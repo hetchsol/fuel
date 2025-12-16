@@ -1,0 +1,79 @@
+
+openapi: 3.0.3
+info:
+  title: Fuel Management API (Prototype)
+  version: 0.1.0
+servers:
+  - url: http://localhost:8000
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200': { description: OK }
+  /api/v1/auth/login:
+    post:
+      summary: Login (mock)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username: { type: string }
+                role: { type: string }
+              required: [username, role]
+      responses:
+        '200':
+          description: Ok
+  /api/v1/attachments:
+    post:
+      summary: Upload (multipart)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201': { description: Created }
+  /api/v1/nozzles/{nozzle_id}/readings:
+    post:
+      summary: Submit reading and validate (mock OCR)
+      parameters:
+        - in: path
+          name: nozzle_id
+          schema: { type: string }
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind: { type: string }
+                manual_value: { type: number }
+                attachment_id: { type: string }
+                ocr_conf_min: { type: number }
+              required: [kind, manual_value]
+      responses:
+        '200': { description: Ok }
+  /api/v1/sales:
+    post:
+      summary: Record sale (pre/post vs volume)
+      responses:
+        '201': { description: Created }
+  /api/v1/reports/daily:
+    get:
+      summary: Daily summary
+      responses:
+        '200': { description: Ok }
+  /api/v1/discrepancies:
+    get:
+      summary: List discrepancies
+      responses:
+        '200': { description: Ok }
