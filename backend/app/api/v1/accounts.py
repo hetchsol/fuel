@@ -7,6 +7,7 @@ from typing import List
 from ...models.models import AccountHolder, CreditSale
 from ...services.validated_crud import ValidatedCRUDService
 from ...services.inventory import process_credit_sale
+from ...services.relationship_validation import validate_create
 from ...database.storage import STORAGE
 
 router = APIRouter()
@@ -161,6 +162,9 @@ def record_credit_sale(sale: CreditSale):
     Record a credit sale transaction
     Updates account balance
     """
+    # Validate foreign keys (account_id, shift_id)
+    validate_create('credit_sales', sale.dict())
+
     process_credit_sale(
         accounts=accounts_data,
         sales_log=credit_sales_data,
