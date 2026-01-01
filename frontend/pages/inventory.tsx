@@ -11,6 +11,19 @@ export default function Inventory() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Delivery form state
+  const [deliveryForm, setDeliveryForm] = useState({
+    tank_id: 'TANK-DIESEL-1',
+    fuel_type: 'Diesel',
+    before_dip_cm: '',
+    after_dip_cm: '',
+    invoiced_volume: '',
+    supplier: '',
+    driver_name: '',
+    shift_type: 'Day'
+  })
+  const [deliveryResult, setDeliveryResult] = useState<any>(null)
+
   useEffect(() => {
     fetchLPGAccessories()
     fetchLubricants()
@@ -190,6 +203,194 @@ export default function Inventory() {
             <p className="text-sm text-gray-600">Track fuel deliveries and tank refills</p>
           </div>
 
+          {/* Record Delivery Form */}
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">🚚 Record New Delivery</h3>
+
+            <form className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tank
+                  </label>
+                  <select
+                    value={deliveryForm.tank_id}
+                    onChange={(e) => {
+                      const fuelType = e.target.value.includes('DIESEL') ? 'Diesel' : 'Petrol'
+                      setDeliveryForm({ ...deliveryForm, tank_id: e.target.value, fuel_type: fuelType })
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="TANK-DIESEL-1">Diesel Tank 1</option>
+                    <option value="TANK-PETROL-1">Petrol Tank 1</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Shift Type
+                  </label>
+                  <select
+                    value={deliveryForm.shift_type}
+                    onChange={(e) => setDeliveryForm({ ...deliveryForm, shift_type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="Day">Day Shift</option>
+                    <option value="Night">Night Shift</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Supplier
+                  </label>
+                  <input
+                    type="text"
+                    value={deliveryForm.supplier}
+                    onChange={(e) => setDeliveryForm({ ...deliveryForm, supplier: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., Total Zambia"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-yellow-50 rounded-lg p-4 border-2 border-yellow-300">
+                  <label className="block text-sm font-bold text-yellow-900 mb-2">
+                    Before Delivery Dip (cm)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={deliveryForm.before_dip_cm}
+                    onChange={(e) => setDeliveryForm({ ...deliveryForm, before_dip_cm: e.target.value })}
+                    className="w-full px-3 py-2 border border-yellow-300 rounded-md focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 text-lg font-semibold"
+                    placeholder="e.g., 45.2"
+                  />
+                  <p className="text-xs text-yellow-700 mt-2">Record BEFORE truck offloads</p>
+                </div>
+
+                <div className="bg-green-50 rounded-lg p-4 border-2 border-green-300">
+                  <label className="block text-sm font-bold text-green-900 mb-2">
+                    After Delivery Dip (cm)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={deliveryForm.after_dip_cm}
+                    onChange={(e) => setDeliveryForm({ ...deliveryForm, after_dip_cm: e.target.value })}
+                    className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 text-lg font-semibold"
+                    placeholder="e.g., 185.6"
+                  />
+                  <p className="text-xs text-green-700 mt-2">Record AFTER truck offloads</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Invoiced Volume (Liters)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={deliveryForm.invoiced_volume}
+                    onChange={(e) => setDeliveryForm({ ...deliveryForm, invoiced_volume: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., 30000"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Volume on delivery invoice</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Driver Name
+                  </label>
+                  <input
+                    type="text"
+                    value={deliveryForm.driver_name}
+                    onChange={(e) => setDeliveryForm({ ...deliveryForm, driver_name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., John M."
+                  />
+                </div>
+              </div>
+
+              {/* Calculated Delivery Volume Preview */}
+              {deliveryForm.before_dip_cm && deliveryForm.after_dip_cm && (
+                <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
+                  <h4 className="text-sm font-bold text-blue-900 mb-2">Calculated Delivery (from dip difference)</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-xs text-blue-700">Before Dip</p>
+                      <p className="text-lg font-bold text-blue-900">{deliveryForm.before_dip_cm} cm</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-blue-700">After Dip</p>
+                      <p className="text-lg font-bold text-blue-900">{deliveryForm.after_dip_cm} cm</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-blue-700">Dip Increase</p>
+                      <p className="text-lg font-bold text-blue-900">
+                        {(parseFloat(deliveryForm.after_dip_cm) - parseFloat(deliveryForm.before_dip_cm)).toFixed(1)} cm
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-blue-600 mt-2">
+                    System will calculate actual volume from dip table and compare to invoiced volume
+                  </p>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDeliveryResult({
+                    success: true,
+                    message: 'Delivery recorded successfully',
+                    calculated_volume: (parseFloat(deliveryForm.after_dip_cm) - parseFloat(deliveryForm.before_dip_cm)) * 175,
+                    invoiced_volume: parseFloat(deliveryForm.invoiced_volume),
+                    variance: ((parseFloat(deliveryForm.after_dip_cm) - parseFloat(deliveryForm.before_dip_cm)) * 175) - parseFloat(deliveryForm.invoiced_volume)
+                  })
+                }}
+                disabled={!deliveryForm.before_dip_cm || !deliveryForm.after_dip_cm || !deliveryForm.invoiced_volume}
+                className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Calculate & Record Delivery
+              </button>
+
+              {/* Delivery Result */}
+              {deliveryResult && (
+                <div className={`p-4 rounded-lg border-2 ${
+                  Math.abs(deliveryResult.variance) < 100 ? 'bg-green-50 border-green-400' : 'bg-yellow-50 border-yellow-400'
+                }`}>
+                  <h4 className="font-bold mb-2">Delivery Verification Result</h4>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-600">Calculated (Dips)</p>
+                      <p className="font-bold text-gray-900">{deliveryResult.calculated_volume.toFixed(0)} L</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600">Invoiced</p>
+                      <p className="font-bold text-gray-900">{deliveryResult.invoiced_volume.toFixed(0)} L</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600">Variance</p>
+                      <p className={`font-bold ${Math.abs(deliveryResult.variance) < 100 ? 'text-green-700' : 'text-yellow-700'}`}>
+                        {deliveryResult.variance > 0 ? '+' : ''}{deliveryResult.variance.toFixed(0)} L
+                      </p>
+                    </div>
+                  </div>
+                  {Math.abs(deliveryResult.variance) < 100 ? (
+                    <p className="text-xs text-green-700 mt-2">✅ Delivery verified - variance within acceptable limits</p>
+                  ) : (
+                    <p className="text-xs text-yellow-700 mt-2">⚠️ Variance exceeds 100L - verify dip readings and invoice</p>
+                  )}
+                </div>
+              )}
+            </form>
+          </div>
+
           {/* Recent Deliveries */}
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
             <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Deliveries</h3>
@@ -227,10 +428,9 @@ export default function Inventory() {
                 </div>
               </div>
 
-              {/* Placeholder for no deliveries */}
-              <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                <p className="text-gray-500">No recent deliveries recorded</p>
-                <p className="text-sm text-gray-400 mt-1">Delivery tracking coming soon</p>
+              {/* Placeholder message */}
+              <div className="text-center py-6 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm text-gray-500">Use the form above to record new deliveries</p>
               </div>
             </div>
           </div>

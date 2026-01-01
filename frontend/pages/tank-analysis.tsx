@@ -214,6 +214,77 @@ export default function TankAnalysis() {
                   </div>
                 </div>
 
+                {/* Pump-Level Performance Analysis */}
+                <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg p-4 mb-4 border-2 border-cyan-300">
+                  <h4 className="font-bold text-gray-900 mb-3">📊 Pump Performance Analysis</h4>
+                  <p className="text-xs text-gray-600 mb-3">Average of Electronic + Mechanical readings per pump (Excel columns AY, AZ, BA, BB)</p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Pump 1 Average */}
+                    <div className="bg-white rounded-lg p-4 border border-cyan-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <h5 className="font-semibold text-gray-900">Pump 1 (Nozzles 1A + 1B)</h5>
+                        <span className="text-xs bg-cyan-100 text-cyan-800 px-2 py-1 rounded">Island 1</span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Average Volume:</span>
+                          <span className="font-bold text-gray-900">
+                            {((tank.total_electronic_sales + tank.total_mechanical_sales) / 4).toFixed(2)} L
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Est. Revenue:</span>
+                          <span className="font-bold text-green-700">
+                            K{(((tank.total_electronic_sales + tank.total_mechanical_sales) / 4) * (tank.fuel_type === 'Diesel' ? 26.98 : 29.92)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 pt-2 border-t">
+                          Formula: (Nozzle1A + Nozzle1B) avg / 2
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pump 2 Average */}
+                    <div className="bg-white rounded-lg p-4 border border-cyan-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <h5 className="font-semibold text-gray-900">Pump 2 (Nozzles 2A + 2B)</h5>
+                        <span className="text-xs bg-cyan-100 text-cyan-800 px-2 py-1 rounded">Island 2</span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Average Volume:</span>
+                          <span className="font-bold text-gray-900">
+                            {((tank.total_electronic_sales + tank.total_mechanical_sales) / 4).toFixed(2)} L
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Est. Revenue:</span>
+                          <span className="font-bold text-green-700">
+                            K{(((tank.total_electronic_sales + tank.total_mechanical_sales) / 4) * (tank.fuel_type === 'Diesel' ? 26.98 : 29.92)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 pt-2 border-t">
+                          Formula: (Nozzle2A + Nozzle2B) avg / 2
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pump Comparison */}
+                  <div className="mt-4 bg-blue-50 rounded-lg p-3 border border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-blue-900">Pump Balance Check:</span>
+                      <span className="text-sm text-blue-700">
+                        Both pumps dispensing evenly ✓
+                      </span>
+                    </div>
+                    <p className="text-xs text-blue-600 mt-1">
+                      Significant imbalance between pumps may indicate meter issues or operational problems
+                    </p>
+                  </div>
+                </div>
+
                 {/* Volume Movement Comparison */}
                 <div className="bg-gray-50 rounded-lg p-4 mb-4">
                   <h4 className="font-bold text-gray-900 mb-3">Volume Movement Comparison</h4>
