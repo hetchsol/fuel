@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 export default function Inventory() {
-  const [activeTab, setActiveTab] = useState<'lpg' | 'lubricants'>('lpg')
+  const [activeTab, setActiveTab] = useState<'tanks' | 'deliveries' | 'lpg' | 'lubricants'>('tanks')
 
   // LPG State
   const [lpgAccessories, setLpgAccessories] = useState<any[]>([])
@@ -68,6 +68,26 @@ export default function Inventory() {
       <div className="mb-6 border-b border-gray-200">
         <nav className="-mb-px flex space-x-8">
           <button
+            onClick={() => setActiveTab('tanks')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'tanks'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            ⛽ Fuel Tanks
+          </button>
+          <button
+            onClick={() => setActiveTab('deliveries')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'deliveries'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            🚚 Fuel Deliveries
+          </button>
+          <button
             onClick={() => setActiveTab('lpg')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'lpg'
@@ -89,6 +109,146 @@ export default function Inventory() {
           </button>
         </nav>
       </div>
+
+      {/* Fuel Tanks Tab */}
+      {activeTab === 'tanks' && (
+        <div>
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Fuel Tank Inventory</h2>
+            <p className="text-sm text-gray-600">Current fuel levels and tank status</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Diesel Tank */}
+            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg shadow-lg p-6 border-2 border-purple-300">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-2xl font-bold text-gray-900">Diesel Tank</h3>
+                <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-semibold">
+                  Tank 1
+                </span>
+              </div>
+              <div className="space-y-4">
+                <div className="bg-white rounded-lg p-4 border border-purple-200">
+                  <p className="text-sm text-gray-600">Current Level</p>
+                  <p className="text-3xl font-bold text-purple-700">25,117 L</p>
+                  <p className="text-xs text-gray-500 mt-1">Dip: 155.4 cm</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white rounded-lg p-3 border border-gray-200">
+                    <p className="text-xs text-gray-600">Capacity</p>
+                    <p className="text-lg font-bold text-gray-900">30,000 L</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-gray-200">
+                    <p className="text-xs text-gray-600">% Full</p>
+                    <p className="text-lg font-bold text-gray-900">83.7%</p>
+                  </div>
+                </div>
+                <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+                  <p className="text-xs text-yellow-800 font-semibold">⚠️ Reorder at 20% (6,000L)</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Petrol Tank */}
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg shadow-lg p-6 border-2 border-green-300">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-2xl font-bold text-gray-900">Petrol Tank</h3>
+                <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold">
+                  Tank 2
+                </span>
+              </div>
+              <div className="space-y-4">
+                <div className="bg-white rounded-lg p-4 border border-green-200">
+                  <p className="text-sm text-gray-600">Current Level</p>
+                  <p className="text-3xl font-bold text-green-700">26,887 L</p>
+                  <p className="text-xs text-gray-500 mt-1">Dip: 164.5 cm</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white rounded-lg p-3 border border-gray-200">
+                    <p className="text-xs text-gray-600">Capacity</p>
+                    <p className="text-lg font-bold text-gray-900">30,000 L</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-gray-200">
+                    <p className="text-xs text-gray-600">% Full</p>
+                    <p className="text-lg font-bold text-gray-900">89.6%</p>
+                  </div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                  <p className="text-xs text-green-800 font-semibold">✅ Stock Level Good</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deliveries Tab */}
+      {activeTab === 'deliveries' && (
+        <div>
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Fuel Deliveries</h2>
+            <p className="text-sm text-gray-600">Track fuel deliveries and tank refills</p>
+          </div>
+
+          {/* Recent Deliveries */}
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Deliveries</h3>
+
+            <div className="space-y-4">
+              {/* Sample Delivery Record */}
+              <div className="border-l-4 border-blue-500 bg-blue-50 rounded-lg p-4">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h4 className="font-bold text-gray-900">Diesel Delivery</h4>
+                    <p className="text-sm text-gray-600">Tank 1 - Dec 15, 2025</p>
+                  </div>
+                  <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
+                    Day Shift
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-600">Before Delivery</p>
+                    <p className="text-lg font-bold text-gray-900">5,240 L</p>
+                    <p className="text-xs text-gray-500">45.2 cm</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Delivered</p>
+                    <p className="text-lg font-bold text-blue-700">+30,000 L</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">After Delivery</p>
+                    <p className="text-lg font-bold text-gray-900">35,240 L</p>
+                    <p className="text-xs text-gray-500">185.6 cm</p>
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-blue-200">
+                  <p className="text-xs text-gray-600">Time: 14:30 | Driver: John M. | Supplier: Total Zambia</p>
+                </div>
+              </div>
+
+              {/* Placeholder for no deliveries */}
+              <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                <p className="text-gray-500">No recent deliveries recorded</p>
+                <p className="text-sm text-gray-400 mt-1">Delivery tracking coming soon</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Delivery Instructions */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-blue-900 mb-2">Fuel Delivery Process</h3>
+            <ul className="text-sm text-blue-700 space-y-1">
+              <li>• <strong>Step 1:</strong> Record "Before Delivery" tank dip reading</li>
+              <li>• <strong>Step 2:</strong> Receive fuel delivery (verify volume with driver)</li>
+              <li>• <strong>Step 3:</strong> Record "After Delivery" tank dip reading</li>
+              <li>• <strong>Step 4:</strong> System calculates delivered volume from dip difference</li>
+              <li>• <strong>Step 5:</strong> Compare calculated vs invoiced volume (tolerance ±1%)</li>
+              <li>• <strong>Important:</strong> Delivery affects tank movement calculation for that shift</li>
+            </ul>
+          </div>
+        </div>
+      )}
 
       {/* LPG Accessories Tab */}
       {activeTab === 'lpg' && (

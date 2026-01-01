@@ -117,6 +117,28 @@ export default function Reconciliation() {
             {/* Revenue Breakdown */}
             <div className="p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">💰 Revenue Breakdown</h3>
+
+              {/* VAT Calculation Section */}
+              <div className="mb-6 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-4 border-2 border-indigo-200">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">VAT Included (16%)</p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Petrol + Diesel Fuel Sales Only
+                    </p>
+                    <p className="text-xs text-indigo-600 mt-1">
+                      Formula: (Revenue × 0.16) ÷ 1.16
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-indigo-900">
+                      {formatCurrency(((recon.petrol_revenue + recon.diesel_revenue) * 0.16 / 1.16))}
+                    </p>
+                    <p className="text-xs text-indigo-600">16% VAT on Fuel</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <div className="bg-white rounded-lg p-4 border border-blue-200">
                   <p className="text-xs text-gray-600 font-medium">Petrol Revenue</p>
@@ -256,6 +278,37 @@ export default function Reconciliation() {
                         {recon.cumulative_difference > 0 ? '+' : ''}{formatCurrency(recon.cumulative_difference)}
                       </p>
                     </div>
+                  </div>
+
+                  {/* Loss/Gain Percentage */}
+                  <div className="mt-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-4 border-2 border-orange-300">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-semibold text-orange-900">
+                          {recon.difference < 0 ? '📉 Loss Percentage' : recon.difference > 0 ? '📈 Gain Percentage' : '⚖️ Perfect Balance'}
+                        </p>
+                        <p className="text-xs text-orange-700 mt-1">
+                          (Actual - Expected) / Expected × 100
+                        </p>
+                      </div>
+                      <p className={`text-2xl font-bold ${
+                        Math.abs((recon.difference / recon.expected_cash) * 100) < 0.5 ? 'text-green-700' :
+                        Math.abs((recon.difference / recon.expected_cash) * 100) < 2 ? 'text-yellow-700' : 'text-red-700'
+                      }`}>
+                        {recon.expected_cash > 0 ? (
+                          <>
+                            {((recon.difference / recon.expected_cash) * 100).toFixed(3)}%
+                          </>
+                        ) : '0.000%'}
+                      </p>
+                    </div>
+                    {Math.abs((recon.difference / recon.expected_cash) * 100) >= 2 && (
+                      <div className="mt-2 pt-2 border-t border-orange-200">
+                        <p className="text-xs text-red-800 font-semibold">
+                          ⚠️ Variance exceeds 2% threshold - Requires investigation
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </>
               )}

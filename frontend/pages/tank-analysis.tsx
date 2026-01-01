@@ -188,6 +188,18 @@ export default function TankAnalysis() {
                   </span>
                 </div>
 
+                {/* Delivery Indicator */}
+                {tank.tank_movement > 0 && tank.tank_movement < -5000 && (
+                  <div className="mb-4 bg-green-50 border-2 border-green-400 rounded-lg p-3">
+                    <p className="text-sm font-bold text-green-900 flex items-center gap-2">
+                      <span>🚚</span> Fuel Delivery Detected
+                    </p>
+                    <p className="text-xs text-green-700 mt-1">
+                      Tank volume increased during this shift - Delivery recorded
+                    </p>
+                  </div>
+                )}
+
                 {/* Tank Dip Readings */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
@@ -251,7 +263,16 @@ export default function TankAnalysis() {
               <li>• <strong>Acceptable</strong>: {'<'} 2% variance (normal operational variation)</li>
               <li>• <strong>Warning</strong>: 2-5% variance (requires attention)</li>
               <li>• <strong>Critical</strong>: {'>'} 5% variance (immediate investigation required)</li>
+              <li>• <strong>Delivery Days</strong>: 🚚 Large negative tank movement indicates fuel delivery during shift</li>
             </ul>
+          </div>
+
+          {/* Three-Way Reconciliation Note */}
+          <div className="mt-4 bg-purple-50 border border-purple-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-purple-900 mb-2">Three-Way Reconciliation System</h3>
+            <p className="text-sm text-purple-700">
+              This analysis compares <strong>Tank Movement</strong> (physical dips) vs <strong>Electronic Meters</strong> vs <strong>Mechanical Meters</strong> to identify discrepancies and ensure accurate fuel accounting.
+            </p>
           </div>
         </div>
       )}
