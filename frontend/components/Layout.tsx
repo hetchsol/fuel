@@ -79,6 +79,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       children: [
         { path: '/daily-sales-report', label: 'Daily Sales Report', roles: ['supervisor', 'owner'] },
         { path: '/reports', label: 'Date Range Reports', roles: ['supervisor', 'owner'] },
+        { path: '/tank-analysis', label: 'Tank Analysis', roles: ['supervisor', 'owner'] },
         { path: '/advanced-reports', label: 'Advanced Reports', roles: ['supervisor', 'owner'] },
         { path: '/readings-monitor', label: 'Readings Monitor', roles: ['owner'] },
       ]
