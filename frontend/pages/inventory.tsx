@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 export default function Inventory() {
+  const { setFuelType } = useTheme()
   const [activeTab, setActiveTab] = useState<'tanks' | 'deliveries' | 'lpg' | 'lubricants'>('tanks')
 
   // LPG State
@@ -218,6 +220,12 @@ export default function Inventory() {
                     onChange={(e) => {
                       const fuelType = e.target.value.includes('DIESEL') ? 'Diesel' : 'Petrol'
                       setDeliveryForm({ ...deliveryForm, tank_id: e.target.value, fuel_type: fuelType })
+                      // Update theme based on fuel selection
+                      if (fuelType.toLowerCase() === 'diesel') {
+                        setFuelType('diesel')
+                      } else if (fuelType.toLowerCase() === 'petrol') {
+                        setFuelType('petrol')
+                      }
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   >

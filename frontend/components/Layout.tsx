@@ -1,11 +1,13 @@
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const { theme } = useTheme()
 
   useEffect(() => {
     // Check if user is logged in
@@ -43,6 +45,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Operations',
       roles: ['user', 'supervisor', 'owner'],
       children: [
+        { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'owner'] },
         { path: '/readings', label: 'Readings', roles: ['user', 'supervisor', 'owner'] },
         { path: '/shifts', label: 'Shifts', roles: ['user', 'supervisor', 'owner'] },
         { path: '/sales', label: 'Sales', roles: ['supervisor', 'owner'] },
@@ -70,6 +73,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Inventory',
       roles: ['supervisor', 'owner'],
       children: [
+        { path: '/tank-movement', label: 'Tank Movement', roles: ['supervisor', 'owner'] },
         { path: '/stock-movement', label: 'Stock Movement', roles: ['supervisor', 'owner'] },
       ]
     },
@@ -77,6 +81,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Reports',
       roles: ['supervisor', 'owner'],
       children: [
+        { path: '/tank-readings-report', label: 'Tank Readings Report', roles: ['supervisor', 'owner'] },
         { path: '/daily-sales-report', label: 'Daily Sales Report', roles: ['supervisor', 'owner'] },
         { path: '/reports', label: 'Date Range Reports', roles: ['supervisor', 'owner'] },
         { path: '/tank-analysis', label: 'Tank Analysis', roles: ['supervisor', 'owner'] },
@@ -116,19 +121,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
+    <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: theme.background }}>
+      <nav className="shadow-sm transition-colors duration-300" style={{ backgroundColor: theme.cardBg, borderBottomColor: theme.border, borderBottomWidth: '1px' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Top row: App name and user info */}
-          <div className="flex justify-between items-center h-16 border-b border-gray-200">
-            <h1 className="text-xl font-bold text-gray-900">⛽ Fuel Management</h1>
+          <div className="flex justify-between items-center h-16 transition-colors duration-300" style={{ borderBottomColor: theme.border, borderBottomWidth: '1px' }}>
+            <h1 className="text-xl font-bold transition-colors duration-300" style={{ color: theme.textPrimary }}>⛽ Fuel Management</h1>
 
-            {/* User Info and Logout */}
+            {/* User Info */}
             {user && (
               <div className="flex items-center space-x-4">
                 <div className="text-right hidden sm:block">
-                  <p className="text-sm font-medium text-gray-900">{user.full_name}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-sm font-medium transition-colors duration-300" style={{ color: theme.textPrimary }}>{user.full_name}</p>
+                  <p className="text-xs transition-colors duration-300" style={{ color: theme.textSecondary }}>
                     {user.role === 'user' && '👤 User'}
                     {user.role === 'supervisor' && '👔 Supervisor'}
                     {user.role === 'owner' && '👑 Owner'}
@@ -150,20 +155,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               item.children ? (
                 <div key={item.label} className="relative group">
                   <button
-                    className="inline-flex items-center px-1 border-b-2 border-transparent text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 h-12"
+                    className="inline-flex items-center px-1 border-b-2 text-sm font-medium h-12 transition-colors duration-300"
+                    style={{
+                      borderColor: 'transparent',
+                      color: theme.textSecondary
+                    }}
                   >
                     {item.label} ▾
                   </button>
-                  <div className="absolute left-0 mt-0 w-48 bg-white shadow-lg rounded-md border border-gray-200 hidden group-hover:block z-50">
+                  <div className="absolute left-0 mt-0 w-48 shadow-lg rounded-md hidden group-hover:block z-50 transition-colors duration-300" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: '1px' }}>
                     {item.children.map((child: any) => (
                       <Link
                         key={child.path}
                         href={child.path}
-                        className={`block px-4 py-2 text-sm ${
-                          isActive(child.path)
-                            ? 'bg-blue-50 text-blue-700 font-medium'
-                            : 'text-gray-700 hover:bg-gray-50'
-                        }`}
+                        className="block px-4 py-2 text-sm transition-colors duration-300"
+                        style={{
+                          backgroundColor: isActive(child.path) ? theme.primaryLight : 'transparent',
+                          color: isActive(child.path) ? theme.primary : theme.textPrimary,
+                          fontWeight: isActive(child.path) ? '500' : '400'
+                        }}
                       >
                         {child.label}
                       </Link>
@@ -174,11 +184,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.path}
                   href={item.path}
-                  className={`inline-flex items-center px-1 border-b-2 text-sm font-medium ${
-                    isActive(item.path)
-                      ? 'border-blue-500 text-gray-900'
-                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                  }`}
+                  className="inline-flex items-center px-1 border-b-2 text-sm font-medium transition-colors duration-300"
+                  style={{
+                    borderColor: isActive(item.path) ? theme.primary : 'transparent',
+                    color: isActive(item.path) ? theme.primary : theme.textSecondary
+                  }}
                 >
                   {item.label}
                 </Link>
@@ -189,14 +199,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* Mobile Navigation */}
-      <div className="sm:hidden bg-white border-b">
+      <div className="sm:hidden transition-colors duration-300" style={{ backgroundColor: theme.cardBg, borderBottomColor: theme.border, borderBottomWidth: '1px' }}>
         <div className="px-2 pt-2 pb-3 space-y-1">
           {navItems.map((item: any) => (
             item.children ? (
               <div key={item.label}>
                 <button
                   onClick={() => toggleMenu(item.label)}
-                  className="w-full flex justify-between items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                  className="w-full flex justify-between items-center px-3 py-2 rounded-md text-base font-medium transition-colors duration-300"
+                  style={{ color: theme.textPrimary }}
                 >
                   <span>{item.label}</span>
                   <span>{openMenus.includes(item.label) ? '▴' : '▾'}</span>
@@ -207,11 +218,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       <Link
                         key={child.path}
                         href={child.path}
-                        className={`block px-3 py-2 rounded-md text-sm ${
-                          isActive(child.path)
-                            ? 'bg-blue-50 text-blue-700 font-medium'
-                            : 'text-gray-600 hover:bg-gray-50'
-                        }`}
+                        className="block px-3 py-2 rounded-md text-sm transition-colors duration-300"
+                        style={{
+                          backgroundColor: isActive(child.path) ? theme.primaryLight : 'transparent',
+                          color: isActive(child.path) ? theme.primary : theme.textSecondary,
+                          fontWeight: isActive(child.path) ? '500' : '400'
+                        }}
                       >
                         {child.label}
                       </Link>
@@ -223,20 +235,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.path}
                 href={item.path}
-                className={`block px-3 py-2 rounded-md text-base font-medium ${
-                  isActive(item.path)
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                }`}
+                className="block px-3 py-2 rounded-md text-base font-medium transition-colors duration-300"
+                style={{
+                  backgroundColor: isActive(item.path) ? theme.primaryLight : 'transparent',
+                  color: isActive(item.path) ? theme.primary : theme.textPrimary
+                }}
               >
                 {item.label}
               </Link>
             )
           ))}
           {user && (
-            <div className="px-3 py-2 border-t mt-2 pt-2">
-              <p className="text-sm font-medium text-gray-900">{user.full_name}</p>
-              <p className="text-xs text-gray-500">
+            <div className="px-3 py-2 mt-2 pt-2 transition-colors duration-300" style={{ borderTopColor: theme.border, borderTopWidth: '1px' }}>
+              <p className="text-sm font-medium transition-colors duration-300" style={{ color: theme.textPrimary }}>{user.full_name}</p>
+              <p className="text-xs transition-colors duration-300" style={{ color: theme.textSecondary }}>
                 {user.role === 'user' && '👤 User'}
                 {user.role === 'supervisor' && '👔 Supervisor'}
                 {user.role === 'owner' && '👑 Owner'}
