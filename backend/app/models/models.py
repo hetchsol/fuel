@@ -448,6 +448,9 @@ class TankVolumeReadingOutput(BaseModel):
     total_delivery_volume: float = 0.0  # Sum of all deliveries
     delivery_count: int = 0
 
+    # Inter-delivery sales timeline (when multiple deliveries occur)
+    delivery_timeline: Optional[dict] = None  # Timeline of sales between deliveries
+
     # DEPRECATED: Delivery Information (kept for backward compatibility display)
     delivery_occurred: bool
     delivery_volume: Optional[float] = None  # AK - AJ

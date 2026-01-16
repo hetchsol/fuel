@@ -28,6 +28,10 @@ from ...services.tank_movement import (
     calculate_variance,
     detect_anomalies
 )
+from ...services.delivery_timeline import (
+    calculate_inter_delivery_sales,
+    validate_delivery_sequence
+)
 from ...api.v1.auth import get_current_user
 
 router = APIRouter()
@@ -276,13 +280,14 @@ def submit_tank_reading(
         if after_offload_volume is None:
             after_offload_volume = dip_to_volume(reading_input.tank_id, reading_input.after_delivery_dip_cm)
 
-    # Validate volume readings (legacy validation still runs)
+    # Validate volume readings (supports both legacy and new multi-delivery format)
     validation = validate_tank_readings(
         opening=opening_volume,
         closing=closing_volume,
         before_offload=before_offload_volume,
         after_offload=after_offload_volume,
-        tank_capacity=tank_config['capacity']
+        tank_capacity=tank_config['capacity'],
+        deliveries=deliveries  # Pass new format deliveries list
     )
 
     all_errors.extend(validation['errors'])
@@ -326,6 +331,16 @@ def submit_tank_reading(
         price_per_liter=price,
         actual_cash=reading_input.actual_cash_banked
     )
+
+    # Calculate inter-delivery sales timeline
+    delivery_timeline = None
+    if deliveries and len(deliveries) > 0:
+        deliveries_dict = [d.dict() for d in deliveries]
+        delivery_timeline = calculate_inter_delivery_sales(
+            deliveries=deliveries_dict,
+            opening_volume=opening_volume,
+            closing_volume=closing_volume
+        )
 
     # Handle customer allocations (DIESEL ONLY - Columns AR-BB)
     allocation_balance_check = None
@@ -421,6 +436,9 @@ def submit_tank_reading(
         deliveries=deliveries,
         total_delivery_volume=total_delivery_volume,
         delivery_count=delivery_count,
+
+        # Inter-delivery sales timeline
+        delivery_timeline=delivery_timeline,
 
         # DEPRECATED: Delivery information (kept for backward compatibility)
         delivery_occurred=len(deliveries) > 0 or reading_input.delivery_occurred,
@@ -814,3 +832,46 @@ def _get_variance_recommendation(electronic_var: dict, mechanical_var: dict) -> 
             return "High variance detected. Verify nozzle meters and tank dip stick calibration."
     else:
         return "Monitor variance. Consider meter calibration if pattern continues."
+
+
+@router.get("/readings/{reading_id}/timeline")
+def get_delivery_timeline(reading_id: str):
+    """
+    Get delivery timeline for a specific reading showing sales between deliveries.
+
+    Returns comprehensive timeline showing:
+    - Shift opening
+    - Sales before each delivery
+    - Each delivery event
+    - Sales between deliveries
+    - Sales after last delivery
+    - Shift closing
+
+    Useful for understanding exactly when fuel was delivered and sold during the shift.
+    """
+    # Find the reading
+    reading = None
+    for r in tank_readings_db.values():
+        if r['reading_id'] == reading_id:
+            reading = r
+            break
+
+    if not reading:
+        raise HTTPException(status_code=404, detail=f"Reading {reading_id} not found")
+
+    # Check if timeline already calculated
+    if reading.get('delivery_timeline'):
+        return reading['delivery_timeline']
+
+    # Calculate timeline if not already present
+    deliveries = reading.get('deliveries', [])
+    opening_volume = reading.get('opening_volume', 0)
+    closing_volume = reading.get('closing_volume', 0)
+
+    timeline = calculate_inter_delivery_sales(
+        deliveries=deliveries,
+        opening_volume=opening_volume,
+        closing_volume=closing_volume
+    )
+
+    return timeline

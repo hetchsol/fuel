@@ -202,7 +202,8 @@ def validate_tank_readings(
     closing: float,
     before_offload: Optional[float] = None,
     after_offload: Optional[float] = None,
-    tank_capacity: Optional[float] = None
+    tank_capacity: Optional[float] = None,
+    deliveries: Optional[List] = None
 ) -> Dict[str, any]:
     """
     Validate tank readings for logical consistency.
@@ -210,9 +211,10 @@ def validate_tank_readings(
     Args:
         opening: Opening tank volume
         closing: Closing tank volume
-        before_offload: Volume before delivery (optional)
-        after_offload: Volume after delivery (optional)
+        before_offload: Volume before delivery (optional, legacy)
+        after_offload: Volume after delivery (optional, legacy)
         tank_capacity: Maximum tank capacity (optional)
+        deliveries: List of deliveries (optional, new format)
 
     Returns:
         dict with:
@@ -223,6 +225,10 @@ def validate_tank_readings(
     """
     errors = []
     warnings = []
+
+    # Check if ANY delivery format is used
+    has_deliveries = (before_offload is not None or after_offload is not None or
+                     (deliveries and len(deliveries) > 0))
 
     # Basic validations
     if opening < 0:
@@ -237,7 +243,7 @@ def validate_tank_readings(
         if closing > tank_capacity:
             errors.append(f"Closing volume ({closing}L) exceeds tank capacity ({tank_capacity}L)")
 
-    # Delivery validations
+    # Delivery validations (legacy single delivery format)
     if before_offload is not None or after_offload is not None:
         # If one is provided, both should be
         if before_offload is None or after_offload is None:
@@ -275,7 +281,7 @@ def validate_tank_readings(
                 )
 
     # No delivery scenario validations
-    else:
+    if not has_deliveries:
         # Closing should typically be less than opening
         if closing > opening:
             errors.append(
