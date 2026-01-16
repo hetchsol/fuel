@@ -176,7 +176,11 @@ export default function StockMovement() {
             <div className="mt-3">
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
-                  className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                  className={`h-3 rounded-full transition-all duration-300 ${
+                    currentStock.percentage >= 95 ? 'bg-red-600' :
+                    currentStock.percentage >= 85 ? 'bg-yellow-500' :
+                    'bg-blue-600'
+                  }`}
                   style={{ width: `${Math.min(currentStock.percentage || 0, 100)}%` }}
                 ></div>
               </div>
@@ -184,6 +188,12 @@ export default function StockMovement() {
                 {currentStock.percentage?.toFixed(1)}% capacity
               </p>
             </div>
+            {currentStock.percentage >= 90 && (
+              <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                ⚠️ Warning: Tank is {currentStock.percentage?.toFixed(1)}% full.
+                Available space: {((currentStock.capacity - currentStock.current_level)).toLocaleString(undefined, {maximumFractionDigits: 0})} L
+              </div>
+            )}
           </div>
         )}
 
@@ -277,6 +287,35 @@ export default function StockMovement() {
               <div className="p-4 bg-red-50 border border-red-200 rounded-md">
                 <p className="text-sm text-red-700">✗ {error}</p>
               </div>
+            )}
+
+            {currentStock && formData.volume_delivered && (
+              (() => {
+                const deliveryVolume = parseFloat(formData.volume_delivered) || 0
+                const afterDelivery = (currentStock.current_level || 0) + deliveryVolume
+                const percentAfter = (afterDelivery / (currentStock.capacity || 1)) * 100
+
+                if (percentAfter > 100) {
+                  return (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+                      <p className="text-sm text-red-700 font-semibold">⚠️ OVERFLOW WARNING</p>
+                      <p className="text-xs text-red-600 mt-1">
+                        This delivery ({deliveryVolume.toLocaleString()} L) will exceed tank capacity by {(afterDelivery - (currentStock.capacity || 0)).toLocaleString()} L.
+                        Delivery will be capped at capacity.
+                      </p>
+                    </div>
+                  )
+                } else if (percentAfter >= 95) {
+                  return (
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                      <p className="text-xs text-yellow-700">
+                        ⚠️ Tank will be {percentAfter.toFixed(1)}% full after delivery.
+                      </p>
+                    </div>
+                  )
+                }
+                return null
+              })()
             )}
 
             <button
