@@ -315,3 +315,188 @@ def get_discrepancies_analysis():
         "net_variance": total_overages + total_shortages,
         "accuracy_rate": ((total_shifts - shifts_with_discrepancies) / total_shifts * 100) if total_shifts > 0 else 0
     }
+
+
+# =======================================================================================
+# THREE-WAY RECONCILIATION (NEW) - Tank, Nozzle, Cash
+# =======================================================================================
+
+@router.get("/three-way/{reading_id}")
+def get_three_way_reconciliation(reading_id: str):
+    """
+    Get three-way reconciliation report for a specific tank reading.
+
+    Compares three independent sources:
+    - Physical: Tank movement (dip readings)
+    - Operational: Nozzle sales (electronic/mechanical)
+    - Financial: Cash collected (actual banking)
+
+    Returns root cause analysis and recommendations.
+    """
+    from ...api.v1.tank_readings import tank_readings_db
+    from ...services.reconciliation_service import get_reconciliation_summary_for_shift
+
+    # Find the reading
+    reading = tank_readings_db.get(reading_id)
+
+    if not reading:
+        raise HTTPException(status_code=404, detail=f"Reading {reading_id} not found")
+
+    # Get reconciliation (already calculated during reading creation)
+    reconciliation = reading.get('reconciliation')
+
+    if not reconciliation:
+        # Calculate if not present (for old readings)
+        reconciliation = get_reconciliation_summary_for_shift(reading)
+
+    # Add reading metadata
+    reconciliation['reading_metadata'] = {
+        'reading_id': reading_id,
+        'tank_id': reading.get('tank_id'),
+        'date': reading.get('date'),
+        'shift_type': reading.get('shift_type'),
+        'recorded_by': reading.get('recorded_by')
+    }
+
+    return reconciliation
+
+
+@router.get("/three-way/daily-summary/{date}")
+def get_daily_three_way_summary(date: str):
+    """
+    Get three-way reconciliation summary for all shifts on a specific date.
+
+    Returns:
+    - Summary across all tanks and shifts
+    - List of shifts requiring investigation
+    - Overall station performance
+    """
+    from ...api.v1.tank_readings import tank_readings_db
+    from ...services.reconciliation_service import get_reconciliation_summary_for_shift
+
+    # Get all readings for the date
+    date_readings = []
+    for r_id, r_data in tank_readings_db.items():
+        if r_data.get('date') == date:
+            reconciliation = r_data.get('reconciliation')
+            if not reconciliation:
+                reconciliation = get_reconciliation_summary_for_shift(r_data)
+
+            date_readings.append({
+                'reading_id': r_id,
+                'tank_id': r_data.get('tank_id'),
+                'shift_type': r_data.get('shift_type'),
+                'reconciliation': reconciliation
+            })
+
+    if not date_readings:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No readings found for date {date}"
+        )
+
+    # Aggregate summary
+    summary = {
+        'date': date,
+        'total_shifts': len(date_readings),
+        'balanced_shifts': sum(1 for r in date_readings if r['reconciliation']['status'] == 'BALANCED'),
+        'variance_shifts': sum(1 for r in date_readings if 'VARIANCE' in r['reconciliation']['status']),
+        'critical_shifts': sum(1 for r in date_readings if r['reconciliation']['status'] == 'DISCREPANCY_CRITICAL'),
+        'shifts_requiring_investigation': [],
+        'overall_status': 'GOOD'
+    }
+
+    # Identify shifts requiring attention
+    for reading in date_readings:
+        if reading['reconciliation']['status'] in ['VARIANCE_INVESTIGATION', 'DISCREPANCY_CRITICAL']:
+            summary['shifts_requiring_investigation'].append({
+                'reading_id': reading['reading_id'],
+                'tank_id': reading['tank_id'],
+                'shift_type': reading['shift_type'],
+                'status': reading['reconciliation']['status'],
+                'outlier_source': reading['reconciliation']['root_cause_analysis'].get('outlier_source')
+            })
+
+    # Determine overall status
+    if summary['critical_shifts'] > 0:
+        summary['overall_status'] = 'CRITICAL'
+    elif summary['variance_shifts'] > summary['total_shifts'] * 0.5:
+        summary['overall_status'] = 'NEEDS_ATTENTION'
+    elif summary['balanced_shifts'] == summary['total_shifts']:
+        summary['overall_status'] = 'EXCELLENT'
+
+    summary['all_shifts'] = date_readings
+
+    return summary
+
+
+@router.get("/three-way/patterns/{tank_id}")
+def get_reconciliation_patterns(tank_id: str, days: int = 30):
+    """
+    Analyze reconciliation patterns over time for a specific tank.
+
+    Identifies:
+    - Recurring variance patterns
+    - Systematic issues with specific measurement sources
+    - Trends over time
+    - Average variance levels
+    """
+    from ...api.v1.tank_readings import tank_readings_db
+    from ...services.reconciliation_service import get_historical_variance_pattern
+
+    # Get readings for the tank
+    readings = []
+    for r_id, r_data in tank_readings_db.items():
+        if r_data.get('tank_id') == tank_id:
+            readings.append(r_data)
+
+    # Limit to most recent 'days' worth
+    readings = readings[-days:] if len(readings) > days else readings
+
+    if not readings:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No readings found for tank {tank_id}"
+        )
+
+    # Perform pattern analysis
+    pattern_analysis = get_historical_variance_pattern(readings)
+
+    # Add metadata
+    pattern_analysis['tank_id'] = tank_id
+    pattern_analysis['analysis_period_days'] = days
+    pattern_analysis['readings_analyzed'] = len(readings)
+
+    return pattern_analysis
+
+
+@router.get("/three-way/config")
+def get_three_way_config():
+    """
+    Get current three-way reconciliation tolerance configuration.
+
+    Returns tolerance thresholds for:
+    - Volume variances (liters and percentage)
+    - Cash variances (monetary units and percentage)
+    """
+    from ...services.reconciliation_service import ReconciliationConfig
+
+    config = ReconciliationConfig()
+
+    return {
+        'volume_tolerances': {
+            'minor_liters': config.VOLUME_TOLERANCE_MINOR,
+            'investigation_liters': config.VOLUME_TOLERANCE_INVESTIGATION,
+            'minor_percent': config.PERCENT_TOLERANCE_MINOR,
+            'investigation_percent': config.PERCENT_TOLERANCE_INVESTIGATION
+        },
+        'cash_tolerances': {
+            'minor_amount': config.CASH_TOLERANCE_MINOR,
+            'investigation_amount': config.CASH_TOLERANCE_INVESTIGATION
+        },
+        'thresholds': {
+            'minor': 'Up to these values is acceptable variance',
+            'investigation': 'Between minor and investigation requires review',
+            'critical': 'Above investigation threshold is critical'
+        }
+    }

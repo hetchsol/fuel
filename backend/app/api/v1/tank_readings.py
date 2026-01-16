@@ -32,6 +32,9 @@ from ...services.delivery_timeline import (
     calculate_inter_delivery_sales,
     validate_delivery_sequence
 )
+from ...services.reconciliation_service import (
+    get_reconciliation_summary_for_shift
+)
 from ...api.v1.auth import get_current_user
 
 router = APIRouter()
@@ -375,6 +378,15 @@ def submit_tank_reading(
     else:
         validation_status = 'PASS'
 
+    # Calculate three-way reconciliation (Tank, Nozzle, Cash)
+    reconciliation = get_reconciliation_summary_for_shift({
+        'tank_volume_movement': tank_movement,
+        'total_electronic_dispensed': calculations['total_electronic_dispensed'],
+        'total_mechanical_dispensed': calculations['total_mechanical_dispensed'],
+        'actual_cash_banked': calculations.get('actual_cash_banked'),
+        'price_per_liter': calculations.get('price_per_liter', 0)
+    })
+
     # Generate reading ID
     reading_id = f"TR-{reading_input.tank_id}-{reading_input.date}-{uuid.uuid4().hex[:8]}"
 
@@ -439,6 +451,9 @@ def submit_tank_reading(
 
         # Inter-delivery sales timeline
         delivery_timeline=delivery_timeline,
+
+        # Three-way reconciliation report
+        reconciliation=reconciliation,
 
         # DEPRECATED: Delivery information (kept for backward compatibility)
         delivery_occurred=len(deliveries) > 0 or reading_input.delivery_occurred,

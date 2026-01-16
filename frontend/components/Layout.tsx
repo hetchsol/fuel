@@ -74,7 +74,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       roles: ['supervisor', 'owner'],
       children: [
         { path: '/accounts', label: 'Accounts', roles: ['supervisor', 'owner'] },
-        { path: '/reconciliation', label: 'Reconciliation', roles: ['supervisor', 'owner'] },
+        { path: '/reconciliation', label: 'Shift Reconciliation', roles: ['supervisor', 'owner'] },
+        { path: '/three-way-reconciliation', label: 'Three-Way Reconciliation', roles: ['supervisor', 'owner'] },
       ]
     },
     {

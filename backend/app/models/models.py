@@ -451,6 +451,9 @@ class TankVolumeReadingOutput(BaseModel):
     # Inter-delivery sales timeline (when multiple deliveries occur)
     delivery_timeline: Optional[dict] = None  # Timeline of sales between deliveries
 
+    # Three-Way Reconciliation (Tank, Nozzle, Cash)
+    reconciliation: Optional[dict] = None  # Three-way reconciliation report
+
     # DEPRECATED: Delivery Information (kept for backward compatibility display)
     delivery_occurred: bool
     delivery_volume: Optional[float] = None  # AK - AJ
