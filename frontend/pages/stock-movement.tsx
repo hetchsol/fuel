@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -23,10 +23,42 @@ export default function StockMovement() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState('')
+  const [currentStock, setCurrentStock] = useState<any>(null)
+  const [fetchingStock, setFetchingStock] = useState(false)
 
   const { data: deliveries, mutate } = useSWR('deliveries', fetchDeliveries, {
     refreshInterval: 10000, // Refresh every 10 seconds
   })
+
+  // Fetch current tank stock when tank changes
+  useEffect(() => {
+    fetchCurrentStock()
+  }, [formData.tank_id])
+
+  const fetchCurrentStock = async () => {
+    setFetchingStock(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const response = await fetch(
+        `${BASE}/tank-readings/readings/${formData.tank_id}/latest`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        setCurrentStock(data)
+      } else {
+        setCurrentStock(null)
+      }
+    } catch (err) {
+      console.error('Error fetching current stock:', err)
+      setCurrentStock(null)
+    } finally {
+      setFetchingStock(false)
+    }
+  }
 
   const handleTankChange = (tankId: string) => {
     const fuelType = tankId === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'
@@ -78,8 +110,9 @@ export default function StockMovement() {
         delivery_note: '',
       })
 
-      // Refresh deliveries list
+      // Refresh deliveries list and current stock
       mutate()
+      fetchCurrentStock()
     } catch (err: any) {
       setError(err.message || 'Failed to receive delivery')
     } finally {
@@ -92,6 +125,70 @@ export default function StockMovement() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Stock Movement</h1>
         <p className="mt-2 text-sm text-gray-600">Receive fuel deliveries and track stock levels</p>
+      </div>
+
+      {/* Current Tank Stock Display */}
+      <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg shadow-lg p-6 border-2 border-blue-200">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-blue-900 mb-1">📊 Current Tank Level</h2>
+            <p className="text-sm text-blue-700">
+              {formData.tank_id === 'TANK-DIESEL' ? '🛢️ Diesel Tank' : '⛽ Petrol Tank'}
+            </p>
+          </div>
+          {fetchingStock ? (
+            <div className="text-blue-600 text-sm">Loading...</div>
+          ) : currentStock ? (
+            <div className="text-right">
+              <div className="text-4xl font-bold text-blue-900">
+                {currentStock.opening_volume
+                  ? currentStock.opening_volume.toLocaleString()
+                  : currentStock.closing_volume
+                    ? currentStock.closing_volume.toLocaleString()
+                    : 'N/A'}
+              </div>
+              <div className="text-sm text-blue-700 font-medium">Liters</div>
+              {currentStock.date && (
+                <div className="text-xs text-blue-600 mt-1">
+                  As of: {currentStock.date} ({currentStock.shift_type})
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-gray-500 text-sm">No reading available</div>
+          )}
+        </div>
+
+        {currentStock && currentStock.opening_volume && (
+          <div className="mt-4 pt-4 border-t border-blue-200">
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              <div>
+                <p className="text-blue-600 text-xs">Opening</p>
+                <p className="font-semibold text-blue-900">{currentStock.opening_volume.toLocaleString()} L</p>
+              </div>
+              {currentStock.closing_volume && (
+                <div>
+                  <p className="text-blue-600 text-xs">Closing</p>
+                  <p className="font-semibold text-blue-900">{currentStock.closing_volume.toLocaleString()} L</p>
+                </div>
+              )}
+              {currentStock.tank_volume_movement && (
+                <div>
+                  <p className="text-blue-600 text-xs">Dispensed</p>
+                  <p className="font-semibold text-blue-900">{currentStock.tank_volume_movement.toLocaleString()} L</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={fetchCurrentStock}
+          disabled={fetchingStock}
+          className="mt-3 text-xs text-blue-600 hover:text-blue-800 underline disabled:opacity-50"
+        >
+          🔄 Refresh Current Stock
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

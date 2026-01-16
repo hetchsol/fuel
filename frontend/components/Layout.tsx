@@ -46,10 +46,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       roles: ['user', 'supervisor', 'owner'],
       children: [
         { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'owner'] },
+        { path: '/stock-movement', label: 'Deliveries', roles: ['supervisor', 'owner'] },
         { path: '/readings', label: 'Readings', roles: ['user', 'supervisor', 'owner'] },
         { path: '/shifts', label: 'Shifts', roles: ['user', 'supervisor', 'owner'] },
         { path: '/sales', label: 'Sales', roles: ['supervisor', 'owner'] },
         { path: '/validated-readings', label: 'Enter Readings', roles: ['supervisor', 'owner'] },
+      ]
+    },
+    {
+      label: 'Inventory',
+      roles: ['supervisor', 'owner'],
+      children: [
+        { path: '/inventory', label: 'Tanks', roles: ['supervisor', 'owner'] },
+        { path: '/tank-movement', label: 'Tank Movement', roles: ['supervisor', 'owner'] },
       ]
     },
     {
@@ -58,7 +67,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       children: [
         { path: '/pumps', label: 'Pumps', roles: ['user', 'supervisor', 'owner'] },
         { path: '/nozzles', label: 'Nozzles', roles: ['user', 'supervisor', 'owner'] },
-        { path: '/inventory', label: 'Tanks', roles: ['supervisor', 'owner'] },
       ]
     },
     {
@@ -67,14 +75,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       children: [
         { path: '/accounts', label: 'Accounts', roles: ['supervisor', 'owner'] },
         { path: '/reconciliation', label: 'Reconciliation', roles: ['supervisor', 'owner'] },
-      ]
-    },
-    {
-      label: 'Inventory',
-      roles: ['supervisor', 'owner'],
-      children: [
-        { path: '/tank-movement', label: 'Tank Movement', roles: ['supervisor', 'owner'] },
-        { path: '/stock-movement', label: 'Stock Movement', roles: ['supervisor', 'owner'] },
       ]
     },
     {
