@@ -39,43 +39,36 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   // Define navigation items with role requirements and nested structure
+  // Organized by workflow: what users do daily, what they monitor, what they analyze
   const allNavItems = [
     { path: '/', label: 'Dashboard', roles: ['user', 'supervisor', 'owner'] },
     {
-      label: 'Operations',
-      roles: ['user', 'supervisor', 'owner'],
+      label: 'Daily Operations',
+      roles: ['supervisor', 'owner'],
       children: [
         { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'owner'] },
-        { path: '/stock-movement', label: 'Deliveries', roles: ['supervisor', 'owner'] },
-        { path: '/readings', label: 'Readings', roles: ['user', 'supervisor', 'owner'] },
-        { path: '/shifts', label: 'Shifts', roles: ['user', 'supervisor', 'owner'] },
-        { path: '/sales', label: 'Sales', roles: ['supervisor', 'owner'] },
         { path: '/validated-readings', label: 'Enter Readings', roles: ['supervisor', 'owner'] },
+        { path: '/stock-movement', label: 'Stock Movement', roles: ['supervisor', 'owner'] },
       ]
     },
     {
-      label: 'Inventory',
-      roles: ['supervisor', 'owner'],
-      children: [
-        { path: '/inventory', label: 'Tanks', roles: ['supervisor', 'owner'] },
-        { path: '/tank-movement', label: 'Tank Movement', roles: ['supervisor', 'owner'] },
-      ]
-    },
-    {
-      label: 'Station Setup',
+      label: 'View & Monitor',
       roles: ['user', 'supervisor', 'owner'],
       children: [
-        { path: '/pumps', label: 'Pumps', roles: ['user', 'supervisor', 'owner'] },
-        { path: '/nozzles', label: 'Nozzles', roles: ['user', 'supervisor', 'owner'] },
+        { path: '/inventory', label: 'Tank Levels', roles: ['supervisor', 'owner'] },
+        { path: '/readings', label: 'Nozzle Readings', roles: ['user', 'supervisor', 'owner'] },
+        { path: '/shifts', label: 'Shifts', roles: ['user', 'supervisor', 'owner'] },
+        { path: '/sales', label: 'Sales', roles: ['supervisor', 'owner'] },
       ]
     },
     {
-      label: 'Financial',
+      label: 'Reconciliation',
       roles: ['supervisor', 'owner'],
       children: [
-        { path: '/accounts', label: 'Accounts', roles: ['supervisor', 'owner'] },
-        { path: '/reconciliation', label: 'Shift Reconciliation', roles: ['supervisor', 'owner'] },
         { path: '/three-way-reconciliation', label: 'Three-Way Reconciliation', roles: ['supervisor', 'owner'] },
+        { path: '/tank-movement', label: 'Tank Movement Analysis', roles: ['supervisor', 'owner'] },
+        { path: '/tank-analysis', label: 'Tank Analysis', roles: ['supervisor', 'owner'] },
+        { path: '/reconciliation', label: 'Shift Reconciliation', roles: ['supervisor', 'owner'] },
       ]
     },
     {
@@ -85,17 +78,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/tank-readings-report', label: 'Tank Readings Report', roles: ['supervisor', 'owner'] },
         { path: '/daily-sales-report', label: 'Daily Sales Report', roles: ['supervisor', 'owner'] },
         { path: '/reports', label: 'Date Range Reports', roles: ['supervisor', 'owner'] },
-        { path: '/tank-analysis', label: 'Tank Analysis', roles: ['supervisor', 'owner'] },
         { path: '/advanced-reports', label: 'Advanced Reports', roles: ['supervisor', 'owner'] },
         { path: '/readings-monitor', label: 'Readings Monitor', roles: ['owner'] },
       ]
     },
     {
-      label: 'Settings',
+      label: 'Financial',
+      roles: ['supervisor', 'owner'],
+      children: [
+        { path: '/accounts', label: 'Credit Accounts', roles: ['supervisor', 'owner'] },
+      ]
+    },
+    {
+      label: 'Setup & Settings',
       roles: ['owner'],
       children: [
-        { path: '/settings', label: 'General', roles: ['owner'] },
+        { path: '/pumps', label: 'Pumps', roles: ['owner'] },
+        { path: '/nozzles', label: 'Nozzles', roles: ['owner'] },
         { path: '/infrastructure', label: 'Infrastructure', roles: ['owner'] },
+        { path: '/settings', label: 'Settings', roles: ['owner'] },
         { path: '/users', label: 'Users', roles: ['owner'] },
       ]
     },
