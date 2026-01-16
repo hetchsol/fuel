@@ -58,23 +58,85 @@ def determine_variance_status(variance_percent: float) -> str:
         return 'FAIL'
 
 
+def calculate_tank_volume_movement_v2(
+    opening_volume: float,
+    closing_volume: float,
+    deliveries: List = None
+) -> float:
+    """
+    Calculate tank volume movement with multiple deliveries support (NEW SIMPLIFIED FORMULA).
+
+    Formula: Tank Movement = (Opening - Closing) + Sum(All Deliveries)
+
+    This formula treats all deliveries as additions to available fuel.
+    The volume dispensed equals: opening + total_delivered - closing
+
+    Args:
+        opening_volume: Tank level at start of shift (liters)
+        closing_volume: Tank level at end of shift (liters)
+        deliveries: List of DeliveryReference objects (optional)
+
+    Returns:
+        Total volume dispensed from tank (liters)
+
+    Examples:
+        >>> # No delivery
+        >>> calculate_tank_volume_movement_v2(10000, 8000, [])
+        2000.0  # Simple: 10000 - 8000
+
+        >>> # Single delivery
+        >>> delivery = type('obj', (object,), {'volume_delivered': 15000})()
+        >>> calculate_tank_volume_movement_v2(10000, 18000, [delivery])
+        7000.0  # (10000 - 18000) + 15000 = -8000 + 15000
+
+        >>> # Multiple deliveries
+        >>> d1 = type('obj', (object,), {'volume_delivered': 10000})()
+        >>> d2 = type('obj', (object,), {'volume_delivered': 8000})()
+        >>> calculate_tank_volume_movement_v2(5000, 15000, [d1, d2])
+        8000.0  # (5000 - 15000) + 18000 = -10000 + 18000
+    """
+    if closing_volume <= 0:
+        return 0.0
+
+    # Base movement (can be negative if deliveries occurred)
+    base_movement = opening_volume - closing_volume
+
+    # Add all delivery volumes
+    if deliveries and len(deliveries) > 0:
+        total_delivered = sum(d.volume_delivered for d in deliveries)
+        return base_movement + total_delivered
+
+    # No deliveries - simple subtraction
+    return base_movement
+
+
 def calculate_tank_volume_movement(
     opening_volume: float,
     closing_volume: float,
     before_offload: Optional[float] = None,
-    after_offload: Optional[float] = None
+    after_offload: Optional[float] = None,
+    deliveries: List = None
 ) -> float:
     """
-    Calculate tank volume movement (fuel dispensed from tank).
+    Calculate tank volume movement (fuel dispensed from tank) - BACKWARD COMPATIBLE WRAPPER.
 
-    Replicates Excel formula:
+    Decision Logic:
+    1. If deliveries list provided → use NEW simplified formula
+    2. If before/after_offload provided → use OLD two-period formula (legacy)
+    3. Otherwise → simple subtraction (no delivery)
+
+    This ensures existing historical data continues to work correctly
+    while new submissions use the improved formula.
+
+    Replicates Excel formula for legacy support:
     =IF(AL>0, IF(AK>0, (AK-AL)+(AI-AJ), AI-AL), 0)
 
     Args:
         opening_volume: AI - Opening tank level (start of day)
         closing_volume: AL - Closing tank level (end of day)
-        before_offload: AJ - Level before delivery (optional)
-        after_offload: AK - Level after delivery (optional)
+        before_offload: AJ - Level before delivery (optional, legacy)
+        after_offload: AK - Level after delivery (optional, legacy)
+        deliveries: List of DeliveryReference objects (optional, new format)
 
     Returns:
         Total volume dispensed from tank (liters)
@@ -84,15 +146,25 @@ def calculate_tank_volume_movement(
         >>> calculate_tank_volume_movement(26887.21, 25117.64)
         1769.57
 
-        >>> # With delivery
+        >>> # Legacy single delivery (old format)
         >>> calculate_tank_volume_movement(10000, 8000, 5000, 12000)
         9000.0  # (10000-5000) + (12000-8000) = 5000 + 4000
+
+        >>> # New format with multiple deliveries
+        >>> d1 = type('obj', (object,), {'volume_delivered': 10000})()
+        >>> d2 = type('obj', (object,), {'volume_delivered': 8000})()
+        >>> calculate_tank_volume_movement(5000, 15000, deliveries=[d1, d2])
+        8000.0  # New formula: (5000 - 15000) + 18000
     """
+    # NEW FORMAT: Multiple deliveries
+    if deliveries and len(deliveries) > 0:
+        return calculate_tank_volume_movement_v2(opening_volume, closing_volume, deliveries)
+
     # Scenario 3: No valid closing reading
     if closing_volume <= 0:
         return 0.0
 
-    # Scenario 2: Delivery occurred
+    # LEGACY FORMAT: Single delivery with two-period calculation
     if after_offload and after_offload > 0:
         # Check if before_offload is recorded
         if before_offload and before_offload > 0:
@@ -234,6 +306,113 @@ def validate_tank_readings(
     else:
         status = "PASS"
         valid = True
+
+    return {
+        'valid': valid,
+        'status': status,
+        'errors': errors,
+        'warnings': warnings
+    }
+
+
+def validate_multiple_deliveries(
+    deliveries: List,
+    opening_volume: float,
+    closing_volume: float,
+    tank_capacity: float
+) -> Dict[str, any]:
+    """
+    Validate multiple deliveries for logical consistency.
+
+    Checks:
+    1. Each delivery: after_volume > before_volume
+    2. No delivery exceeds tank capacity
+    3. Deliveries in chronological order (by time)
+    4. Volume sequence consistency (optional warnings)
+    5. Calculated volume matches stated volume
+
+    Args:
+        deliveries: List of DeliveryReference objects
+        opening_volume: Tank level at start of shift
+        closing_volume: Tank level at end of shift
+        tank_capacity: Maximum tank capacity
+
+    Returns:
+        {
+            'valid': bool,
+            'status': 'PASS'|'WARNING'|'FAIL',
+            'errors': List[str],
+            'warnings': List[str]
+        }
+    """
+    errors = []
+    warnings = []
+
+    if not deliveries or len(deliveries) == 0:
+        return {'valid': True, 'status': 'PASS', 'errors': [], 'warnings': []}
+
+    # Sort deliveries by time
+    sorted_deliveries = sorted(deliveries, key=lambda d: d.delivery_time)
+
+    for i, delivery in enumerate(sorted_deliveries):
+        delivery_num = i + 1
+
+        # Validation 1: After must be greater than before
+        if delivery.after_volume <= delivery.before_volume:
+            errors.append(
+                f"Delivery {delivery_num} ({delivery.delivery_time}): "
+                f"After volume ({delivery.after_volume}L) must be greater than "
+                f"before volume ({delivery.before_volume}L)"
+            )
+
+        # Validation 2: Tank capacity check
+        if delivery.after_volume > tank_capacity:
+            errors.append(
+                f"Delivery {delivery_num}: After volume ({delivery.after_volume}L) "
+                f"exceeds tank capacity ({tank_capacity}L)"
+            )
+
+        # Validation 3: Calculated volume matches stated volume
+        calculated_vol = delivery.after_volume - delivery.before_volume
+        if abs(calculated_vol - delivery.volume_delivered) > 0.1:
+            warnings.append(
+                f"Delivery {delivery_num}: Calculated volume ({calculated_vol:.2f}L) "
+                f"differs from stated volume ({delivery.volume_delivered:.2f}L)"
+            )
+
+        # Validation 4: Check sequence consistency with previous delivery
+        if i > 0:
+            prev_delivery = sorted_deliveries[i - 1]
+            # Allow 100L tolerance for sales between deliveries
+            if delivery.before_volume > prev_delivery.after_volume + 100:
+                warnings.append(
+                    f"Delivery {delivery_num}: Starts at {delivery.before_volume}L but "
+                    f"previous delivery ended at {prev_delivery.after_volume}L. "
+                    f"This suggests significant sales between deliveries."
+                )
+
+    # Validation 5: Check first delivery alignment with opening
+    if abs(sorted_deliveries[0].before_volume - opening_volume) > 100:
+        warnings.append(
+            f"First delivery before-volume ({sorted_deliveries[0].before_volume}L) "
+            f"differs from opening volume ({opening_volume}L) by "
+            f"{abs(sorted_deliveries[0].before_volume - opening_volume):.2f}L. "
+            f"This suggests sales occurred before the first delivery was recorded."
+        )
+
+    # Validation 6: Check last delivery alignment with closing
+    last_delivery = sorted_deliveries[-1]
+    if last_delivery.after_volume > closing_volume:
+        # This means sales happened after the delivery
+        expected_sales = last_delivery.after_volume - closing_volume
+        warnings.append(
+            f"Last delivery ended at {last_delivery.after_volume}L but "
+            f"closing is {closing_volume}L, indicating {expected_sales:.2f}L "
+            f"were dispensed after the last delivery."
+        )
+
+    valid = len(errors) == 0
+    status = 'FAIL' if errors else ('WARNING' if warnings else 'PASS')
 
     return {
         'valid': valid,

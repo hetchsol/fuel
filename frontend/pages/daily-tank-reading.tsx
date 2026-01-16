@@ -95,6 +95,19 @@ export default function DailyTankReading() {
   const [customerAllocations, setCustomerAllocations] = useState<any[]>([])
   const [allocationBalance, setAllocationBalance] = useState<any>(null)
 
+  // NEW: Multiple deliveries state
+  const [deliveries, setDeliveries] = useState<Array<{
+    id: string;
+    time: string;
+    supplier: string;
+    invoice_number: string;
+    fuel_type: string;  // NEW: diesel or petrol
+    before_volume: string;
+    after_volume: string;
+    volume_delivered: number;
+  }>>([])
+  const [availableDeliveries, setAvailableDeliveries] = useState<any[]>([])
+
   useEffect(() => {
     const userData = localStorage.getItem('user')
     if (!userData) {
@@ -137,6 +150,257 @@ export default function DailyTankReading() {
     } catch (err) {
       console.error('Error fetching customers:', err)
     }
+  }
+
+  // NEW: Fetch unlinked deliveries when tank, date, or shift changes
+  useEffect(() => {
+    if (selectedTank && formData.date && formData.shift_type) {
+      fetchUnlinkedDeliveries()
+    }
+  }, [selectedTank, formData.date, formData.shift_type])
+
+  // NEW: Fetch unlinked deliveries for auto-linking
+  const fetchUnlinkedDeliveries = async () => {
+    try {
+      const token = localStorage.getItem('accessToken')
+      const response = await fetch(
+        `${BASE}/tank-readings/deliveries/${selectedTank}?date=${formData.date}&shift_type=${formData.shift_type}&unlinked_only=true`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        setAvailableDeliveries(data)
+      }
+    } catch (err) {
+      console.error('Error fetching unlinked deliveries:', err)
+    }
+  }
+
+  // NEW: Get current tank reading estimate for new delivery
+  const getCurrentTankReading = () => {
+    const sortedDeliveries = getSortedDeliveries()
+
+    if (sortedDeliveries.length === 0) {
+      // First delivery: use opening volume
+      return parseFloat(formData.opening_volume) || 0
+    } else {
+      // Use last delivery's after_volume
+      const lastDelivery = sortedDeliveries[sortedDeliveries.length - 1]
+      return parseFloat(lastDelivery.after_volume) || 0
+    }
+  }
+
+  // NEW: Add new delivery inline with auto-timestamp (FULL FORMAT)
+  const addDelivery = () => {
+    // Get current date and time in DD-MM-YYYY HH:MM format
+    const now = new Date()
+    const day = String(now.getDate()).padStart(2, '0')
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const year = now.getFullYear()
+    const hours = String(now.getHours()).padStart(2, '0')
+    const minutes = String(now.getMinutes()).padStart(2, '0')
+    const fullTimestamp = `${day}-${month}-${year} ${hours}:${minutes}`
+
+    // Get estimated current tank reading
+    const estimatedTankLevel = getCurrentTankReading()
+
+    // Determine fuel type from selected tank
+    const fuelType = selectedTank === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'
+
+    const newDelivery = {
+      id: `temp-${Date.now()}`,
+      time: fullTimestamp,  // AUTO-POPULATED with full timestamp DD-MM-YYYY HH:MM
+      supplier: '',
+      invoice_number: '',
+      fuel_type: fuelType,  // AUTO-POPULATED from selected tank
+      before_volume: estimatedTankLevel > 0 ? estimatedTankLevel.toString() : '',  // AUTO-POPULATED
+      after_volume: '',
+      volume_delivered: 0
+    }
+    setDeliveries([...deliveries, newDelivery])
+  }
+
+  // NEW: Update delivery field with smart auto-calculation
+  const updateDelivery = (index: number, field: string, value: string) => {
+    const updated = [...deliveries]
+    updated[index] = { ...updated[index], [field]: value }
+
+    // Smart auto-calculation based on what user is entering
+    if (field === 'volume_delivered') {
+      // User entered delivery volume directly (from invoice/delivery note)
+      const delivered = parseFloat(value) || 0
+      const before = parseFloat(updated[index].before_volume) || 0
+
+      // If before_volume exists, calculate after_volume
+      if (before > 0) {
+        updated[index].after_volume = (before + delivered).toString()
+      }
+      updated[index].volume_delivered = delivered
+    } else if (field === 'before_volume') {
+      // User entered before volume, calculate after using delivery volume
+      const before = parseFloat(value) || 0
+      const delivered = updated[index].volume_delivered || 0
+
+      if (delivered > 0) {
+        updated[index].after_volume = (before + delivered).toString()
+      }
+    } else if (field === 'after_volume') {
+      // User entered after volume, calculate delivery volume
+      const after = parseFloat(value) || 0
+      const before = parseFloat(updated[index].before_volume) || 0
+
+      if (before > 0) {
+        updated[index].volume_delivered = after - before
+      }
+    }
+
+    setDeliveries(updated)
+  }
+
+  // NEW: Remove delivery
+  const removeDelivery = (id: string) => {
+    setDeliveries(deliveries.filter(d => d.id !== id))
+  }
+
+  // NEW: Link standalone delivery
+  const linkStandaloneDelivery = (deliveryId: string) => {
+    const standalone = availableDeliveries.find(d => d.delivery_id === deliveryId)
+    if (standalone) {
+      const linked = {
+        id: standalone.delivery_id,
+        time: standalone.time,
+        supplier: standalone.supplier,
+        invoice_number: standalone.invoice_number || '',
+        fuel_type: standalone.fuel_type || (selectedTank === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'),
+        before_volume: standalone.volume_before.toString(),
+        after_volume: standalone.volume_after.toString(),
+        volume_delivered: standalone.actual_volume_delivered
+      }
+      setDeliveries([...deliveries, linked])
+      setAvailableDeliveries(availableDeliveries.filter(d => d.delivery_id !== deliveryId))
+    }
+  }
+
+  // NEW: Calculate total delivered volume
+  const getTotalDelivered = () => {
+    return deliveries.reduce((sum, d) => {
+      const vol = parseFloat(d.after_volume) - parseFloat(d.before_volume)
+      return sum + (isNaN(vol) ? 0 : vol)
+    }, 0)
+  }
+
+  // NEW: Get deliveries sorted by time
+  const getSortedDeliveries = () => {
+    return [...deliveries].sort((a, b) => {
+      if (!a.time || !b.time) return 0
+      return a.time.localeCompare(b.time)
+    })
+  }
+
+  // NEW: Calculate expected tank level before a delivery
+  const calculateExpectedBeforeVolume = (deliveryIndex: number) => {
+    const sortedDeliveries = getSortedDeliveries()
+    const delivery = sortedDeliveries[deliveryIndex]
+
+    if (!delivery || !delivery.time) return null
+
+    const openingVol = parseFloat(formData.opening_volume) || 0
+    const { totalElectronic } = calculateTotals()
+
+    if (deliveryIndex === 0) {
+      // First delivery: Opening - sales up to this point
+      // We don't know exact sales timing, so estimate proportionally
+      return openingVol // Simplified: just show opening for now
+    } else {
+      // Subsequent delivery: Previous after_volume - sales since then
+      const previousDelivery = sortedDeliveries[deliveryIndex - 1]
+      const prevAfter = parseFloat(previousDelivery.after_volume) || 0
+      return prevAfter // Simplified: show previous after volume
+    }
+  }
+
+  // NEW: Validate delivery sequence
+  const validateDeliverySequence = () => {
+    const sorted = getSortedDeliveries()
+    const warnings = []
+
+    for (let i = 0; i < sorted.length; i++) {
+      const delivery = sorted[i]
+      const beforeVol = parseFloat(delivery.before_volume) || 0
+      const afterVol = parseFloat(delivery.after_volume) || 0
+      const delivered = delivery.volume_delivered || 0
+
+      // Check if after = before + delivered
+      if (beforeVol > 0 && afterVol > 0) {
+        const calculated = beforeVol + delivered
+        const diff = Math.abs(afterVol - calculated)
+        if (diff > 10) {
+          warnings.push(`Delivery #${i + 1}: After volume (${afterVol.toFixed(0)}L) doesn't match before (${beforeVol.toFixed(0)}L) + delivered (${delivered.toFixed(0)}L)`)
+        }
+      }
+
+      // Check sequence: before_volume should be less than after_volume
+      if (beforeVol >= afterVol && afterVol > 0) {
+        warnings.push(`Delivery #${i + 1}: Before volume should be less than after volume`)
+      }
+
+      // Check if before_volume makes sense relative to previous delivery
+      if (i > 0) {
+        const prevDelivery = sorted[i - 1]
+        const prevAfter = parseFloat(prevDelivery.after_volume) || 0
+        if (prevAfter > 0 && beforeVol > prevAfter) {
+          warnings.push(`Delivery #${i + 1}: Before volume (${beforeVol.toFixed(0)}L) is higher than previous after volume (${prevAfter.toFixed(0)}L) - tank can't gain fuel between deliveries`)
+        }
+      }
+    }
+
+    return warnings
+  }
+
+  // NEW: Calculate tank state at each point in time
+  const calculateTimeline = () => {
+    const opening = parseFloat(formData.opening_volume) || 0
+    const closing = parseFloat(formData.closing_volume) || 0
+    const { totalElectronic } = calculateTotals()
+    const sortedDeliveries = getSortedDeliveries()
+
+    const timeline = []
+
+    // Start point
+    timeline.push({
+      time: 'Start',
+      description: 'Shift Opening',
+      volume: opening,
+      type: 'opening'
+    })
+
+    // Add deliveries with estimated sales between them
+    let cumulativeDeliveries = 0
+    sortedDeliveries.forEach((delivery, index) => {
+      cumulativeDeliveries += delivery.volume_delivered || 0
+
+      // Add delivery point
+      timeline.push({
+        time: delivery.time || 'Unknown',
+        description: `Delivery from ${delivery.supplier}`,
+        volume: parseFloat(delivery.after_volume) || null,
+        deliveredVolume: delivery.volume_delivered,
+        type: 'delivery'
+      })
+    })
+
+    // End point
+    timeline.push({
+      time: 'End',
+      description: 'Shift Closing',
+      volume: closing,
+      type: 'closing'
+    })
+
+    return timeline
   }
 
   // Auto-calculate Expected Cash based on Total Electronic * Price per Liter
@@ -185,10 +449,19 @@ export default function DailyTankReading() {
     return { totalElectronic, totalMechanical, readings }
   }
 
-  // Calculate Tank Volume Movement (Column AM)
+  // NEW: Calculate Tank Volume Movement with multiple deliveries support
   const calculateTankVolumeMovement = () => {
     const openingVol = parseFloat(formData.opening_volume) || 0
     const closingVol = parseFloat(formData.closing_volume) || 0
+    const totalDelivered = getTotalDelivered()
+
+    // NEW SIMPLIFIED FORMULA: Tank Movement = (Opening - Closing) + Total Delivered
+    // This accounts for multiple deliveries correctly
+    if (deliveries.length > 0) {
+      return (openingVol - closingVol) + totalDelivered
+    }
+
+    // LEGACY: Old single delivery formula (for backward compatibility)
     const beforeOffload = parseFloat(formData.before_offload_volume) || 0
     const afterOffload = parseFloat(formData.after_offload_volume) || 0
 
@@ -320,6 +593,30 @@ export default function DailyTankReading() {
         throw new Error('Please enter at least one nozzle reading')
       }
 
+      // NEW: Prepare deliveries array (prioritize new format)
+      const deliveriesPayload = deliveries.length > 0
+        ? deliveries.map(d => {
+            const volumeDelivered = typeof d.volume_delivered === 'number'
+              ? d.volume_delivered
+              : parseFloat(d.volume_delivered) || 0
+
+            // If before/after volumes are provided, use them; otherwise calculate from delivery volume
+            const beforeVol = d.before_volume ? parseFloat(d.before_volume) : 0
+            const afterVol = d.after_volume ? parseFloat(d.after_volume) : (beforeVol + volumeDelivered)
+
+            return {
+              delivery_id: d.id.startsWith('temp-') ? null : d.id,  // null for new inline, ID for linked
+              delivery_time: d.time,
+              supplier: d.supplier,
+              fuel_type: d.fuel_type || (selectedTank === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'),  // NEW
+              invoice_number: d.invoice_number || null,
+              before_volume: beforeVol,
+              after_volume: afterVol,
+              volume_delivered: volumeDelivered
+            }
+          })
+        : []
+
       const payload = {
         tank_id: selectedTank,
         date: formData.date,
@@ -337,13 +634,16 @@ export default function DailyTankReading() {
         // Nozzle readings
         nozzle_readings: nozzleReadings,
 
-        // Delivery
-        delivery_occurred: formData.delivery_occurred,
-        before_offload_volume: formData.before_offload_volume ? parseFloat(formData.before_offload_volume) : null,
-        after_offload_volume: formData.after_offload_volume ? parseFloat(formData.after_offload_volume) : null,
-        delivery_time: formData.delivery_time || null,
-        supplier: formData.supplier || null,
-        invoice_number: formData.invoice_number || null,
+        // NEW: Multiple deliveries array (PRIORITY)
+        deliveries: deliveriesPayload,
+
+        // LEGACY: Single delivery fields (backward compatibility - only used if no deliveries array)
+        delivery_occurred: deliveries.length === 0 ? formData.delivery_occurred : false,
+        before_offload_volume: deliveries.length === 0 && formData.before_offload_volume ? parseFloat(formData.before_offload_volume) : null,
+        after_offload_volume: deliveries.length === 0 && formData.after_offload_volume ? parseFloat(formData.after_offload_volume) : null,
+        delivery_time: deliveries.length === 0 ? (formData.delivery_time || null) : null,
+        supplier: deliveries.length === 0 ? (formData.supplier || null) : null,
+        invoice_number: deliveries.length === 0 ? (formData.invoice_number || null) : null,
 
         // Financial
         price_per_liter: formData.price_per_liter ? parseFloat(formData.price_per_liter) : null,
@@ -1062,6 +1362,538 @@ export default function DailyTankReading() {
                   })()}
                 </div>
               )}
+
+              {/* NEW: Multiple Deliveries Section */}
+              <div className="rounded-lg p-6 mb-6 transition-colors duration-300" style={{
+                backgroundColor: theme.accentLight,
+                borderColor: theme.accent,
+                borderWidth: '2px'
+              }}>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold" style={{ color: theme.accent }}>
+                      🚚 Fuel Deliveries (Multiple Supported)
+                    </h3>
+                    <p className="text-sm opacity-75 mt-1" style={{ color: theme.accent }}>
+                      Add multiple deliveries or link existing standalone deliveries
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addDelivery}
+                    className="px-4 py-2 text-white rounded-md hover:opacity-90 transition flex items-center gap-2"
+                    style={{ backgroundColor: theme.accent }}
+                  >
+                    <span className="text-xl">+</span>
+                    Add Delivery
+                  </button>
+                </div>
+
+                {/* Auto-Link Suggestion Box */}
+                {availableDeliveries.length > 0 && (
+                  <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <div className="text-2xl">💡</div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-yellow-900 mb-2">
+                          {availableDeliveries.length} Standalone Delivery(s) Available
+                        </h4>
+                        <p className="text-sm text-yellow-800 mb-3">
+                          These deliveries were recorded separately and match this tank/date/shift. Link them to this reading:
+                        </p>
+                        <div className="space-y-2">
+                          {availableDeliveries.map((delivery) => (
+                            <div
+                              key={delivery.delivery_id}
+                              className="bg-white rounded-lg p-3 border border-yellow-300 flex items-center justify-between"
+                            >
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-900">
+                                  {delivery.supplier} - {delivery.time}
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  Volume: {delivery.actual_volume_delivered.toFixed(2)}L
+                                  {delivery.invoice_number && ` • Invoice: ${delivery.invoice_number}`}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => linkStandaloneDelivery(delivery.delivery_id)}
+                                className="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition text-sm"
+                              >
+                                Link
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Deliveries List */}
+                {deliveries.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Chronological order note */}
+                    {deliveries.length > 1 && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <p className="text-sm text-blue-800">
+                          📋 <strong>Deliveries are displayed in chronological order</strong> based on delivery time.
+                          This helps track the tank state throughout the shift.
+                        </p>
+                      </div>
+                    )}
+
+                    {getSortedDeliveries().map((delivery, index) => {
+                      // Find the original index for updating
+                      const originalIndex = deliveries.findIndex(d => d.id === delivery.id)
+
+                      return (
+                      <div
+                        key={delivery.id}
+                        className="rounded-lg p-4 border-2 transition-colors duration-300"
+                        style={{
+                          backgroundColor: theme.cardBg,
+                          borderColor: theme.accent
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-lg">
+                              {index + 1}
+                            </div>
+                            <div>
+                              <h4 className="font-semibold" style={{ color: theme.accent }}>
+                                Delivery #{index + 1}
+                                {delivery.id.startsWith('temp-') ? ' (New)' : ' (Linked)'}
+                              </h4>
+                              <p className="text-xs opacity-75" style={{ color: theme.accent }}>
+                                {delivery.time ? `⏰ ${delivery.time}` : 'Time not set'}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeDelivery(delivery.id)}
+                            className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition text-sm"
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+                        {/* Current Tank Reading Display */}
+                        {delivery.before_volume && (
+                          <div className="mb-4 rounded-lg p-4 border-2 border-green-400 bg-green-50">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs font-medium text-green-800 mb-1">
+                                  📊 Current Tank Reading (Before This Delivery)
+                                </p>
+                                <p className="text-xs text-green-700">
+                                  {index === 0
+                                    ? 'Based on shift opening volume'
+                                    : `Based on previous delivery's after-volume`}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-3xl font-bold text-green-600">
+                                  {parseFloat(delivery.before_volume).toFixed(0)}
+                                </p>
+                                <p className="text-xs text-green-700">Liters</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Row 1: Time and Fuel Type */}
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
+                              Delivery Time <span className="text-red-500">*</span>
+                              <span className="text-xs ml-2 opacity-75">(Auto-filled)</span>
+                            </label>
+                            <input
+                              type="time"
+                              value={delivery.time}
+                              onChange={(e) => updateDelivery(originalIndex, 'time', e.target.value)}
+                              className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
+                              style={{
+                                borderColor: theme.accent,
+                                backgroundColor: theme.cardBg,
+                                color: theme.textPrimary
+                              }}
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
+                              Fuel Type <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={delivery.fuel_type || ''}
+                              onChange={(e) => updateDelivery(originalIndex, 'fuel_type', e.target.value)}
+                              className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 font-medium transition-colors duration-300"
+                              style={{
+                                borderColor: theme.accent,
+                                backgroundColor: theme.cardBg,
+                                color: delivery.fuel_type === 'Diesel' ? '#9333EA' : '#10B981'
+                              }}
+                              required
+                            >
+                              <option value="">Select Fuel Type</option>
+                              <option value="Diesel" style={{ color: '#9333EA' }}>🟣 Diesel (LSD)</option>
+                              <option value="Petrol" style={{ color: '#10B981' }}>🟢 Petrol (UNL)</option>
+                            </select>
+                          </div>
+
+                          {/* Row 2: Supplier and Invoice */}
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
+                              Supplier <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={delivery.supplier}
+                              onChange={(e) => updateDelivery(originalIndex, 'supplier', e.target.value)}
+                              className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
+                              style={{
+                                borderColor: theme.accent,
+                                backgroundColor: theme.cardBg,
+                                color: theme.textPrimary
+                              }}
+                              placeholder="e.g., Puma Energy"
+                              required
+                            />
+                          </div>
+
+                          {/* Row 2: Invoice and Volume Delivered (PRIMARY) */}
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
+                              Invoice Number
+                            </label>
+                            <input
+                              type="text"
+                              value={delivery.invoice_number}
+                              onChange={(e) => updateDelivery(originalIndex, 'invoice_number', e.target.value)}
+                              className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
+                              style={{
+                                borderColor: theme.accent,
+                                backgroundColor: theme.cardBg,
+                                color: theme.textPrimary
+                              }}
+                              placeholder="INV-12345"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
+                              Volume Delivered (Liters) <span className="text-red-500">*</span>
+                              <span className="text-xs ml-2 opacity-75">From delivery note/invoice</span>
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={delivery.volume_delivered || ''}
+                              onChange={(e) => updateDelivery(originalIndex, 'volume_delivered', e.target.value)}
+                              className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 font-bold text-lg transition-colors duration-300"
+                              style={{
+                                borderColor: theme.accent,
+                                backgroundColor: theme.cardBg,
+                                color: theme.accent
+                              }}
+                              placeholder="15000.00"
+                              required
+                            />
+                          </div>
+
+                          {/* Row 3: Optional Verification Fields */}
+                          <div className="md:col-span-2">
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                              <p className="text-xs text-blue-800">
+                                <strong>💡 Optional Verification:</strong> Enter tank dip readings before/after this delivery to verify the volume.
+                                These fields auto-calculate each other based on the delivery volume above.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
+                              Tank Level Before Delivery (L)
+                              <span className="text-xs ml-2 opacity-75">Optional - for verification</span>
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={delivery.before_volume}
+                              onChange={(e) => updateDelivery(originalIndex, 'before_volume', e.target.value)}
+                              className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
+                              style={{
+                                borderColor: theme.accent + '80',
+                                backgroundColor: theme.cardBg,
+                                color: theme.textPrimary
+                              }}
+                              placeholder="e.g., 5000.00"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
+                              Tank Level After Delivery (L)
+                              <span className="text-xs ml-2 opacity-75">Optional - for verification</span>
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={delivery.after_volume}
+                              onChange={(e) => updateDelivery(originalIndex, 'after_volume', e.target.value)}
+                              className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
+                              style={{
+                                borderColor: theme.accent + '80',
+                                backgroundColor: theme.cardBg,
+                                color: theme.textPrimary
+                              }}
+                              placeholder="e.g., 20000.00"
+                            />
+                            {delivery.before_volume && delivery.after_volume && (
+                              <p className="text-xs mt-1" style={{ color: theme.accent }}>
+                                ✓ Calculated: {(parseFloat(delivery.after_volume) - parseFloat(delivery.before_volume)).toFixed(2)}L
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )})}
+
+                    {/* Sequence Validation Warnings */}
+                    {deliveries.length > 0 && (() => {
+                      const warnings = validateDeliverySequence()
+                      if (warnings.length > 0) {
+                        return (
+                          <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
+                            <div className="flex items-start gap-3">
+                              <div className="text-2xl">⚠️</div>
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-yellow-900 mb-2">Delivery Sequence Warnings</h4>
+                                <ul className="text-sm text-yellow-800 space-y-1">
+                                  {warnings.map((warning, i) => (
+                                    <li key={i}>• {warning}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      }
+                      return null
+                    })()}
+
+                    {/* Timeline Visualization */}
+                    {deliveries.length > 0 && formData.opening_volume && formData.closing_volume && (
+                      <div className="rounded-lg p-6 border-2" style={{
+                        backgroundColor: theme.cardBg,
+                        borderColor: theme.primary
+                      }}>
+                        <h4 className="font-semibold mb-4 flex items-center gap-2" style={{ color: theme.primary }}>
+                          <span className="text-2xl">📈</span>
+                          Shift Timeline (Chronological Order)
+                        </h4>
+                        <div className="space-y-3">
+                          {calculateTimeline().map((event, index) => {
+                            const isOpening = event.type === 'opening'
+                            const isClosing = event.type === 'closing'
+                            const isDelivery = event.type === 'delivery'
+
+                            return (
+                              <div key={index} className="flex items-start gap-4">
+                                {/* Timeline line */}
+                                <div className="flex flex-col items-center">
+                                  <div className={`w-4 h-4 rounded-full ${
+                                    isOpening ? 'bg-green-500' :
+                                    isClosing ? 'bg-red-500' :
+                                    'bg-blue-500'
+                                  }`} />
+                                  {index < calculateTimeline().length - 1 && (
+                                    <div className="w-0.5 h-12 bg-gray-300" />
+                                  )}
+                                </div>
+
+                                {/* Event details */}
+                                <div className="flex-1 pb-4">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-sm font-semibold" style={{ color: theme.textPrimary }}>
+                                      {event.time === 'Start' || event.time === 'End' ? event.time : `⏰ ${event.time}`}
+                                    </span>
+                                    {event.volume !== null && (
+                                      <span className={`text-xl font-bold ${
+                                        isOpening ? 'text-green-600' :
+                                        isClosing ? 'text-red-600' :
+                                        'text-blue-600'
+                                      }`}>
+                                        {event.volume.toFixed(0)} L
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm opacity-75" style={{ color: theme.textSecondary }}>
+                                    {event.description}
+                                  </p>
+                                  {isDelivery && event.deliveredVolume && (
+                                    <div className="mt-2 inline-block px-3 py-1 rounded-full bg-blue-100 border border-blue-300">
+                                      <span className="text-xs font-medium text-blue-800">
+                                        +{event.deliveredVolume.toFixed(0)}L delivered
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Summary calculation */}
+                        <div className="mt-6 pt-4 border-t-2" style={{ borderColor: theme.primary + '40' }}>
+                          <div className="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                              <p className="text-xs opacity-75 mb-1" style={{ color: theme.textSecondary }}>Opening</p>
+                              <p className="text-lg font-bold text-green-600">{parseFloat(formData.opening_volume).toFixed(0)}L</p>
+                            </div>
+                            <div>
+                              <p className="text-xs opacity-75 mb-1" style={{ color: theme.textSecondary }}>Total Delivered</p>
+                              <p className="text-lg font-bold text-blue-600">+{getTotalDelivered().toFixed(0)}L</p>
+                            </div>
+                            <div>
+                              <p className="text-xs opacity-75 mb-1" style={{ color: theme.textSecondary }}>Closing</p>
+                              <p className="text-lg font-bold text-red-600">{parseFloat(formData.closing_volume).toFixed(0)}L</p>
+                            </div>
+                          </div>
+                          <div className="text-center mt-4">
+                            <p className="text-xs opacity-75 mb-1" style={{ color: theme.textSecondary }}>Total Sales (Calculated)</p>
+                            <p className="text-2xl font-bold" style={{ color: theme.primary }}>
+                              {calculateTankVolumeMovement().toFixed(3)} L
+                            </p>
+                            <p className="text-xs mt-1 font-mono" style={{ color: theme.textSecondary }}>
+                              ({parseFloat(formData.opening_volume).toFixed(0)} - {parseFloat(formData.closing_volume).toFixed(0)}) + {getTotalDelivered().toFixed(0)} = {calculateTankVolumeMovement().toFixed(0)}L
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Total Deliveries Summary - ENHANCED */}
+                    <div className="rounded-lg p-6 border-4" style={{
+                      backgroundColor: theme.accentLight,
+                      borderColor: theme.accent,
+                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                    }}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="text-xs font-medium opacity-75 mb-1" style={{ color: theme.accent }}>
+                            TOTAL DELIVERIES
+                          </p>
+                          <div className="flex items-baseline gap-4">
+                            <div>
+                              <p className="text-5xl font-bold" style={{ color: theme.accent }}>
+                                {deliveries.length}
+                              </p>
+                              <p className="text-sm mt-1 opacity-75" style={{ color: theme.accent }}>
+                                Delivery(s)
+                              </p>
+                            </div>
+                            <div className="border-l-2 pl-4" style={{ borderColor: theme.accent }}>
+                              <p className="text-5xl font-bold" style={{ color: theme.accent }}>
+                                {getTotalDelivered().toFixed(0)}
+                              </p>
+                              <p className="text-sm mt-1 opacity-75" style={{ color: theme.accent }}>
+                                Liters
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-xs mt-3 opacity-75" style={{ color: theme.accent }}>
+                            💧 Total volume: {getTotalDelivered().toFixed(3)} L •
+                            Average per delivery: {deliveries.length > 0 ? (getTotalDelivered() / deliveries.length).toFixed(2) : '0.00'} L
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="bg-white rounded-lg p-4 shadow-inner" style={{ borderColor: theme.accent, borderWidth: '2px' }}>
+                            <p className="text-xs font-medium mb-1" style={{ color: theme.accent }}>BREAKDOWN</p>
+                            <div className="space-y-1 text-left">
+                              {deliveries.map((d, i) => (
+                                <div key={d.id} className="flex items-center justify-between gap-2 text-xs">
+                                  <span style={{ color: theme.accent }} className="opacity-75">#{i + 1}</span>
+                                  <span style={{ color: theme.accent }} className="font-mono font-bold">
+                                    {d.volume_delivered ? d.volume_delivered.toFixed(0) : '0'}L
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Updated Tank Movement Display with Multiple Deliveries */}
+                    {(formData.opening_volume && formData.closing_volume) && (
+                      <div className="rounded-lg p-4 border-2" style={{
+                        backgroundColor: theme.primaryLight,
+                        borderColor: theme.primary,
+                        borderWidth: '2px'
+                      }}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <label className="block text-sm font-medium mb-1" style={{ color: theme.primary }}>
+                              📊 Tank Volume Movement (With Multiple Deliveries)
+                              <span className="text-xs ml-2 opacity-75">Excel Column: AM</span>
+                            </label>
+                            <p className="text-xs opacity-75" style={{ color: theme.primary }}>
+                              NEW Formula: (Opening - Closing) + Total Delivered
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-4xl font-bold" style={{ color: theme.primary }}>
+                              {calculateTankVolumeMovement().toFixed(3)}
+                            </div>
+                            <div className="text-sm font-medium" style={{ color: theme.primary }}>Liters</div>
+                          </div>
+                        </div>
+
+                        {/* Formula Breakdown */}
+                        <div className="mt-3 pt-3 border-t-2" style={{ borderColor: theme.primary + '40' }}>
+                          <p className="text-xs font-medium mb-2" style={{ color: theme.primary }}>Calculation Breakdown:</p>
+                          <div className="grid grid-cols-3 gap-2 text-xs">
+                            <div className="rounded p-2" style={{ backgroundColor: theme.cardBg }}>
+                              <p className="opacity-75" style={{ color: theme.primary }}>Opening Volume</p>
+                              <p className="font-bold" style={{ color: theme.primary }}>{parseFloat(formData.opening_volume).toFixed(3)}L</p>
+                            </div>
+                            <div className="rounded p-2" style={{ backgroundColor: theme.cardBg }}>
+                              <p className="opacity-75" style={{ color: theme.primary }}>Closing Volume</p>
+                              <p className="font-bold" style={{ color: theme.primary }}>{parseFloat(formData.closing_volume).toFixed(3)}L</p>
+                            </div>
+                            <div className="rounded p-2" style={{ backgroundColor: theme.cardBg }}>
+                              <p className="opacity-75" style={{ color: theme.primary }}>Total Delivered</p>
+                              <p className="font-bold" style={{ color: theme.primary }}>{getTotalDelivered().toFixed(3)}L</p>
+                            </div>
+                          </div>
+                          <p className="text-xs mt-2 text-center font-mono" style={{ color: theme.primary }}>
+                            ({parseFloat(formData.opening_volume).toFixed(3)} - {parseFloat(formData.closing_volume).toFixed(3)}) + {getTotalDelivered().toFixed(3)} = {calculateTankVolumeMovement().toFixed(3)}L
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 rounded-lg border-2 border-dashed transition-colors duration-300" style={{
+                    borderColor: theme.accent,
+                    backgroundColor: theme.cardBg
+                  }}>
+                    <p className="text-sm opacity-75 mb-2" style={{ color: theme.textSecondary }}>
+                      No deliveries added yet
+                    </p>
+                    <p className="text-xs opacity-60" style={{ color: theme.textSecondary }}>
+                      Click "Add Delivery" to record a fuel delivery, or link an existing standalone delivery above
+                    </p>
+                  </div>
+                )}
+              </div>
 
               {/* Customer Allocation Section (DIESEL ONLY - Columns AR-BB) */}
               {selectedTank === 'TANK-DIESEL' && customers.length > 0 && (

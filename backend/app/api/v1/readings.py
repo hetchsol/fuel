@@ -1,16 +1,39 @@
-
+import os
 from fastapi import APIRouter
 from ...models.models import ReadingIn, ReadingOut
 from ...services.validation import validate_reading
+from ...services.ocr import get_ocr_reading
+from ...config import TOLERANCE_ABSOLUTE, TOLERANCE_PERCENT
 
 router = APIRouter()
 
-TOL_ABS = 0.2
-TOL_PCT = 0.05
+STORAGE_DIR = os.getenv("STORAGE_DIR", "storage")
 
 @router.post("/{nozzle_id}/readings")
 def submit_reading(nozzle_id: str, payload: ReadingIn):
-    # Mock OCR outcome
-    ocr_value, conf = payload.manual_value + 0.03, 0.90
-    result = validate_reading(payload.manual_value, ocr_value, TOL_ABS, TOL_PCT, conf, payload.ocr_conf_min)
-    return {"reading_id": "mock-id", **result}
+    # Get image path if attachment provided
+    image_path = None
+    if payload.attachment_id:
+        image_path = os.path.join(STORAGE_DIR, payload.attachment_id)
+
+    # Run OCR (real or simulated)
+    ocr_value, conf, method = get_ocr_reading(image_path, payload.manual_value)
+
+    # Validate reading
+    result = validate_reading(
+        payload.manual_value,
+        ocr_value,
+        TOLERANCE_ABSOLUTE,
+        TOLERANCE_PERCENT,
+        conf,
+        payload.ocr_conf_min
+    )
+
+    # Add OCR metadata to response
+    return {
+        "reading_id": f"read-{nozzle_id}-{int(payload.manual_value)}",
+        "ocr_method": method,
+        "ocr_value": ocr_value,
+        "ocr_confidence": conf,
+        **result
+    }

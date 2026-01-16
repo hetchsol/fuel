@@ -259,6 +259,17 @@ class CreditSale(BaseModel):
     amount: float
     invoice_number: Optional[str] = None
 
+# Delivery Reference for Multiple Deliveries Support
+class DeliveryReference(BaseModel):
+    """Reference to a delivery within a tank reading (supports multiple deliveries per shift)"""
+    delivery_id: Optional[str] = None  # FK to tank_deliveries_db, or None for new inline delivery
+    volume_delivered: float  # Liters delivered
+    delivery_time: str  # HH:MM format
+    supplier: str
+    invoice_number: Optional[str] = None
+    before_volume: float  # Tank level before this specific delivery
+    after_volume: float   # Tank level after this specific delivery
+
 # LPG Products
 class LPGSale(BaseModel):
     sale_id: str
@@ -355,7 +366,10 @@ class TankVolumeReadingInput(BaseModel):
     # Nozzle Readings (Columns D-AE) - All nozzles for this tank
     nozzle_readings: List[NozzleReadingDetail] = []
 
-    # Delivery information
+    # NEW: Multiple deliveries support
+    deliveries: List[DeliveryReference] = []  # Empty list = no deliveries
+
+    # DEPRECATED: Delivery information (kept for backward compatibility)
     delivery_occurred: bool = False
     delivery_time: Optional[str] = None  # HH:MM
     supplier: Optional[str] = None
@@ -429,7 +443,12 @@ class TankVolumeReadingOutput(BaseModel):
     allocation_balance_check: Optional[float] = None  # AW = AN - sum(allocations) - should be zero
     total_customer_revenue: Optional[float] = None  # Sum of all customer amounts
 
-    # Delivery Information
+    # NEW: Multiple deliveries support
+    deliveries: List[DeliveryReference] = []
+    total_delivery_volume: float = 0.0  # Sum of all deliveries
+    delivery_count: int = 0
+
+    # DEPRECATED: Delivery Information (kept for backward compatibility display)
     delivery_occurred: bool
     delivery_volume: Optional[float] = None  # AK - AJ
     delivery_time: Optional[str] = None
@@ -493,6 +512,9 @@ class TankDeliveryOutput(BaseModel):
     # Validation
     validation_status: str  # PASS, WARNING, FAIL
     validation_message: str
+
+    # NEW: Link to tank reading (for auto-linking functionality)
+    linked_reading_id: Optional[str] = None  # FK to tank_readings
 
     # Metadata
     recorded_by: str

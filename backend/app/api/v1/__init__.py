@@ -1,11 +1,24 @@
 
 from fastapi import APIRouter
-from . import auth, attachments, readings, sales, reports, discrepancies
+from . import auth, attachments, readings, sales, reports, discrepancies, ocr_preview, tanks, settings, islands, shifts, accounts, reconciliation, lpg, lubricants, validated_readings, sales_reports, tank_readings, customers
 
 router = APIRouter()
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
 router.include_router(attachments.router, prefix="/attachments", tags=["attachments"])
+router.include_router(ocr_preview.router, prefix="/ocr", tags=["ocr"])
 router.include_router(readings.router, prefix="/nozzles", tags=["readings"])
 router.include_router(sales.router, prefix="/sales", tags=["sales"])
 router.include_router(reports.router, prefix="/reports", tags=["reports"])
 router.include_router(discrepancies.router, prefix="/discrepancies", tags=["discrepancies"])
+router.include_router(tanks.router, prefix="/tanks", tags=["tanks"])
+router.include_router(tank_readings.router, prefix="/tank-readings", tags=["tank-readings"])
+router.include_router(customers.router, prefix="/customers", tags=["customers"])
+router.include_router(settings.router, prefix="/settings", tags=["settings"])
+router.include_router(islands.router, prefix="/islands", tags=["islands"])
+router.include_router(shifts.router, prefix="/shifts", tags=["shifts"])
+router.include_router(accounts.router, prefix="/accounts", tags=["accounts"])
+router.include_router(reconciliation.router, prefix="/reconciliation", tags=["reconciliation"])
+router.include_router(lpg.router, prefix="/lpg", tags=["lpg"])
+router.include_router(lubricants.router, prefix="/lubricants", tags=["lubricants"])
+router.include_router(validated_readings.router, tags=["validated-readings"])
+router.include_router(sales_reports.router, prefix="/sales-reports", tags=["sales-reports"])

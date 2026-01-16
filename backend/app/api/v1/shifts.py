@@ -2,12 +2,16 @@
 Shift Management API
 Handles Day and Night shifts, attendant assignments, and dual meter readings
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from typing import List
 from datetime import datetime
-from ...models.models import Shift, ShiftType, DualReading, NozzleShiftSummary
+from ...models.models import Shift, ShiftType, DualReading, NozzleShiftSummary, TankDipReading
 from ...services.relationship_validation import validate_create, validate_delete_operation
+from ...services.shift_validation import validate_shift_assignments
 from ...database.storage import STORAGE
+from .auth import get_current_user, require_supervisor_or_owner
 
 router = APIRouter()
 
@@ -18,19 +22,51 @@ readings_data = STORAGE['readings']
 # Sample attendants from the spreadsheet
 attendants_list = ["Violet", "Shaka", "Trevor", "Chileshe", "Matthew", "Mubanga", "Isabel", "Prosper"]
 
-@router.post("/", response_model=Shift)
-def create_shift(shift: Shift):
+@router.post("/", dependencies=[Depends(require_supervisor_or_owner)])
+def create_shift(shift: Shift, current_user: dict = Depends(get_current_user)):
     """
-    Create a new shift (Day or Night)
+    Create a new shift with attendant assignments (supervisor/owner only)
     """
+    # Validate assignments if present
+    if shift.assignments:
+        validate_shift_assignments([a.dict() for a in shift.assignments])
+
+    # Populate metadata
+    shift.created_by = current_user['user_id']
+    shift.created_at = datetime.now().isoformat()
+
+    # Populate backward-compatible attendants list
+    if shift.assignments:
+        shift.attendants = [a.attendant_name for a in shift.assignments]
+
     # Validate foreign keys
     validate_create('shifts', shift.dict())
 
     if shift.shift_id in shifts_data:
         raise HTTPException(status_code=400, detail="Shift already exists")
 
-    shifts_data[shift.shift_id] = shift.dict()
-    return shift
+    # Manually construct response to ensure all fields are included
+    shift_dict = {
+        "shift_id": shift.shift_id,
+        "date": shift.date,
+        "shift_type": shift.shift_type,
+        "attendants": shift.attendants,
+        "assignments": [a.dict() for a in shift.assignments] if shift.assignments else [],
+        "start_time": shift.start_time,
+        "end_time": shift.end_time,
+        "status": shift.status,
+        "created_by": shift.created_by,
+        "created_at": shift.created_at
+    }
+
+    shifts_data[shift.shift_id] = shift_dict
+
+    # Debug output
+    print(f"DEBUG: Returning shift_dict with keys: {list(shift_dict.keys())}")
+    print(f"DEBUG: assignments value: {shift_dict.get('assignments')}")
+    print(f"DEBUG: shift_dict: {shift_dict}")
+
+    return JSONResponse(content=shift_dict)
 
 @router.get("/", response_model=List[Shift])
 def get_all_shifts():
@@ -179,3 +215,90 @@ def reconcile_shift(shift_id: str):
 
     shifts_data[shift_id]["status"] = "reconciled"
     return {"status": "success", "shift_id": shift_id, "new_status": "reconciled"}
+
+@router.put("/{shift_id}", response_model=Shift, dependencies=[Depends(require_supervisor_or_owner)])
+def update_shift(shift_id: str, shift: Shift, current_user: dict = Depends(get_current_user)):
+    """
+    Update shift assignments (supervisor/owner only)
+    """
+    if shift_id not in shifts_data:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    # Validate assignments if present
+    if shift.assignments:
+        validate_shift_assignments([a.dict() for a in shift.assignments])
+
+    # Update attendants list for backward compatibility
+    if shift.assignments:
+        shift.attendants = [a.attendant_name for a in shift.assignments]
+
+    # Update shift
+    shifts_data[shift_id] = shift.dict()
+
+    return shift
+
+
+@router.post("/{shift_id}/tank-dip-reading", dependencies=[Depends(require_supervisor_or_owner)])
+def record_tank_dip_reading(shift_id: str, reading: TankDipReading, current_user: dict = Depends(get_current_user)):
+    """
+    Record tank dip reading (opening or closing) for a shift
+    Converts dip measurement (cm) to volume (liters) using tank conversion factor
+    """
+    if shift_id not in shifts_data:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    # Validate tank exists
+    from ...database.storage import STORAGE
+    from ...config import TANK_CONVERSION_FACTOR
+
+    tanks = STORAGE.get('tanks', {})
+    if reading.tank_id not in tanks:
+        raise HTTPException(status_code=404, detail=f"Tank {reading.tank_id} not found")
+
+    shift = shifts_data[shift_id]
+
+    # Initialize tank_dip_readings if not exists
+    if 'tank_dip_readings' not in shift:
+        shift['tank_dip_readings'] = []
+
+    # Find existing reading for this tank or create new one
+    existing_reading = None
+    for idx, r in enumerate(shift['tank_dip_readings']):
+        if r['tank_id'] == reading.tank_id:
+            existing_reading = idx
+            break
+
+    # Convert dip to volume
+    if reading.opening_dip_cm is not None:
+        reading.opening_volume_liters = reading.opening_dip_cm * TANK_CONVERSION_FACTOR
+    if reading.closing_dip_cm is not None:
+        reading.closing_volume_liters = reading.closing_dip_cm * TANK_CONVERSION_FACTOR
+
+    reading_dict = reading.dict()
+
+    if existing_reading is not None:
+        # Update existing reading
+        shift['tank_dip_readings'][existing_reading] = reading_dict
+    else:
+        # Add new reading
+        shift['tank_dip_readings'].append(reading_dict)
+
+    return {
+        "status": "success",
+        "message": f"Tank dip reading recorded for {reading.tank_id}",
+        "shift_id": shift_id,
+        "reading": reading_dict
+    }
+
+
+@router.get("/{shift_id}/tank-dip-readings")
+def get_shift_tank_dip_readings(shift_id: str):
+    """
+    Get all tank dip readings for a shift
+    """
+    if shift_id not in shifts_data:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    shift = shifts_data[shift_id]
+    return shift.get('tank_dip_readings', [])
+

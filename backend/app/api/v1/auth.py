@@ -216,7 +216,7 @@ def logout(token: str):
     return {"message": "Logged out successfully"}
 
 @router.get("/me")
-def get_current_user(token: str):
+def get_user_info(token: str):
     """
     Get current logged-in user info
     """
