@@ -38,17 +38,18 @@ export default function StockMovement() {
   const fetchCurrentStock = async () => {
     setFetchingStock(true)
     try {
-      const token = localStorage.getItem('accessToken')
-      const response = await fetch(
-        `${BASE}/tank-readings/readings/${formData.tank_id}/latest`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
-      )
+      // Fetch REAL-TIME tank levels (cumulative with all deliveries and sales)
+      const response = await fetch(`${BASE}/tanks/levels`)
 
       if (response.ok) {
-        const data = await response.json()
-        setCurrentStock(data)
+        const allTanks = await response.json()
+        // Find the current tank
+        const tankLevel = allTanks.find((t: any) => t.tank_id === formData.tank_id)
+        if (tankLevel) {
+          setCurrentStock(tankLevel)
+        } else {
+          setCurrentStock(null)
+        }
       } else {
         setCurrentStock(null)
       }
@@ -141,43 +142,47 @@ export default function StockMovement() {
           ) : currentStock ? (
             <div className="text-right">
               <div className="text-4xl font-bold text-blue-900">
-                {currentStock.opening_volume
-                  ? currentStock.opening_volume.toLocaleString()
-                  : currentStock.closing_volume
-                    ? currentStock.closing_volume.toLocaleString()
-                    : 'N/A'}
+                {currentStock.current_level
+                  ? currentStock.current_level.toLocaleString(undefined, {maximumFractionDigits: 0})
+                  : 'N/A'}
               </div>
               <div className="text-sm text-blue-700 font-medium">Liters</div>
-              {currentStock.date && (
-                <div className="text-xs text-blue-600 mt-1">
-                  As of: {currentStock.date} ({currentStock.shift_type})
+              <div className="text-xs text-blue-600 mt-1">
+                {currentStock.percentage?.toFixed(1)}% Full
+              </div>
+              {currentStock.last_updated && (
+                <div className="text-xs text-blue-500 mt-1">
+                  Updated: {new Date(currentStock.last_updated).toLocaleString()}
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-gray-500 text-sm">No reading available</div>
+            <div className="text-gray-500 text-sm">No data available</div>
           )}
         </div>
 
-        {currentStock && currentStock.opening_volume && (
+        {currentStock && currentStock.current_level && (
           <div className="mt-4 pt-4 border-t border-blue-200">
-            <div className="grid grid-cols-3 gap-3 text-sm">
+            <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <p className="text-blue-600 text-xs">Opening</p>
-                <p className="font-semibold text-blue-900">{currentStock.opening_volume.toLocaleString()} L</p>
+                <p className="text-blue-600 text-xs">Current Level</p>
+                <p className="font-semibold text-blue-900">{currentStock.current_level.toLocaleString(undefined, {maximumFractionDigits: 0})} L</p>
               </div>
-              {currentStock.closing_volume && (
-                <div>
-                  <p className="text-blue-600 text-xs">Closing</p>
-                  <p className="font-semibold text-blue-900">{currentStock.closing_volume.toLocaleString()} L</p>
-                </div>
-              )}
-              {currentStock.tank_volume_movement && (
-                <div>
-                  <p className="text-blue-600 text-xs">Dispensed</p>
-                  <p className="font-semibold text-blue-900">{currentStock.tank_volume_movement.toLocaleString()} L</p>
-                </div>
-              )}
+              <div>
+                <p className="text-blue-600 text-xs">Tank Capacity</p>
+                <p className="font-semibold text-blue-900">{currentStock.capacity?.toLocaleString(undefined, {maximumFractionDigits: 0})} L</p>
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="w-full bg-gray-200 rounded-full h-3">
+                <div
+                  className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min(currentStock.percentage || 0, 100)}%` }}
+                ></div>
+              </div>
+              <p className="text-xs text-gray-600 mt-1 text-center">
+                {currentStock.percentage?.toFixed(1)}% capacity
+              </p>
             </div>
           </div>
         )}
