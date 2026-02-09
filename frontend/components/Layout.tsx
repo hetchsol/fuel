@@ -71,9 +71,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { path: '/', label: 'Dashboard', roles: ['user', 'supervisor', 'owner'] },
     { path: '/my-shift', label: 'My Shift', roles: ['user', 'supervisor', 'owner'] },
     {
-      label: 'Daily Operations',
-      roles: ['supervisor', 'owner'],
+      label: 'Operations',
+      roles: ['user', 'supervisor', 'owner'],
       children: [
+        { path: '/shifts', label: 'Shifts', roles: ['user', 'supervisor', 'owner'] },
         { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'owner'] },
         { path: '/validated-readings', label: 'Enter Readings', roles: ['supervisor', 'owner'] },
         { path: '/stock-movement', label: 'Stock Movement', roles: ['supervisor', 'owner'] },
@@ -82,13 +83,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       ]
     },
     {
-      label: 'View & Monitor',
+      label: 'Inventory & Sales',
       roles: ['user', 'supervisor', 'owner'],
       children: [
         { path: '/inventory', label: 'Tank Levels', roles: ['supervisor', 'owner'] },
         { path: '/readings', label: 'Nozzle Readings', roles: ['user', 'supervisor', 'owner'] },
-        { path: '/shifts', label: 'Shifts', roles: ['user', 'supervisor', 'owner'] },
         { path: '/sales', label: 'Sales', roles: ['supervisor', 'owner'] },
+        { path: '/accounts', label: 'Credit Accounts', roles: ['supervisor', 'owner'] },
       ]
     },
     {
@@ -113,14 +114,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       ]
     },
     {
-      label: 'Financial',
-      roles: ['supervisor', 'owner'],
-      children: [
-        { path: '/accounts', label: 'Credit Accounts', roles: ['supervisor', 'owner'] },
-      ]
-    },
-    {
-      label: 'Setup & Settings',
+      label: 'Administration',
       roles: ['owner'],
       children: [
         { path: '/stations', label: 'Stations', roles: ['owner'] },
