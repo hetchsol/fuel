@@ -121,7 +121,20 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
 
     # Validate token exists in active sessions
     if token not in active_sessions:
-        raise HTTPException(status_code=401, detail="Invalid or expired session token")
+        # Token format is "token-{username}-{user_id}" — recover session after server restart
+        if token.startswith("token-"):
+            parts = token.split("-", 2)  # ["token", "{username}", "{user_id}"]
+            if len(parts) >= 3:
+                recovered_username = parts[1]
+                recovered_user_id = parts[2]
+                if recovered_username in users_db and users_db[recovered_username]["user_id"] == recovered_user_id:
+                    active_sessions[token] = {
+                        "user_id": recovered_user_id,
+                        "username": recovered_username,
+                        "role": users_db[recovered_username]["role"]
+                    }
+        if token not in active_sessions:
+            raise HTTPException(status_code=401, detail="Invalid or expired session token")
 
     # Get session data
     session = active_sessions[token]
