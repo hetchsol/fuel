@@ -69,3 +69,52 @@ Thumbs.db
 # Project specific
 uploads/
 attachments/
+
+# Claude temp files
+tmpclaude-*-cwd
+tmpclaude-*
+
+# Temp/lock files
+nul
+~$*
+
+# Backups
+backups/
+
+# Storage images (user uploads, not source code)
+backend/storage/*.png
+backend/storage/*.jpeg
+backend/storage/*.jpg
+backend/storage/*.JPG
+backend/storage/test-*
+backend/storage/user-*
+backend/storage/Screenshot*
+
+# Excel lock files
+~$*.xlsx
+
+# Claude settings
+.claude/
+
+# Extracted prototype (old)
+extracted/
+
+# Misnamed files
+C*ProjectsFuel*
+
+# Large binary files
+Fuel_FullStack_Prototype.zip
+*.pdf
+
+# PDF conversion scripts (one-off utilities)
+convert_*.py
+create_user_guide_pdf.py
+generate_pdfs.py
+md_to_pdf.py
+examine_*.py
+
+# Excel data files
+backend/*.xlsx
+
+# Import logs
+backend/import_log.txt

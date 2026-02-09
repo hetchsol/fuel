@@ -1,0 +1,63 @@
+{
+  "tank_id": "TANK-PETROL",
+  "date": "2025-12-01",
+  "shift_type": "Day",
+  "opening_dip_cm": 164.5,
+  "closing_dip_cm": 155.4,
+  "after_delivery_dip_cm": null,
+  "opening_volume": null,
+  "closing_volume": null,
+  "before_offload_volume": null,
+  "after_offload_volume": null,
+  "nozzle_readings": [
+    {
+      "nozzle_id": "1A",
+      "attendant": "Shaka",
+      "electronic_opening": 609176.526,
+      "electronic_closing": 609454.572,
+      "electronic_movement": 278.046,
+      "mechanical_opening": 611984.0,
+      "mechanical_closing": 612262.0,
+      "mechanical_movement": 278.0
+    },
+    {
+      "nozzle_id": "1B",
+      "attendant": "Shaka",
+      "electronic_opening": 825565.474,
+      "electronic_closing": 826087.723,
+      "electronic_movement": 522.249,
+      "mechanical_opening": 829030.0,
+      "mechanical_closing": 829552.0,
+      "mechanical_movement": 522.0
+    },
+    {
+      "nozzle_id": "2A",
+      "attendant": "Violet",
+      "electronic_opening": 801332.477,
+      "electronic_closing": 801682.231,
+      "electronic_movement": 349.754,
+      "mechanical_opening": 801430.0,
+      "mechanical_closing": 801780.0,
+      "mechanical_movement": 350.0
+    },
+    {
+      "nozzle_id": "2B",
+      "attendant": "Violet",
+      "electronic_opening": 1270044.517,
+      "electronic_closing": 1270634.323,
+      "electronic_movement": 589.806,
+      "mechanical_opening": 1270144.0,
+      "mechanical_closing": 1270733.0,
+      "mechanical_movement": 589.0
+    }
+  ],
+  "delivery_occurred": false,
+  "delivery_time": null,
+  "supplier": null,
+  "invoice_number": null,
+  "delivery_note": null,
+  "price_per_liter": 29.92,
+  "actual_cash_banked": null,
+  "recorded_by": "TEST-USER",
+  "notes": "Real data from Excel row 4 - Petrol sheet"
+}
