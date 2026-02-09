@@ -1,4 +1,5 @@
 import useSWR from 'swr'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
@@ -27,7 +28,7 @@ export default function Pumps() {
       )}
 
       {!error && !islands && (
-        <div className="text-gray-500">Loading pump stations...</div>
+        <LoadingSpinner text="Loading pump stations..." />
       )}
 
       {islands && (

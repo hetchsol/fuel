@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 interface ValidatedReading {
   reading_id: string
@@ -187,7 +188,7 @@ export default function ReadingsMonitor() {
       {/* Readings Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-500">Loading readings...</div>
+          <LoadingSpinner text="Loading readings..." />
         ) : filteredReadings.length === 0 ? (
           <div className="p-8 text-center text-gray-500">No readings found matching filters.</div>
         ) : (

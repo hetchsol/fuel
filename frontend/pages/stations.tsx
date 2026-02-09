@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Layout from '../components/Layout'
 import { useTheme } from '../contexts/ThemeContext'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
@@ -212,7 +213,7 @@ export default function StationsPage() {
 
         {/* Station List */}
         {loading ? (
-          <p style={{ color: theme.textSecondary }}>Loading stations...</p>
+          <LoadingSpinner text="Loading stations..." />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {stations.map((station: any) => {

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import { getDaily, getFlags, getTankLevels } from '../lib/api'
 import TankCard from '../components/TankCard'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function Home() {
   const today = new Date().toISOString().split('T')[0]
@@ -119,7 +120,7 @@ export default function Home() {
             <div className="text-red-600 text-sm">Failed to load daily summary</div>
           )}
           {!dailyError && !daily && (
-            <div className="text-gray-500 text-sm">Loading...</div>
+            <LoadingSpinner text="Loading..." />
           )}
           {daily && (
             <div className="space-y-4">
@@ -149,7 +150,7 @@ export default function Home() {
             <div className="text-red-600 text-sm">Failed to load discrepancies</div>
           )}
           {!flagsError && !flags && (
-            <div className="text-gray-500 text-sm">Loading...</div>
+            <LoadingSpinner text="Loading..." />
           )}
           {flags && (
             <div>

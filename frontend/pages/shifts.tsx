@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
@@ -633,7 +634,7 @@ export default function Shifts() {
 
           <div className="space-y-3">
             {nozzles.length === 0 ? (
-              <p className="text-gray-500 text-sm">Loading nozzles...</p>
+              <LoadingSpinner text="Loading nozzles..." />
             ) : (
               nozzles.map(nozzle => (
                 <div

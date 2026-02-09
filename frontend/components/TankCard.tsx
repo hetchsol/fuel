@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getAuthHeaders } from '../lib/headers'
+import LoadingSpinner from './LoadingSpinner'
 
 interface TankCardProps {
   fuelType: 'Diesel' | 'Petrol'
@@ -115,7 +116,7 @@ const TankCard = ({
         <div className="text-red-600 text-sm">Failed to load tank data</div>
       )}
       {!tanksError && !tank && (
-        <div className="text-gray-500 text-sm">Loading...</div>
+        <LoadingSpinner text="Loading tank data..." />
       )}
 
       {tank && (

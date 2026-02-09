@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
@@ -328,9 +329,7 @@ export default function MyShift() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-lg" style={{ color: theme.textSecondary }}>Loading shift data...</div>
-      </div>
+      <LoadingSpinner text="Loading shift data..." />
     )
   }
 

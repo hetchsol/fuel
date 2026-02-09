@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
@@ -325,7 +326,7 @@ export default function Accounts() {
         <h2 className="text-xl font-bold text-gray-900 mb-4">💳 Account Holders</h2>
 
         {loading && accounts.length === 0 ? (
-          <div className="text-gray-500">Loading accounts...</div>
+          <LoadingSpinner text="Loading accounts..." />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {accounts.map(account => {
