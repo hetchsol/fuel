@@ -661,3 +661,55 @@ class LubricantDailyEntryOutput(BaseModel):
     recorded_by: str
     created_at: str
     notes: Optional[str] = None
+
+
+# ===== Attendant Shift Handover Models =====
+
+class HandoverNozzleReadingInput(BaseModel):
+    """Nozzle reading submitted by attendant during shift handover"""
+    nozzle_id: str
+    opening_reading: float      # auto-populated from last known reading
+    closing_reading: float      # entered by attendant
+
+class HandoverNozzleReadingSummary(BaseModel):
+    """Computed nozzle reading summary for handover output"""
+    nozzle_id: str
+    fuel_type: str              # Petrol or Diesel
+    opening_reading: float
+    closing_reading: float
+    volume_sold: float          # closing - opening
+    price_per_liter: float
+    revenue: float              # volume × price
+
+class HandoverInput(BaseModel):
+    """Input for submitting a shift handover"""
+    shift_id: str
+    nozzle_readings: List[HandoverNozzleReadingInput]
+    lpg_sales: float = 0        # total ZMW from LPG cylinders sold this shift
+    lubricant_sales: float = 0  # total ZMW from lubricants sold
+    accessory_sales: float = 0  # total ZMW from accessories sold
+    credit_sales: float = 0     # total credit sales (not collected as cash)
+    actual_cash: float          # cash being handed in
+    notes: Optional[str] = None
+
+class HandoverOutput(BaseModel):
+    """Output after submitting a shift handover with all computed values"""
+    handover_id: str
+    shift_id: str
+    attendant_id: str
+    attendant_name: str
+    date: str
+    shift_type: str
+    nozzle_summaries: List[HandoverNozzleReadingSummary]
+    fuel_revenue: float         # sum of nozzle revenues
+    lpg_sales: float
+    lubricant_sales: float
+    accessory_sales: float
+    total_expected: float       # fuel + lpg + lubricants + accessories
+    credit_sales: float
+    expected_cash: float        # total_expected - credit_sales
+    actual_cash: float
+    difference: float           # actual - expected (+surplus / -shortage)
+    status: str                 # "submitted" or "reopened"
+    notes: Optional[str] = None
+    created_at: str

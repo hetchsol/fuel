@@ -1,6 +1,6 @@
 
 from fastapi import APIRouter
-from . import auth, attachments, readings, sales, reports, discrepancies, ocr_preview, tanks, settings, islands, shifts, accounts, reconciliation, lpg, lubricants, validated_readings, sales_reports, tank_readings, customers, lpg_daily, lubricants_daily
+from . import auth, attachments, readings, sales, reports, discrepancies, ocr_preview, tanks, settings, islands, shifts, accounts, reconciliation, lpg, lubricants, validated_readings, sales_reports, tank_readings, customers, lpg_daily, lubricants_daily, attendant_handover
 
 router = APIRouter()
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -24,3 +24,4 @@ router.include_router(validated_readings.router, tags=["validated-readings"])
 router.include_router(sales_reports.router, prefix="/sales-reports", tags=["sales-reports"])
 router.include_router(lpg_daily.router, prefix="/lpg-daily", tags=["lpg-daily"])
 router.include_router(lubricants_daily.router, prefix="/lubricants-daily", tags=["lubricants-daily"])
+router.include_router(attendant_handover.router, prefix="/handover", tags=["handover"])

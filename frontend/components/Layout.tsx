@@ -42,6 +42,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Organized by workflow: what users do daily, what they monitor, what they analyze
   const allNavItems = [
     { path: '/', label: 'Dashboard', roles: ['user', 'supervisor', 'owner'] },
+    { path: '/my-shift', label: 'My Shift', roles: ['user', 'supervisor', 'owner'] },
     {
       label: 'Daily Operations',
       roles: ['supervisor', 'owner'],
