@@ -319,7 +319,7 @@ export default function LubricantsDaily() {
         <div>
           <div className="text-xs" style={{ color: theme.textSecondary }}>Total Sales Value</div>
           <div className="text-lg font-bold" style={{ color: theme.primary }}>
-            KES {totalSalesValue.toLocaleString()}
+            ZMW{totalSalesValue.toLocaleString()}
           </div>
         </div>
         <div>
@@ -467,7 +467,7 @@ export default function LubricantsDaily() {
                   <td className="px-4 py-2 font-mono text-xs" style={{ color: theme.textPrimary }}>{e.entry_id}</td>
                   <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.location}</td>
                   <td className="px-4 py-2 font-semibold" style={{ color: theme.primary }}>
-                    KES {(e.total_daily_sales_value || 0).toLocaleString()}
+                    ZMW{(e.total_daily_sales_value || 0).toLocaleString()}
                   </td>
                   <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.total_items_moved || 0}</td>
                   <td className="px-4 py-2 text-xs" style={{ color: theme.textSecondary }}>

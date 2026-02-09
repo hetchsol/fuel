@@ -64,10 +64,19 @@ export default function LPGDaily() {
   // Accessories
   const [accessoryRows, setAccessoryRows] = useState<AccessoryRow[]>([])
 
+  // Pricing editor state
+  const [showPricingEditor, setShowPricingEditor] = useState(false)
+  const [editPricePerKg, setEditPricePerKg] = useState<string>('')
+  const [editDeposits, setEditDeposits] = useState<Record<number, string>>({})
+  const [pricingSaving, setPricingSaving] = useState(false)
+  const [pricingMsg, setPricingMsg] = useState('')
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [entries, setEntries] = useState<any[]>([])
+
+  const canEditPricing = user?.role === 'supervisor' || user?.role === 'owner'
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -75,12 +84,24 @@ export default function LPGDaily() {
   }, [])
 
   // Fetch pricing on mount
-  useEffect(() => {
+  const fetchPricing = useCallback(() => {
     fetch(`${BASE}/lpg-daily/pricing`, { headers: getAuthHeaders() })
       .then(r => r.json())
-      .then(data => setPricing(data.sizes || []))
+      .then(data => {
+        setPricing(data.sizes || [])
+        setEditPricePerKg(String(data.price_per_kg || 49))
+        const deps: Record<number, string> = {}
+        if (data.deposits) {
+          for (const [k, v] of Object.entries(data.deposits)) {
+            deps[parseInt(k)] = String(v)
+          }
+        }
+        setEditDeposits(deps)
+      })
       .catch(() => {})
   }, [])
+
+  useEffect(() => { fetchPricing() }, [fetchPricing])
 
   // Fetch previous shift data when date/shift changes
   const fetchPreviousShift = useCallback(() => {
@@ -249,6 +270,35 @@ export default function LPGDaily() {
     }
   }
 
+  const savePricing = async () => {
+    setPricingSaving(true)
+    setPricingMsg('')
+    try {
+      const deposits: Record<string, number> = {}
+      for (const [k, v] of Object.entries(editDeposits)) {
+        deposits[String(k)] = parseFloat(v) || 0
+      }
+      const res = await fetch(`${BASE}/lpg-daily/pricing`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          price_per_kg: parseFloat(editPricePerKg) || 0,
+          deposits,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Failed to update pricing')
+      }
+      setPricingMsg('Pricing updated successfully')
+      fetchPricing()
+    } catch (err: any) {
+      setPricingMsg(err.message || 'Failed to save pricing')
+    } finally {
+      setPricingSaving(false)
+    }
+  }
+
   const inputStyle = {
     backgroundColor: theme.cardBg,
     color: theme.textPrimary,
@@ -263,6 +313,60 @@ export default function LPGDaily() {
           Shift-level cylinder sales and accessories tracking
         </p>
       </div>
+
+      {/* Pricing Settings (editable by supervisor/owner) */}
+      {canEditPricing && (
+        <div className="rounded-lg shadow mb-6 overflow-hidden"
+          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+          <button
+            onClick={() => setShowPricingEditor(!showPricingEditor)}
+            className="w-full p-3 flex justify-between items-center text-sm font-medium"
+            style={{ color: theme.textPrimary }}>
+            <span>LPG Pricing Settings</span>
+            <span className="text-xs" style={{ color: theme.textSecondary }}>
+              {showPricingEditor ? 'Hide' : 'Edit Pricing'} {showPricingEditor ? '-' : '+'}
+            </span>
+          </button>
+          {showPricingEditor && (
+            <div className="p-4 space-y-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+                  Price per kg (ZMW)
+                </label>
+                <input type="number" min={0} step="0.01" value={editPricePerKg}
+                  onChange={e => setEditPricePerKg(e.target.value)}
+                  className="w-40 px-3 py-2 rounded border text-sm" style={inputStyle} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-2" style={{ color: theme.textSecondary }}>
+                  Cylinder Deposits (ZMW)
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {LPG_SIZES.map(size => (
+                    <div key={size}>
+                      <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>{size} kg</label>
+                      <input type="number" min={0} step="0.01"
+                        value={editDeposits[size] || ''}
+                        onChange={e => setEditDeposits(prev => ({ ...prev, [size]: e.target.value }))}
+                        className="w-full px-2 py-1 rounded border text-sm" style={inputStyle} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {pricingMsg && (
+                <div className="text-sm" style={{
+                  color: pricingMsg.includes('success') ? '#16a34a' : '#dc2626'
+                }}>{pricingMsg}</div>
+              )}
+              <button onClick={savePricing} disabled={pricingSaving}
+                className="px-4 py-2 rounded text-sm font-medium text-white disabled:opacity-50"
+                style={{ backgroundColor: theme.primary }}>
+                {pricingSaving ? 'Saving...' : 'Save Pricing'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Date / Shift / Salesperson selectors */}
       <div className="rounded-lg shadow p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4"
@@ -366,7 +470,7 @@ export default function LPGDaily() {
                 {cylinderRows.reduce((s, r) => s + r.value_with_cylinder, 0).toLocaleString()}
               </td>
               <td className="px-3 py-2 text-right font-bold text-base" style={{ color: theme.primary }}>
-                KES {grandTotal.toLocaleString()}
+                ZMW{grandTotal.toLocaleString()}
               </td>
             </tr>
           </tbody>
@@ -410,7 +514,7 @@ export default function LPGDaily() {
           style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
           <span>LPG Accessories</span>
           <span className="text-xs font-normal" style={{ color: theme.textSecondary }}>
-            Daily Sales: KES {accessoryTotal.toLocaleString()}
+            Daily Sales: ZMW{accessoryTotal.toLocaleString()}
           </span>
         </div>
         <table className="min-w-full text-sm">
@@ -503,7 +607,7 @@ export default function LPGDaily() {
                   <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.shift_type}</td>
                   <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.salesperson}</td>
                   <td className="px-4 py-2 font-semibold" style={{ color: theme.primary }}>
-                    KES {(e.grand_total_value || 0).toLocaleString()}
+                    ZMW{(e.grand_total_value || 0).toLocaleString()}
                   </td>
                   <td className="px-4 py-2" style={{
                     color: e.population_difference && e.population_difference !== 0 ? '#ef4444' : theme.textSecondary

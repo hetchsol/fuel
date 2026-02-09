@@ -24,10 +24,14 @@ from ...api.v1.auth import get_current_user
 
 router = APIRouter()
 
-# ===== LPG PRICING CONSTANTS =====
-LPG_PRICE_PER_KG = 49
-LPG_DEPOSITS = {3: 330, 6: 550, 9: 800, 19: 1200, 45: 1700, 48: 1700}
+# ===== LPG CYLINDER SIZES =====
 LPG_SIZES = [3, 6, 9, 19, 45, 48]
+
+# Default pricing (used only when no saved pricing exists)
+DEFAULT_LPG_PRICING = {
+    "price_per_kg": 49,
+    "deposits": {"3": 330, "6": 550, "9": 800, "19": 1200, "45": 1700, "48": 1700},
+}
 
 # Default LPG accessories
 DEFAULT_LPG_ACCESSORIES = [
@@ -43,6 +47,23 @@ DEFAULT_LPG_ACCESSORIES = [
 STORAGE_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'storage')
 LPG_DAILY_FILE = os.path.join(STORAGE_DIR, 'lpg_daily_entries.json')
 LPG_ACCESSORIES_FILE = os.path.join(STORAGE_DIR, 'lpg_accessories_daily.json')
+LPG_PRICING_FILE = os.path.join(STORAGE_DIR, 'lpg_pricing.json')
+
+
+def load_lpg_pricing():
+    if os.path.exists(LPG_PRICING_FILE):
+        try:
+            with open(LPG_PRICING_FILE, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return dict(DEFAULT_LPG_PRICING)
+    return dict(DEFAULT_LPG_PRICING)
+
+
+def save_lpg_pricing():
+    os.makedirs(STORAGE_DIR, exist_ok=True)
+    with open(LPG_PRICING_FILE, 'w') as f:
+        json.dump(lpg_pricing_db, f, indent=2, default=str)
 
 
 def load_lpg_daily():
@@ -78,14 +99,17 @@ def save_lpg_accessories():
 
 
 # Load on startup
+lpg_pricing_db = load_lpg_pricing()
 lpg_daily_db = load_lpg_daily()
 lpg_accessories_db = load_lpg_accessories()
 
 
 def get_pricing_for_size(size_kg: int) -> dict:
-    """Calculate pricing for a given cylinder size."""
-    refill = LPG_PRICE_PER_KG * size_kg
-    deposit = LPG_DEPOSITS.get(size_kg, 0)
+    """Calculate pricing for a given cylinder size using editable pricing."""
+    price_per_kg = lpg_pricing_db.get('price_per_kg', 49)
+    deposits = lpg_pricing_db.get('deposits', {})
+    refill = price_per_kg * size_kg
+    deposit = deposits.get(str(size_kg), 0)
     return {
         "size_kg": size_kg,
         "price_refill": refill,
@@ -100,7 +124,47 @@ def get_pricing_for_size(size_kg: int) -> dict:
 def get_lpg_pricing(current_user: dict = Depends(get_current_user)):
     """Return pricing table for all 6 LPG cylinder sizes."""
     return {
-        "price_per_kg": LPG_PRICE_PER_KG,
+        "price_per_kg": lpg_pricing_db.get('price_per_kg', 49),
+        "deposits": lpg_pricing_db.get('deposits', {}),
+        "sizes": [get_pricing_for_size(s) for s in LPG_SIZES],
+    }
+
+
+@router.put("/pricing")
+def update_lpg_pricing(
+    pricing_data: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Update LPG pricing. Requires supervisor or owner role.
+
+    Body: { "price_per_kg": 49, "deposits": {"3": 330, "6": 550, ...} }
+    """
+    role = current_user.get('role', '')
+    if role not in ('supervisor', 'owner'):
+        raise HTTPException(status_code=403, detail="Only supervisors and owners can update pricing")
+
+    if 'price_per_kg' in pricing_data:
+        val = pricing_data['price_per_kg']
+        if not isinstance(val, (int, float)) or val <= 0:
+            raise HTTPException(status_code=400, detail="price_per_kg must be a positive number")
+        lpg_pricing_db['price_per_kg'] = val
+
+    if 'deposits' in pricing_data:
+        deps = pricing_data['deposits']
+        if not isinstance(deps, dict):
+            raise HTTPException(status_code=400, detail="deposits must be an object mapping size_kg to deposit amount")
+        for key, val in deps.items():
+            if not isinstance(val, (int, float)) or val < 0:
+                raise HTTPException(status_code=400, detail=f"Deposit for {key}kg must be a non-negative number")
+        lpg_pricing_db['deposits'] = {str(k): v for k, v in deps.items()}
+
+    save_lpg_pricing()
+
+    return {
+        "message": "LPG pricing updated successfully",
+        "price_per_kg": lpg_pricing_db.get('price_per_kg'),
+        "deposits": lpg_pricing_db.get('deposits'),
         "sizes": [get_pricing_for_size(s) for s in LPG_SIZES],
     }
 
