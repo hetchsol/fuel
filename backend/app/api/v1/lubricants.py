@@ -2,132 +2,61 @@
 Lubricants Inventory and Sales API
 Handles lubricants across Island 3 and Buffer locations
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from ...models.models import Lubricant, LubricantSale
-from ...services.validated_crud import ValidatedCRUDService
 from ...services.crud import increment_stock, decrement_stock
 from ...services.inventory import process_stock_sale, get_sales_summary
-from ...database.storage import STORAGE
+from .auth import get_station_context
 
 router = APIRouter()
 
-# Use central storage
-lubricants_inventory = STORAGE['lubricants']
-lubricants_sales_data = STORAGE['lubricant_sales']
-
-# Initialize CRUD service for lubricants with validation
-lubricants_service = ValidatedCRUDService(
-    storage=lubricants_inventory,
-    model=Lubricant,
-    id_field='product_code',
-    name='lubricant',
-    entity_type='lubricants'  # Enable relationship validation
-)
-
-# Initialize with sample lubricants
-STORAGE['lubricants'] = {
-    "OIL-10W30": {
-        "product_code": "OIL-10W30",
-        "description": "Engine Oil 10W-30 (1L)",
-        "category": "Engine Oil",
-        "unit_price": 85.0,
-        "location": "Island 3",
-        "opening_stock": 50,
-        "current_stock": 50
-    },
-    "OIL-15W40": {
-        "product_code": "OIL-15W40",
-        "description": "Engine Oil 15W-40 (1L)",
-        "category": "Engine Oil",
-        "unit_price": 90.0,
-        "location": "Island 3",
-        "opening_stock": 45,
-        "current_stock": 45
-    },
-    "OIL-20W50": {
-        "product_code": "OIL-20W50",
-        "description": "Engine Oil 20W-50 (1L)",
-        "category": "Engine Oil",
-        "unit_price": 95.0,
-        "location": "Island 3",
-        "opening_stock": 40,
-        "current_stock": 40
-    },
-    "TF-ATF": {
-        "product_code": "TF-ATF",
-        "description": "Automatic Transmission Fluid",
-        "category": "Transmission Fluid",
-        "unit_price": 120.0,
-        "location": "Island 3",
-        "opening_stock": 30,
-        "current_stock": 30
-    },
-    "BF-DOT3": {
-        "product_code": "BF-DOT3",
-        "description": "Brake Fluid DOT 3",
-        "category": "Brake Fluid",
-        "unit_price": 45.0,
-        "location": "Island 3",
-        "opening_stock": 25,
-        "current_stock": 25
-    },
-    "COOL-GREEN": {
-        "product_code": "COOL-GREEN",
-        "description": "Coolant Green (1L)",
-        "category": "Coolant",
-        "unit_price": 55.0,
-        "location": "Island 3",
-        "opening_stock": 35,
-        "current_stock": 35
-    },
-    "OIL-10W30-BUF": {
-        "product_code": "OIL-10W30-BUF",
-        "description": "Engine Oil 10W-30 (1L) - Buffer Stock",
-        "category": "Engine Oil",
-        "unit_price": 85.0,
-        "location": "Buffer",
-        "opening_stock": 100,
-        "current_stock": 100
-    },
-    "OIL-15W40-BUF": {
-        "product_code": "OIL-15W40-BUF",
-        "description": "Engine Oil 15W-40 (1L) - Buffer Stock",
-        "category": "Engine Oil",
-        "unit_price": 90.0,
-        "location": "Buffer",
-        "opening_stock": 100,
-        "current_stock": 100
-    }
-}
 
 @router.get("/", response_model=List[Lubricant])
-def get_all_lubricants():
+async def get_all_lubricants(ctx: dict = Depends(get_station_context)):
     """
     Get all lubricants from all locations
     """
-    return lubricants_service.get_all()
+    storage = ctx["storage"]
+    lubricants_inventory = storage['lubricants']
+    return [Lubricant(**item) for item in lubricants_inventory.values()]
+
 
 @router.get("/location/{location}")
-def get_lubricants_by_location(location: str):
+async def get_lubricants_by_location(location: str, ctx: dict = Depends(get_station_context)):
     """
     Get lubricants from specific location (Island 3 or Buffer)
     """
-    return lubricants_service.filter(location=location)
+    storage = ctx["storage"]
+    lubricants_inventory = storage['lubricants']
+    return [
+        Lubricant(**item) for item in lubricants_inventory.values()
+        if item.get("location") == location
+    ]
+
 
 @router.get("/{product_code}", response_model=Lubricant)
-def get_lubricant(product_code: str):
+async def get_lubricant(product_code: str, ctx: dict = Depends(get_station_context)):
     """
     Get specific lubricant details
     """
-    return lubricants_service.get_by_id(product_code)
+    storage = ctx["storage"]
+    lubricants_inventory = storage['lubricants']
+    if product_code not in lubricants_inventory:
+        raise HTTPException(status_code=404, detail="Lubricant not found")
+    return Lubricant(**lubricants_inventory[product_code])
+
 
 @router.post("/sales", response_model=LubricantSale)
-def record_lubricant_sale(sale: LubricantSale):
+async def record_lubricant_sale(sale: LubricantSale, ctx: dict = Depends(get_station_context)):
     """
     Record lubricant sale
     Updates inventory at Island 3
     """
+    storage = ctx["storage"]
+    lubricants_inventory = storage['lubricants']
+    lubricants_sales_data = storage['lubricant_sales']
+
     process_stock_sale(
         inventory=lubricants_inventory,
         sales_log=lubricants_sales_data,
@@ -139,22 +68,30 @@ def record_lubricant_sale(sale: LubricantSale):
 
     return sale
 
+
 @router.get("/sales/shift/{shift_id}")
-def get_shift_lubricant_sales(shift_id: str):
+async def get_shift_lubricant_sales(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get all lubricant sales for a specific shift
     """
+    storage = ctx["storage"]
+    lubricants_sales_data = storage['lubricant_sales']
+
     return get_sales_summary(
         sales_log=lubricants_sales_data,
         shift_id=shift_id,
         model_class=LubricantSale
     )
 
+
 @router.post("/transfer")
-def transfer_from_buffer(product_code: str, quantity: int):
+async def transfer_from_buffer(product_code: str, quantity: int, ctx: dict = Depends(get_station_context)):
     """
     Transfer stock from Buffer to Island 3
     """
+    storage = ctx["storage"]
+    lubricants_inventory = storage['lubricants']
+
     # Find buffer product
     buffer_code = f"{product_code}-BUF" if not product_code.endswith("-BUF") else product_code
     island_code = product_code.replace("-BUF", "") if product_code.endswith("-BUF") else product_code
@@ -186,11 +123,15 @@ def transfer_from_buffer(product_code: str, quantity: int):
         "island_new_stock": island_item["current_stock"]
     }
 
+
 @router.post("/{product_code}/restock")
-def restock_lubricant(product_code: str, quantity: int):
+async def restock_lubricant(product_code: str, quantity: int, ctx: dict = Depends(get_station_context)):
     """
     Add stock to lubricant inventory (usually to Buffer)
     """
+    storage = ctx["storage"]
+    lubricants_inventory = storage['lubricants']
+
     result = increment_stock(
         storage=lubricants_inventory,
         item_id=product_code,
@@ -201,11 +142,15 @@ def restock_lubricant(product_code: str, quantity: int):
     result['product_code'] = result.pop('lubricant_id')
     return result
 
+
 @router.get("/inventory/summary")
-def get_inventory_summary():
+async def get_inventory_summary(ctx: dict = Depends(get_station_context)):
     """
     Get inventory summary by location and category
     """
+    storage = ctx["storage"]
+    lubricants_inventory = storage['lubricants']
+
     island3_items = [item for item in lubricants_inventory.values() if item["location"] == "Island 3"]
     buffer_items = [item for item in lubricants_inventory.values() if item["location"] == "Buffer"]
 

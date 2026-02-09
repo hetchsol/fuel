@@ -1,48 +1,24 @@
 """
 Fuel Tank Inventory API
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime
 from typing import List
 from ...models.models import FuelTankLevel, StockDelivery
 from ...config import TANK_CONVERSION_FACTOR, get_allowable_loss_percent
-from ...database.storage import STORAGE
+from .auth import get_station_context
 
 router = APIRouter()
 
-# Use central storage
-tank_data = STORAGE['tanks']
-
-# Initialize tanks if not exists
-if not tank_data:
-    STORAGE['tanks'] = {
-        "TANK-DIESEL": {
-            "tank_id": "TANK-DIESEL",
-            "fuel_type": "Diesel",
-            "current_level": 15000.0,  # liters
-            "capacity": 20000.0,  # liters (configurable by owner)
-            "last_updated": datetime.now().isoformat(),
-            "percentage": 75.0
-        },
-        "TANK-PETROL": {
-            "tank_id": "TANK-PETROL",
-            "fuel_type": "Petrol",
-            "current_level": 18000.0,  # liters
-            "capacity": 25000.0,  # liters (configurable by owner)
-            "last_updated": datetime.now().isoformat(),
-            "percentage": 72.0
-        }
-    }
-    tank_data = STORAGE['tanks']  # Re-assign after initialization
-
-# Store delivery history
-delivery_history = []
 
 @router.get("/levels", response_model=List[FuelTankLevel])
-def get_tank_levels():
+def get_tank_levels(ctx: dict = Depends(get_station_context)):
     """
     Get current fuel levels for all tanks
     """
+    storage = ctx["storage"]
+    tank_data = storage['tanks']
+
     tanks = []
     for tank_id, data in tank_data.items():
         percentage = (data["current_level"] / data["capacity"]) * 100
@@ -57,11 +33,16 @@ def get_tank_levels():
     return tanks
 
 @router.post("/update/{tank_id}")
-def update_tank_level(tank_id: str, volume_dispensed: float):
+def update_tank_level(tank_id: str, volume_dispensed: float, ctx: dict = Depends(get_station_context)):
     """
     Update tank level after fuel dispensing
     Called after each sale to reduce tank level
     """
+    storage = ctx["storage"]
+    tank_data = storage['tanks']
+    delivery_history = storage['delivery_history']
+    dip_readings_data = storage['dip_readings_data']
+
     if tank_id not in tank_data:
         return {"error": "Tank not found"}
 
@@ -78,10 +59,15 @@ def update_tank_level(tank_id: str, volume_dispensed: float):
     }
 
 @router.post("/refill/{tank_id}")
-def refill_tank(tank_id: str, volume_added: float):
+def refill_tank(tank_id: str, volume_added: float, ctx: dict = Depends(get_station_context)):
     """
     Refill a tank with new fuel
     """
+    storage = ctx["storage"]
+    tank_data = storage['tanks']
+    delivery_history = storage['delivery_history']
+    dip_readings_data = storage['dip_readings_data']
+
     if tank_id not in tank_data:
         return {"error": "Tank not found"}
 
@@ -102,11 +88,16 @@ def refill_tank(tank_id: str, volume_added: float):
     }
 
 @router.post("/delivery")
-def receive_delivery(delivery: StockDelivery):
+def receive_delivery(delivery: StockDelivery, ctx: dict = Depends(get_station_context)):
     """
     Receive a fuel delivery and update tank levels.
     Calculates actual loss vs expected loss.
     """
+    storage = ctx["storage"]
+    tank_data = storage['tanks']
+    delivery_history = storage['delivery_history']
+    dip_readings_data = storage['dip_readings_data']
+
     if delivery.tank_id not in tank_data:
         return {"error": "Tank not found"}
 
@@ -174,24 +165,31 @@ def receive_delivery(delivery: StockDelivery):
     }
 
 @router.get("/deliveries")
-def get_delivery_history(limit: int = 50):
+def get_delivery_history(limit: int = 50, ctx: dict = Depends(get_station_context)):
     """
     Get fuel delivery history
     """
+    storage = ctx["storage"]
+    tank_data = storage['tanks']
+    delivery_history = storage['delivery_history']
+    dip_readings_data = storage['dip_readings_data']
+
     return sorted(delivery_history, key=lambda x: x["timestamp"], reverse=True)[:limit]
 
-# Store dip readings
-dip_readings_data = {}
-
 @router.post("/dip-reading/{tank_id}")
-def record_dip_reading(tank_id: str, opening_dip: float = None, closing_dip: float = None, user: str = None):
+def record_dip_reading(tank_id: str, opening_dip: float = None, closing_dip: float = None, user: str = None, ctx: dict = Depends(get_station_context)):
     """
     Record tank dip readings and calculate volume from dip measurement
     Dip measurement in cm, converted to liters based on tank dimensions
 
-    Standard cylindrical tank conversion: 1 cm height ≈ 78.54 liters (for 10m diameter tank)
+    Standard cylindrical tank conversion: 1 cm height ~ 78.54 liters (for 10m diameter tank)
     For more accuracy, use actual tank dimensions
     """
+    storage = ctx["storage"]
+    tank_data = storage['tanks']
+    delivery_history = storage['delivery_history']
+    dip_readings_data = storage['dip_readings_data']
+
     if tank_id not in tank_data:
         return {"error": "Tank not found"}
 
@@ -235,10 +233,15 @@ def record_dip_reading(tank_id: str, opening_dip: float = None, closing_dip: flo
     }
 
 @router.get("/dip-reading/{tank_id}")
-def get_dip_reading(tank_id: str):
+def get_dip_reading(tank_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get stored dip readings for a tank
     """
+    storage = ctx["storage"]
+    tank_data = storage['tanks']
+    delivery_history = storage['delivery_history']
+    dip_readings_data = storage['dip_readings_data']
+
     if tank_id not in tank_data:
         return {"error": "Tank not found"}
 
@@ -258,7 +261,7 @@ def get_dip_reading(tank_id: str):
 
 
 @router.post("/create")
-def create_tank(tank_id: str, fuel_type: str, capacity: float, initial_level: float = 0.0):
+def create_tank(tank_id: str, fuel_type: str, capacity: float, initial_level: float = 0.0, ctx: dict = Depends(get_station_context)):
     """
     Create a new tank (Owner only)
 
@@ -268,6 +271,11 @@ def create_tank(tank_id: str, fuel_type: str, capacity: float, initial_level: fl
         capacity: Tank capacity in liters
         initial_level: Initial fuel level in liters (default: 0.0)
     """
+    storage = ctx["storage"]
+    tank_data = storage['tanks']
+    delivery_history = storage['delivery_history']
+    dip_readings_data = storage['dip_readings_data']
+
     # Validate tank doesn't already exist
     if tank_id in tank_data:
         raise HTTPException(status_code=400, detail=f"Tank {tank_id} already exists")
@@ -309,19 +317,23 @@ def create_tank(tank_id: str, fuel_type: str, capacity: float, initial_level: fl
 
 
 @router.delete("/{tank_id}")
-def delete_tank(tank_id: str):
+def delete_tank(tank_id: str, ctx: dict = Depends(get_station_context)):
     """
     Delete a tank (Owner only)
 
     Args:
         tank_id: Tank ID to delete
     """
+    storage = ctx["storage"]
+    tank_data = storage['tanks']
+    delivery_history = storage['delivery_history']
+    dip_readings_data = storage['dip_readings_data']
+
     if tank_id not in tank_data:
         raise HTTPException(status_code=404, detail="Tank not found")
 
     # Check if tank is being used by any pump station
-    from ...database.storage import STORAGE
-    islands_data = STORAGE.get('islands', {})
+    islands_data = storage.get('islands', {})
 
     for island_id, island in islands_data.items():
         pump_station = island.get("pump_station", {})
@@ -342,7 +354,7 @@ def delete_tank(tank_id: str):
 
 
 @router.put("/{tank_id}/capacity")
-def update_tank_capacity(tank_id: str, new_capacity: float):
+def update_tank_capacity(tank_id: str, new_capacity: float, ctx: dict = Depends(get_station_context)):
     """
     Update tank capacity (Owner only)
 
@@ -350,6 +362,11 @@ def update_tank_capacity(tank_id: str, new_capacity: float):
         tank_id: Tank ID (TANK-DIESEL or TANK-PETROL)
         new_capacity: New capacity in liters
     """
+    storage = ctx["storage"]
+    tank_data = storage['tanks']
+    delivery_history = storage['delivery_history']
+    dip_readings_data = storage['dip_readings_data']
+
     if tank_id not in tank_data:
         raise HTTPException(status_code=404, detail="Tank not found")
 

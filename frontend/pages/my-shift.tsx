@@ -68,6 +68,7 @@ function getAuthHeaders() {
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
   }
 }
 

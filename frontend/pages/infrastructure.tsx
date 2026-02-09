@@ -78,7 +78,9 @@ export default function Infrastructure() {
 
   const fetchTanks = async () => {
     try {
-      const res = await fetch(`${BASE}/tanks/levels`)
+      const res = await fetch(`${BASE}/tanks/levels`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setTanks(data)
@@ -90,7 +92,9 @@ export default function Infrastructure() {
 
   const fetchIslands = async () => {
     try {
-      const res = await fetch(`${BASE}/islands/`)
+      const res = await fetch(`${BASE}/islands/`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setIslands(data)
@@ -105,6 +109,7 @@ export default function Infrastructure() {
     try {
       const res = await fetch(`${BASE}/tanks/${tankId}/capacity?new_capacity=${capacity}`, {
         method: 'PUT',
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
       })
 
       if (res.ok) {
@@ -128,6 +133,7 @@ export default function Infrastructure() {
     try {
       const res = await fetch(`${BASE}/islands/${islandId}/pump-station/tank?tank_id=${tankId}`, {
         method: 'PUT',
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
       })
 
       if (res.ok) {
@@ -164,7 +170,7 @@ export default function Infrastructure() {
 
       const res = await fetch(`${BASE}/islands/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: JSON.stringify(islandData),
       })
 
@@ -200,6 +206,7 @@ export default function Infrastructure() {
     try {
       const res = await fetch(`${BASE}/islands/${islandId}`, {
         method: 'DELETE',
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
       })
 
       if (res.ok) {
@@ -230,7 +237,7 @@ export default function Infrastructure() {
 
       const res = await fetch(`${BASE}/islands/${islandId}/nozzle`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: JSON.stringify(nozzleData),
       })
 
@@ -260,6 +267,7 @@ export default function Infrastructure() {
     try {
       const res = await fetch(`${BASE}/islands/${islandId}/nozzle/${nozzleId}`, {
         method: 'DELETE',
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
       })
 
       if (res.ok) {

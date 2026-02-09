@@ -66,7 +66,9 @@ export default function Shifts() {
 
   const fetchActiveShift = async () => {
     try {
-      const res = await fetch(`${BASE}/shifts/current/active`)
+      const res = await fetch(`${BASE}/shifts/current/active`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setActiveShift(data)
@@ -78,7 +80,9 @@ export default function Shifts() {
 
   const fetchNozzles = async () => {
     try {
-      const res = await fetch(`${BASE}/islands/`)
+      const res = await fetch(`${BASE}/islands/`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         // Extract all nozzles from islands
@@ -97,7 +101,9 @@ export default function Shifts() {
 
   const fetchStaffList = async () => {
     try {
-      const res = await fetch(`${BASE}/auth/staff`)
+      const res = await fetch(`${BASE}/auth/staff`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         // Extract full names from staff data
@@ -111,7 +117,9 @@ export default function Shifts() {
 
   const loadAvailableStaff = async () => {
     try {
-      const res = await fetch(`${BASE}/auth/staff`)
+      const res = await fetch(`${BASE}/auth/staff`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         // Filter only users with role='user' (attendants)
@@ -125,7 +133,9 @@ export default function Shifts() {
 
   const loadIslandsData = async () => {
     try {
-      const res = await fetch(`${BASE}/islands/`)
+      const res = await fetch(`${BASE}/islands/`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setIslandsData(data)
@@ -137,7 +147,9 @@ export default function Shifts() {
 
   const fetchTanks = async () => {
     try {
-      const res = await fetch(`${BASE}/tanks/levels`)
+      const res = await fetch(`${BASE}/tanks/levels`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setTanks(data)
@@ -150,7 +162,9 @@ export default function Shifts() {
   const fetchTankDipReadings = async () => {
     if (!activeShift) return
     try {
-      const res = await fetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-readings`)
+      const res = await fetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-readings`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setTankDipReadings(data)
@@ -177,7 +191,8 @@ export default function Shifts() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
         },
         body: JSON.stringify(payload)
       })
@@ -217,7 +232,7 @@ export default function Shifts() {
 
       const res = await fetch(`${BASE}/shifts/readings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: JSON.stringify(payload)
       })
 
@@ -342,7 +357,9 @@ export default function Shifts() {
       const token = localStorage.getItem('accessToken')
 
       // First, check if shift already exists
-      const checkRes = await fetch(`${BASE}/shifts/${shift_id}`)
+      const checkRes = await fetch(`${BASE}/shifts/${shift_id}`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       const shiftExists = checkRes.ok
       setIsEditMode(shiftExists)
 
@@ -354,7 +371,8 @@ export default function Shifts() {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
         },
         body: JSON.stringify(payload)
       })

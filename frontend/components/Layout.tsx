@@ -3,26 +3,53 @@ import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const { theme } = useTheme()
+  const [stations, setStations] = useState<any[]>([])
+  const [activeStationId, setActiveStationId] = useState<string>('ST001')
 
   useEffect(() => {
     // Check if user is logged in
     const userData = localStorage.getItem('user')
     if (userData) {
-      setUser(JSON.parse(userData))
+      const parsed = JSON.parse(userData)
+      setUser(parsed)
+      setActiveStationId(localStorage.getItem('stationId') || parsed.station_id || 'ST001')
     } else if (router.pathname !== '/login') {
       router.push('/login')
     }
     setLoading(false)
   }, [router.pathname])
 
+  // Load stations for owners
+  useEffect(() => {
+    if (user && user.role === 'owner') {
+      const token = localStorage.getItem('accessToken')
+      fetch(`${BASE}/stations/`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => setStations(data))
+        .catch(() => {})
+    }
+  }, [user])
+
+  const handleStationChange = (stationId: string) => {
+    setActiveStationId(stationId)
+    localStorage.setItem('stationId', stationId)
+    // Reload the current page to refresh data for the new station
+    router.reload()
+  }
+
   const handleLogout = () => {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('user')
+    localStorage.removeItem('stationId')
     setUser(null)
     router.push('/login')
   }
@@ -96,6 +123,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Setup & Settings',
       roles: ['owner'],
       children: [
+        { path: '/stations', label: 'Stations', roles: ['owner'] },
         { path: '/infrastructure', label: 'Infrastructure (Pumps & Nozzles)', roles: ['owner'] },
         { path: '/settings', label: 'Settings', roles: ['owner'] },
         { path: '/users', label: 'Users', roles: ['owner'] },
@@ -134,6 +162,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {/* User Info */}
             {user && (
               <div className="flex items-center space-x-4">
+                {/* Station Selector for owners */}
+                {user.role === 'owner' && stations.length > 0 && (
+                  <select
+                    value={activeStationId}
+                    onChange={(e) => handleStationChange(e.target.value)}
+                    className="px-3 py-1.5 text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}
+                  >
+                    {stations.map((s: any) => (
+                      <option key={s.station_id} value={s.station_id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <div className="text-right hidden sm:block">
                   <p className="text-sm font-medium transition-colors duration-300" style={{ color: theme.textPrimary }}>{user.full_name}</p>
                   <p className="text-xs transition-colors duration-300" style={{ color: theme.textSecondary }}>

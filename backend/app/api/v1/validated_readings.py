@@ -2,7 +2,7 @@
 API endpoints for validated readings (Mechanical, Electronic, Dip)
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 import json
 import os
@@ -10,32 +10,32 @@ from datetime import datetime
 
 from ...models.models import ValidatedReadingInput, ValidatedReadingOutput
 from ...services.reading_validation import create_validated_reading
+from .auth import get_station_context
+from ...database.station_files import get_station_file
 
 router = APIRouter()
 
-# In-memory storage (replace with database in production)
-VALIDATED_READINGS_FILE = "storage/validated_readings.json"
 
-
-def load_validated_readings() -> List[dict]:
-    """Load validated readings from file"""
-    if not os.path.exists(VALIDATED_READINGS_FILE):
+def load_validated_readings(station_id: str) -> List[dict]:
+    """Load validated readings from station-specific file"""
+    filepath = get_station_file(station_id, 'validated_readings.json')
+    if not os.path.exists(filepath):
         return []
 
     try:
-        with open(VALIDATED_READINGS_FILE, 'r') as f:
+        with open(filepath, 'r') as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading validated readings: {e}")
         return []
 
 
-def save_validated_readings(readings: List[dict]):
-    """Save validated readings to file"""
-    os.makedirs(os.path.dirname(VALIDATED_READINGS_FILE), exist_ok=True)
+def save_validated_readings(readings: List[dict], station_id: str):
+    """Save validated readings to station-specific file"""
+    filepath = get_station_file(station_id, 'validated_readings.json')
 
     try:
-        with open(VALIDATED_READINGS_FILE, 'w') as f:
+        with open(filepath, 'w') as f:
             json.dump(readings, f, indent=2)
     except Exception as e:
         print(f"Error saving validated readings: {e}")
@@ -43,7 +43,7 @@ def save_validated_readings(readings: List[dict]):
 
 
 @router.post("/validated-readings", response_model=ValidatedReadingOutput)
-def create_new_validated_reading(payload: ValidatedReadingInput):
+def create_new_validated_reading(payload: ValidatedReadingInput, ctx: dict = Depends(get_station_context)):
     """
     Create a new validated reading record
     Validates mechanical, electronic, and dip readings for consistency
@@ -62,13 +62,13 @@ def create_new_validated_reading(payload: ValidatedReadingInput):
         )
 
         # Load existing readings
-        readings = load_validated_readings()
+        readings = load_validated_readings(ctx["station_id"])
 
         # Add new reading
         readings.append(validated_reading)
 
         # Save back to file
-        save_validated_readings(readings)
+        save_validated_readings(readings, ctx["station_id"])
 
         return ValidatedReadingOutput(**validated_reading)
 
@@ -82,7 +82,8 @@ def create_new_validated_reading(payload: ValidatedReadingInput):
 def get_all_validated_readings(
     shift_id: str = None,
     tank_id: str = None,
-    validation_status: str = None
+    validation_status: str = None,
+    ctx: dict = Depends(get_station_context),
 ):
     """
     Get all validated readings with optional filtering
@@ -93,7 +94,7 @@ def get_all_validated_readings(
         validation_status: Filter by validation status (PASS, WARNING, FAIL)
     """
     try:
-        readings = load_validated_readings()
+        readings = load_validated_readings(ctx["station_id"])
 
         # Apply filters
         if shift_id:
@@ -112,10 +113,10 @@ def get_all_validated_readings(
 
 
 @router.get("/validated-readings/{reading_id}", response_model=ValidatedReadingOutput)
-def get_validated_reading_by_id(reading_id: str):
+def get_validated_reading_by_id(reading_id: str, ctx: dict = Depends(get_station_context)):
     """Get a specific validated reading by ID"""
     try:
-        readings = load_validated_readings()
+        readings = load_validated_readings(ctx["station_id"])
 
         # Find reading by ID
         reading = next((r for r in readings if r.get("reading_id") == reading_id), None)
@@ -132,7 +133,7 @@ def get_validated_reading_by_id(reading_id: str):
 
 
 @router.get("/validated-readings/shift/{shift_id}/summary")
-def get_shift_validated_readings_summary(shift_id: str):
+def get_shift_validated_readings_summary(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get summary of validated readings for a specific shift
 
@@ -140,7 +141,7 @@ def get_shift_validated_readings_summary(shift_id: str):
         Statistics about validated readings for the shift
     """
     try:
-        readings = load_validated_readings()
+        readings = load_validated_readings(ctx["station_id"])
         shift_readings = [r for r in readings if r.get("shift_id") == shift_id]
 
         if not shift_readings:

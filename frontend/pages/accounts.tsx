@@ -34,7 +34,9 @@ export default function Accounts() {
   const fetchAccounts = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/accounts/`)
+      const res = await fetch(`${BASE}/accounts/`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setAccounts(data)
@@ -105,7 +107,7 @@ export default function Accounts() {
 
       const res = await fetch(`${BASE}/accounts/sales`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: JSON.stringify(payload)
       })
 

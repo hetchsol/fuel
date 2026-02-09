@@ -28,7 +28,7 @@ class DependentInfo:
         }
 
 
-def validate_foreign_keys(entity_type: str, data: Dict[str, Any]) -> None:
+def validate_foreign_keys(entity_type: str, data: Dict[str, Any], storage: Dict[str, Any] = None) -> None:
     """
     Validate all foreign key references exist
 
@@ -58,7 +58,16 @@ def validate_foreign_keys(entity_type: str, data: Dict[str, Any]) -> None:
 
         # If field has a value (or is required), validate it exists
         if field_value:
-            if not entity_exists(referenced_entity, field_value):
+            store = storage if storage is not None else STORAGE
+            exists = False
+            if referenced_entity == 'nozzles':
+                from ..database.storage import get_nozzle
+                exists = get_nozzle(field_value, store) is not None
+            elif isinstance(store.get(referenced_entity), dict):
+                exists = field_value in store.get(referenced_entity, {})
+            else:
+                exists = entity_exists(referenced_entity, field_value)
+            if not exists:
                 referenced_name = referenced_entity.rstrip('s').capitalize()  # 'shifts' -> 'Shift'
                 error_msg = (
                     f"Invalid {field_name}: '{field_value}' - "
@@ -84,7 +93,7 @@ def validate_foreign_keys(entity_type: str, data: Dict[str, Any]) -> None:
         )
 
 
-def check_dependents(entity_type: str, entity_id: str) -> List[DependentInfo]:
+def check_dependents(entity_type: str, entity_id: str, storage: Dict[str, Any] = None) -> List[DependentInfo]:
     """
     Check if entity has any dependent records
 
@@ -107,26 +116,26 @@ def check_dependents(entity_type: str, entity_id: str) -> List[DependentInfo]:
         # Special handling for nested nozzles
         if is_nested and dep_name == 'nozzles':
             from ..database.storage import get_all_nozzles
-            all_nozzles = get_all_nozzles()
+            all_nozzles = get_all_nozzles(storage)
             matching_nozzles = [n for n in all_nozzles if n.get('island_id') == entity_id]
             count = len(matching_nozzles)
         else:
             # Check in storage
-            storage = STORAGE.get(storage_key)
+            store = storage if storage is not None else STORAGE
+            storage_data = store.get(storage_key)
 
-            if isinstance(storage, dict):
+            if isinstance(storage_data, dict):
                 # Dict-based storage: check all values
                 count = sum(
-                    1 for item in storage.values()
+                    1 for item in storage_data.values()
                     if item.get(foreign_key_field) == entity_id
                 )
-            elif isinstance(storage, list):
-                # List-based storage: filter by foreign key field
-                matching_items = filter_list_storage(
-                    storage_key,
-                    **{foreign_key_field: entity_id}
+            elif isinstance(storage_data, list):
+                # List-based storage: filter by field
+                count = sum(
+                    1 for item in storage_data
+                    if item.get(foreign_key_field) == entity_id
                 )
-                count = len(matching_items)
             else:
                 count = 0
 
@@ -138,7 +147,7 @@ def check_dependents(entity_type: str, entity_id: str) -> List[DependentInfo]:
     return dependent_info_list
 
 
-def validate_delete(entity_type: str, entity_id: str, cascade: bool = False) -> None:
+def validate_delete(entity_type: str, entity_id: str, cascade: bool = False, storage: Dict[str, Any] = None) -> None:
     """
     Validate that an entity can be deleted
     Optionally performs cascade delete
@@ -151,7 +160,7 @@ def validate_delete(entity_type: str, entity_id: str, cascade: bool = False) -> 
     Raises:
         HTTPException: 409 if dependents exist and cascade=False
     """
-    dependent_info = check_dependents(entity_type, entity_id)
+    dependent_info = check_dependents(entity_type, entity_id, storage)
 
     if not dependent_info:
         return  # No dependents, safe to delete
@@ -184,13 +193,14 @@ def validate_delete(entity_type: str, entity_id: str, cascade: bool = False) -> 
         )
 
     # Cascade delete: Delete all dependents recursively
-    _cascade_delete_dependents(entity_type, entity_id, dependent_info)
+    _cascade_delete_dependents(entity_type, entity_id, dependent_info, storage)
 
 
 def _cascade_delete_dependents(
     entity_type: str,
     entity_id: str,
-    dependent_info: List[DependentInfo]
+    dependent_info: List[DependentInfo],
+    storage: Dict[str, Any] = None
 ) -> None:
     """
     Recursively delete all dependent records
@@ -215,32 +225,31 @@ def _cascade_delete_dependents(
             # Would need to modify island data structure
             continue
 
-        storage = STORAGE.get(storage_key)
+        store = storage if storage is not None else STORAGE
+        storage_data = store.get(storage_key)
 
-        if isinstance(storage, dict):
+        if isinstance(storage_data, dict):
             # Dict-based storage: find and delete all matching items
             ids_to_delete = [
-                item_id for item_id, item in storage.items()
+                item_id for item_id, item in storage_data.items()
                 if item.get(foreign_key_field) == entity_id
             ]
             for item_id in ids_to_delete:
                 # Recursively check if this item has dependents
-                sub_dependents = check_dependents(storage_key, item_id)
+                sub_dependents = check_dependents(storage_key, item_id, storage)
                 if sub_dependents:
-                    _cascade_delete_dependents(storage_key, item_id, sub_dependents)
+                    _cascade_delete_dependents(storage_key, item_id, sub_dependents, storage)
                 # Delete the item
-                del storage[item_id]
+                del storage_data[item_id]
 
-        elif isinstance(storage, list):
+        elif isinstance(storage_data, list):
             # List-based storage: filter out matching items
-            # First, recursively delete dependents of each item
-            items_to_remove = filter_list_storage(
-                storage_key,
-                **{foreign_key_field: entity_id}
-            )
+            items_to_remove = [
+                item for item in storage_data
+                if item.get(foreign_key_field) == entity_id
+            ]
 
             # For list storage, we need to know the ID field
-            # This is simplified - may need enhancement
             id_field_map = {
                 'readings': 'reading_id',
                 'lpg_sales': 'sale_id',
@@ -255,13 +264,13 @@ def _cascade_delete_dependents(
                 for item in items_to_remove:
                     item_id = item.get(id_field)
                     if item_id:
-                        sub_dependents = check_dependents(storage_key, item_id)
+                        sub_dependents = check_dependents(storage_key, item_id, storage)
                         if sub_dependents:
-                            _cascade_delete_dependents(storage_key, item_id, sub_dependents)
+                            _cascade_delete_dependents(storage_key, item_id, sub_dependents, storage)
 
             # Now remove from list
-            STORAGE[storage_key] = [
-                item for item in storage
+            store[storage_key] = [
+                item for item in storage_data
                 if item.get(foreign_key_field) != entity_id
             ]
 
@@ -270,7 +279,8 @@ def validate_unique_constraint(
     entity_type: str,
     field_name: str,
     field_value: Any,
-    exclude_id: Optional[str] = None
+    exclude_id: Optional[str] = None,
+    storage: Dict[str, Any] = None
 ) -> None:
     """
     Validate that a field value is unique (for one-to-one relationships)
@@ -290,11 +300,12 @@ def validate_unique_constraint(
     if not fk_def.get('unique', False):
         return  # Not a unique constraint
 
-    storage = STORAGE.get(entity_type)
+    store = storage if storage is not None else STORAGE
+    storage_data = store.get(entity_type)
 
-    if isinstance(storage, dict):
+    if isinstance(storage_data, dict):
         # Check if any other record has this value
-        for item_id, item in storage.items():
+        for item_id, item in storage_data.items():
             if item_id == exclude_id:
                 continue  # Skip the item being updated
             if item.get(field_name) == field_value:
@@ -308,14 +319,14 @@ def validate_unique_constraint(
                     }
                 )
 
-    elif isinstance(storage, list):
+    elif isinstance(storage_data, list):
         # Check if any item has this value
         id_field_map = {
             'shift_reconciliations': 'shift_id',
         }
         id_field = id_field_map.get(entity_type)
 
-        for item in storage:
+        for item in storage_data:
             if id_field and item.get(id_field) == exclude_id:
                 continue  # Skip the item being updated
             if item.get(field_name) == field_value:

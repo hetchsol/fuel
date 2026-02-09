@@ -3,6 +3,7 @@ Authentication API with Role-Based Access Control
 """
 from fastapi import APIRouter, HTTPException, Header, Depends
 from ...models.models import UserLogin, User, UserRole
+from ...database.storage import get_station_storage
 import hashlib
 from typing import Optional
 
@@ -177,6 +178,19 @@ async def require_supervisor_or_owner(current_user: dict = Depends(get_current_u
         )
 
     return current_user
+
+
+async def get_station_context(
+    current_user: dict = Depends(get_current_user),
+    x_station_id: Optional[str] = Header(None)
+) -> dict:
+    """
+    Resolve station from user token or X-Station-Id header.
+    Returns a dict with user info plus 'station_id' and 'storage'.
+    """
+    station_id = current_user.get("station_id") or x_station_id or "ST001"
+    storage = get_station_storage(station_id)
+    return {**current_user, "station_id": station_id, "storage": storage}
 
 
 @router.post("/login")

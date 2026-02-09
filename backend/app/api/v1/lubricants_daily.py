@@ -19,13 +19,10 @@ from ...models.models import (
     LubricantDailyEntryOutput,
 )
 from ...api.v1.auth import get_current_user
+from .auth import get_station_context
+from ...database.station_files import get_station_file
 
 router = APIRouter()
-
-# ===== FILE PERSISTENCE =====
-STORAGE_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'storage')
-LUBRICANT_DAILY_FILE = os.path.join(STORAGE_DIR, 'lubricant_daily_entries.json')
-LUBRICANT_PRODUCTS_FILE = os.path.join(STORAGE_DIR, 'lubricant_products.json')
 
 # Default lubricant product catalog (86 products grouped by category)
 DEFAULT_PRODUCTS = [
@@ -129,34 +126,34 @@ DEFAULT_PRODUCTS = [
 ]
 
 
-def load_lubricant_daily():
-    if os.path.exists(LUBRICANT_DAILY_FILE):
+# ===== FILE PERSISTENCE =====
+
+def load_lubricant_daily(station_id: str) -> dict:
+    filepath = get_station_file(station_id, 'lubricant_daily_entries.json')
+    if os.path.exists(filepath):
         try:
-            with open(LUBRICANT_DAILY_FILE, 'r') as f:
+            with open(filepath, 'r') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return {}
     return {}
 
 
-def save_lubricant_daily():
-    os.makedirs(STORAGE_DIR, exist_ok=True)
-    with open(LUBRICANT_DAILY_FILE, 'w') as f:
-        json.dump(lubricant_daily_db, f, indent=2, default=str)
+def save_lubricant_daily(db: dict, station_id: str):
+    filepath = get_station_file(station_id, 'lubricant_daily_entries.json')
+    with open(filepath, 'w') as f:
+        json.dump(db, f, indent=2, default=str)
 
 
-def load_product_catalog():
-    if os.path.exists(LUBRICANT_PRODUCTS_FILE):
+def load_product_catalog(station_id: str):
+    filepath = get_station_file(station_id, 'lubricant_products.json')
+    if os.path.exists(filepath):
         try:
-            with open(LUBRICANT_PRODUCTS_FILE, 'r') as f:
+            with open(filepath, 'r') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return DEFAULT_PRODUCTS
     return DEFAULT_PRODUCTS
-
-
-# Load on startup
-lubricant_daily_db = load_lubricant_daily()
 
 
 # ===== ENDPOINTS =====
@@ -164,7 +161,7 @@ lubricant_daily_db = load_lubricant_daily()
 @router.get("/products/{location}")
 def get_products_for_location(
     location: str,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """
     Get lubricant product catalog for a location with current stock levels.
@@ -173,7 +170,9 @@ def get_products_for_location(
     if location not in ("Island 3", "Buffer"):
         raise HTTPException(status_code=400, detail="Location must be 'Island 3' or 'Buffer'")
 
-    products = load_product_catalog()
+    station_id = ctx["station_id"]
+    products = load_product_catalog(station_id)
+    lubricant_daily_db = load_lubricant_daily(station_id)
 
     # Find most recent entry for this location to get current stock
     location_entries = [
@@ -207,7 +206,7 @@ def get_products_for_location(
 def get_previous_day(
     current_date: str,
     location: str,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """
     Get previous day's closing balances for a location to auto-populate opening stock.
@@ -216,6 +215,7 @@ def get_previous_day(
     if location not in ("Island 3", "Buffer"):
         raise HTTPException(status_code=400, detail="Location must be 'Island 3' or 'Buffer'")
 
+    lubricant_daily_db = load_lubricant_daily(ctx["station_id"])
     prev_date = (datetime.strptime(current_date, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
 
     matching = [
@@ -259,7 +259,7 @@ def get_previous_day(
 @router.post("/entry", response_model=LubricantDailyEntryOutput)
 def submit_lubricant_entry(
     entry_input: LubricantDailyEntryInput,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """
     Submit daily lubricant entry for a location.
@@ -267,6 +267,9 @@ def submit_lubricant_entry(
     """
     if entry_input.location not in ("Island 3", "Buffer"):
         raise HTTPException(status_code=400, detail="Location must be 'Island 3' or 'Buffer'")
+
+    station_id = ctx["station_id"]
+    lubricant_daily_db = load_lubricant_daily(station_id)
 
     calculated_rows = []
     total_sales = 0.0
@@ -307,7 +310,7 @@ def submit_lubricant_entry(
     )
 
     lubricant_daily_db[entry_id] = output.model_dump(mode='json')
-    save_lubricant_daily()
+    save_lubricant_daily(lubricant_daily_db, station_id)
 
     return output
 
@@ -316,9 +319,10 @@ def submit_lubricant_entry(
 def list_lubricant_entries(
     date: Optional[str] = None,
     location: Optional[str] = None,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """List lubricant daily entries, optionally filtered by date and/or location."""
+    lubricant_daily_db = load_lubricant_daily(ctx["station_id"])
     entries = list(lubricant_daily_db.values())
 
     if date:
@@ -335,7 +339,7 @@ def bulk_transfer(
     date: str,
     transfers: List[dict],
     recorded_by: str,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """
     Bulk transfer stock from Buffer to Island 3.
@@ -347,6 +351,8 @@ def bulk_transfer(
     """
     if not transfers:
         raise HTTPException(status_code=400, detail="No transfer items provided")
+
+    lubricant_daily_db = load_lubricant_daily(ctx["station_id"])
 
     # Get current Buffer stock (most recent entry)
     buffer_entries = [

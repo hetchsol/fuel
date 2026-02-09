@@ -5,7 +5,11 @@ import { useTheme } from '../contexts/ThemeContext'
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 const fetchDeliveries = async () => {
-  const res = await fetch(`${BASE}/tanks/deliveries`)
+  const res = await fetch(`${BASE}/tanks/deliveries`, {
+    headers: {
+      'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+    }
+  })
   if (!res.ok) throw new Error('Failed to load deliveries')
   return res.json()
 }
@@ -39,7 +43,11 @@ export default function StockMovement() {
     setFetchingStock(true)
     try {
       // Fetch REAL-TIME tank levels (cumulative with all deliveries and sales)
-      const response = await fetch(`${BASE}/tanks/levels`)
+      const response = await fetch(`${BASE}/tanks/levels`, {
+        headers: {
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+        }
+      })
 
       if (response.ok) {
         const allTanks = await response.json()
@@ -90,7 +98,10 @@ export default function StockMovement() {
 
       const res = await fetch(`${BASE}/tanks/delivery`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+        },
         body: JSON.stringify(payload),
       })
 

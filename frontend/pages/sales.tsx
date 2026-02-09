@@ -60,7 +60,10 @@ export default function Sales() {
     try {
       const res = await fetch(`${BASE}/sales`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+        },
         body: JSON.stringify({
           shift_id: formData.shiftId,
           fuel_type: formData.fuelType,

@@ -2,79 +2,40 @@
 LPG and Accessories API
 Handles LPG sales and accessories inventory
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from ...models.models import LPGSale, LPGAccessory, LPGAccessorySale
-from ...services.validated_crud import ValidatedCRUDService
 from ...services.crud import increment_stock, decrement_stock
 from ...services.inventory import process_stock_sale, get_sales_summary
 from ...services.relationship_validation import validate_create
-from ...database.storage import STORAGE
+from .auth import get_station_context
 
 router = APIRouter()
 
-# Use central storage
-lpg_sales_data = STORAGE['lpg_sales']
-accessories_inventory = STORAGE['lpg_accessories']
-accessories_sales_data = []  # Not yet in central storage
-
-# Initialize CRUD service for accessories with validation
-accessories_service = ValidatedCRUDService(
-    storage=accessories_inventory,
-    model=LPGAccessory,
-    id_field='product_code',
-    name='accessory',
-    entity_type='lpg_accessories'
-)
-
-# Initialize with sample accessories from spreadsheet
-STORAGE['lpg_accessories'] = {
-    "COK007": {
-        "product_code": "COK007",
-        "description": "2 Plate Stove with Swivel Regulator",
-        "unit_price": 1373.0,
-        "opening_stock": 6,
-        "current_stock": 6
-    },
-    "COK008": {
-        "product_code": "COK008",
-        "description": "2 Plate Stove with Bullnose Regulator",
-        "unit_price": 1437.0,
-        "opening_stock": 7,
-        "current_stock": 7
-    },
-    "COK002": {
-        "product_code": "COK002",
-        "description": "Cadac Cooker Top",
-        "unit_price": 305.0,
-        "opening_stock": 9,
-        "current_stock": 9
-    },
-    "LPGH001": {
-        "product_code": "LPGH001",
-        "description": "LPG Hose",
-        "unit_price": 56.0,
-        "opening_stock": 51,
-        "current_stock": 51
-    }
-}
 
 @router.post("/sales", response_model=LPGSale)
-def record_lpg_sale(sale: LPGSale):
+async def record_lpg_sale(sale: LPGSale, ctx: dict = Depends(get_station_context)):
     """
     Record LPG gas sale (by weight)
     """
+    storage = ctx["storage"]
+    lpg_sales_data = storage['lpg_sales']
+
     # Validate foreign keys (shift_id)
     validate_create('lpg_sales', sale.dict())
 
     lpg_sales_data.append(sale.dict())
     return sale
 
+
 @router.get("/sales/shift/{shift_id}")
-def get_shift_lpg_sales(shift_id: str):
+async def get_shift_lpg_sales(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get all LPG sales for a specific shift
     """
+    storage = ctx["storage"]
+    lpg_sales_data = storage['lpg_sales']
+
     shift_sales = [
         LPGSale(**sale) for sale in lpg_sales_data
         if sale["shift_id"] == shift_id
@@ -90,26 +51,39 @@ def get_shift_lpg_sales(shift_id: str):
         "total_revenue": total_revenue
     }
 
+
 @router.get("/accessories", response_model=List[LPGAccessory])
-def get_all_accessories():
+async def get_all_accessories(ctx: dict = Depends(get_station_context)):
     """
     Get all LPG accessories inventory
     """
-    return accessories_service.get_all()
+    storage = ctx["storage"]
+    accessories_inventory = storage['lpg_accessories']
+    return [LPGAccessory(**item) for item in accessories_inventory.values()]
+
 
 @router.get("/accessories/{product_code}", response_model=LPGAccessory)
-def get_accessory(product_code: str):
+async def get_accessory(product_code: str, ctx: dict = Depends(get_station_context)):
     """
     Get specific accessory details
     """
-    return accessories_service.get_by_id(product_code)
+    storage = ctx["storage"]
+    accessories_inventory = storage['lpg_accessories']
+    if product_code not in accessories_inventory:
+        raise HTTPException(status_code=404, detail="Accessory not found")
+    return LPGAccessory(**accessories_inventory[product_code])
+
 
 @router.post("/accessories/sales", response_model=LPGAccessorySale)
-def record_accessory_sale(sale: LPGAccessorySale):
+async def record_accessory_sale(sale: LPGAccessorySale, ctx: dict = Depends(get_station_context)):
     """
     Record LPG accessory sale
     Updates inventory
     """
+    storage = ctx["storage"]
+    accessories_inventory = storage['lpg_accessories']
+    accessories_sales_data = storage['accessories_sales']
+
     process_stock_sale(
         inventory=accessories_inventory,
         sales_log=accessories_sales_data,
@@ -121,22 +95,30 @@ def record_accessory_sale(sale: LPGAccessorySale):
 
     return sale
 
+
 @router.get("/accessories/sales/shift/{shift_id}")
-def get_shift_accessory_sales(shift_id: str):
+async def get_shift_accessory_sales(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get all accessory sales for a specific shift
     """
+    storage = ctx["storage"]
+    accessories_sales_data = storage['accessories_sales']
+
     return get_sales_summary(
         sales_log=accessories_sales_data,
         shift_id=shift_id,
         model_class=LPGAccessorySale
     )
 
+
 @router.post("/accessories/{product_code}/restock")
-def restock_accessory(product_code: str, quantity: int):
+async def restock_accessory(product_code: str, quantity: int, ctx: dict = Depends(get_station_context)):
     """
     Add stock to accessory inventory
     """
+    storage = ctx["storage"]
+    accessories_inventory = storage['lpg_accessories']
+
     result = increment_stock(
         storage=accessories_inventory,
         item_id=product_code,
@@ -147,11 +129,16 @@ def restock_accessory(product_code: str, quantity: int):
     result['product_code'] = result.pop('accessory_id')
     return result
 
+
 @router.get("/summary/shift/{shift_id}")
-def get_lpg_shift_summary(shift_id: str):
+async def get_lpg_shift_summary(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get complete LPG summary for a shift (gas + accessories)
     """
+    storage = ctx["storage"]
+    lpg_sales_data = storage['lpg_sales']
+    accessories_sales_data = storage['accessories_sales']
+
     # LPG gas sales
     gas_sales = [sale for sale in lpg_sales_data if sale["shift_id"] == shift_id]
     gas_revenue = sum(sale["total_amount"] for sale in gas_sales)

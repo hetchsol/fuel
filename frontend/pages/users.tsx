@@ -30,7 +30,11 @@ export default function UsersManagement() {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`${BASE}/auth/users`)
+      const res = await fetch(`${BASE}/auth/users`, {
+        headers: {
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
+      })
       if (!res.ok) throw new Error('Failed to fetch users')
       const data = await res.json()
       setUsers(data)
@@ -78,7 +82,10 @@ export default function UsersManagement() {
 
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        },
         body: JSON.stringify(formData)
       })
 
@@ -100,7 +107,10 @@ export default function UsersManagement() {
 
     try {
       const res = await fetch(`${BASE}/auth/users/${username}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
       })
 
       if (!res.ok) {

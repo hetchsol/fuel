@@ -52,7 +52,13 @@ export default function DailySalesReport() {
     setError('')
 
     try {
-      const res = await fetch(`${BASE}/sales-reports/daily/${date}`)
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch(`${BASE}/sales-reports/daily/${date}`, {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+        },
+      })
 
       if (!res.ok) {
         throw new Error('Failed to load report')

@@ -34,7 +34,11 @@ export default function TankAnalysis() {
 
   const fetchRecentShifts = async () => {
     try {
-      const res = await fetch(`${BASE}/shifts/`)
+      const res = await fetch(`${BASE}/shifts/`, {
+        headers: {
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
+      })
       if (res.ok) {
         const data = await res.json()
         setShifts(data.slice(0, 30))
@@ -48,7 +52,11 @@ export default function TankAnalysis() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${BASE}/reconciliation/shift/${shiftId}/tank-analysis`)
+      const res = await fetch(`${BASE}/reconciliation/shift/${shiftId}/tank-analysis`, {
+        headers: {
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
+      })
       if (!res.ok) {
         const error = await res.json()
         throw new Error(error.detail || 'Failed to fetch reconciliation')

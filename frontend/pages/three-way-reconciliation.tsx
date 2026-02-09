@@ -59,7 +59,11 @@ export default function ThreeWayReconciliation() {
   const fetchDailySummary = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`${BASE}/reconciliation/three-way/daily-summary/${selectedDate}`)
+      const response = await fetch(`${BASE}/reconciliation/three-way/daily-summary/${selectedDate}`, {
+        headers: {
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
+      })
       if (response.ok) {
         const data = await response.json()
         setDailySummary(data)

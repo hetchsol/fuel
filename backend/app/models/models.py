@@ -8,6 +8,14 @@ class UserRole(str, Enum):
     SUPERVISOR = "supervisor"
     OWNER = "owner"
 
+
+class Station(BaseModel):
+    station_id: str
+    name: str
+    location: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: Optional[str] = None
+
 class UserLogin(BaseModel):
     username: str
     password: str

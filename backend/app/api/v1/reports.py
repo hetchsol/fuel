@@ -1,69 +1,108 @@
 """
 Advanced Reports API
 Provides filtered reporting by staff, nozzle, island, pump, product, date range, etc.
+All endpoints are station-aware via get_station_context dependency.
 """
 from fastapi import APIRouter, Query, Depends, HTTPException
 from typing import Optional, List
 from ...services.reporting import ReportingService
 from ...services.relational_queries import RelationalQueryService
-from .auth import require_supervisor_or_owner
+from .auth import require_supervisor_or_owner, get_station_context
+from ...database.station_files import get_station_file
 from datetime import datetime
 import json
 import os
 
 router = APIRouter()
 
-# In-memory data stores (these would connect to your actual data sources)
-sales_data = []
-readings_data = []
-shifts_data = []
-reconciliations_data = []
-nozzles_data = []
-islands_data = []
-users_data = []
-tanks_data = []
-accounts_data = []
 
-
-def get_reporting_service() -> ReportingService:
-    """Get instance of reporting service with current data"""
+def _build_reporting_service(storage: dict) -> ReportingService:
+    """Build a ReportingService from station storage data"""
     return ReportingService(
-        sales_data=sales_data,
-        readings_data=readings_data,
-        shifts_data=shifts_data,
-        reconciliations_data=reconciliations_data
+        sales_data=storage.get('readings', []),
+        readings_data=storage.get('readings', []),
+        shifts_data=list(storage.get('shifts', {}).values()),
+        reconciliations_data=storage.get('reconciliations_data', [])
     )
 
 
-def get_relational_service() -> RelationalQueryService:
-    """Get instance of relational query service with all data stores"""
+def _build_relational_service(storage: dict) -> RelationalQueryService:
+    """Build a RelationalQueryService from station storage data"""
+    # Flatten nozzles from islands
+    nozzles_list = []
+    for island_id, island_data in storage.get('islands', {}).items():
+        pump_station = island_data.get('pump_station', {})
+        if pump_station and pump_station.get('nozzles'):
+            for nozzle in pump_station['nozzles'].values():
+                nozzles_list.append(nozzle)
+
+    # Flatten islands
+    islands_list = list(storage.get('islands', {}).values())
+
     return RelationalQueryService({
-        'sales': sales_data,
-        'readings': readings_data,
-        'shifts': shifts_data,
-        'reconciliations': reconciliations_data,
-        'nozzles': nozzles_data,
-        'islands': islands_data,
-        'users': users_data,
-        'tanks': tanks_data,
-        'accounts': accounts_data
+        'sales': storage.get('readings', []),
+        'readings': storage.get('readings', []),
+        'shifts': list(storage.get('shifts', {}).values()),
+        'reconciliations': storage.get('reconciliations_data', []),
+        'nozzles': nozzles_list,
+        'islands': islands_list,
+        'users': list(storage.get('users', {}).values()),
+        'tanks': list(storage.get('tanks', {}).values()),
+        'accounts': list(storage.get('accounts', {}).values())
     })
+
+
+def load_all_sales_sources(station_id: str, storage: dict):
+    """
+    Load all sales types from their respective station-specific sources
+
+    Args:
+        station_id: The station identifier
+        storage: The station's in-memory storage dict
+
+    Returns:
+        Dictionary with all sales data
+    """
+    # Load fuel sales from station-specific JSON file
+    fuel_sales = []
+    sales_file = get_station_file(station_id, 'sales.json')
+    if os.path.exists(sales_file):
+        with open(sales_file, 'r') as f:
+            fuel_sales = json.load(f)
+
+    # Load other sales from station's in-memory storage
+    credit_sales = storage.get('credit_sales', [])
+    lpg_sales = storage.get('lpg_sales', [])
+    lubricant_sales = storage.get('lubricant_sales', [])
+    accessory_sales = storage.get('accessories_sales', [])
+
+    return {
+        'fuel_sales': fuel_sales,
+        'credit_sales': credit_sales,
+        'lpg_sales': lpg_sales,
+        'lubricant_sales': lubricant_sales,
+        'accessory_sales': accessory_sales
+    }
 
 
 @router.get("/staff/list")
 def get_all_staff_names(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get list of all staff names from sales and readings data
 
     Example: /reports/staff/list?start_date=2025-12-01&end_date=2025-12-31
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
+
+    readings = storage.get('readings', [])
 
     # Filter data by date if provided
-    data = sales_data + readings_data
+    data = readings.copy()
     if start_date and end_date:
         data = service.filter_by_date_range(start_date, end_date, data)
 
@@ -83,17 +122,19 @@ def get_all_staff_names(
 @router.get("/staff/all")
 def get_all_staff_reports(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get reports for all staff members
 
     Example: /reports/staff/all?start_date=2025-12-01&end_date=2025-12-31
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
 
     # Get all staff names
-    staff_list = get_all_staff_names(start_date, end_date)
+    staff_list = get_all_staff_names(start_date, end_date, ctx)
 
     # Generate report for each staff member
     reports = []
@@ -115,31 +156,37 @@ def get_all_staff_reports(
 def get_staff_report(
     staff_name: str,
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get comprehensive report for a specific staff member
 
     Example: /reports/staff/John%20Doe?start_date=2025-12-01&end_date=2025-12-31
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
     return service.generate_staff_report(staff_name, start_date, end_date)
 
 
 @router.get("/nozzle/list")
 def get_all_nozzle_ids(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get list of all nozzle IDs from readings data
 
     Example: /reports/nozzle/list?start_date=2025-12-01&end_date=2025-12-31
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
+
+    readings = storage.get('readings', [])
 
     # Filter data by date if provided
-    data = readings_data.copy()
+    data = readings.copy()
     if start_date and end_date:
         data = service.filter_by_date_range(start_date, end_date, data)
 
@@ -159,17 +206,19 @@ def get_all_nozzle_ids(
 @router.get("/nozzle/all")
 def get_all_nozzle_reports(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get reports for all nozzles
 
     Example: /reports/nozzle/all?start_date=2025-12-01&end_date=2025-12-31
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
 
     # Get all nozzle IDs
-    nozzle_list = get_all_nozzle_ids(start_date, end_date)
+    nozzle_list = get_all_nozzle_ids(start_date, end_date, ctx)
 
     # Generate report for each nozzle
     reports = []
@@ -192,31 +241,37 @@ def get_all_nozzle_reports(
 def get_nozzle_report(
     nozzle_id: str,
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get comprehensive report for a specific nozzle
 
     Example: /reports/nozzle/ULP-001?start_date=2025-12-01&end_date=2025-12-31
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
     return service.generate_nozzle_report(nozzle_id, start_date, end_date)
 
 
 @router.get("/island/list")
 def get_all_island_ids(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get list of all island IDs from readings data
 
     Example: /reports/island/list?start_date=2025-12-01&end_date=2025-12-31
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
+
+    readings = storage.get('readings', [])
 
     # Filter data by date if provided
-    data = readings_data.copy()
+    data = readings.copy()
     if start_date and end_date:
         data = service.filter_by_date_range(start_date, end_date, data)
 
@@ -243,17 +298,19 @@ def get_all_island_ids(
 @router.get("/island/all")
 def get_all_island_reports(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get reports for all islands
 
     Example: /reports/island/all?start_date=2025-12-01&end_date=2025-12-31
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
 
     # Get all island IDs
-    island_list = get_all_island_ids(start_date, end_date)
+    island_list = get_all_island_ids(start_date, end_date, ctx)
 
     # Generate report for each island
     reports = []
@@ -275,31 +332,37 @@ def get_all_island_reports(
 def get_island_report(
     island_id: str,
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get comprehensive report for a specific island (pump station)
 
     Example: /reports/island/ISLAND-1?start_date=2025-12-01&end_date=2025-12-31
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
     return service.generate_island_report(island_id, start_date, end_date)
 
 
 @router.get("/product/list")
 def get_all_product_types(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get list of all product types from sales data
 
     Example: /reports/product/list?start_date=2025-12-01&end_date=2025-12-31
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
+
+    readings = storage.get('readings', [])
 
     # Filter data by date if provided
-    data = sales_data.copy()
+    data = readings.copy()
     if start_date and end_date:
         data = service.filter_by_date_range(start_date, end_date, data)
 
@@ -323,17 +386,19 @@ def get_all_product_types(
 @router.get("/product/all")
 def get_all_product_reports(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get reports for all product types
 
     Example: /reports/product/all?start_date=2025-12-01&end_date=2025-12-31
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
 
     # Get all product types
-    product_list = get_all_product_types(start_date, end_date)
+    product_list = get_all_product_types(start_date, end_date, ctx)
 
     # Generate report for each product
     reports = []
@@ -355,7 +420,8 @@ def get_all_product_reports(
 def get_product_report(
     product_type: str,
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get comprehensive report for a specific product type
@@ -364,7 +430,8 @@ def get_product_report(
 
     Example: /reports/product/Petrol?start_date=2025-12-01&end_date=2025-12-31
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
     return service.generate_product_report(product_type, start_date, end_date)
 
 
@@ -377,7 +444,8 @@ def get_custom_report(
     shift_id: Optional[str] = Query(None, description="Filter by shift ID"),
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    current_user: dict = Depends(require_supervisor_or_owner)
+    current_user: dict = Depends(require_supervisor_or_owner),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get custom report with multiple filters
@@ -405,14 +473,16 @@ def get_custom_report(
     if end_date:
         filters['end_date'] = end_date
 
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
     return service.generate_multi_filter_report(filters)
 
 
 @router.get("/daily")
 def get_daily_summary(
     date: str = Query(..., description="Date (YYYY-MM-DD)"),
-    current_user: dict = Depends(require_supervisor_or_owner)
+    current_user: dict = Depends(require_supervisor_or_owner),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get daily summary report for all operations
@@ -421,7 +491,8 @@ def get_daily_summary(
 
     Example: /reports/daily?date=2025-12-13
     """
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
 
     # Get all data for the date
     sales = service.filter_by_date_range(date, date)
@@ -509,7 +580,8 @@ def get_top_nozzles(readings: List[dict], limit: int = 5) -> List[dict]:
 def get_monthly_summary(
     year: int = Query(..., description="Year (e.g., 2025)"),
     month: int = Query(..., description="Month (1-12)"),
-    current_user: dict = Depends(require_supervisor_or_owner)
+    current_user: dict = Depends(require_supervisor_or_owner),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get monthly summary report
@@ -524,7 +596,8 @@ def get_monthly_summary(
     start_date = f"{year}-{month:02d}-01"
     end_date = f"{year}-{month:02d}-{last_day}"
 
-    service = get_reporting_service()
+    storage = ctx["storage"]
+    service = _build_reporting_service(storage)
 
     # Get all data for the month
     sales = service.filter_by_date_range(start_date, end_date)
@@ -578,7 +651,8 @@ def get_monthly_summary(
 @router.get("/relationships/{entity_type}/{entity_id}")
 def get_entity_relationships(
     entity_type: str,
-    entity_id: str
+    entity_id: str,
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get all related entities for a specific entity
@@ -588,14 +662,19 @@ def get_entity_relationships(
     Example: /reports/relationships/staff/John%20Doe
     Returns all nozzles, shifts, and products related to John Doe
     """
-    relational_service = get_relational_service()
+    storage = ctx["storage"]
+    relational_service = _build_relational_service(storage)
     return relational_service.get_entity_summary(entity_type, entity_id)
 
 
 @router.get("/relationships/staff/{staff_name}/nozzles")
-def get_staff_nozzles(staff_name: str):
+def get_staff_nozzles(
+    staff_name: str,
+    ctx: dict = Depends(get_station_context)
+):
     """Get all nozzles used by a specific staff member"""
-    relational_service = get_relational_service()
+    storage = ctx["storage"]
+    relational_service = _build_relational_service(storage)
     return {
         "staff_name": staff_name,
         "nozzles": relational_service.get_nozzles_by_staff(staff_name)
@@ -603,9 +682,13 @@ def get_staff_nozzles(staff_name: str):
 
 
 @router.get("/relationships/staff/{staff_name}/shifts")
-def get_staff_shifts_relation(staff_name: str):
+def get_staff_shifts_relation(
+    staff_name: str,
+    ctx: dict = Depends(get_station_context)
+):
     """Get all shifts worked by a specific staff member"""
-    relational_service = get_relational_service()
+    storage = ctx["storage"]
+    relational_service = _build_relational_service(storage)
     return {
         "staff_name": staff_name,
         "shifts": relational_service.get_shifts_by_staff(staff_name)
@@ -613,9 +696,13 @@ def get_staff_shifts_relation(staff_name: str):
 
 
 @router.get("/relationships/nozzle/{nozzle_id}/staff")
-def get_nozzle_staff(nozzle_id: str):
+def get_nozzle_staff(
+    nozzle_id: str,
+    ctx: dict = Depends(get_station_context)
+):
     """Get all staff who have used a specific nozzle"""
-    relational_service = get_relational_service()
+    storage = ctx["storage"]
+    relational_service = _build_relational_service(storage)
     return {
         "nozzle_id": nozzle_id,
         "staff": relational_service.get_staff_by_nozzle(nozzle_id)
@@ -623,9 +710,13 @@ def get_nozzle_staff(nozzle_id: str):
 
 
 @router.get("/relationships/nozzle/{nozzle_id}/island")
-def get_nozzle_island(nozzle_id: str):
+def get_nozzle_island(
+    nozzle_id: str,
+    ctx: dict = Depends(get_station_context)
+):
     """Get the island that a nozzle belongs to"""
-    relational_service = get_relational_service()
+    storage = ctx["storage"]
+    relational_service = _build_relational_service(storage)
     return {
         "nozzle_id": nozzle_id,
         "island_id": relational_service.get_island_by_nozzle(nozzle_id)
@@ -633,9 +724,13 @@ def get_nozzle_island(nozzle_id: str):
 
 
 @router.get("/relationships/island/{island_id}/nozzles")
-def get_island_nozzles_relation(island_id: str):
+def get_island_nozzles_relation(
+    island_id: str,
+    ctx: dict = Depends(get_station_context)
+):
     """Get all nozzles on a specific island"""
-    relational_service = get_relational_service()
+    storage = ctx["storage"]
+    relational_service = _build_relational_service(storage)
     return {
         "island_id": island_id,
         "nozzles": relational_service.get_nozzles_by_island(island_id)
@@ -643,9 +738,13 @@ def get_island_nozzles_relation(island_id: str):
 
 
 @router.get("/relationships/island/{island_id}/staff")
-def get_island_staff(island_id: str):
+def get_island_staff(
+    island_id: str,
+    ctx: dict = Depends(get_station_context)
+):
     """Get all staff who have worked on a specific island"""
-    relational_service = get_relational_service()
+    storage = ctx["storage"]
+    relational_service = _build_relational_service(storage)
     return {
         "island_id": island_id,
         "staff": relational_service.get_staff_by_island(island_id)
@@ -653,9 +752,13 @@ def get_island_staff(island_id: str):
 
 
 @router.get("/relationships/product/{product_type}/nozzles")
-def get_product_nozzles_relation(product_type: str):
+def get_product_nozzles_relation(
+    product_type: str,
+    ctx: dict = Depends(get_station_context)
+):
     """Get all nozzles that dispense a specific product"""
-    relational_service = get_relational_service()
+    storage = ctx["storage"]
+    relational_service = _build_relational_service(storage)
     return {
         "product_type": product_type,
         "nozzles": relational_service.get_nozzles_by_product(product_type)
@@ -663,43 +766,16 @@ def get_product_nozzles_relation(product_type: str):
 
 
 @router.get("/relationships/product/{product_type}/staff")
-def get_product_staff(product_type: str):
+def get_product_staff(
+    product_type: str,
+    ctx: dict = Depends(get_station_context)
+):
     """Get all staff who have handled a specific product"""
-    relational_service = get_relational_service()
+    storage = ctx["storage"]
+    relational_service = _build_relational_service(storage)
     return {
         "product_type": product_type,
         "staff": relational_service.get_staff_by_product(product_type)
-    }
-
-
-def load_all_sales_sources():
-    """
-    Load all sales types from their respective sources
-
-    Returns:
-        Dictionary with all sales data
-    """
-    from ...database.storage import STORAGE
-
-    # Load fuel sales from JSON file
-    fuel_sales = []
-    sales_file = "storage/sales.json"
-    if os.path.exists(sales_file):
-        with open(sales_file, 'r') as f:
-            fuel_sales = json.load(f)
-
-    # Load other sales from in-memory storage
-    credit_sales = STORAGE.get('credit_sales', [])
-    lpg_sales = STORAGE.get('lpg_sales', [])
-    lubricant_sales = STORAGE.get('lubricant_sales', [])
-    accessory_sales = STORAGE.get('lpg_accessory_sales', [])
-
-    return {
-        'fuel_sales': fuel_sales,
-        'credit_sales': credit_sales,
-        'lpg_sales': lpg_sales,
-        'lubricant_sales': lubricant_sales,
-        'accessory_sales': accessory_sales
     }
 
 
@@ -708,7 +784,8 @@ def get_date_range_report(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)", regex=r'^\d{4}-\d{2}-\d{2}$'),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)", regex=r'^\d{4}-\d{2}-\d{2}$'),
     product_type: Optional[str] = Query(None, description="Filter by product type (Petrol, Diesel, LPG, etc.)"),
-    current_user: dict = Depends(require_supervisor_or_owner)
+    current_user: dict = Depends(require_supervisor_or_owner),
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get aggregated sales report for a custom date range
@@ -752,11 +829,14 @@ def get_date_range_report(
             detail=f"Invalid date format. Use YYYY-MM-DD format. Error: {str(e)}"
         )
 
-    # Load all sales sources
-    all_sales_sources = load_all_sales_sources()
+    storage = ctx["storage"]
+    station_id = ctx["station_id"]
+
+    # Load all sales sources for this station
+    all_sales_sources = load_all_sales_sources(station_id, storage)
 
     # Get reporting service
-    service = get_reporting_service()
+    service = _build_reporting_service(storage)
 
     # Aggregate sales by date range
     report_data = service.aggregate_sales_by_date_range(

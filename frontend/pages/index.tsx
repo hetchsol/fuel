@@ -38,9 +38,15 @@ export default function Home() {
       const user = userData ? JSON.parse(userData).full_name : 'Unknown'
 
       const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
+      const token = localStorage.getItem('accessToken')
+      const stationId = localStorage.getItem('stationId')
       const res = await fetch(`${BASE}/tanks/dip-reading/${tankId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(stationId ? { 'X-Station-Id': stationId } : {}),
+        },
         body: JSON.stringify({
           opening_dip: dipReadings.openingDip ? parseFloat(dipReadings.openingDip) : null,
           closing_dip: dipReadings.closingDip ? parseFloat(dipReadings.closingDip) : null,

@@ -38,54 +38,49 @@ from ...services.reconciliation_service import (
     get_reconciliation_summary_for_shift
 )
 from ...api.v1.auth import get_current_user
+from .auth import get_station_context
+from ...database.station_files import get_station_file
 
 router = APIRouter()
 
-# File paths for persistence
-STORAGE_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'storage')
-TANK_READINGS_FILE = os.path.join(STORAGE_DIR, 'tank_readings.json')
-TANK_DELIVERIES_FILE = os.path.join(STORAGE_DIR, 'tank_deliveries.json')
 
-
-def load_tank_readings():
-    """Load tank readings from JSON file"""
-    if os.path.exists(TANK_READINGS_FILE):
+def load_tank_readings(station_id: str) -> dict:
+    """Load tank readings from station-specific JSON file"""
+    filepath = get_station_file(station_id, 'tank_readings.json')
+    if os.path.exists(filepath):
         try:
-            with open(TANK_READINGS_FILE, 'r') as f:
+            with open(filepath, 'r') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return {}
     return {}
 
 
-def save_tank_readings():
-    """Save tank readings to JSON file"""
-    os.makedirs(STORAGE_DIR, exist_ok=True)
-    with open(TANK_READINGS_FILE, 'w') as f:
+def save_tank_readings(tank_readings_db: dict, station_id: str):
+    """Save tank readings to station-specific JSON file"""
+    filepath = get_station_file(station_id, 'tank_readings.json')
+    with open(filepath, 'w') as f:
         json.dump(tank_readings_db, f, indent=2, default=str)
 
 
-def load_tank_deliveries():
-    """Load tank deliveries from JSON file"""
-    if os.path.exists(TANK_DELIVERIES_FILE):
+def load_tank_deliveries(station_id: str) -> dict:
+    """Load tank deliveries from station-specific JSON file"""
+    filepath = get_station_file(station_id, 'tank_deliveries.json')
+    if os.path.exists(filepath):
         try:
-            with open(TANK_DELIVERIES_FILE, 'r') as f:
+            with open(filepath, 'r') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return {}
     return {}
 
 
-def save_tank_deliveries():
-    """Save tank deliveries to JSON file"""
-    os.makedirs(STORAGE_DIR, exist_ok=True)
-    with open(TANK_DELIVERIES_FILE, 'w') as f:
+def save_tank_deliveries(tank_deliveries_db: dict, station_id: str):
+    """Save tank deliveries to station-specific JSON file"""
+    filepath = get_station_file(station_id, 'tank_deliveries.json')
+    with open(filepath, 'w') as f:
         json.dump(tank_deliveries_db, f, indent=2, default=str)
 
-
-# Load data from files on startup
-tank_readings_db = load_tank_readings()
-tank_deliveries_db = load_tank_deliveries()
 
 # Tank configuration (should come from database)
 TANK_CONFIG = {
@@ -145,7 +140,8 @@ def is_time_in_shift(time_str: str, start_time: str, end_time: str, shift_type: 
 def find_and_link_deliveries(
     tank_id: str,
     date: str,
-    shift_type: str
+    shift_type: str,
+    tank_deliveries_db: dict
 ) -> List[DeliveryReference]:
     """
     Automatically find standalone deliveries that match this tank reading.
@@ -160,6 +156,7 @@ def find_and_link_deliveries(
         tank_id: Tank identifier
         date: Date string (YYYY-MM-DD)
         shift_type: "Day" or "Night"
+        tank_deliveries_db: Deliveries database dict
 
     Returns:
         List of matched deliveries as DeliveryReference objects, sorted by time
@@ -205,7 +202,7 @@ def find_and_link_deliveries(
 @router.post("/readings", response_model=TankVolumeReadingOutput, response_model_exclude_unset=False, response_model_exclude_defaults=False, response_model_exclude_none=False)
 def submit_tank_reading(
     reading_input: TankVolumeReadingInput,
-    current_user: dict = Depends(get_current_user)
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Submit comprehensive daily tank volume readings matching Excel structure (Columns D-BF).
@@ -226,6 +223,10 @@ def submit_tank_reading(
     """
     from ...services.dip_conversion import dip_to_volume, validate_dip_reading
     from ...services.tank_movement import comprehensive_daily_calculation
+
+    station_id = ctx["station_id"]
+    tank_readings_db = load_tank_readings(station_id)
+    tank_deliveries_db = load_tank_deliveries(station_id)
 
     # Get tank configuration
     if reading_input.tank_id not in TANK_CONFIG:
@@ -291,7 +292,8 @@ def submit_tank_reading(
         auto_linked = find_and_link_deliveries(
             tank_id=reading_input.tank_id,
             date=reading_input.date,
-            shift_type=reading_input.shift_type
+            shift_type=reading_input.shift_type,
+            tank_deliveries_db=tank_deliveries_db
         )
         if auto_linked:
             deliveries = auto_linked
@@ -521,7 +523,7 @@ def submit_tank_reading(
     # Use model_dump for Pydantic v2
     output_dict = output.model_dump(mode='json', exclude_unset=False, exclude_defaults=False, exclude_none=False)
     tank_readings_db[reading_id] = output_dict
-    save_tank_readings()  # Persist to file
+    save_tank_readings(tank_readings_db, station_id)  # Persist to file
 
     # Update linked deliveries with reading_id (NEW FEATURE)
     for delivery in deliveries:
@@ -529,7 +531,7 @@ def submit_tank_reading(
             tank_deliveries_db[delivery.delivery_id]['linked_reading_id'] = reading_id
 
     if deliveries:
-        save_tank_deliveries()  # Persist linked delivery updates
+        save_tank_deliveries(tank_deliveries_db, station_id)  # Persist linked delivery updates
 
     # Return JSONResponse to ensure all fields are included
     return JSONResponse(content=jsonable_encoder(output_dict))
@@ -540,11 +542,13 @@ def get_tank_readings(
     tank_id: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get tank readings for a specific tank, optionally filtered by date range.
     """
+    tank_readings_db = load_tank_readings(ctx["station_id"])
+
     # Filter readings by tank_id - return raw dicts to preserve all fields
     readings = [
         r
@@ -568,11 +572,13 @@ def get_tank_readings(
 @router.get("/readings/{tank_id}/latest", response_model=TankVolumeReadingOutput)
 def get_latest_reading(
     tank_id: str,
-    current_user: dict = Depends(get_current_user)
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get the most recent reading for a tank.
     """
+    tank_readings_db = load_tank_readings(ctx["station_id"])
+
     readings = [
         TankVolumeReadingOutput(**r)
         for r in tank_readings_db.values()
@@ -592,7 +598,7 @@ def get_previous_shift_closing(
     tank_id: str,
     current_date: str,
     shift_type: str,
-    current_user: dict = Depends(get_current_user)
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get closing readings from the previous shift to auto-populate opening readings.
@@ -604,6 +610,8 @@ def get_previous_shift_closing(
     Returns the previous shift's closing values that become the new shift's opening values.
     """
     from datetime import datetime, timedelta
+
+    tank_readings_db = load_tank_readings(ctx["station_id"])
 
     # Determine which previous shift to look for
     if shift_type.lower() == 'night':
@@ -677,13 +685,16 @@ def get_previous_shift_closing(
 @router.post("/deliveries", response_model=TankDeliveryOutput)
 def record_delivery(
     delivery_input: TankDeliveryInput,
-    current_user: dict = Depends(get_current_user)
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Record a fuel delivery to a tank.
 
     This creates a delivery record and validates the delivery volume.
     """
+    station_id = ctx["station_id"]
+    tank_deliveries_db = load_tank_deliveries(station_id)
+
     # Get tank configuration
     if delivery_input.tank_id not in TANK_CONFIG:
         raise HTTPException(status_code=404, detail=f"Tank {delivery_input.tank_id} not found")
@@ -757,7 +768,7 @@ def record_delivery(
     delivery_dict = output.dict()
     delivery_dict['linked_reading_id'] = None  # Explicitly set for auto-linking
     tank_deliveries_db[delivery_id] = delivery_dict
-    save_tank_deliveries()  # Persist to file
+    save_tank_deliveries(tank_deliveries_db, station_id)  # Persist to file
 
     return output
 
@@ -770,7 +781,7 @@ def get_tank_deliveries(
     date: Optional[str] = None,           # NEW: Specific date filter
     shift_type: Optional[str] = None,     # NEW: Shift filter ("Day" or "Night")
     unlinked_only: bool = False,          # NEW: Only unlinked deliveries
-    current_user: dict = Depends(get_current_user)
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get delivery records for a specific tank with advanced filtering.
@@ -780,6 +791,8 @@ def get_tank_deliveries(
     - shift_type: Filter to "Day" or "Night" shift
     - unlinked_only: If true, only return deliveries not linked to readings
     """
+    tank_deliveries_db = load_tank_deliveries(ctx["station_id"])
+
     # Filter deliveries by tank_id
     deliveries = [
         TankDeliveryOutput(**d)
@@ -827,7 +840,7 @@ def get_tank_movement_summary(
     tank_id: str,
     start_date: str,
     end_date: str,
-    current_user: dict = Depends(get_current_user)
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Get summary of tank movement over a date range.
@@ -838,6 +851,9 @@ def get_tank_movement_summary(
     - Variance analysis
     - Anomaly detection
     """
+    tank_readings_db = load_tank_readings(ctx["station_id"])
+    tank_deliveries_db = load_tank_deliveries(ctx["station_id"])
+
     # Get tank configuration
     if tank_id not in TANK_CONFIG:
         raise HTTPException(status_code=404, detail=f"Tank {tank_id} not found")
@@ -918,7 +934,7 @@ def analyze_daily_variance(
     date: str,
     nozzle_electronic_total: float,
     nozzle_mechanical_total: float,
-    current_user: dict = Depends(get_current_user)
+    ctx: dict = Depends(get_station_context)
 ):
     """
     Analyze variance between tank movement and nozzle readings for a specific day.
@@ -927,6 +943,8 @@ def analyze_daily_variance(
     - Tank Movement (Column AM) vs Electronic Total (Column AN)
     - Tank Movement (Column AM) vs Mechanical Total (Column AO)
     """
+    tank_readings_db = load_tank_readings(ctx["station_id"])
+
     # Find reading for this date
     reading = None
     for r in tank_readings_db.values():
@@ -986,7 +1004,7 @@ def _get_variance_recommendation(electronic_var: dict, mechanical_var: dict) -> 
 
 
 @router.get("/readings/{reading_id}/timeline")
-def get_delivery_timeline(reading_id: str):
+def get_delivery_timeline(reading_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get delivery timeline for a specific reading showing sales between deliveries.
 
@@ -1000,6 +1018,8 @@ def get_delivery_timeline(reading_id: str):
 
     Useful for understanding exactly when fuel was delivered and sold during the shift.
     """
+    tank_readings_db = load_tank_readings(ctx["station_id"])
+
     # Find the reading
     reading = None
     for r in tank_readings_db.values():

@@ -1,33 +1,46 @@
 """
 Comprehensive Shift Reconciliation API
 Matches the Summary sheet functionality from the Excel spreadsheet
+Station-aware: all data lives in ctx["storage"]
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from ...models.models import ShiftReconciliation, TankReconciliation
 from ...config import PETROL_PRICE_PER_LITER, DIESEL_PRICE_PER_LITER
+from .auth import get_station_context
+from ...database.station_files import get_station_file
+import json
+import os
 
 router = APIRouter()
 
-# In-memory storage
-reconciliations_data = []
-tank_reconciliations_data = []
+
+def _load_station_tank_readings(station_id: str) -> dict:
+    """Load tank readings from the station file."""
+    path = get_station_file(station_id, 'tank_readings.json')
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            return json.load(f)
+    return {}
+
 
 @router.post("/shift", response_model=ShiftReconciliation)
-def create_shift_reconciliation(recon: ShiftReconciliation):
+def create_shift_reconciliation(recon: ShiftReconciliation, ctx: dict = Depends(get_station_context)):
     """
     Create comprehensive shift reconciliation
     Matches Summary sheet in Excel
     """
-    reconciliations_data.append(recon.dict())
+    storage = ctx["storage"]
+    storage['reconciliations_data'].append(recon.dict())
     return recon
 
 @router.get("/shift/{shift_id}", response_model=ShiftReconciliation)
-def get_shift_reconciliation(shift_id: str):
+def get_shift_reconciliation(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get reconciliation for a specific shift
     """
-    recon = next((r for r in reconciliations_data if r["shift_id"] == shift_id), None)
+    storage = ctx["storage"]
+    recon = next((r for r in storage['reconciliations_data'] if r["shift_id"] == shift_id), None)
 
     if not recon:
         raise HTTPException(status_code=404, detail="Reconciliation not found")
@@ -35,23 +48,25 @@ def get_shift_reconciliation(shift_id: str):
     return ShiftReconciliation(**recon)
 
 @router.get("/date/{date}")
-def get_date_reconciliation(date: str):
+def get_date_reconciliation(date: str, ctx: dict = Depends(get_station_context)):
     """
     Get both Day and Night shift reconciliations for a specific date
     """
+    storage = ctx["storage"]
     date_recons = [
-        ShiftReconciliation(**r) for r in reconciliations_data
+        ShiftReconciliation(**r) for r in storage['reconciliations_data']
         if r["date"] == date
     ]
     return date_recons
 
 @router.post("/shift/{shift_id}/deposit")
-def record_bank_deposit(shift_id: str, amount: float, deposit_slip: str = None):
+def record_bank_deposit(shift_id: str, amount: float, deposit_slip: str = None, ctx: dict = Depends(get_station_context)):
     """
     Record actual amount deposited to bank
     Updates difference and calculates variance
     """
-    recon = next((r for r in reconciliations_data if r["shift_id"] == shift_id), None)
+    storage = ctx["storage"]
+    recon = next((r for r in storage['reconciliations_data'] if r["shift_id"] == shift_id), None)
 
     if not recon:
         raise HTTPException(status_code=404, detail="Reconciliation not found for this shift")
@@ -60,7 +75,7 @@ def record_bank_deposit(shift_id: str, amount: float, deposit_slip: str = None):
     recon["difference"] = amount - recon["expected_cash"]
 
     # Update cumulative difference
-    previous_recons = [r for r in reconciliations_data if r["date"] < recon["date"]]
+    previous_recons = [r for r in storage['reconciliations_data'] if r["date"] < recon["date"]]
     previous_cumulative = sum(r.get("difference", 0) or 0 for r in previous_recons)
     recon["cumulative_difference"] = previous_cumulative + recon["difference"]
 
@@ -75,21 +90,23 @@ def record_bank_deposit(shift_id: str, amount: float, deposit_slip: str = None):
     }
 
 @router.post("/tank", response_model=TankReconciliation)
-def create_tank_reconciliation(tank_recon: TankReconciliation):
+def create_tank_reconciliation(tank_recon: TankReconciliation, ctx: dict = Depends(get_station_context)):
     """
     Create tank reconciliation for a shift
     Compares electronic sales vs tank movement
     """
-    tank_reconciliations_data.append(tank_recon.dict())
+    storage = ctx["storage"]
+    storage['tank_reconciliations_data'].append(tank_recon.dict())
     return tank_recon
 
 @router.get("/tank/{shift_id}/{tank_id}")
-def get_tank_reconciliation(shift_id: str, tank_id: str):
+def get_tank_reconciliation(shift_id: str, tank_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get tank reconciliation for specific shift and tank
     """
+    storage = ctx["storage"]
     tank_recon = next(
-        (r for r in tank_reconciliations_data if r["shift_id"] == shift_id and r["tank_id"] == tank_id),
+        (r for r in storage['tank_reconciliations_data'] if r["shift_id"] == shift_id and r["tank_id"] == tank_id),
         None
     )
 
@@ -100,16 +117,16 @@ def get_tank_reconciliation(shift_id: str, tank_id: str):
 
 
 @router.get("/shift/{shift_id}/tank-analysis")
-def calculate_tank_volume_movement_analysis(shift_id: str):
+def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
     Calculate comprehensive shift reconciliation including tank volume movement analysis
     Automatically computes from shift data, tank dip readings, and sales
     """
-    from ...database.storage import STORAGE
+    storage = ctx["storage"]
 
-    shifts = STORAGE.get('shifts', {})
-    sales = STORAGE.get('sales', [])
-    tanks = STORAGE.get('tanks', {})
+    shifts = storage.get('shifts', {})
+    sales = storage.get('sales', [])
+    tanks = storage.get('tanks', {})
 
     if shift_id not in shifts:
         raise HTTPException(status_code=404, detail="Shift not found")
@@ -194,11 +211,13 @@ def calculate_tank_volume_movement_analysis(shift_id: str):
     }
 
 @router.post("/calculate/{shift_id}")
-def calculate_shift_reconciliation(shift_id: str, nozzle_summaries: dict, lpg_revenue: float = 0, lubricants_revenue: float = 0, accessories_revenue: float = 0, credit_sales: List[dict] = []):
+def calculate_shift_reconciliation(shift_id: str, nozzle_summaries: dict, lpg_revenue: float = 0, lubricants_revenue: float = 0, accessories_revenue: float = 0, credit_sales: List[dict] = [], ctx: dict = Depends(get_station_context)):
     """
     Calculate comprehensive reconciliation for a shift
     Takes nozzle summaries and calculates all revenue
     """
+    storage = ctx["storage"]
+
     # Calculate fuel revenues
     petrol_volume = sum(
         summary["electronic_movement"]
@@ -225,7 +244,7 @@ def calculate_shift_reconciliation(shift_id: str, nozzle_summaries: dict, lpg_re
     expected_cash = total_expected - credit_sales_total
 
     # Get cumulative difference
-    previous_recons = [r for r in reconciliations_data]
+    previous_recons = [r for r in storage['reconciliations_data']]
     previous_cumulative = sum(r.get("difference", 0) or 0 for r in previous_recons)
 
     result = {
@@ -245,15 +264,16 @@ def calculate_shift_reconciliation(shift_id: str, nozzle_summaries: dict, lpg_re
     return result
 
 @router.get("/summary/month/{year}/{month}")
-def get_monthly_summary(year: int, month: int):
+def get_monthly_summary(year: int, month: int, ctx: dict = Depends(get_station_context)):
     """
     Get monthly reconciliation summary
     Similar to month-end totals in Excel
     """
+    storage = ctx["storage"]
     month_str = f"{year}-{month:02d}"
 
     month_recons = [
-        r for r in reconciliations_data
+        r for r in storage['reconciliations_data']
         if r["date"].startswith(month_str)
     ]
 
@@ -293,11 +313,14 @@ def get_monthly_summary(year: int, month: int):
     }
 
 @router.get("/discrepancies/analysis")
-def get_discrepancies_analysis():
+def get_discrepancies_analysis(ctx: dict = Depends(get_station_context)):
     """
     Analyze all discrepancies across reconciliations
     Helps identify patterns
     """
+    storage = ctx["storage"]
+    reconciliations_data = storage['reconciliations_data']
+
     if not reconciliations_data:
         return {"message": "No reconciliations found"}
 
@@ -322,7 +345,7 @@ def get_discrepancies_analysis():
 # =======================================================================================
 
 @router.get("/three-way/{reading_id}")
-def get_three_way_reconciliation(reading_id: str):
+def get_three_way_reconciliation(reading_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get three-way reconciliation report for a specific tank reading.
 
@@ -333,8 +356,9 @@ def get_three_way_reconciliation(reading_id: str):
 
     Returns root cause analysis and recommendations.
     """
-    from ...api.v1.tank_readings import tank_readings_db
     from ...services.reconciliation_service import get_reconciliation_summary_for_shift
+
+    tank_readings_db = _load_station_tank_readings(ctx["station_id"])
 
     # Find the reading
     reading = tank_readings_db.get(reading_id)
@@ -362,7 +386,7 @@ def get_three_way_reconciliation(reading_id: str):
 
 
 @router.get("/three-way/daily-summary/{date}")
-def get_daily_three_way_summary(date: str):
+def get_daily_three_way_summary(date: str, ctx: dict = Depends(get_station_context)):
     """
     Get three-way reconciliation summary for all shifts on a specific date.
 
@@ -371,8 +395,9 @@ def get_daily_three_way_summary(date: str):
     - List of shifts requiring investigation
     - Overall station performance
     """
-    from ...api.v1.tank_readings import tank_readings_db
     from ...services.reconciliation_service import get_reconciliation_summary_for_shift
+
+    tank_readings_db = _load_station_tank_readings(ctx["station_id"])
 
     # Get all readings for the date
     date_readings = []
@@ -431,7 +456,7 @@ def get_daily_three_way_summary(date: str):
 
 
 @router.get("/three-way/patterns/{tank_id}")
-def get_reconciliation_patterns(tank_id: str, days: int = 30):
+def get_reconciliation_patterns(tank_id: str, days: int = 30, ctx: dict = Depends(get_station_context)):
     """
     Analyze reconciliation patterns over time for a specific tank.
 
@@ -441,8 +466,9 @@ def get_reconciliation_patterns(tank_id: str, days: int = 30):
     - Trends over time
     - Average variance levels
     """
-    from ...api.v1.tank_readings import tank_readings_db
     from ...services.reconciliation_service import get_historical_variance_pattern
+
+    tank_readings_db = _load_station_tank_readings(ctx["station_id"])
 
     # Get readings for the tank
     readings = []

@@ -13,7 +13,11 @@ export default function Reconciliation() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${BASE}/reconciliation/date/${selectedDate}`)
+      const res = await fetch(`${BASE}/reconciliation/date/${selectedDate}`, {
+        headers: {
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+        }
+      })
       if (!res.ok) {
         throw new Error('Failed to fetch reconciliations')
       }

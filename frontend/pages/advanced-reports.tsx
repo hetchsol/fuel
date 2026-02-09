@@ -175,7 +175,11 @@ export default function AdvancedReports() {
           break
       }
 
-      const response = await fetch(url)
+      const response = await fetch(url, {
+        headers: {
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
+      })
       if (!response.ok) {
         throw new Error('Failed to generate report')
       }

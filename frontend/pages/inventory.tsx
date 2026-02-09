@@ -33,7 +33,9 @@ export default function Inventory() {
 
   const fetchLPGAccessories = async () => {
     try {
-      const res = await fetch(`${BASE}/lpg/accessories`)
+      const res = await fetch(`${BASE}/lpg/accessories`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setLpgAccessories(data)
@@ -45,7 +47,9 @@ export default function Inventory() {
 
   const fetchLubricants = async () => {
     try {
-      const res = await fetch(`${BASE}/lubricants/`)
+      const res = await fetch(`${BASE}/lubricants/`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setLubricants(data)

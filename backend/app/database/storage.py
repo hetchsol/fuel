@@ -1,53 +1,82 @@
 """
 Centralized Storage Registry
-Provides unified access to all in-memory data storage
+Provides unified access to all in-memory data storage.
+Supports per-station isolated storage.
 """
 from typing import Dict, List, Any, Optional
-
-# Centralized storage for all entities
-# This replaces scattered storage dictionaries across API modules
-STORAGE: Dict[str, Any] = {
-    # Core entities
-    'users': {},                    # user_id -> User dict
-    'shifts': {},                   # shift_id -> Shift dict
-    'islands': {},                  # island_id -> Island dict
-    'tanks': {},                    # tank_id -> Tank dict
-    'accounts': {},                 # account_id -> AccountHolder dict
-
-    # Products
-    'lubricants': {},               # product_code -> Lubricant dict
-    'lpg_accessories': {},          # product_code -> LPGAccessory dict
-
-    # Transactional data (using lists for now, may migrate to dicts)
-    'readings': [],                 # List of DualReading dicts
-    'lpg_sales': [],                # List of LPGSale dicts
-    'lubricant_sales': [],          # List of LubricantSale dicts
-    'credit_sales': [],             # List of CreditSale dicts
-    'shift_reconciliations': [],    # List of ShiftReconciliation dicts
-    'tank_reconciliations': [],     # List of TankReconciliation dicts
-
-    # LPG & Lubricants Daily Operations
-    'lpg_daily_entries': {},        # entry_id -> LPG shift entry dict
-    'lpg_accessories_daily': {},    # entry_id -> LPG accessories daily dict
-    'lubricant_daily_entries': {},  # entry_id -> Lubricant daily entry dict
-
-    # Settings
-    'fuel_settings': {},            # Singleton for FuelSettings
-}
+import copy
 
 
-def get_nozzle(nozzle_id: str) -> Optional[Dict[str, Any]]:
+def _make_empty_storage() -> Dict[str, Any]:
+    """Create a fresh empty storage dict template"""
+    return {
+        # Core entities
+        'users': {},
+        'shifts': {},
+        'islands': {},
+        'tanks': {},
+        'accounts': {},
+
+        # Products
+        'lubricants': {},
+        'lpg_accessories': {},
+
+        # Transactional data
+        'readings': [],
+        'lpg_sales': [],
+        'lubricant_sales': [],
+        'credit_sales': [],
+        'shift_reconciliations': [],
+        'tank_reconciliations': [],
+
+        # LPG & Lubricants Daily Operations
+        'lpg_daily_entries': {},
+        'lpg_accessories_daily': {},
+        'lubricant_daily_entries': {},
+
+        # Settings
+        'fuel_settings': {},
+        'system_settings': {},
+        'validation_thresholds': {},
+
+        # Reconciliation (previously module-level lists)
+        'reconciliations_data': [],
+        'tank_reconciliations_data': [],
+
+        # Delivery history (previously module-level in tanks.py)
+        'delivery_history': [],
+        'dip_readings_data': {},
+
+        # Accessories sales (previously module-level in lpg.py)
+        'accessories_sales': [],
+    }
+
+
+# Per-station storage: station_id -> storage dict
+STATIONS_STORAGE: Dict[str, Dict[str, Any]] = {}
+
+# Global STORAGE points to ST001 by default (backward compat)
+STORAGE: Dict[str, Any] = _make_empty_storage()
+
+
+def get_station_storage(station_id: str) -> Dict[str, Any]:
     """
-    Find a nozzle across all islands
-    Nozzles are nested in islands -> pump_station -> nozzles
-
-    Args:
-        nozzle_id: The nozzle ID to find
-
-    Returns:
-        Nozzle dict if found, None otherwise
+    Get or create the storage dict for a station.
     """
-    for island_id, island_data in STORAGE['islands'].items():
+    if station_id not in STATIONS_STORAGE:
+        STATIONS_STORAGE[station_id] = _make_empty_storage()
+    return STATIONS_STORAGE[station_id]
+
+
+# ──────────────────────────────────────────────────────────
+# Helper functions — operate on global STORAGE by default
+# (kept for backward compat with services/validation_engine)
+# ──────────────────────────────────────────────────────────
+
+def get_nozzle(nozzle_id: str, storage: Dict[str, Any] = None) -> Optional[Dict[str, Any]]:
+    """Find a nozzle across all islands"""
+    store = storage if storage is not None else STORAGE
+    for island_id, island_data in store.get('islands', {}).items():
         if island_data.get('pump_station'):
             pump_station = island_data['pump_station']
             if pump_station.get('nozzles'):
@@ -58,27 +87,15 @@ def get_nozzle(nozzle_id: str) -> Optional[Dict[str, Any]]:
 
 
 def nozzle_exists(nozzle_id: str) -> bool:
-    """
-    Check if a nozzle exists
-
-    Args:
-        nozzle_id: The nozzle ID to check
-
-    Returns:
-        True if nozzle exists, False otherwise
-    """
+    """Check if a nozzle exists"""
     return get_nozzle(nozzle_id) is not None
 
 
-def get_all_nozzles() -> List[Dict[str, Any]]:
-    """
-    Get all nozzles across all islands
-
-    Returns:
-        List of all nozzle dicts
-    """
+def get_all_nozzles(storage: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    """Get all nozzles across all islands"""
+    store = storage if storage is not None else STORAGE
     nozzles = []
-    for island_id, island_data in STORAGE['islands'].items():
+    for island_id, island_data in store.get('islands', {}).items():
         if island_data.get('pump_station'):
             pump_station = island_data['pump_station']
             if pump_station.get('nozzles'):
@@ -91,21 +108,9 @@ def find_in_list_storage(
     field: str,
     value: Any
 ) -> Optional[Dict[str, Any]]:
-    """
-    Find an item in list-based storage by field value
-
-    Args:
-        storage_key: Key in STORAGE dict (e.g., 'readings', 'lpg_sales')
-        field: Field name to search by
-        value: Value to match
-
-    Returns:
-        First matching dict if found, None otherwise
-    """
     storage = STORAGE.get(storage_key, [])
     if not isinstance(storage, list):
         return None
-
     for item in storage:
         if item.get(field) == value:
             return item
@@ -116,20 +121,9 @@ def filter_list_storage(
     storage_key: str,
     **filters
 ) -> List[Dict[str, Any]]:
-    """
-    Filter items in list-based storage by multiple field values
-
-    Args:
-        storage_key: Key in STORAGE dict
-        **filters: Field name and value pairs to filter by
-
-    Returns:
-        List of matching dicts
-    """
     storage = STORAGE.get(storage_key, [])
     if not isinstance(storage, list):
         return []
-
     results = []
     for item in storage:
         match = True
@@ -139,34 +133,19 @@ def filter_list_storage(
                 break
         if match:
             results.append(item)
-
     return results
 
 
 def entity_exists(entity_type: str, entity_id: str) -> bool:
-    """
-    Check if an entity exists in storage
-
-    Args:
-        entity_type: Type of entity (e.g., 'users', 'shifts', 'nozzles')
-        entity_id: ID of the entity
-
-    Returns:
-        True if entity exists, False otherwise
-    """
-    # Special handling for nozzles (nested)
+    """Check if an entity exists in storage"""
     if entity_type == 'nozzles':
         return nozzle_exists(entity_id)
 
-    # For dict-based storage
     storage = STORAGE.get(entity_type)
     if isinstance(storage, dict):
         return entity_id in storage
 
-    # For list-based storage, need to know the ID field
-    # This is a simplified check - may need enhancement
     if isinstance(storage, list):
-        # Determine ID field based on entity type
         id_field_map = {
             'readings': 'reading_id',
             'lpg_sales': 'sale_id',
@@ -183,26 +162,14 @@ def entity_exists(entity_type: str, entity_id: str) -> bool:
 
 
 def get_entity(entity_type: str, entity_id: str) -> Optional[Dict[str, Any]]:
-    """
-    Get an entity from storage
-
-    Args:
-        entity_type: Type of entity
-        entity_id: ID of the entity
-
-    Returns:
-        Entity dict if found, None otherwise
-    """
-    # Special handling for nozzles
+    """Get an entity from storage"""
     if entity_type == 'nozzles':
         return get_nozzle(entity_id)
 
-    # For dict-based storage
     storage = STORAGE.get(entity_type)
     if isinstance(storage, dict):
         return storage.get(entity_id)
 
-    # For list-based storage
     if isinstance(storage, list):
         id_field_map = {
             'readings': 'reading_id',

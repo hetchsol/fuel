@@ -125,7 +125,10 @@ export default function TankMovement() {
     try {
       const token = localStorage.getItem('accessToken')
       const res = await fetch(`${BASE}/tank-readings/readings/${selectedTank}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
       })
       if (res.ok) {
         const data = await res.json()
@@ -140,7 +143,10 @@ export default function TankMovement() {
     try {
       const token = localStorage.getItem('accessToken')
       const res = await fetch(`${BASE}/tank-readings/deliveries/${selectedTank}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
       })
       if (res.ok) {
         const data = await res.json()
@@ -178,7 +184,8 @@ export default function TankMovement() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
         },
         body: JSON.stringify(payload)
       })
@@ -236,7 +243,8 @@ export default function TankMovement() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
         },
         body: JSON.stringify(payload)
       })
