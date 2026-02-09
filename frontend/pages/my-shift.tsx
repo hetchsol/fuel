@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
@@ -17,6 +17,22 @@ interface NozzleRow {
   opening_reading: number
   closing_reading: string
   price_per_liter: number
+}
+
+interface SaleLineItem {
+  id: string
+  product_code: string
+  description: string
+  unit_price: number
+  quantity: string
+  amount: number
+}
+
+interface ProductOption {
+  product_code: string
+  description: string
+  unit_price: number
+  category?: string
 }
 
 interface HandoverResult {
@@ -55,6 +71,9 @@ function getAuthHeaders() {
   }
 }
 
+let lineIdCounter = 0
+function nextLineId() { return `line-${++lineIdCounter}` }
+
 export default function MyShift() {
   const { theme } = useTheme()
   const [user, setUser] = useState<any>(null)
@@ -65,10 +84,15 @@ export default function MyShift() {
   const [assignmentInfo, setAssignmentInfo] = useState<any>(null)
   const [nozzleRows, setNozzleRows] = useState<NozzleRow[]>([])
 
-  // Other sales
-  const [lpgSales, setLpgSales] = useState('')
-  const [lubricantSales, setLubricantSales] = useState('')
-  const [accessorySales, setAccessorySales] = useState('')
+  // Other sales — item-by-item
+  const [lpgProducts, setLpgProducts] = useState<ProductOption[]>([])
+  const [lubricantProducts, setLubricantProducts] = useState<ProductOption[]>([])
+  const [accessoryProducts, setAccessoryProducts] = useState<ProductOption[]>([])
+
+  const [lpgLines, setLpgLines] = useState<SaleLineItem[]>([])
+  const [lubricantLines, setLubricantLines] = useState<SaleLineItem[]>([])
+  const [accessoryLines, setAccessoryLines] = useState<SaleLineItem[]>([])
+
   const [creditSales, setCreditSales] = useState('')
   const [actualCash, setActualCash] = useState('')
   const [notes, setNotes] = useState('')
@@ -113,6 +137,51 @@ export default function MyShift() {
       .finally(() => setLoading(false))
   }, [])
 
+  // Fetch product lists for dropdowns
+  const fetchProducts = useCallback(() => {
+    // LPG cylinders from pricing
+    fetch(`${BASE}/lpg-daily/pricing`, { headers: getAuthHeaders() })
+      .then(r => r.json())
+      .then(data => {
+        const sizes = data.sizes || []
+        setLpgProducts(sizes.map((s: any) => ({
+          product_code: `LPG-${s.size_kg}KG`,
+          description: `LPG ${s.size_kg}kg Refill`,
+          unit_price: s.price_refill || 0,
+        })))
+      })
+      .catch(() => {})
+
+    // LPG Accessories
+    fetch(`${BASE}/lpg/accessories`, { headers: getAuthHeaders() })
+      .then(r => r.json())
+      .then(data => {
+        const items = Array.isArray(data) ? data : []
+        setAccessoryProducts(items.map((a: any) => ({
+          product_code: a.product_code,
+          description: a.description,
+          unit_price: a.unit_price || a.selling_price || 0,
+        })))
+      })
+      .catch(() => {})
+
+    // Lubricants
+    fetch(`${BASE}/lubricants-daily/products/Island 3`, { headers: getAuthHeaders() })
+      .then(r => r.json())
+      .then(data => {
+        const items = data.products || []
+        setLubricantProducts(items.map((l: any) => ({
+          product_code: l.product_code,
+          description: l.description,
+          unit_price: l.selling_price || l.unit_price || 0,
+          category: l.category,
+        })))
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => { fetchProducts() }, [fetchProducts])
+
   // Fetch past handovers
   useEffect(() => {
     fetch(`${BASE}/handover/entries`, { headers: getAuthHeaders() })
@@ -121,31 +190,34 @@ export default function MyShift() {
       .catch(() => {})
   }, [success])
 
-  // Computed values
-  const nozzleComputations = useMemo(() => {
-    return nozzleRows.map(row => {
-      const closing = parseFloat(row.closing_reading)
-      if (isNaN(closing) || row.closing_reading === '') {
-        return { volume: 0, revenue: 0, valid: false }
-      }
-      const volume = closing - row.opening_reading
-      const revenue = volume >= 0 ? volume * row.price_per_liter : 0
-      return { volume: Math.max(0, volume), revenue: volume >= 0 ? revenue : 0, valid: volume >= 0 }
-    })
-  }, [nozzleRows])
+  // --- Nozzle computation (inline, no useMemo) ---
+  const nozzleComputations = nozzleRows.map(row => {
+    const closing = parseFloat(row.closing_reading)
+    if (isNaN(closing) || row.closing_reading === '') {
+      return { volume: 0, revenue: 0, valid: false }
+    }
+    const volume = closing - row.opening_reading
+    const revenue = volume >= 0 ? volume * row.price_per_liter : 0
+    return { volume: Math.max(0, volume), revenue: volume >= 0 ? revenue : 0, valid: volume >= 0 }
+  })
 
-  const fuelRevenue = useMemo(
-    () => nozzleComputations.reduce((s, c) => s + c.revenue, 0),
-    [nozzleComputations]
-  )
+  const fuelRevenue = nozzleComputations.reduce((s, c) => s + c.revenue, 0)
+  const totalVolume = nozzleComputations.reduce((s, c) => s + c.volume, 0)
 
-  const lpgVal = parseFloat(lpgSales) || 0
-  const lubVal = parseFloat(lubricantSales) || 0
-  const accVal = parseFloat(accessorySales) || 0
+  // --- Other sales line totals ---
+  const computeLineAmount = (line: SaleLineItem) => {
+    const qty = parseFloat(line.quantity) || 0
+    return qty * line.unit_price
+  }
+
+  const lpgTotal = lpgLines.reduce((s, l) => s + computeLineAmount(l), 0)
+  const lubricantTotal = lubricantLines.reduce((s, l) => s + computeLineAmount(l), 0)
+  const accessoryTotal = accessoryLines.reduce((s, l) => s + computeLineAmount(l), 0)
+
   const creditVal = parseFloat(creditSales) || 0
   const actualCashVal = parseFloat(actualCash) || 0
 
-  const totalExpected = fuelRevenue + lpgVal + lubVal + accVal
+  const totalExpected = fuelRevenue + lpgTotal + lubricantTotal + accessoryTotal
   const expectedCash = totalExpected - creditVal
   const difference = actualCashVal - expectedCash
 
@@ -157,6 +229,53 @@ export default function MyShift() {
     setNozzleRows(prev =>
       prev.map(r => r.nozzle_id === nozzleId ? { ...r, closing_reading: value } : r)
     )
+  }
+
+  // --- Sale line management ---
+  const addLine = (
+    products: ProductOption[],
+    setLines: React.Dispatch<React.SetStateAction<SaleLineItem[]>>
+  ) => {
+    if (products.length === 0) return
+    const p = products[0]
+    setLines(prev => [...prev, {
+      id: nextLineId(),
+      product_code: p.product_code,
+      description: p.description,
+      unit_price: p.unit_price,
+      quantity: '',
+      amount: 0,
+    }])
+  }
+
+  const removeLine = (
+    lineId: string,
+    setLines: React.Dispatch<React.SetStateAction<SaleLineItem[]>>
+  ) => {
+    setLines(prev => prev.filter(l => l.id !== lineId))
+  }
+
+  const updateLineProduct = (
+    lineId: string,
+    productCode: string,
+    products: ProductOption[],
+    setLines: React.Dispatch<React.SetStateAction<SaleLineItem[]>>
+  ) => {
+    const product = products.find(p => p.product_code === productCode)
+    if (!product) return
+    setLines(prev => prev.map(l =>
+      l.id === lineId ? { ...l, product_code: product.product_code, description: product.description, unit_price: product.unit_price } : l
+    ))
+  }
+
+  const updateLineQuantity = (
+    lineId: string,
+    qty: string,
+    setLines: React.Dispatch<React.SetStateAction<SaleLineItem[]>>
+  ) => {
+    setLines(prev => prev.map(l =>
+      l.id === lineId ? { ...l, quantity: qty } : l
+    ))
   }
 
   const handleSubmit = async () => {
@@ -176,9 +295,9 @@ export default function MyShift() {
             opening_reading: r.opening_reading,
             closing_reading: parseFloat(r.closing_reading) || 0,
           })),
-          lpg_sales: lpgVal,
-          lubricant_sales: lubVal,
-          accessory_sales: accVal,
+          lpg_sales: lpgTotal,
+          lubricant_sales: lubricantTotal,
+          accessory_sales: accessoryTotal,
           credit_sales: creditVal,
           actual_cash: actualCashVal,
           notes: notes || null,
@@ -228,8 +347,6 @@ export default function MyShift() {
             You don't have an active shift assigned to you. Please contact your supervisor to be assigned to a shift.
           </p>
         </div>
-
-        {/* Show past handovers even without active shift */}
         {pastHandovers.length > 0 && (
           <div className="mt-8">
             <PastHandoversTable handovers={pastHandovers} theme={theme} />
@@ -381,7 +498,7 @@ export default function MyShift() {
                 Total Fuel Revenue
               </td>
               <td className="px-3 py-2 text-right font-mono font-semibold" style={{ color: theme.textPrimary }}>
-                {nozzleComputations.reduce((s, c) => s + c.volume, 0).toLocaleString(undefined, { minimumFractionDigits: 3 })} L
+                {totalVolume.toLocaleString(undefined, { minimumFractionDigits: 3 })} L
               </td>
               <td className="px-3 py-2"></td>
               <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: theme.primary }}>
@@ -392,44 +509,98 @@ export default function MyShift() {
         </table>
       </div>
 
-      {/* 3. Other Sales Section */}
+      {/* 3. Other Sales — Item-by-item with dropdowns */}
       <div className="rounded-lg shadow p-4 mb-6"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <h2 className="text-sm font-semibold mb-3 uppercase tracking-wide" style={{ color: theme.textSecondary }}>
+        <h2 className="text-sm font-semibold mb-4 uppercase tracking-wide" style={{ color: theme.textSecondary }}>
           Other Sales
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-              LPG Sales (ZMW)
-            </label>
-            <input type="number" min={0} step="0.01" value={lpgSales}
-              onChange={e => setLpgSales(e.target.value)} placeholder="0.00"
-              className="w-full px-3 py-2 rounded border text-sm text-right" style={inputStyle} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-              Lubricant Sales (ZMW)
-            </label>
-            <input type="number" min={0} step="0.01" value={lubricantSales}
-              onChange={e => setLubricantSales(e.target.value)} placeholder="0.00"
-              className="w-full px-3 py-2 rounded border text-sm text-right" style={inputStyle} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-              Accessory Sales (ZMW)
-            </label>
-            <input type="number" min={0} step="0.01" value={accessorySales}
-              onChange={e => setAccessorySales(e.target.value)} placeholder="0.00"
-              className="w-full px-3 py-2 rounded border text-sm text-right" style={inputStyle} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+
+        {/* LPG Sales */}
+        <SalesLineSection
+          title="LPG Sales"
+          products={lpgProducts}
+          lines={lpgLines}
+          setLines={setLpgLines}
+          total={lpgTotal}
+          theme={theme}
+          inputStyle={inputStyle}
+          addLine={addLine}
+          removeLine={removeLine}
+          updateLineProduct={updateLineProduct}
+          updateLineQuantity={updateLineQuantity}
+          computeLineAmount={computeLineAmount}
+        />
+
+        {/* Lubricant Sales */}
+        <SalesLineSection
+          title="Lubricant Sales"
+          products={lubricantProducts}
+          lines={lubricantLines}
+          setLines={setLubricantLines}
+          total={lubricantTotal}
+          theme={theme}
+          inputStyle={inputStyle}
+          addLine={addLine}
+          removeLine={removeLine}
+          updateLineProduct={updateLineProduct}
+          updateLineQuantity={updateLineQuantity}
+          computeLineAmount={computeLineAmount}
+        />
+
+        {/* Accessory Sales */}
+        <SalesLineSection
+          title="Accessory Sales"
+          products={accessoryProducts}
+          lines={accessoryLines}
+          setLines={setAccessoryLines}
+          total={accessoryTotal}
+          theme={theme}
+          inputStyle={inputStyle}
+          addLine={addLine}
+          removeLine={removeLine}
+          updateLineProduct={updateLineProduct}
+          updateLineQuantity={updateLineQuantity}
+          computeLineAmount={computeLineAmount}
+        />
+
+        {/* Credit Sales */}
+        <div className="mt-4 pt-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-medium" style={{ color: theme.textSecondary }}>
               Credit Sales (ZMW)
             </label>
             <input type="number" min={0} step="0.01" value={creditSales}
               onChange={e => setCreditSales(e.target.value)} placeholder="0.00"
-              className="w-full px-3 py-2 rounded border text-sm text-right" style={inputStyle} />
+              className="w-40 px-3 py-2 rounded border text-sm text-right" style={inputStyle} />
+          </div>
+        </div>
+
+        {/* Other Sales Summary */}
+        <div className="mt-4 pt-4 grid grid-cols-2 md:grid-cols-4 gap-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+          <div>
+            <div className="text-xs" style={{ color: theme.textSecondary }}>LPG Total</div>
+            <div className="font-mono font-medium text-sm" style={{ color: theme.textPrimary }}>
+              {lpgTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
+            </div>
+          </div>
+          <div>
+            <div className="text-xs" style={{ color: theme.textSecondary }}>Lubricant Total</div>
+            <div className="font-mono font-medium text-sm" style={{ color: theme.textPrimary }}>
+              {lubricantTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
+            </div>
+          </div>
+          <div>
+            <div className="text-xs" style={{ color: theme.textSecondary }}>Accessory Total</div>
+            <div className="font-mono font-medium text-sm" style={{ color: theme.textPrimary }}>
+              {accessoryTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
+            </div>
+          </div>
+          <div>
+            <div className="text-xs" style={{ color: theme.textSecondary }}>Other Sales Grand Total</div>
+            <div className="font-mono font-bold text-sm" style={{ color: theme.primary }}>
+              {(lpgTotal + lubricantTotal + accessoryTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
+            </div>
           </div>
         </div>
       </div>
@@ -452,19 +623,19 @@ export default function MyShift() {
             <div className="flex justify-between text-sm">
               <span style={{ color: theme.textSecondary }}>+ LPG Sales</span>
               <span className="font-mono" style={{ color: theme.textPrimary }}>
-                {lpgVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {lpgTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span style={{ color: theme.textSecondary }}>+ Lubricant Sales</span>
               <span className="font-mono" style={{ color: theme.textPrimary }}>
-                {lubVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {lubricantTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span style={{ color: theme.textSecondary }}>+ Accessory Sales</span>
               <span className="font-mono" style={{ color: theme.textPrimary }}>
-                {accVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {accessoryTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
             </div>
             <div className="flex justify-between text-sm pt-2" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
@@ -633,6 +804,118 @@ export default function MyShift() {
       {/* Past Handovers */}
       {pastHandovers.length > 0 && (
         <PastHandoversTable handovers={pastHandovers} theme={theme} />
+      )}
+    </div>
+  )
+}
+
+// --- Reusable Sales Line Section Component ---
+function SalesLineSection({
+  title, products, lines, setLines, total, theme, inputStyle,
+  addLine, removeLine, updateLineProduct, updateLineQuantity, computeLineAmount,
+}: {
+  title: string
+  products: ProductOption[]
+  lines: SaleLineItem[]
+  setLines: React.Dispatch<React.SetStateAction<SaleLineItem[]>>
+  total: number
+  theme: any
+  inputStyle: any
+  addLine: (p: ProductOption[], s: React.Dispatch<React.SetStateAction<SaleLineItem[]>>) => void
+  removeLine: (id: string, s: React.Dispatch<React.SetStateAction<SaleLineItem[]>>) => void
+  updateLineProduct: (id: string, code: string, p: ProductOption[], s: React.Dispatch<React.SetStateAction<SaleLineItem[]>>) => void
+  updateLineQuantity: (id: string, qty: string, s: React.Dispatch<React.SetStateAction<SaleLineItem[]>>) => void
+  computeLineAmount: (l: SaleLineItem) => number
+}) {
+  return (
+    <div className="mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-medium" style={{ color: theme.textPrimary }}>{title}</h3>
+        <button
+          onClick={() => addLine(products, setLines)}
+          disabled={products.length === 0}
+          className="px-3 py-1 rounded text-xs font-medium text-white disabled:opacity-40"
+          style={{ backgroundColor: theme.primary }}>
+          + Add Item
+        </button>
+      </div>
+
+      {lines.length === 0 && (
+        <div className="text-xs py-2" style={{ color: theme.textSecondary }}>
+          No items added. Click "+ Add Item" to add a sale.
+        </div>
+      )}
+
+      {lines.length > 0 && (
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr style={{ backgroundColor: theme.background }}>
+              <th className="px-2 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Product</th>
+              <th className="px-2 py-1 text-right text-xs font-medium uppercase w-24" style={{ color: theme.textSecondary }}>Unit Price</th>
+              <th className="px-2 py-1 text-right text-xs font-medium uppercase w-20" style={{ color: theme.textSecondary }}>Qty</th>
+              <th className="px-2 py-1 text-right text-xs font-medium uppercase w-28" style={{ color: theme.textSecondary }}>Amount</th>
+              <th className="px-2 py-1 w-10"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map(line => {
+              const amt = computeLineAmount(line)
+              return (
+                <tr key={line.id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                  <td className="px-2 py-1">
+                    <select
+                      value={line.product_code}
+                      onChange={e => updateLineProduct(line.id, e.target.value, products, setLines)}
+                      className="w-full px-2 py-1 rounded border text-sm"
+                      style={inputStyle}>
+                      {products.map(p => (
+                        <option key={p.product_code} value={p.product_code}>
+                          {p.description} {p.category ? `(${p.category})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono" style={{ color: theme.textSecondary }}>
+                    {line.unit_price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-2 py-1">
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={line.quantity}
+                      onChange={e => updateLineQuantity(line.id, e.target.value, setLines)}
+                      placeholder="0"
+                      className="w-full px-2 py-1 rounded border text-sm text-right"
+                      style={inputStyle}
+                    />
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
+                    {amt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    <button
+                      onClick={() => removeLine(line.id, setLines)}
+                      className="text-red-500 hover:text-red-700 text-xs font-bold px-1">
+                      X
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTopColor: theme.border, borderTopWidth: 2, backgroundColor: theme.background }}>
+              <td colSpan={3} className="px-2 py-1 text-right font-semibold text-xs" style={{ color: theme.textPrimary }}>
+                Subtotal
+              </td>
+              <td className="px-2 py-1 text-right font-mono font-bold" style={{ color: theme.primary }}>
+                {total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
       )}
     </div>
   )

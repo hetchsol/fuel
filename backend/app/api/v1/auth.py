@@ -155,7 +155,9 @@ async def require_supervisor_or_owner(current_user: dict = Depends(get_current_u
     Raises:
         HTTPException 403: If user role is not supervisor or owner
     """
-    if current_user["role"] not in [UserRole.SUPERVISOR, UserRole.OWNER]:
+    role = current_user["role"]
+    role_str = role.value if isinstance(role, UserRole) else str(role)
+    if role_str not in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]:
         raise HTTPException(
             status_code=403,
             detail="Access forbidden. This endpoint is restricted to supervisors and owners only."
