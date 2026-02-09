@@ -2,21 +2,23 @@ services:
   - type: web
     name: fuel-api
     runtime: python
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     rootDir: backend
     envVars:
       - key: PORT
-        value: 10000
+        value: "10000"
 
   - type: web
     name: fuel-frontend
     runtime: node
+    plan: free
     buildCommand: npm install && npm run build
     startCommand: npm run start -- -p $PORT
     rootDir: frontend
     envVars:
       - key: PORT
-        value: 10000
+        value: "10000"
       - key: NEXT_PUBLIC_API_BASE_URL
         sync: false
