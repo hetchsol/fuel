@@ -49,6 +49,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'owner'] },
         { path: '/validated-readings', label: 'Enter Readings', roles: ['supervisor', 'owner'] },
         { path: '/stock-movement', label: 'Stock Movement', roles: ['supervisor', 'owner'] },
+        { path: '/lpg-daily', label: 'LPG Daily Operations', roles: ['supervisor', 'owner'] },
+        { path: '/lubricants-daily', label: 'Lubricants Daily', roles: ['supervisor', 'owner'] },
       ]
     },
     {

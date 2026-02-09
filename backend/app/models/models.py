@@ -556,3 +556,108 @@ class TankMovementSummary(BaseModel):
     overall_status: str  # GOOD, WARNING, CRITICAL
     loss_detected: bool
     estimated_loss_volume: Optional[float] = None
+
+
+# ===== LPG Daily Operations Models =====
+
+class LPGCylinderShiftRow(BaseModel):
+    """Single cylinder size row within an LPG shift entry"""
+    size_kg: int  # 3, 6, 9, 19, 45, 48
+    opening_balance: int = 0
+    receipts: int = 0
+    sold_refill: int = 0
+    sold_with_cylinder: int = 0
+    balance: int = 0  # Server-calculated: opening + receipts - sold_refill - sold_with_cylinder
+    value_refill: float = 0.0  # Server-calculated: price_refill * sold_refill
+    value_with_cylinder: float = 0.0  # Server-calculated: price_with_cyl * sold_with_cylinder
+    total_value: float = 0.0  # Server-calculated: value_refill + value_with_cylinder
+
+class LPGDailyEntryInput(BaseModel):
+    """Input for submitting an LPG shift entry"""
+    date: str  # YYYY-MM-DD
+    shift_type: str  # Day or Night
+    salesperson: str
+    cylinder_rows: List[LPGCylinderShiftRow]  # 6 rows, one per size
+    book_cylinder_population: Optional[int] = None
+    actual_cylinder_population: Optional[int] = None
+    recorded_by: str
+    notes: Optional[str] = None
+
+class LPGDailyEntryOutput(BaseModel):
+    """Output after submitting an LPG shift entry with calculated values"""
+    entry_id: str
+    date: str
+    shift_type: str
+    salesperson: str
+    cylinder_rows: List[LPGCylinderShiftRow]
+    grand_total_value: float  # Sum of all total_value across rows
+    book_cylinder_population: Optional[int] = None
+    actual_cylinder_population: Optional[int] = None
+    population_difference: Optional[int] = None  # book - actual
+    recorded_by: str
+    created_at: str
+    notes: Optional[str] = None
+
+class LPGAccessoryDailyRow(BaseModel):
+    """Single accessory product row"""
+    product_code: str
+    description: str
+    selling_price: float
+    opening_stock: int = 0
+    additions: int = 0
+    sold: int = 0
+    balance: int = 0  # Server-calculated: opening + additions - sold
+    sales_value: float = 0.0  # Server-calculated: selling_price * sold
+
+class LPGAccessoriesDailyInput(BaseModel):
+    """Input for submitting LPG accessories daily entry"""
+    date: str  # YYYY-MM-DD
+    product_rows: List[LPGAccessoryDailyRow]
+    recorded_by: str
+    notes: Optional[str] = None
+
+class LPGAccessoriesDailyOutput(BaseModel):
+    """Output after submitting LPG accessories daily entry"""
+    entry_id: str
+    date: str
+    product_rows: List[LPGAccessoryDailyRow]
+    total_daily_sales_value: float  # SUMPRODUCT(selling_price, qty_sold)
+    recorded_by: str
+    created_at: str
+    notes: Optional[str] = None
+
+
+# ===== Lubricants Daily Operations Models =====
+
+class LubricantDailyRow(BaseModel):
+    """Single lubricant product row within a daily entry"""
+    product_code: str
+    description: str
+    category: str  # Engine Oil, Transmission Fluid, etc.
+    unit_size: Optional[str] = None  # e.g. "1L", "4L", "20L"
+    selling_price: float = 0.0
+    opening_stock: int = 0
+    additions: int = 0  # From buffer (Island 3) or from supplier (Buffer)
+    sold_or_drawn: int = 0  # Sold (Island 3) or Drawn to Island 3 (Buffer)
+    balance: int = 0  # Server-calculated: opening + additions - sold_or_drawn
+    sales_value: float = 0.0  # Server-calculated: selling_price * sold_or_drawn
+
+class LubricantDailyEntryInput(BaseModel):
+    """Input for submitting a lubricant daily entry"""
+    date: str  # YYYY-MM-DD
+    location: str  # "Island 3" or "Buffer"
+    product_rows: List[LubricantDailyRow]
+    recorded_by: str
+    notes: Optional[str] = None
+
+class LubricantDailyEntryOutput(BaseModel):
+    """Output after submitting a lubricant daily entry"""
+    entry_id: str
+    date: str
+    location: str
+    product_rows: List[LubricantDailyRow]
+    total_daily_sales_value: float  # Sum of sales_value across all rows
+    total_items_moved: int  # Sum of sold_or_drawn across all rows
+    recorded_by: str
+    created_at: str
+    notes: Optional[str] = None

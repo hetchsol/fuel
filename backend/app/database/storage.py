@@ -26,6 +26,11 @@ STORAGE: Dict[str, Any] = {
     'shift_reconciliations': [],    # List of ShiftReconciliation dicts
     'tank_reconciliations': [],     # List of TankReconciliation dicts
 
+    # LPG & Lubricants Daily Operations
+    'lpg_daily_entries': {},        # entry_id -> LPG shift entry dict
+    'lpg_accessories_daily': {},    # entry_id -> LPG accessories daily dict
+    'lubricant_daily_entries': {},  # entry_id -> Lubricant daily entry dict
+
     # Settings
     'fuel_settings': {},            # Singleton for FuelSettings
 }
