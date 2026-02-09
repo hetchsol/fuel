@@ -84,7 +84,8 @@ export default function Reports() {
                 throw new Error('No access token found');
             }
 
-            const url = `http://localhost:8000/api/v1/reports/date-range?start_date=${startDate}&end_date=${endDate}`;
+            const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+            const url = `${BASE}/reports/date-range?start_date=${startDate}&end_date=${endDate}`;
             const response = await fetch(url, {
                 headers: {
                     'Authorization': `Bearer ${token}`,

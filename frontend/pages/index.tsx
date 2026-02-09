@@ -37,7 +37,8 @@ export default function Home() {
       const userData = localStorage.getItem('user')
       const user = userData ? JSON.parse(userData).full_name : 'Unknown'
 
-      const res = await fetch(`http://localhost:8000/api/v1/tanks/dip-reading/${tankId}`, {
+      const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
+      const res = await fetch(`${BASE}/tanks/dip-reading/${tankId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { useTheme } from '../contexts/ThemeContext'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
+
 interface ValidatedReading {
   reading_id: string
   shift_id: string
@@ -75,7 +77,7 @@ export default function ValidatedReadingsPage() {
       }
 
       // Load shifts
-      const shiftsResponse = await fetch('http://localhost:8000/api/v1/shifts', { headers })
+      const shiftsResponse = await fetch(`${BASE}/shifts`, { headers })
       if (shiftsResponse.ok) {
         const shiftsData = await shiftsResponse.json()
         setShifts(shiftsData)
@@ -91,7 +93,7 @@ export default function ValidatedReadingsPage() {
   const loadValidatedReadings = async () => {
     try {
       const token = localStorage.getItem('accessToken')
-      const response = await fetch('http://localhost:8000/api/v1/validated-readings', {
+      const response = await fetch(`${BASE}/validated-readings`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -126,7 +128,7 @@ export default function ValidatedReadingsPage() {
         notes: formData.notes
       }
 
-      const response = await fetch('http://localhost:8000/api/v1/validated-readings', {
+      const response = await fetch(`${BASE}/validated-readings`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

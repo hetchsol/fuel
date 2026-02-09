@@ -50,7 +50,8 @@ export default function ReadingsMonitor() {
     setLoading(true)
     try {
       const token = localStorage.getItem('accessToken')
-      const response = await fetch('http://localhost:8000/api/v1/validated-readings', {
+      const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
+      const response = await fetch(`${BASE}/validated-readings`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
