@@ -127,6 +127,7 @@ export default function Accounts() {
         fuel_type: 'Diesel',
         volume: '',
         price_per_liter: '26.98',
+        pricing_tier: 'standard',
         amount: '',
         shift_id: '',
         notes: ''
