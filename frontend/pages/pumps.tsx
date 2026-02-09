@@ -83,7 +83,7 @@ export default function Pumps() {
                               <div>
                                 <p className="text-xs font-bold text-gray-900">{nozzle.nozzle_id}</p>
                                 <p className={`text-xs ${
-                                  nozzle.fuel_type === 'Diesel' ? 'text-orange-700' : 'text-blue-700'
+                                  nozzle.fuel_type === 'Diesel' ? 'text-purple-700' : 'text-green-700'
                                 }`}>
                                   {nozzle.fuel_type}
                                 </p>

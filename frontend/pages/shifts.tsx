@@ -946,7 +946,7 @@ export default function Shifts() {
                         <label
                           key={nozzle.nozzle_id}
                           className={`flex items-center space-x-2 p-2 border rounded hover:bg-blue-50 cursor-pointer ${
-                            nozzle.fuel_type === 'Petrol' ? 'border-blue-300' : 'border-orange-300'
+                            nozzle.fuel_type === 'Petrol' ? 'border-green-300' : 'border-purple-300'
                           }`}
                         >
                           <input

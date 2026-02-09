@@ -352,7 +352,7 @@ export default function Infrastructure() {
               <div
                 key={tank.tank_id}
                 className={`bg-white rounded-lg shadow-lg p-6 border-2 ${
-                  tank.fuel_type === 'Diesel' ? 'border-yellow-300' : 'border-green-300'
+                  tank.fuel_type === 'Diesel' ? 'border-purple-300' : 'border-green-300'
                 }`}
               >
                 <div className="flex justify-between items-start mb-4">
@@ -362,7 +362,7 @@ export default function Infrastructure() {
                   </div>
                   <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                     tank.fuel_type === 'Diesel'
-                      ? 'bg-yellow-100 text-yellow-800'
+                      ? 'bg-purple-100 text-purple-800'
                       : 'bg-green-100 text-green-800'
                   }`}>
                     {tank.percentage.toFixed(1)}% Full
@@ -748,7 +748,7 @@ export default function Infrastructure() {
                         key={nozzle.nozzle_id}
                         className={`p-3 rounded-lg border-2 ${
                           nozzle.fuel_type === 'Diesel'
-                            ? 'bg-yellow-50 border-yellow-300'
+                            ? 'bg-purple-50 border-purple-300'
                             : 'bg-green-50 border-green-300'
                         }`}
                       >
@@ -763,7 +763,7 @@ export default function Infrastructure() {
                           </button>
                         </div>
                         <p className={`text-xs font-semibold ${
-                          nozzle.fuel_type === 'Diesel' ? 'text-yellow-700' : 'text-green-700'
+                          nozzle.fuel_type === 'Diesel' ? 'text-purple-700' : 'text-green-700'
                         }`}>
                           {nozzle.fuel_type}
                         </p>

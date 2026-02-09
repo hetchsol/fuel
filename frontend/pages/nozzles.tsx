@@ -75,14 +75,14 @@ export default function Nozzles() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
                             <div className={`text-2xl ${
-                              nozzle.fuel_type === 'Diesel' ? 'text-orange-600' : 'text-blue-600'
+                              nozzle.fuel_type === 'Diesel' ? 'text-purple-600' : 'text-green-600'
                             }`}>
                               {nozzle.fuel_type === 'Diesel' ? '🛢️' : '⛽'}
                             </div>
                             <div>
                               <p className="font-bold text-gray-900">{nozzle.nozzle_id}</p>
                               <p className={`text-xs font-medium ${
-                                nozzle.fuel_type === 'Diesel' ? 'text-orange-700' : 'text-blue-700'
+                                nozzle.fuel_type === 'Diesel' ? 'text-purple-700' : 'text-green-700'
                               }`}>
                                 {nozzle.fuel_type}
                               </p>

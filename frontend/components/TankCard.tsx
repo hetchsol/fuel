@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getAuthHeaders } from '../lib/headers'
 
 interface TankCardProps {
   fuelType: 'Diesel' | 'Petrol'
@@ -30,44 +31,44 @@ const TankCard = ({
   // Color theme based on fuel type
   const colors = fuelType === 'Diesel'
     ? {
-        gradient: 'from-orange-50 to-orange-100',
-        border: 'border-orange-200',
-        title: 'text-orange-900',
-        badge: 'text-orange-600 bg-orange-200',
-        text: 'text-orange-700',
-        boldText: 'text-orange-900',
-        lightText: 'text-orange-600',
-        mediumText: 'text-orange-800',
-        button: 'bg-orange-600 hover:bg-orange-700',
-        progressBg: 'bg-orange-200',
-        divider: 'border-orange-200',
-        sectionBg: 'bg-orange-50',
-        sectionBorder: 'border-orange-200',
-        inputBorder: 'border-orange-300',
-        focusRing: 'focus:ring-orange-500 focus:border-orange-500',
-        lightestText: 'text-orange-500',
-        sectionDivider: 'border-orange-300',
-        badgeBg: 'bg-orange-200 text-orange-800'
+        gradient: 'from-purple-50 to-purple-100',
+        border: 'border-purple-200',
+        title: 'text-purple-900',
+        badge: 'text-purple-600 bg-purple-200',
+        text: 'text-purple-700',
+        boldText: 'text-purple-900',
+        lightText: 'text-purple-600',
+        mediumText: 'text-purple-800',
+        button: 'bg-purple-600 hover:bg-purple-700',
+        progressBg: 'bg-purple-200',
+        divider: 'border-purple-200',
+        sectionBg: 'bg-purple-50',
+        sectionBorder: 'border-purple-200',
+        inputBorder: 'border-purple-300',
+        focusRing: 'focus:ring-purple-500 focus:border-purple-500',
+        lightestText: 'text-purple-500',
+        sectionDivider: 'border-purple-300',
+        badgeBg: 'bg-purple-200 text-purple-800'
       }
     : {
-        gradient: 'from-blue-50 to-blue-100',
-        border: 'border-blue-200',
-        title: 'text-blue-900',
-        badge: 'text-blue-600 bg-blue-200',
-        text: 'text-blue-700',
-        boldText: 'text-blue-900',
-        lightText: 'text-blue-600',
-        mediumText: 'text-blue-800',
-        button: 'bg-blue-600 hover:bg-blue-700',
-        progressBg: 'bg-blue-200',
-        divider: 'border-blue-200',
-        sectionBg: 'bg-blue-50',
-        sectionBorder: 'border-blue-200',
-        inputBorder: 'border-blue-300',
-        focusRing: 'focus:ring-blue-500 focus:border-blue-500',
-        lightestText: 'text-blue-500',
-        sectionDivider: 'border-blue-300',
-        badgeBg: 'bg-blue-200 text-blue-800'
+        gradient: 'from-green-50 to-green-100',
+        border: 'border-green-200',
+        title: 'text-green-900',
+        badge: 'text-green-600 bg-green-200',
+        text: 'text-green-700',
+        boldText: 'text-green-900',
+        lightText: 'text-green-600',
+        mediumText: 'text-green-800',
+        button: 'bg-green-600 hover:bg-green-700',
+        progressBg: 'bg-green-200',
+        divider: 'border-green-200',
+        sectionBg: 'bg-green-50',
+        sectionBorder: 'border-green-200',
+        inputBorder: 'border-green-300',
+        focusRing: 'focus:ring-green-500 focus:border-green-500',
+        lightestText: 'text-green-500',
+        sectionDivider: 'border-green-300',
+        badgeBg: 'bg-green-200 text-green-800'
       }
 
   const tankId = `TANK-${fuelType.toUpperCase()}`
@@ -83,7 +84,9 @@ const TankCard = ({
   const fetchDipReadings = async () => {
     try {
       const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
-      const res = await fetch(`${BASE}/tanks/dip-reading/${tankId}`)
+      const res = await fetch(`${BASE}/tanks/dip-reading/${tankId}`, {
+        headers: getAuthHeaders()
+      })
       if (res.ok) {
         const data = await res.json()
         setSavedDips(data)
