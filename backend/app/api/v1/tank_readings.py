@@ -11,6 +11,8 @@ from fastapi.encoders import jsonable_encoder
 from typing import List, Optional
 from datetime import datetime, date
 import uuid
+import json
+import os
 
 from ...models.models import (
     TankVolumeReadingInput,
@@ -39,9 +41,51 @@ from ...api.v1.auth import get_current_user
 
 router = APIRouter()
 
-# In-memory storage (replace with database in production)
-tank_readings_db = {}
-tank_deliveries_db = {}
+# File paths for persistence
+STORAGE_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'storage')
+TANK_READINGS_FILE = os.path.join(STORAGE_DIR, 'tank_readings.json')
+TANK_DELIVERIES_FILE = os.path.join(STORAGE_DIR, 'tank_deliveries.json')
+
+
+def load_tank_readings():
+    """Load tank readings from JSON file"""
+    if os.path.exists(TANK_READINGS_FILE):
+        try:
+            with open(TANK_READINGS_FILE, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return {}
+    return {}
+
+
+def save_tank_readings():
+    """Save tank readings to JSON file"""
+    os.makedirs(STORAGE_DIR, exist_ok=True)
+    with open(TANK_READINGS_FILE, 'w') as f:
+        json.dump(tank_readings_db, f, indent=2, default=str)
+
+
+def load_tank_deliveries():
+    """Load tank deliveries from JSON file"""
+    if os.path.exists(TANK_DELIVERIES_FILE):
+        try:
+            with open(TANK_DELIVERIES_FILE, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return {}
+    return {}
+
+
+def save_tank_deliveries():
+    """Save tank deliveries to JSON file"""
+    os.makedirs(STORAGE_DIR, exist_ok=True)
+    with open(TANK_DELIVERIES_FILE, 'w') as f:
+        json.dump(tank_deliveries_db, f, indent=2, default=str)
+
+
+# Load data from files on startup
+tank_readings_db = load_tank_readings()
+tank_deliveries_db = load_tank_deliveries()
 
 # Tank configuration (should come from database)
 TANK_CONFIG = {
@@ -139,7 +183,7 @@ def find_and_link_deliveries(
 
             # Check if delivery time falls within shift
             delivery_time = delivery_data['time']
-            if is_time_in_shift(delivery_time, shift_type):
+            if is_time_in_shift(delivery_time, start_time, end_time, shift_type):
                 # Create DeliveryReference from standalone delivery
                 ref = DeliveryReference(
                     delivery_id=delivery_id,
@@ -477,11 +521,15 @@ def submit_tank_reading(
     # Use model_dump for Pydantic v2
     output_dict = output.model_dump(mode='json', exclude_unset=False, exclude_defaults=False, exclude_none=False)
     tank_readings_db[reading_id] = output_dict
+    save_tank_readings()  # Persist to file
 
     # Update linked deliveries with reading_id (NEW FEATURE)
     for delivery in deliveries:
         if delivery.delivery_id and delivery.delivery_id in tank_deliveries_db:
             tank_deliveries_db[delivery.delivery_id]['linked_reading_id'] = reading_id
+
+    if deliveries:
+        save_tank_deliveries()  # Persist linked delivery updates
 
     # Return JSONResponse to ensure all fields are included
     return JSONResponse(content=jsonable_encoder(output_dict))
@@ -537,6 +585,93 @@ def get_latest_reading(
     # Sort by date and return latest
     readings.sort(key=lambda x: x.date, reverse=True)
     return readings[0]
+
+
+@router.get("/readings/{tank_id}/previous-shift")
+def get_previous_shift_closing(
+    tank_id: str,
+    current_date: str,
+    shift_type: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get closing readings from the previous shift to auto-populate opening readings.
+
+    Logic:
+    - If current shift is Night: Get Day shift from same date
+    - If current shift is Day: Get Night shift from previous day
+
+    Returns the previous shift's closing values that become the new shift's opening values.
+    """
+    from datetime import datetime, timedelta
+
+    # Determine which previous shift to look for
+    if shift_type.lower() == 'night':
+        # Night shift: look for Day shift from same date
+        target_date = current_date
+        target_shift = 'Day'
+    else:
+        # Day shift: look for Night shift from previous day
+        prev_date = datetime.strptime(current_date, '%Y-%m-%d') - timedelta(days=1)
+        target_date = prev_date.strftime('%Y-%m-%d')
+        target_shift = 'Night'
+
+    # Find the matching reading
+    matching_readings = [
+        r for r in tank_readings_db.values()
+        if r['tank_id'] == tank_id
+        and r['date'] == target_date
+        and r.get('shift_type', '').lower() == target_shift.lower()
+    ]
+
+    if not matching_readings:
+        # Try to find the most recent reading for this tank as fallback
+        all_readings = [
+            r for r in tank_readings_db.values()
+            if r['tank_id'] == tank_id
+        ]
+
+        if not all_readings:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No previous readings found for {tank_id}. Please enter opening values manually."
+            )
+
+        # Sort by date and shift (Night comes after Day on same date)
+        def sort_key(r):
+            shift_order = 1 if r.get('shift_type', '').lower() == 'night' else 0
+            return (r['date'], shift_order)
+
+        all_readings.sort(key=sort_key, reverse=True)
+        previous_reading = all_readings[0]
+    else:
+        previous_reading = matching_readings[0]
+
+    # Extract the closing values to become opening values
+    previous_closing = {
+        "found": True,
+        "source_date": previous_reading['date'],
+        "source_shift": previous_reading.get('shift_type', 'Unknown'),
+        "source_reading_id": previous_reading.get('reading_id', ''),
+
+        # Tank dip and volume - these become the new opening values
+        "opening_dip_cm": previous_reading.get('closing_dip_cm', 0),
+        "opening_volume": previous_reading.get('closing_volume', 0),
+
+        # Nozzle readings - closing values become opening values
+        "nozzle_readings": []
+    }
+
+    # Extract nozzle closing readings
+    for nozzle in previous_reading.get('nozzle_readings', []):
+        previous_closing["nozzle_readings"].append({
+            "nozzle_id": nozzle.get('nozzle_id', ''),
+            "attendant": nozzle.get('attendant', ''),
+            "electronic_opening": nozzle.get('electronic_closing', 0),
+            "mechanical_opening": nozzle.get('mechanical_closing', 0)
+        })
+
+    return previous_closing
 
 
 @router.post("/deliveries", response_model=TankDeliveryOutput)
@@ -622,6 +757,7 @@ def record_delivery(
     delivery_dict = output.dict()
     delivery_dict['linked_reading_id'] = None  # Explicitly set for auto-linking
     tank_deliveries_db[delivery_id] = delivery_dict
+    save_tank_deliveries()  # Persist to file
 
     return output
 

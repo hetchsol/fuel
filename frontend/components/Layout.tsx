@@ -93,9 +93,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Setup & Settings',
       roles: ['owner'],
       children: [
-        { path: '/pumps', label: 'Pumps', roles: ['owner'] },
-        { path: '/nozzles', label: 'Nozzles', roles: ['owner'] },
-        { path: '/infrastructure', label: 'Infrastructure', roles: ['owner'] },
+        { path: '/infrastructure', label: 'Infrastructure (Pumps & Nozzles)', roles: ['owner'] },
         { path: '/settings', label: 'Settings', roles: ['owner'] },
         { path: '/users', label: 'Users', roles: ['owner'] },
       ]

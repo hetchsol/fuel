@@ -1613,5 +1613,24 @@
     "validation_message": "Readings match within tolerance",
     "date": "2025-12-19",
     "created_at": "2025-12-19T06:44:00"
+  },
+  {
+    "sale_id": "SALE-20260116-7F4A6F71",
+    "shift_id": "DAY_16_01_2026",
+    "fuel_type": "Diesel",
+    "mechanical_opening": 9680.0,
+    "mechanical_closing": 10680.0,
+    "electronic_opening": 9920.0,
+    "electronic_closing": 10920.0,
+    "mechanical_volume": 1000.0,
+    "electronic_volume": 1000.0,
+    "discrepancy_percent": 0.0,
+    "validation_status": "PASS",
+    "average_volume": 1000.0,
+    "unit_price": 25.5,
+    "total_amount": 25500.0,
+    "validation_message": "Readings match within tolerance (0.0000% \u2264 0.03%)",
+    "created_at": "2026-01-16T13:03:33.834433",
+    "date": "2026-01-16"
   }
 ]

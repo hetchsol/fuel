@@ -108,6 +108,14 @@ export default function DailyTankReading() {
   }>>([])
   const [availableDeliveries, setAvailableDeliveries] = useState<any[]>([])
 
+  // NEW: Auto-populate state
+  const [autoPopulated, setAutoPopulated] = useState<{
+    active: boolean;
+    sourceDate: string;
+    sourceShift: string;
+  } | null>(null)
+  const [fetchingPrevious, setFetchingPrevious] = useState(false)
+
   useEffect(() => {
     const userData = localStorage.getItem('user')
     if (!userData) {
@@ -178,6 +186,74 @@ export default function DailyTankReading() {
       console.error('Error fetching unlinked deliveries:', err)
     }
   }
+
+  // NEW: Fetch previous shift closing readings to auto-populate opening values
+  const fetchPreviousShiftData = async () => {
+    try {
+      setFetchingPrevious(true)
+      const token = localStorage.getItem('accessToken')
+      const response = await fetch(
+        `${BASE}/tank-readings/readings/${selectedTank}/previous-shift?current_date=${formData.date}&shift_type=${formData.shift_type}`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+
+        if (data.found) {
+          // Auto-populate opening values from previous shift's closing values
+          setFormData(prev => {
+            const updatedNozzles = [...prev.nozzles]
+
+            // Update nozzle opening readings from previous closing
+            data.nozzle_readings?.forEach((prevNozzle: any) => {
+              const nozzleIndex = updatedNozzles.findIndex(n => n.nozzle_id === prevNozzle.nozzle_id)
+              if (nozzleIndex !== -1) {
+                updatedNozzles[nozzleIndex] = {
+                  ...updatedNozzles[nozzleIndex],
+                  electronic_opening: prevNozzle.electronic_opening?.toString() || '',
+                  mechanical_opening: prevNozzle.mechanical_opening?.toString() || ''
+                }
+              }
+            })
+
+            return {
+              ...prev,
+              opening_dip_cm: data.opening_dip_cm?.toString() || '',
+              opening_volume: data.opening_volume?.toString() || '',
+              nozzles: updatedNozzles
+            }
+          })
+
+          // Set auto-populated indicator
+          setAutoPopulated({
+            active: true,
+            sourceDate: data.source_date,
+            sourceShift: data.source_shift
+          })
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching previous shift data:', err)
+    } finally {
+      setFetchingPrevious(false)
+    }
+  }
+
+  // NEW: Auto-fetch previous shift data when tank, date, or shift changes
+  useEffect(() => {
+    if (selectedTank && formData.date && formData.shift_type) {
+      // Only auto-fetch if opening values are empty
+      const hasOpeningValues = formData.opening_dip_cm || formData.opening_volume ||
+        formData.nozzles.some(n => n.electronic_opening || n.mechanical_opening)
+
+      if (!hasOpeningValues) {
+        fetchPreviousShiftData()
+      }
+    }
+  }, [selectedTank, formData.date, formData.shift_type])
 
   // NEW: Get current tank reading estimate for new delivery
   const getCurrentTankReading = () => {
@@ -815,8 +891,61 @@ export default function DailyTankReading() {
           {/* Section 1: Tank Dip Readings (Columns AF, AG, AH) */}
           {activeSection === 1 && (
             <div className="rounded-lg shadow p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
-              <h2 className="text-xl font-semibold mb-4 transition-colors duration-300" style={{ color: theme.textPrimary }}>📏 Tank Dip Readings & Volume Levels</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>📏 Tank Dip Readings & Volume Levels</h2>
+                {!autoPopulated?.active && !fetchingPrevious && (
+                  <button
+                    type="button"
+                    onClick={fetchPreviousShiftData}
+                    className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                    style={{ backgroundColor: '#EFF6FF', color: '#2563EB', border: '1px solid #3B82F6' }}
+                  >
+                    ↻ Load Previous Shift
+                  </button>
+                )}
+              </div>
               <p className="text-sm mb-6 transition-colors duration-300" style={{ color: theme.textSecondary }}>Physical measurements in centimeters and volume levels in liters (Columns AF-AH, AI, AL)</p>
+
+              {/* Auto-populated indicator */}
+              {fetchingPrevious && (
+                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: '#EFF6FF', borderColor: '#3B82F6', borderWidth: '1px' }}>
+                  <svg className="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="text-blue-700 text-sm font-medium">Loading previous shift data...</span>
+                </div>
+              )}
+
+              {autoPopulated?.active && !fetchingPrevious && (
+                <div className="mb-4 p-3 rounded-lg flex items-center justify-between" style={{ backgroundColor: '#ECFDF5', borderColor: '#10B981', borderWidth: '1px' }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600 text-lg">✓</span>
+                    <span className="text-green-700 text-sm font-medium">
+                      Opening values auto-populated from {autoPopulated.sourceShift} shift ({autoPopulated.sourceDate})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAutoPopulated(null)
+                      setFormData(prev => ({
+                        ...prev,
+                        opening_dip_cm: '',
+                        opening_volume: '',
+                        nozzles: prev.nozzles.map(n => ({
+                          ...n,
+                          electronic_opening: '',
+                          mechanical_opening: ''
+                        }))
+                      }))
+                    }}
+                    className="text-green-600 hover:text-green-800 text-sm underline"
+                  >
+                    Clear & enter manually
+                  </button>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="rounded-lg p-4" style={{ backgroundColor: theme.primaryLight, borderColor: theme.primary, borderWidth: '1px' }}>
@@ -978,6 +1107,16 @@ export default function DailyTankReading() {
             <div className="rounded-lg shadow p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
               <h2 className="text-xl font-semibold mb-4 transition-colors duration-300" style={{ color: theme.textPrimary }}>⛽ Nozzle Readings (Columns D-AE)</h2>
               <p className="text-sm mb-6 transition-colors duration-300" style={{ color: theme.textSecondary }}>Individual pump nozzle readings with attendant assignments</p>
+
+              {/* Auto-populated indicator for nozzle readings */}
+              {autoPopulated?.active && (
+                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: '#ECFDF5', borderColor: '#10B981', borderWidth: '1px' }}>
+                  <span className="text-green-600 text-lg">✓</span>
+                  <span className="text-green-700 text-sm font-medium">
+                    Opening meter readings auto-populated from {autoPopulated.sourceShift} shift ({autoPopulated.sourceDate})
+                  </span>
+                </div>
+              )}
 
               <div className="space-y-6">
                 {formData.nozzles.map((nozzle, index) => {
