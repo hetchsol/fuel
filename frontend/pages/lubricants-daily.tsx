@@ -16,13 +16,6 @@ interface ProductRow {
   sales_value: number
 }
 
-function getAuthHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  }
-}
 
 export default function LubricantsDaily() {
   const { theme } = useTheme()
@@ -54,7 +47,7 @@ export default function LubricantsDaily() {
   // Fetch products for location
   useEffect(() => {
     authFetch(`${BASE}/lubricants-daily/products/${encodeURIComponent(location)}`, {
-      headers: getAuthHeaders(),
+      
     })
       .then(r => r.json())
       .then(data => {
@@ -62,7 +55,7 @@ export default function LubricantsDaily() {
         const products = data.products || []
         // Now fetch previous day to set opening stock
         authFetch(`${BASE}/lubricants-daily/previous-day?current_date=${date}&location=${encodeURIComponent(location)}`, {
-          headers: getAuthHeaders(),
+          
         })
           .then(r => r.json())
           .then(prevData => {
@@ -101,7 +94,7 @@ export default function LubricantsDaily() {
   // Fetch entries for display
   useEffect(() => {
     authFetch(`${BASE}/lubricants-daily/entries?date=${date}&location=${encodeURIComponent(location)}`, {
-      headers: getAuthHeaders(),
+      
     })
       .then(r => r.json())
       .then(data => setEntries(Array.isArray(data) ? data : []))
@@ -171,7 +164,7 @@ export default function LubricantsDaily() {
     try {
       const res = await authFetch(`${BASE}/lubricants-daily/entry`, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        
         body: JSON.stringify({
           date,
           location,
@@ -219,7 +212,7 @@ export default function LubricantsDaily() {
     try {
       const res = await authFetch(`${BASE}/lubricants-daily/transfer?date=${date}&recorded_by=${user?.user_id || 'unknown'}`, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        
         body: JSON.stringify(items),
       })
 

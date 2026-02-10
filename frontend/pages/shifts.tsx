@@ -64,19 +64,9 @@ export default function Shifts() {
     }
   }, [activeShift])
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('accessToken')
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    }
-  }
-
   const fetchActiveShift = async () => {
     try {
-      const res = await authFetch(`${BASE}/shifts/current/active`, {
-        headers: getAuthHeaders()
-      })
+      const res = await authFetch(`${BASE}/shifts/current/active`)
       if (res.ok) {
         const data = await res.json()
         setActiveShift(data)
@@ -160,9 +150,7 @@ export default function Shifts() {
   const fetchTankDipReadings = async () => {
     if (!activeShift) return
     try {
-      const res = await authFetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-readings`, {
-        headers: getAuthHeaders()
-      })
+      const res = await authFetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-readings`)
       if (res.ok) {
         const data = await res.json()
         setTankDipReadings(data)
@@ -186,7 +174,6 @@ export default function Shifts() {
 
       const res = await authFetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-reading`, {
         method: 'POST',
-        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       })
 
@@ -225,7 +212,6 @@ export default function Shifts() {
 
       const res = await authFetch(`${BASE}/shifts/readings`, {
         method: 'POST',
-        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       })
 
@@ -348,9 +334,7 @@ export default function Shifts() {
 
     try {
       // First, check if shift already exists
-      const checkRes = await authFetch(`${BASE}/shifts/${shift_id}`, {
-        headers: getAuthHeaders()
-      })
+      const checkRes = await authFetch(`${BASE}/shifts/${shift_id}`)
       const shiftExists = checkRes.ok
       setIsEditMode(shiftExists)
 
@@ -360,7 +344,6 @@ export default function Shifts() {
 
       const res = await authFetch(url, {
         method,
-        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       })
 

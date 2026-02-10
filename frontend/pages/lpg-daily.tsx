@@ -34,13 +34,6 @@ interface AccessoryRow {
   sales_value: number
 }
 
-function getAuthHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  }
-}
 
 export default function LPGDaily() {
   const { theme } = useTheme()
@@ -85,7 +78,7 @@ export default function LPGDaily() {
 
   // Fetch pricing on mount
   const fetchPricing = useCallback(() => {
-    authFetch(`${BASE}/lpg-daily/pricing`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/lpg-daily/pricing`, )
       .then(r => r.json())
       .then(data => {
         setPricing(data.sizes || [])
@@ -106,7 +99,7 @@ export default function LPGDaily() {
   // Fetch previous shift data when date/shift changes
   const fetchPreviousShift = useCallback(() => {
     authFetch(`${BASE}/lpg-daily/previous-shift?current_date=${date}&shift_type=${shiftType}`, {
-      headers: getAuthHeaders(),
+      
     })
       .then(r => r.json())
       .then(data => {
@@ -125,7 +118,7 @@ export default function LPGDaily() {
   // Fetch previous day accessories
   useEffect(() => {
     authFetch(`${BASE}/lpg-daily/accessories/previous-day?current_date=${date}`, {
-      headers: getAuthHeaders(),
+      
     })
       .then(r => r.json())
       .then(data => {
@@ -147,7 +140,7 @@ export default function LPGDaily() {
 
   // Fetch existing entries
   useEffect(() => {
-    authFetch(`${BASE}/lpg-daily/entries?date=${date}`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/lpg-daily/entries?date=${date}`, )
       .then(r => r.json())
       .then(data => setEntries(Array.isArray(data) ? data : []))
       .catch(() => {})
@@ -213,7 +206,7 @@ export default function LPGDaily() {
       // Submit cylinder entry
       const cylRes = await authFetch(`${BASE}/lpg-daily/entry`, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        
         body: JSON.stringify({
           date,
           shift_type: shiftType,
@@ -241,7 +234,7 @@ export default function LPGDaily() {
       if (hasAccessoryActivity) {
         const accRes = await authFetch(`${BASE}/lpg-daily/accessories/entry`, {
           method: 'POST',
-          headers: getAuthHeaders(),
+          
           body: JSON.stringify({
             date,
             product_rows: accessoryRows.map(r => ({
@@ -280,7 +273,7 @@ export default function LPGDaily() {
       }
       const res = await authFetch(`${BASE}/lpg-daily/pricing`, {
         method: 'PUT',
-        headers: getAuthHeaders(),
+        
         body: JSON.stringify({
           price_per_kg: parseFloat(editPricePerKg) || 0,
           deposits,

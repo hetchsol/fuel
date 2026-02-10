@@ -63,13 +63,6 @@ interface HandoverResult {
   created_at: string
 }
 
-function getAuthHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  }
-}
 
 let lineIdCounter = 0
 function nextLineId() { return `line-${++lineIdCounter}` }
@@ -113,7 +106,7 @@ export default function MyShift() {
   // Fetch active shift on mount
   useEffect(() => {
     setLoading(true)
-    authFetch(`${BASE}/handover/my-shift`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/handover/my-shift`, )
       .then(r => r.json())
       .then(data => {
         if (data.found) {
@@ -140,7 +133,7 @@ export default function MyShift() {
   // Fetch product lists for dropdowns
   const fetchProducts = useCallback(() => {
     // LPG cylinders from pricing
-    authFetch(`${BASE}/lpg-daily/pricing`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/lpg-daily/pricing`, )
       .then(r => r.json())
       .then(data => {
         const sizes = data.sizes || []
@@ -153,7 +146,7 @@ export default function MyShift() {
       .catch(() => {})
 
     // LPG Accessories
-    authFetch(`${BASE}/lpg/accessories`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/lpg/accessories`, )
       .then(r => r.json())
       .then(data => {
         const items = Array.isArray(data) ? data : []
@@ -166,7 +159,7 @@ export default function MyShift() {
       .catch(() => {})
 
     // Lubricants
-    authFetch(`${BASE}/lubricants-daily/products/Island 3`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/lubricants-daily/products/Island 3`, )
       .then(r => r.json())
       .then(data => {
         const items = data.products || []
@@ -184,7 +177,7 @@ export default function MyShift() {
 
   // Fetch past handovers
   useEffect(() => {
-    authFetch(`${BASE}/handover/entries`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/handover/entries`, )
       .then(r => r.json())
       .then(data => setPastHandovers(Array.isArray(data) ? data : []))
       .catch(() => {})
@@ -287,7 +280,7 @@ export default function MyShift() {
     try {
       const res = await authFetch(`${BASE}/handover/submit`, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        
         body: JSON.stringify({
           shift_id: shiftInfo.shift_id,
           nozzle_readings: nozzleRows.map(r => ({
