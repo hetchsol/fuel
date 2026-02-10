@@ -498,8 +498,16 @@ export default function Shifts() {
             )}
           </div>
         ) : (
-          <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
-            <p className="text-yellow-800">No active shift found. A shift will be automatically created.</p>
+          <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 flex items-center justify-between">
+            <p className="text-yellow-800">No active shift found.</p>
+            {canManageShifts && (
+              <button
+                onClick={() => setShowManagementModal(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium"
+              >
+                Create Shift
+              </button>
+            )}
           </div>
         )}
       </div>
