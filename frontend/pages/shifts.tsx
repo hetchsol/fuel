@@ -64,9 +64,19 @@ export default function Shifts() {
     }
   }, [activeShift])
 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('accessToken')
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  }
+
   const fetchActiveShift = async () => {
     try {
-      const res = await fetch(`${BASE}/shifts/current/active`)
+      const res = await fetch(`${BASE}/shifts/current/active`, {
+        headers: getAuthHeaders()
+      })
       if (res.ok) {
         const data = await res.json()
         setActiveShift(data)
@@ -150,7 +160,9 @@ export default function Shifts() {
   const fetchTankDipReadings = async () => {
     if (!activeShift) return
     try {
-      const res = await fetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-readings`)
+      const res = await fetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-readings`, {
+        headers: getAuthHeaders()
+      })
       if (res.ok) {
         const data = await res.json()
         setTankDipReadings(data)
@@ -166,7 +178,6 @@ export default function Shifts() {
 
     setLoading(true)
     try {
-      const token = localStorage.getItem('token')
       const payload = {
         tank_id: tankDipForm.tank_id,
         opening_dip_cm: tankDipForm.opening_dip_cm ? parseFloat(tankDipForm.opening_dip_cm) : null,
@@ -175,10 +186,7 @@ export default function Shifts() {
 
       const res = await fetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-reading`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       })
 
@@ -217,7 +225,7 @@ export default function Shifts() {
 
       const res = await fetch(`${BASE}/shifts/readings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       })
 
@@ -339,10 +347,10 @@ export default function Shifts() {
     }
 
     try {
-      const token = localStorage.getItem('accessToken')
-
       // First, check if shift already exists
-      const checkRes = await fetch(`${BASE}/shifts/${shift_id}`)
+      const checkRes = await fetch(`${BASE}/shifts/${shift_id}`, {
+        headers: getAuthHeaders()
+      })
       const shiftExists = checkRes.ok
       setIsEditMode(shiftExists)
 
@@ -352,10 +360,7 @@ export default function Shifts() {
 
       const res = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       })
 
