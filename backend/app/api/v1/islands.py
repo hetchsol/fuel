@@ -1,30 +1,51 @@
 """
 Islands, Pump Stations, and Nozzles Management API
+Default setup: 4 islands, 1 pump each, 2 nozzles per pump.
+Islands are configured (product type) and activated/deactivated by the owner.
+Owners retain full CRUD capabilities.
 """
-from fastapi import APIRouter, HTTPException, Depends
-from typing import List
+from fastapi import APIRouter, HTTPException, Depends, Query
+from typing import List, Optional
+from pydantic import BaseModel
 from ...models.models import Island, PumpStation, Nozzle
-from ...services.relationship_validation import validate_create, validate_delete_operation
 from .auth import get_station_context
 
 router = APIRouter()
 
 
+# ── Request models ──────────────────────────────────────
+
+class StatusUpdate(BaseModel):
+    status: str  # "active" or "inactive"
+
+class ProductUpdate(BaseModel):
+    product_type: str  # "Petrol" or "Diesel"
+
+
+# ── READ endpoints ──────────────────────────────────────
+
 @router.get("/", response_model=List[Island])
-async def get_all_islands(ctx: dict = Depends(get_station_context)):
+async def get_all_islands(
+    status: Optional[str] = Query(None, description="Filter by status: active or inactive"),
+    ctx: dict = Depends(get_station_context),
+):
     """
-    Get all islands with their pump stations and nozzles
+    Get all islands with their pump stations and nozzles.
+    Optional ?status=active filter.
     """
     storage = ctx["storage"]
     islands_data = storage['islands']
-    return [Island(**island) for island in islands_data.values()]
+    islands = [Island(**island) for island in islands_data.values()]
+
+    if status:
+        islands = [i for i in islands if i.status == status]
+
+    return islands
 
 
 @router.get("/{island_id}", response_model=Island)
 async def get_island(island_id: str, ctx: dict = Depends(get_station_context)):
-    """
-    Get specific island details
-    """
+    """Get specific island details"""
     storage = ctx["storage"]
     islands_data = storage['islands']
 
@@ -36,9 +57,7 @@ async def get_island(island_id: str, ctx: dict = Depends(get_station_context)):
 
 @router.get("/{island_id}/pump-station", response_model=PumpStation)
 async def get_pump_station(island_id: str, ctx: dict = Depends(get_station_context)):
-    """
-    Get pump station for a specific island
-    """
+    """Get pump station for a specific island"""
     storage = ctx["storage"]
     islands_data = storage['islands']
 
@@ -54,9 +73,7 @@ async def get_pump_station(island_id: str, ctx: dict = Depends(get_station_conte
 
 @router.get("/{island_id}/nozzles", response_model=List[Nozzle])
 async def get_island_nozzles(island_id: str, ctx: dict = Depends(get_station_context)):
-    """
-    Get all nozzles for a specific island
-    """
+    """Get all nozzles for a specific island"""
     storage = ctx["storage"]
     islands_data = storage['islands']
 
@@ -72,9 +89,7 @@ async def get_island_nozzles(island_id: str, ctx: dict = Depends(get_station_con
 
 @router.get("/nozzle/{nozzle_id}")
 async def get_nozzle_info(nozzle_id: str, ctx: dict = Depends(get_station_context)):
-    """
-    Get nozzle info including its island and pump station
-    """
+    """Get nozzle info including its island and pump station"""
     storage = ctx["storage"]
     islands_data = storage['islands']
 
@@ -99,26 +114,83 @@ async def get_nozzle_info(nozzle_id: str, ctx: dict = Depends(get_station_contex
     return {"error": "Nozzle not found"}
 
 
-@router.post("/")
-async def create_island(island: Island, ctx: dict = Depends(get_station_context)):
+# ── Configuration endpoints ─────────────────────────────
+
+@router.put("/{island_id}/status")
+async def update_island_status(
+    island_id: str,
+    body: StatusUpdate,
+    ctx: dict = Depends(get_station_context),
+):
     """
-    Create a new island with pump station and nozzles
+    Toggle island active/inactive.
+    Cannot activate if product_type is not configured.
     """
     storage = ctx["storage"]
     islands_data = storage['islands']
 
-    if island.island_id in islands_data:
-        return {"error": "Island already exists"}
+    if island_id not in islands_data:
+        raise HTTPException(status_code=404, detail="Island not found")
 
-    islands_data[island.island_id] = island.dict()
-    return {"status": "success", "island": island}
+    new_status = body.status
+    if new_status not in ("active", "inactive"):
+        raise HTTPException(status_code=400, detail="Status must be 'active' or 'inactive'")
+
+    island = islands_data[island_id]
+
+    if new_status == "active" and not island.get("product_type"):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot activate island without configuring product type first"
+        )
+
+    island["status"] = new_status
+    return {"status": "success", "island_id": island_id, "new_status": new_status}
+
+
+@router.put("/{island_id}/product")
+async def update_island_product(
+    island_id: str,
+    body: ProductUpdate,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Configure product type for an island.
+    Atomically updates island product_type, pump tank_id, and both nozzles' fuel_type.
+    """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
+    if island_id not in islands_data:
+        raise HTTPException(status_code=404, detail="Island not found")
+
+    product = body.product_type
+    if product not in ("Petrol", "Diesel"):
+        raise HTTPException(status_code=400, detail="product_type must be 'Petrol' or 'Diesel'")
+
+    island = islands_data[island_id]
+    island["product_type"] = product
+
+    # Update pump station tank mapping
+    tank_id = "TANK-PETROL" if product == "Petrol" else "TANK-DIESEL"
+    pump_station = island.get("pump_station")
+    if pump_station:
+        pump_station["tank_id"] = tank_id
+        # Update all nozzles' fuel_type
+        for nozzle in pump_station.get("nozzles", []):
+            nozzle["fuel_type"] = product
+
+    return {
+        "status": "success",
+        "island_id": island_id,
+        "product_type": product,
+        "tank_id": tank_id,
+    }
 
 
 @router.put("/{island_id}/nozzle/{nozzle_id}/status")
 async def update_nozzle_status(island_id: str, nozzle_id: str, status: str, ctx: dict = Depends(get_station_context)):
-    """
-    Update nozzle status (Active, Inactive, Maintenance)
-    """
+    """Update nozzle status (Active, Inactive, Maintenance)"""
     storage = ctx["storage"]
     islands_data = storage['islands']
 
@@ -137,43 +209,47 @@ async def update_nozzle_status(island_id: str, nozzle_id: str, status: str, ctx:
     return {"error": "Nozzle not found"}
 
 
-@router.delete("/{island_id}")
-async def delete_island(island_id: str, cascade: bool = False, ctx: dict = Depends(get_station_context)):
-    """
-    Delete an island (Owner only)
+# ── Owner CRUD endpoints ─────────────────────────────────
 
-    Args:
-        island_id: Island ID to delete
-        cascade: If True, delete all dependent records (readings, sales)
+@router.post("/")
+async def create_island(island: Island, ctx: dict = Depends(get_station_context)):
     """
+    Create a new island with pump station and nozzles (Owner only).
+    New islands default to inactive with no product_type.
+    """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
+    if island.island_id in islands_data:
+        raise HTTPException(status_code=400, detail="Island already exists")
+
+    islands_data[island.island_id] = island.dict()
+    return {"status": "success", "island": island}
+
+
+@router.delete("/{island_id}")
+async def delete_island(island_id: str, ctx: dict = Depends(get_station_context)):
+    """Delete an island (Owner only)"""
     storage = ctx["storage"]
     islands_data = storage['islands']
 
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
 
-    # Validate deletion (check for dependent records)
-    validate_delete_operation('islands', island_id, cascade)
-
-    # Delete the island
     deleted_island = islands_data.pop(island_id)
 
     return {
         "status": "success",
         "message": f"Island {island_id} deleted successfully",
         "deleted_island": deleted_island["name"],
-        "cascade": cascade
     }
 
 
 @router.put("/{island_id}/pump-station/tank")
 async def update_pump_tank_mapping(island_id: str, tank_id: str, ctx: dict = Depends(get_station_context)):
     """
-    Update which tank the pump station draws fuel from (Owner only)
-
-    Args:
-        island_id: Island ID
-        tank_id: Tank ID (TANK-DIESEL or TANK-PETROL)
+    Update which tank the pump station draws fuel from (Owner only).
+    Consider using PUT /islands/{island_id}/product instead for standardized config.
     """
     storage = ctx["storage"]
     islands_data = storage['islands']
@@ -181,8 +257,7 @@ async def update_pump_tank_mapping(island_id: str, tank_id: str, ctx: dict = Dep
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
 
-    # Validate tank exists
-    if tank_id not in storage['tanks']:
+    if tank_id not in storage.get('tanks', {}):
         raise HTTPException(status_code=404, detail=f"Tank {tank_id} not found")
 
     pump_station = islands_data[island_id].get("pump_station")
@@ -198,17 +273,13 @@ async def update_pump_tank_mapping(island_id: str, tank_id: str, ctx: dict = Dep
         "island_id": island_id,
         "pump_station_id": pump_station["pump_station_id"],
         "old_tank_id": old_tank_id,
-        "new_tank_id": tank_id
+        "new_tank_id": tank_id,
     }
 
 
 @router.post("/{island_id}/nozzle")
 async def add_nozzle(island_id: str, nozzle: Nozzle, ctx: dict = Depends(get_station_context)):
-    """
-    Add a nozzle to an island's pump station (Owner only)
-
-    Note: Typically each pump has 2 nozzles
-    """
+    """Add a nozzle to an island's pump station (Owner only)"""
     storage = ctx["storage"]
     islands_data = storage['islands']
 
@@ -219,12 +290,10 @@ async def add_nozzle(island_id: str, nozzle: Nozzle, ctx: dict = Depends(get_sta
     if not pump_station:
         raise HTTPException(status_code=404, detail="Pump station not found")
 
-    # Check if nozzle already exists
     for existing_nozzle in pump_station.get("nozzles", []):
         if existing_nozzle["nozzle_id"] == nozzle.nozzle_id:
             raise HTTPException(status_code=400, detail="Nozzle ID already exists")
 
-    # Add the nozzle
     pump_station["nozzles"].append(nozzle.dict())
 
     return {
@@ -232,15 +301,13 @@ async def add_nozzle(island_id: str, nozzle: Nozzle, ctx: dict = Depends(get_sta
         "message": f"Nozzle {nozzle.nozzle_id} added successfully",
         "nozzle": nozzle,
         "island_id": island_id,
-        "total_nozzles": len(pump_station["nozzles"])
+        "total_nozzles": len(pump_station["nozzles"]),
     }
 
 
 @router.delete("/{island_id}/nozzle/{nozzle_id}")
 async def remove_nozzle(island_id: str, nozzle_id: str, ctx: dict = Depends(get_station_context)):
-    """
-    Remove a nozzle from an island's pump station (Owner only)
-    """
+    """Remove a nozzle from an island's pump station (Owner only)"""
     storage = ctx["storage"]
     islands_data = storage['islands']
 
@@ -251,7 +318,6 @@ async def remove_nozzle(island_id: str, nozzle_id: str, ctx: dict = Depends(get_
     if not pump_station:
         raise HTTPException(status_code=404, detail="Pump station not found")
 
-    # Find and remove the nozzle
     nozzles = pump_station.get("nozzles", [])
     original_count = len(nozzles)
 
@@ -264,5 +330,5 @@ async def remove_nozzle(island_id: str, nozzle_id: str, ctx: dict = Depends(get_
         "status": "success",
         "message": f"Nozzle {nozzle_id} removed successfully",
         "island_id": island_id,
-        "remaining_nozzles": len(pump_station["nozzles"])
+        "remaining_nozzles": len(pump_station["nozzles"]),
     }

@@ -77,8 +77,8 @@ def update_station(station_id: str, station: Station, current_user: dict = Depen
 @router.post("/{station_id}/setup-wizard")
 def run_setup_wizard(station_id: str, current_user: dict = Depends(get_current_user)):
     """
-    Seed default infrastructure (2 islands, 8 nozzles, 2 tanks, accounts, etc.)
-    for a station. Owner only.
+    Seed default infrastructure (4 standard islands, 2 tanks, accounts, etc.)
+    for a station. All islands start inactive until configured. Owner only.
     """
     role = current_user.get("role", "")
     role_str = role.value if hasattr(role, 'value') else str(role)
@@ -93,7 +93,7 @@ def run_setup_wizard(station_id: str, current_user: dict = Depends(get_current_u
 
     return {
         "status": "success",
-        "message": f"Station {station_id} seeded with default infrastructure",
+        "message": f"Station {station_id} seeded with 4 standard islands (all inactive until configured), 2 tanks, and default accounts",
         "islands": len(storage.get('islands', {})),
         "tanks": len(storage.get('tanks', {})),
         "nozzles": sum(

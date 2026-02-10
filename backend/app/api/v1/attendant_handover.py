@@ -34,15 +34,10 @@ def _save_handovers(data: dict, station_id: str):
 
 
 def _get_fuel_type(nozzle_id: str, storage: dict = None) -> str:
-    """Determine fuel type from nozzle ID prefix"""
-    if nozzle_id.upper().startswith("UNL"):
-        return "Petrol"
-    elif nozzle_id.upper().startswith("LSD"):
-        return "Diesel"
-    # Fallback: look up from island data
+    """Determine fuel type by looking up nozzle data from storage"""
     nozzle = get_nozzle(nozzle_id, storage=storage)
     if nozzle:
-        return nozzle.get("fuel_type", "Diesel")
+        return nozzle.get("fuel_type", "") or "Diesel"
     return "Diesel"
 
 

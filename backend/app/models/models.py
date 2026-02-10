@@ -124,6 +124,8 @@ class Island(BaseModel):
     island_id: str
     name: str
     location: Optional[str] = None
+    status: str = "inactive"          # "active" or "inactive"
+    product_type: Optional[str] = None  # "Petrol" or "Diesel"
     pump_station: Optional[PumpStation] = None
 
 # Shift Management

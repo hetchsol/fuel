@@ -19,44 +19,52 @@ def seed_station_defaults(storage: dict):
 
 
 def _seed_islands(storage: dict):
-    if storage.get('islands'):
+    existing = storage.get('islands')
+
+    # Migration guard: if existing islands lack "status" field, wipe and re-seed
+    if existing:
+        first_island = next(iter(existing.values()), None)
+        if first_island and "status" not in first_island:
+            existing = None  # Force re-seed
+
+    if existing:
         return
-    storage['islands'] = {
-        "ISL-001": {
-            "island_id": "ISL-001",
-            "name": "Island 1",
+
+    storage['islands'] = {}
+    for i in range(1, 5):
+        isl_id = f"ISL-00{i}"
+        ps_id = f"PS-00{i}"
+        storage['islands'][isl_id] = {
+            "island_id": isl_id,
+            "name": f"Island {i}",
             "location": "Main Station",
+            "status": "inactive",
+            "product_type": None,
             "pump_station": {
-                "pump_station_id": "PS-001",
-                "island_id": "ISL-001",
-                "name": "Pump Station 1",
-                "tank_id": "TANK-PETROL",
+                "pump_station_id": ps_id,
+                "island_id": isl_id,
+                "name": f"Pump Station {i}",
+                "tank_id": "",
                 "nozzles": [
-                    {"nozzle_id": "UNL-1A", "pump_station_id": "PS-001", "fuel_type": "Petrol", "status": "Active", "electronic_reading": 609176.526, "mechanical_reading": 611984},
-                    {"nozzle_id": "UNL-1B", "pump_station_id": "PS-001", "fuel_type": "Petrol", "status": "Active", "electronic_reading": 825565.474, "mechanical_reading": 829030},
-                    {"nozzle_id": "LSD-1A", "pump_station_id": "PS-001", "fuel_type": "Diesel", "status": "Active", "electronic_reading": 211532.970, "mechanical_reading": 281964},
-                    {"nozzle_id": "LSD-1B", "pump_station_id": "PS-001", "fuel_type": "Diesel", "status": "Active", "electronic_reading": 216085.638, "mechanical_reading": 284970},
-                ]
-            }
-        },
-        "ISL-002": {
-            "island_id": "ISL-002",
-            "name": "Island 2",
-            "location": "Main Station",
-            "pump_station": {
-                "pump_station_id": "PS-002",
-                "island_id": "ISL-002",
-                "name": "Pump Station 2",
-                "tank_id": "TANK-DIESEL",
-                "nozzles": [
-                    {"nozzle_id": "UNL-2A", "pump_station_id": "PS-002", "fuel_type": "Petrol", "status": "Active", "electronic_reading": 801332.477, "mechanical_reading": 801430},
-                    {"nozzle_id": "UNL-2B", "pump_station_id": "PS-002", "fuel_type": "Petrol", "status": "Active", "electronic_reading": 1270044.517, "mechanical_reading": 1270144},
-                    {"nozzle_id": "LSD-2A", "pump_station_id": "PS-002", "fuel_type": "Diesel", "status": "Active", "electronic_reading": 448641.242, "mechanical_reading": 448887},
-                    {"nozzle_id": "LSD-2B", "pump_station_id": "PS-002", "fuel_type": "Diesel", "status": "Active", "electronic_reading": 639272.611, "mechanical_reading": 639579},
-                ]
-            }
+                    {
+                        "nozzle_id": f"ISL{i}-A",
+                        "pump_station_id": ps_id,
+                        "fuel_type": "",
+                        "status": "Active",
+                        "electronic_reading": 0,
+                        "mechanical_reading": 0,
+                    },
+                    {
+                        "nozzle_id": f"ISL{i}-B",
+                        "pump_station_id": ps_id,
+                        "fuel_type": "",
+                        "status": "Active",
+                        "electronic_reading": 0,
+                        "mechanical_reading": 0,
+                    },
+                ],
+            },
         }
-    }
 
 
 def _seed_tanks(storage: dict):

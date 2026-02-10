@@ -81,12 +81,12 @@ export default function Shifts() {
 
   const fetchNozzles = async () => {
     try {
-      const res = await fetch(`${BASE}/islands/`, {
+      const res = await fetch(`${BASE}/islands/?status=active`, {
         headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
       })
       if (res.ok) {
         const data = await res.json()
-        // Extract all nozzles from islands
+        // Extract all nozzles from active islands only
         const allNozzles: any[] = []
         data.forEach((island: any) => {
           if (island.pump_station?.nozzles) {
@@ -134,7 +134,7 @@ export default function Shifts() {
 
   const loadIslandsData = async () => {
     try {
-      const res = await fetch(`${BASE}/islands/`, {
+      const res = await fetch(`${BASE}/islands/?status=active`, {
         headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
       })
       if (res.ok) {
@@ -279,7 +279,8 @@ export default function Shifts() {
 
   const openShiftModal = () => {
     loadAvailableStaff()
-    loadIslandsData()
+    loadIslandsData()  // Re-fetch active islands
+    fetchNozzles()     // Re-fetch nozzles from active islands
     setShowManagementModal(true)
   }
 

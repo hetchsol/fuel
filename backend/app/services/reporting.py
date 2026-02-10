@@ -17,7 +17,8 @@ class ReportingService:
         sales_data: List[Dict[str, Any]],
         readings_data: List[Dict[str, Any]],
         shifts_data: List[Dict[str, Any]],
-        reconciliations_data: List[Dict[str, Any]]
+        reconciliations_data: List[Dict[str, Any]],
+        islands_data: Optional[Dict[str, Any]] = None,
     ):
         """
         Initialize reporting service with all data sources
@@ -27,11 +28,13 @@ class ReportingService:
             readings_data: All meter readings
             shifts_data: All shift records
             reconciliations_data: All reconciliation records
+            islands_data: Islands dict keyed by island_id (for nozzle fuel type lookup)
         """
         self.sales_data = sales_data
         self.readings_data = readings_data
         self.shifts_data = shifts_data
         self.reconciliations_data = reconciliations_data
+        self.islands_data = islands_data or {}
 
     def filter_by_staff(
         self,
@@ -276,12 +279,17 @@ class ReportingService:
         opening_reading = sorted_readings[0].get('reading', 0) if sorted_readings else 0
         closing_reading = sorted_readings[-1].get('reading', 0) if sorted_readings else 0
 
-        # Determine fuel type from nozzle ID
+        # Determine fuel type from islands data (nozzle lookup)
         fuel_type = 'Unknown'
-        if 'ULP' in nozzle_id or 'PETROL' in nozzle_id.upper():
-            fuel_type = 'Petrol'
-        elif 'LSD' in nozzle_id or 'DIESEL' in nozzle_id.upper():
-            fuel_type = 'Diesel'
+        for island_data in self.islands_data.values():
+            ps = island_data.get('pump_station')
+            if ps:
+                for n in ps.get('nozzles', []):
+                    if n.get('nozzle_id') == nozzle_id:
+                        fuel_type = n.get('fuel_type', '') or 'Unknown'
+                        break
+                if fuel_type != 'Unknown':
+                    break
 
         return {
             'nozzle_id': nozzle_id,

@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from ...models.models import ShiftReconciliation, TankReconciliation
 from ...config import PETROL_PRICE_PER_LITER, DIESEL_PRICE_PER_LITER
+from ...database.storage import get_nozzle
 from .auth import get_station_context
 from ...database.station_files import get_station_file
 import json
@@ -218,18 +219,16 @@ def calculate_shift_reconciliation(shift_id: str, nozzle_summaries: dict, lpg_re
     """
     storage = ctx["storage"]
 
-    # Calculate fuel revenues
-    petrol_volume = sum(
-        summary["electronic_movement"]
-        for nozzle_id, summary in nozzle_summaries.items()
-        if nozzle_id.startswith("UNL")
-    )
-
-    diesel_volume = sum(
-        summary["electronic_movement"]
-        for nozzle_id, summary in nozzle_summaries.items()
-        if nozzle_id.startswith("LSD")
-    )
+    # Calculate fuel revenues by looking up nozzle fuel type from storage
+    petrol_volume = 0.0
+    diesel_volume = 0.0
+    for nozzle_id, summary in nozzle_summaries.items():
+        nozzle = get_nozzle(nozzle_id, storage=storage)
+        fuel_type = nozzle.get("fuel_type", "") if nozzle else ""
+        if fuel_type == "Petrol":
+            petrol_volume += summary["electronic_movement"]
+        elif fuel_type == "Diesel":
+            diesel_volume += summary["electronic_movement"]
 
     petrol_revenue = petrol_volume * PETROL_PRICE_PER_LITER
     diesel_revenue = diesel_volume * DIESEL_PRICE_PER_LITER

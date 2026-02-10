@@ -33,6 +33,8 @@ interface Island {
   island_id: string
   name: string
   location: string
+  status: string
+  product_type: string | null
   pump_station: PumpStation
 }
 
@@ -47,29 +49,6 @@ export default function Infrastructure() {
   // Tank capacity edit state
   const [editingTank, setEditingTank] = useState<string | null>(null)
   const [newCapacity, setNewCapacity] = useState<number>(0)
-
-  // Island creation state
-  const [showCreateIsland, setShowCreateIsland] = useState(false)
-  const [newIsland, setNewIsland] = useState({
-    island_id: '',
-    name: '',
-    location: '',
-    pump_station_id: '',
-    pump_station_name: '',
-    tank_id: 'TANK-PETROL'
-  })
-
-  // Nozzle management state
-  const [showAddNozzle, setShowAddNozzle] = useState<string | null>(null)
-  const [newNozzle, setNewNozzle] = useState({
-    nozzle_id: '',
-    fuel_type: 'Petrol',
-    pump_station_id: ''
-  })
-
-  // Pump-tank mapping state
-  const [editingPumpMapping, setEditingPumpMapping] = useState<string | null>(null)
-  const [selectedTankForPump, setSelectedTankForPump] = useState<string>('')
 
   useEffect(() => {
     fetchTanks()
@@ -128,22 +107,27 @@ export default function Infrastructure() {
     }
   }
 
-  const updatePumpTankMapping = async (islandId: string, tankId: string) => {
+  const updateProductType = async (islandId: string, productType: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/islands/${islandId}/pump-station/tank?tank_id=${tankId}`, {
+      const res = await fetch(`${BASE}/islands/${islandId}/product`, {
         method: 'PUT',
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+        },
+        body: JSON.stringify({ product_type: productType }),
       })
 
       if (res.ok) {
         const data = await res.json()
-        setMessage({ type: 'success', text: data.message })
+        setMessage({ type: 'success', text: `${islandId} configured as ${productType}` })
+        if (productType === 'Diesel') setFuelType('diesel')
+        else setFuelType('petrol')
         fetchIslands()
-        setEditingPumpMapping(null)
       } else {
         const error = await res.json()
-        setMessage({ type: 'error', text: error.detail || 'Failed to update mapping' })
+        setMessage({ type: 'error', text: error.detail || 'Failed to update product type' })
       }
     } catch (err) {
       setMessage({ type: 'error', text: 'Network error' })
@@ -152,131 +136,25 @@ export default function Infrastructure() {
     }
   }
 
-  const createIsland = async () => {
+  const toggleIslandStatus = async (islandId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
     setLoading(true)
     try {
-      const islandData = {
-        island_id: newIsland.island_id,
-        name: newIsland.name,
-        location: newIsland.location,
-        pump_station: {
-          pump_station_id: newIsland.pump_station_id,
-          island_id: newIsland.island_id,
-          name: newIsland.pump_station_name,
-          tank_id: newIsland.tank_id,
-          nozzles: []
-        }
-      }
-
-      const res = await fetch(`${BASE}/islands/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
-        body: JSON.stringify(islandData),
+      const res = await fetch(`${BASE}/islands/${islandId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+        },
+        body: JSON.stringify({ status: newStatus }),
       })
 
       if (res.ok) {
-        setMessage({ type: 'success', text: 'Island created successfully' })
-        fetchIslands()
-        setShowCreateIsland(false)
-        setNewIsland({
-          island_id: '',
-          name: '',
-          location: '',
-          pump_station_id: '',
-          pump_station_name: '',
-          tank_id: 'TANK-PETROL'
-        })
-      } else {
-        const error = await res.json()
-        setMessage({ type: 'error', text: error.detail || 'Failed to create island' })
-      }
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Network error' })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const deleteIsland = async (islandId: string, islandName: string) => {
-    if (!confirm(`Are you sure you want to delete ${islandName}? This action cannot be undone.`)) {
-      return
-    }
-
-    setLoading(true)
-    try {
-      const res = await fetch(`${BASE}/islands/${islandId}`, {
-        method: 'DELETE',
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
-      })
-
-      if (res.ok) {
-        setMessage({ type: 'success', text: `Island ${islandName} deleted successfully` })
+        setMessage({ type: 'success', text: `${islandId} is now ${newStatus}` })
         fetchIslands()
       } else {
         const error = await res.json()
-        setMessage({ type: 'error', text: error.detail || 'Failed to delete island' })
-      }
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Network error' })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const addNozzle = async (islandId: string) => {
-    setLoading(true)
-    try {
-      const nozzleData = {
-        nozzle_id: newNozzle.nozzle_id,
-        pump_station_id: newNozzle.pump_station_id,
-        fuel_type: newNozzle.fuel_type,
-        status: 'Active',
-        electronic_reading: 0.0,
-        mechanical_reading: 0.0
-      }
-
-      const res = await fetch(`${BASE}/islands/${islandId}/nozzle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
-        body: JSON.stringify(nozzleData),
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        setMessage({ type: 'success', text: data.message })
-        fetchIslands()
-        setShowAddNozzle(null)
-        setNewNozzle({ nozzle_id: '', fuel_type: 'Petrol', pump_station_id: '' })
-      } else {
-        const error = await res.json()
-        setMessage({ type: 'error', text: error.detail || 'Failed to add nozzle' })
-      }
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Network error' })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const removeNozzle = async (islandId: string, nozzleId: string) => {
-    if (!confirm(`Are you sure you want to remove nozzle ${nozzleId}?`)) {
-      return
-    }
-
-    setLoading(true)
-    try {
-      const res = await fetch(`${BASE}/islands/${islandId}/nozzle/${nozzleId}`, {
-        method: 'DELETE',
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        setMessage({ type: 'success', text: data.message })
-        fetchIslands()
-      } else {
-        const error = await res.json()
-        setMessage({ type: 'error', text: error.detail || 'Failed to remove nozzle' })
+        setMessage({ type: 'error', text: error.detail || 'Failed to update status' })
       }
     } catch (err) {
       setMessage({ type: 'error', text: 'Network error' })
@@ -287,6 +165,17 @@ export default function Infrastructure() {
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString()
+  }
+
+  const getNozzleColor = (fuelType: string) => {
+    if (fuelType === 'Petrol') return 'bg-green-100 text-green-800 border-green-300'
+    if (fuelType === 'Diesel') return 'bg-purple-100 text-purple-800 border-purple-300'
+    return 'bg-gray-100 text-gray-600 border-gray-300'
+  }
+
+  const getStatusBadge = (status: string) => {
+    if (status === 'active') return 'bg-green-100 text-green-800 border-green-300'
+    return 'bg-gray-100 text-gray-600 border-gray-300'
   }
 
   return (
@@ -324,7 +213,7 @@ export default function Infrastructure() {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            ⛽ Tank Management
+            Tank Management
           </button>
           <button
             onClick={() => setActiveTab('islands')}
@@ -334,7 +223,7 @@ export default function Infrastructure() {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            🏝️ Islands & Pumps
+            Islands & Pumps
           </button>
         </nav>
       </div>
@@ -446,7 +335,7 @@ export default function Infrastructure() {
                 {/* Warning */}
                 {tank.percentage < 30 && (
                   <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-800 font-semibold">⚠️ Low fuel level - Schedule delivery soon!</p>
+                    <p className="text-sm text-red-800 font-semibold">Low fuel level - Schedule delivery soon!</p>
                   </div>
                 )}
               </div>
@@ -457,10 +346,10 @@ export default function Infrastructure() {
           <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h3 className="text-sm font-semibold text-blue-900 mb-2">Tank Capacity Guidelines</h3>
             <ul className="text-sm text-blue-700 space-y-1">
-              <li>• <strong>Owner Only</strong>: Only station owners can modify tank capacities</li>
-              <li>• <strong>Safety Limits</strong>: Capacity cannot be set below current fuel level</li>
-              <li>• <strong>Monitoring</strong>: System tracks tank levels in real-time as fuel is dispensed</li>
-              <li>• <strong>Alerts</strong>: Low fuel warnings when tank drops below 30%</li>
+              <li>- <strong>Owner Only</strong>: Only station owners can modify tank capacities</li>
+              <li>- <strong>Safety Limits</strong>: Capacity cannot be set below current fuel level</li>
+              <li>- <strong>Monitoring</strong>: System tracks tank levels in real-time as fuel is dispensed</li>
+              <li>- <strong>Alerts</strong>: Low fuel warnings when tank drops below 30%</li>
             </ul>
           </div>
         </div>
@@ -469,322 +358,121 @@ export default function Infrastructure() {
       {/* Islands Tab */}
       {activeTab === 'islands' && (
         <div>
-          <div className="mb-6 flex justify-between items-center">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Islands & Pump Stations</h2>
-              <p className="text-sm text-gray-600">Manage dispensing islands, pumps, and nozzles</p>
-            </div>
-            <button
-              onClick={() => setShowCreateIsland(true)}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold"
-            >
-              + Create New Island
-            </button>
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Islands & Pump Stations</h2>
+            <p className="text-sm text-gray-600">Configure product type and activate islands for operation</p>
           </div>
 
-          {/* Create Island Form */}
-          {showCreateIsland && (
-            <div className="mb-6 bg-white rounded-lg shadow-lg p-6 border-2 border-green-300">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Create New Island</h3>
-
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Island ID</label>
-                  <input
-                    type="text"
-                    value={newIsland.island_id}
-                    onChange={(e) => setNewIsland({...newIsland, island_id: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    placeholder="ISL-003"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Island Name</label>
-                  <input
-                    type="text"
-                    value={newIsland.name}
-                    onChange={(e) => setNewIsland({...newIsland, name: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    placeholder="Island 3"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Location</label>
-                  <input
-                    type="text"
-                    value={newIsland.location}
-                    onChange={(e) => setNewIsland({...newIsland, location: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    placeholder="Main Station"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Pump Station ID</label>
-                  <input
-                    type="text"
-                    value={newIsland.pump_station_id}
-                    onChange={(e) => setNewIsland({...newIsland, pump_station_id: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    placeholder="PS-003"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Pump Station Name</label>
-                  <input
-                    type="text"
-                    value={newIsland.pump_station_name}
-                    onChange={(e) => setNewIsland({...newIsland, pump_station_name: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    placeholder="Pump Station 3"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Tank Source</label>
-                  <select
-                    value={newIsland.tank_id}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      setNewIsland({...newIsland, tank_id: value})
-                      // Update theme based on tank selection
-                      if (value === 'TANK-DIESEL') {
-                        setFuelType('diesel')
-                      } else if (value === 'TANK-PETROL') {
-                        setFuelType('petrol')
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="TANK-PETROL">Petrol Tank</option>
-                    <option value="TANK-DIESEL">Diesel Tank</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={createIsland}
-                  disabled={loading || !newIsland.island_id || !newIsland.name}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400"
-                >
-                  Create Island
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCreateIsland(false)
-                    setNewIsland({
-                      island_id: '',
-                      name: '',
-                      location: '',
-                      pump_station_id: '',
-                      pump_station_name: '',
-                      tank_id: 'TANK-PETROL'
-                    })
-                  }}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Islands List */}
-          <div className="space-y-6">
+          {/* 2x2 Grid of Island Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {islands.map(island => (
               <div
                 key={island.island_id}
-                className="bg-white rounded-lg shadow-lg p-6 border-2 border-blue-200"
+                className={`bg-white rounded-lg shadow-lg p-6 border-2 ${
+                  island.status === 'active' ? 'border-green-300' : 'border-gray-300'
+                }`}
               >
+                {/* Header: Name, ID, Status Badge */}
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-2xl font-bold text-gray-900">{island.name}</h3>
-                    <p className="text-sm text-gray-500">{island.island_id} • {island.location}</p>
+                    <h3 className="text-xl font-bold text-gray-900">{island.name}</h3>
+                    <p className="text-sm text-gray-500">{island.island_id}</p>
                   </div>
-                  <button
-                    onClick={() => deleteIsland(island.island_id, island.name)}
-                    className="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-semibold"
-                  >
-                    Delete Island
-                  </button>
+                  <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${getStatusBadge(island.status)}`}>
+                    {island.status === 'active' ? 'Active' : 'Inactive'}
+                  </span>
                 </div>
 
-                {/* Pump Station Info */}
-                <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h4 className="font-bold text-gray-900">{island.pump_station.name}</h4>
-                      <p className="text-sm text-gray-600">{island.pump_station.pump_station_id}</p>
-                    </div>
-                    {editingPumpMapping !== island.island_id && (
-                      <button
-                        onClick={() => {
-                          setEditingPumpMapping(island.island_id)
-                          setSelectedTankForPump(island.pump_station.tank_id)
-                        }}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold underline"
-                      >
-                        Change Tank Source
-                      </button>
+                {/* Product Type Dropdown */}
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Product Type</label>
+                  <select
+                    value={island.product_type || ''}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        updateProductType(island.island_id, e.target.value)
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Not configured</option>
+                    <option value="Petrol">Petrol</option>
+                    <option value="Diesel">Diesel</option>
+                  </select>
+                </div>
+
+                {/* Activate / Deactivate Toggle */}
+                <div className="mb-4">
+                  <button
+                    onClick={() => toggleIslandStatus(island.island_id, island.status)}
+                    disabled={loading || (!island.product_type && island.status !== 'active')}
+                    className={`w-full px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                      island.status === 'active'
+                        ? 'bg-red-100 text-red-700 hover:bg-red-200 border border-red-300'
+                        : island.product_type
+                          ? 'bg-green-600 text-white hover:bg-green-700'
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {island.status === 'active' ? 'Deactivate' : 'Activate'}
+                  </button>
+                  {!island.product_type && island.status !== 'active' && (
+                    <p className="text-xs text-gray-500 mt-1">Configure product type before activating</p>
+                  )}
+                </div>
+
+                {/* Pump Station Info (read-only) */}
+                {island.pump_station && (
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <p className="text-sm font-semibold text-gray-700">{island.pump_station.name}</p>
+                    <p className="text-xs text-gray-500">{island.pump_station.pump_station_id}</p>
+                    {island.pump_station.tank_id && (
+                      <div className="mt-1">
+                        <span className="text-xs text-gray-600">Tank: </span>
+                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                          island.pump_station.tank_id === 'TANK-DIESEL'
+                            ? 'bg-purple-100 text-purple-800'
+                            : island.pump_station.tank_id === 'TANK-PETROL'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {island.pump_station.tank_id || 'Not assigned'}
+                        </span>
+                      </div>
                     )}
                   </div>
+                )}
 
-                  {editingPumpMapping === island.island_id ? (
-                    <div className="flex gap-2 mt-2">
-                      <select
-                        value={selectedTankForPump}
-                        onChange={(e) => {
-                          const value = e.target.value
-                          setSelectedTankForPump(value)
-                          // Update theme based on tank selection
-                          if (value === 'TANK-DIESEL') {
-                            setFuelType('diesel')
-                          } else if (value === 'TANK-PETROL') {
-                            setFuelType('petrol')
-                          }
-                        }}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="TANK-PETROL">Petrol Tank</option>
-                        <option value="TANK-DIESEL">Diesel Tank</option>
-                      </select>
-                      <button
-                        onClick={() => updatePumpTankMapping(island.island_id, selectedTankForPump)}
-                        disabled={loading}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setEditingPumpMapping(null)}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="mt-2">
-                      <span className="text-sm text-gray-600">Draws fuel from: </span>
-                      <span className={`px-2 py-1 rounded text-sm font-semibold ${
-                        island.pump_station.tank_id === 'TANK-DIESEL'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {island.pump_station.tank_id.replace('TANK-', '')} Tank
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Nozzles */}
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="font-bold text-gray-900">Nozzles ({island.pump_station.nozzles.length})</h4>
-                    <button
-                      onClick={() => {
-                        setShowAddNozzle(island.island_id)
-                        setNewNozzle({
-                          nozzle_id: '',
-                          fuel_type: 'Petrol',
-                          pump_station_id: island.pump_station.pump_station_id
-                        })
-                      }}
-                      className="text-sm px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-semibold"
-                    >
-                      + Add Nozzle
-                    </button>
-                  </div>
-
-                  {/* Add Nozzle Form */}
-                  {showAddNozzle === island.island_id && (
-                    <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                      <div className="grid grid-cols-3 gap-2 mb-2">
-                        <input
-                          type="text"
-                          value={newNozzle.nozzle_id}
-                          onChange={(e) => setNewNozzle({...newNozzle, nozzle_id: e.target.value})}
-                          className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                          placeholder="Nozzle ID (e.g., UNL-3A)"
-                        />
-                        <select
-                          value={newNozzle.fuel_type}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            setNewNozzle({...newNozzle, fuel_type: value})
-                            // Update theme based on fuel selection
-                            if (value.toLowerCase() === 'diesel') {
-                              setFuelType('diesel')
-                            } else if (value.toLowerCase() === 'petrol') {
-                              setFuelType('petrol')
-                            }
-                          }}
-                          className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                {/* Nozzle Badges (read-only, color-coded) */}
+                {island.pump_station && (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">Nozzles</p>
+                    <div className="flex gap-2">
+                      {island.pump_station.nozzles.map(nozzle => (
+                        <div
+                          key={nozzle.nozzle_id}
+                          className={`flex-1 p-2 rounded-lg border text-center ${getNozzleColor(nozzle.fuel_type)}`}
                         >
-                          <option value="Petrol">Petrol</option>
-                          <option value="Diesel">Diesel</option>
-                        </select>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => addNozzle(island.island_id)}
-                            disabled={loading || !newNozzle.nozzle_id}
-                            className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400"
-                          >
-                            Add
-                          </button>
-                          <button
-                            onClick={() => setShowAddNozzle(null)}
-                            className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                          >
-                            Cancel
-                          </button>
+                          <p className="font-bold text-sm">{nozzle.nozzle_id}</p>
+                          <p className="text-xs">{nozzle.fuel_type || 'Unconfigured'}</p>
                         </div>
-                      </div>
+                      ))}
                     </div>
-                  )}
-
-                  {/* Nozzles Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {island.pump_station.nozzles.map(nozzle => (
-                      <div
-                        key={nozzle.nozzle_id}
-                        className={`p-3 rounded-lg border-2 ${
-                          nozzle.fuel_type === 'Diesel'
-                            ? 'bg-purple-50 border-purple-300'
-                            : 'bg-green-50 border-green-300'
-                        }`}
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <p className="font-bold text-gray-900 text-sm">{nozzle.nozzle_id}</p>
-                          <button
-                            onClick={() => removeNozzle(island.island_id, nozzle.nozzle_id)}
-                            className="text-red-600 hover:text-red-800 text-xs"
-                            title="Remove nozzle"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                        <p className={`text-xs font-semibold ${
-                          nozzle.fuel_type === 'Diesel' ? 'text-purple-700' : 'text-green-700'
-                        }`}>
-                          {nozzle.fuel_type}
-                        </p>
-                        <p className="text-xs text-gray-600 mt-1">{nozzle.status}</p>
-                      </div>
-                    ))}
                   </div>
-                </div>
+                )}
               </div>
             ))}
           </div>
 
           {/* Info Panel */}
           <div className="mt-8 bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-purple-900 mb-2">Infrastructure Configuration</h3>
+            <h3 className="text-sm font-semibold text-purple-900 mb-2">Standardized Island Configuration</h3>
             <ul className="text-sm text-purple-700 space-y-1">
-              <li>• <strong>Islands</strong>: Each island has one pump station with multiple nozzles</li>
-              <li>• <strong>Pump-Tank Mapping</strong>: Configure which tank each pump draws fuel from</li>
-              <li>• <strong>Nozzles</strong>: Add or remove nozzles from pump stations as needed</li>
-              <li>• <strong>Safety</strong>: Cannot delete islands that have dependent records (readings, sales)</li>
-              <li>• <strong>Owner Only</strong>: All infrastructure changes require owner privileges</li>
+              <li>- <strong>4 Islands</strong>: Each station has 4 standard islands with 1 pump and 2 nozzles each</li>
+              <li>- <strong>Product Type</strong>: Configure each island as Petrol or Diesel. This sets the tank mapping and nozzle fuel types automatically.</li>
+              <li>- <strong>Activation</strong>: Islands must have a product type configured before they can be activated</li>
+              <li>- <strong>Active Islands</strong>: Only active islands appear in shift allocation and operations</li>
+              <li>- <strong>Owner Only</strong>: All island configuration changes require owner privileges</li>
             </ul>
           </div>
         </div>

@@ -22,7 +22,8 @@ def _build_reporting_service(storage: dict) -> ReportingService:
         sales_data=storage.get('readings', []),
         readings_data=storage.get('readings', []),
         shifts_data=list(storage.get('shifts', {}).values()),
-        reconciliations_data=storage.get('reconciliations_data', [])
+        reconciliations_data=storage.get('reconciliations_data', []),
+        islands_data=storage.get('islands', {}),
     )
 
 
