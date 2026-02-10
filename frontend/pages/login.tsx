@@ -24,6 +24,11 @@ export default function Login() {
         body: JSON.stringify(credentials),
       })
 
+      const contentType = res.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) {
+        throw new Error('Cannot reach the API server. Please check that NEXT_PUBLIC_API_BASE_URL is configured correctly.')
+      }
+
       if (!res.ok) {
         const errorData = await res.json()
         throw new Error(errorData.detail || 'Login failed')
