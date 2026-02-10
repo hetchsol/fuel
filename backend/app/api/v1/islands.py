@@ -108,6 +108,7 @@ if not islands_data:
     }
 }
     islands_data = STORAGE['islands']  # Re-assign after initialization
+    print(f"[STARTUP] Islands seeded: {list(STORAGE['islands'].keys())}")
 
 @router.get("/", response_model=List[Island])
 def get_all_islands():
