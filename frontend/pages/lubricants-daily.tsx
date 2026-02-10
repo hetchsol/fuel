@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
+const BASE = '/api/v1'
 
 interface ProductRow {
   product_code: string

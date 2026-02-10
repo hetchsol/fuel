@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/router'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
+const BASE = '/api/v1'
 
 export default function Login() {
   const router = useRouter()
@@ -26,7 +26,7 @@ export default function Login() {
 
       const contentType = res.headers.get('content-type') || ''
       if (!contentType.includes('application/json')) {
-        throw new Error('Cannot reach the API server. Please check that NEXT_PUBLIC_API_BASE_URL is configured correctly.')
+        throw new Error('Cannot reach the API server. Please try again in a moment.')
       }
 
       if (!res.ok) {

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
+const BASE = '/api/v1'
 
 interface NozzleInfo {
   nozzle_id: string

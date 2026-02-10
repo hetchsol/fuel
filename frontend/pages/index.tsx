@@ -38,7 +38,7 @@ export default function Home() {
       const userData = localStorage.getItem('user')
       const user = userData ? JSON.parse(userData).full_name : 'Unknown'
 
-      const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
+      const BASE = '/api/v1'
       const token = localStorage.getItem('accessToken')
       const stationId = localStorage.getItem('stationId')
       const res = await fetch(`${BASE}/tanks/dip-reading/${tankId}`, {

@@ -84,7 +84,7 @@ const TankCard = ({
 
   const fetchDipReadings = async () => {
     try {
-      const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
+      const BASE = '/api/v1'
       const res = await fetch(`${BASE}/tanks/dip-reading/${tankId}`, {
         headers: getAuthHeaders()
       })
