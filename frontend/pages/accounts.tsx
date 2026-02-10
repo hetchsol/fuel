@@ -1,6 +1,7 @@
-import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
+import LoadingSpinner from '../components/LoadingSpinner'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 export default function Accounts() {
   const [accounts, setAccounts] = useState<any[]>([])
@@ -34,7 +35,9 @@ export default function Accounts() {
   const fetchAccounts = async () => {
     setLoading(true)
     try {
-      const res = await authFetch(`${BASE}/accounts/`)
+      const res = await fetch(`${BASE}/accounts/`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setAccounts(data)
@@ -103,9 +106,9 @@ export default function Accounts() {
         invoice_number: saleForm.notes || null
       }
 
-      const res = await authFetch(`${BASE}/accounts/sales`, {
+      const res = await fetch(`${BASE}/accounts/sales`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: JSON.stringify(payload)
       })
 
@@ -323,7 +326,7 @@ export default function Accounts() {
         <h2 className="text-xl font-bold text-gray-900 mb-4">💳 Account Holders</h2>
 
         {loading && accounts.length === 0 ? (
-          <div className="text-gray-500">Loading accounts...</div>
+          <LoadingSpinner text="Loading accounts..." />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {accounts.map(account => {

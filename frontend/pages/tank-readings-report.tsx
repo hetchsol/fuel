@@ -106,7 +106,8 @@ export default function TankReadingsReport() {
 
       const res = await authFetch(url, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
         }
       })
 

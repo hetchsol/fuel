@@ -1,7 +1,7 @@
-import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 const LPG_SIZES = [3, 6, 9, 19, 45, 48]
 
 interface CylinderRow {
@@ -34,6 +34,14 @@ interface AccessoryRow {
   sales_value: number
 }
 
+function getAuthHeaders() {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+  }
+}
 
 export default function LPGDaily() {
   const { theme } = useTheme()
@@ -78,7 +86,7 @@ export default function LPGDaily() {
 
   // Fetch pricing on mount
   const fetchPricing = useCallback(() => {
-    authFetch(`${BASE}/lpg-daily/pricing`, )
+    fetch(`${BASE}/lpg-daily/pricing`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
         setPricing(data.sizes || [])
@@ -98,8 +106,8 @@ export default function LPGDaily() {
 
   // Fetch previous shift data when date/shift changes
   const fetchPreviousShift = useCallback(() => {
-    authFetch(`${BASE}/lpg-daily/previous-shift?current_date=${date}&shift_type=${shiftType}`, {
-      
+    fetch(`${BASE}/lpg-daily/previous-shift?current_date=${date}&shift_type=${shiftType}`, {
+      headers: getAuthHeaders(),
     })
       .then(r => r.json())
       .then(data => {
@@ -117,8 +125,8 @@ export default function LPGDaily() {
 
   // Fetch previous day accessories
   useEffect(() => {
-    authFetch(`${BASE}/lpg-daily/accessories/previous-day?current_date=${date}`, {
-      
+    fetch(`${BASE}/lpg-daily/accessories/previous-day?current_date=${date}`, {
+      headers: getAuthHeaders(),
     })
       .then(r => r.json())
       .then(data => {
@@ -140,7 +148,7 @@ export default function LPGDaily() {
 
   // Fetch existing entries
   useEffect(() => {
-    authFetch(`${BASE}/lpg-daily/entries?date=${date}`, )
+    fetch(`${BASE}/lpg-daily/entries?date=${date}`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => setEntries(Array.isArray(data) ? data : []))
       .catch(() => {})
@@ -204,9 +212,9 @@ export default function LPGDaily() {
 
     try {
       // Submit cylinder entry
-      const cylRes = await authFetch(`${BASE}/lpg-daily/entry`, {
+      const cylRes = await fetch(`${BASE}/lpg-daily/entry`, {
         method: 'POST',
-        
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           date,
           shift_type: shiftType,
@@ -232,9 +240,9 @@ export default function LPGDaily() {
       // Submit accessories entry
       const hasAccessoryActivity = accessoryRows.some(r => r.additions > 0 || r.sold > 0)
       if (hasAccessoryActivity) {
-        const accRes = await authFetch(`${BASE}/lpg-daily/accessories/entry`, {
+        const accRes = await fetch(`${BASE}/lpg-daily/accessories/entry`, {
           method: 'POST',
-          
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             date,
             product_rows: accessoryRows.map(r => ({
@@ -271,9 +279,9 @@ export default function LPGDaily() {
       for (const [k, v] of Object.entries(editDeposits)) {
         deposits[String(k)] = parseFloat(v) || 0
       }
-      const res = await authFetch(`${BASE}/lpg-daily/pricing`, {
+      const res = await fetch(`${BASE}/lpg-daily/pricing`, {
         method: 'PUT',
-        
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           price_per_kg: parseFloat(editPricePerKg) || 0,
           deposits,

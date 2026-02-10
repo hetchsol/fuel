@@ -1,36 +1,40 @@
-
-from fastapi import APIRouter, HTTPException
+"""
+Sales API - Station-aware file-based persistence
+"""
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 import json
 import os
 from datetime import datetime
 from ...models.models import SaleIn, SaleOut
 from ...services.sales_calculator import calculate_sale
+from .auth import get_station_context
+from ...database.station_files import get_station_file
 
 router = APIRouter()
 
-SALES_FILE = "storage/sales.json"
 
-
-def load_sales() -> List[dict]:
-    """Load sales from file"""
-    if not os.path.exists(SALES_FILE):
+def load_sales(station_id: str) -> List[dict]:
+    """Load sales from station-specific file"""
+    path = get_station_file(station_id, 'sales.json')
+    if not os.path.exists(path):
         return []
 
     try:
-        with open(SALES_FILE, 'r') as f:
+        with open(path, 'r') as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading sales: {e}")
         return []
 
 
-def save_sales(sales: List[dict]):
-    """Save sales to file"""
-    os.makedirs(os.path.dirname(SALES_FILE), exist_ok=True)
+def save_sales(sales: List[dict], station_id: str):
+    """Save sales to station-specific file"""
+    path = get_station_file(station_id, 'sales.json')
+    os.makedirs(os.path.dirname(path), exist_ok=True)
 
     try:
-        with open(SALES_FILE, 'w') as f:
+        with open(path, 'w') as f:
             json.dump(sales, f, indent=2)
     except Exception as e:
         print(f"Error saving sales: {e}")
@@ -38,11 +42,13 @@ def save_sales(sales: List[dict]):
 
 
 @router.post("", response_model=SaleOut)
-def record_sale(payload: SaleIn):
+def record_sale(payload: SaleIn, ctx: dict = Depends(get_station_context)):
     """
     Calculate daily sale from opening and closing readings
     Validates mechanical vs electronic readings within 0.03% tolerance
     """
+    station_id = ctx["station_id"]
+
     try:
         sale = calculate_sale(
             shift_id=payload.shift_id,
@@ -75,13 +81,13 @@ def record_sale(payload: SaleIn):
             sale["date"] = datetime.now().strftime("%Y-%m-%d")
 
         # Load existing sales
-        sales = load_sales()
+        sales = load_sales(station_id)
 
         # Add new sale
         sales.append(sale)
 
         # Save back to file
-        save_sales(sales)
+        save_sales(sales, station_id)
 
         return SaleOut(**sale)
 
@@ -92,25 +98,29 @@ def record_sale(payload: SaleIn):
 
 
 @router.get("", response_model=List[SaleOut])
-def get_all_sales():
+def get_all_sales(ctx: dict = Depends(get_station_context)):
     """Get all sales"""
+    station_id = ctx["station_id"]
+
     try:
-        sales = load_sales()
+        sales = load_sales(station_id)
         return [SaleOut(**s) for s in sales]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving sales: {str(e)}")
 
 
 @router.get("/date/{date}", response_model=List[SaleOut])
-def get_sales_by_date(date: str):
+def get_sales_by_date(date: str, ctx: dict = Depends(get_station_context)):
     """
     Get sales for a specific date
 
     Args:
         date: Date in format YYYY-MM-DD (e.g., 2025-12-19)
     """
+    station_id = ctx["station_id"]
+
     try:
-        sales = load_sales()
+        sales = load_sales(station_id)
         filtered_sales = [s for s in sales if s.get("date") == date]
         return [SaleOut(**s) for s in filtered_sales]
     except Exception as e:

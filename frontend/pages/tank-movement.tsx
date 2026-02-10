@@ -1,8 +1,8 @@
-import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { useTheme } from '../contexts/ThemeContext'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface TankReading {
   reading_id: string
@@ -124,8 +124,11 @@ export default function TankMovement() {
   const fetchReadings = async () => {
     try {
       const token = localStorage.getItem('accessToken')
-      const res = await authFetch(`${BASE}/tank-readings/readings/${selectedTank}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await fetch(`${BASE}/tank-readings/readings/${selectedTank}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
       })
       if (res.ok) {
         const data = await res.json()
@@ -139,8 +142,11 @@ export default function TankMovement() {
   const fetchDeliveries = async () => {
     try {
       const token = localStorage.getItem('accessToken')
-      const res = await authFetch(`${BASE}/tank-readings/deliveries/${selectedTank}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await fetch(`${BASE}/tank-readings/deliveries/${selectedTank}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
       })
       if (res.ok) {
         const data = await res.json()
@@ -174,11 +180,12 @@ export default function TankMovement() {
         notes: readingForm.notes || null
       }
 
-      const res = await authFetch(`${BASE}/tank-readings/readings`, {
+      const res = await fetch(`${BASE}/tank-readings/readings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
         },
         body: JSON.stringify(payload)
       })
@@ -232,11 +239,12 @@ export default function TankMovement() {
         notes: deliveryForm.notes || null
       }
 
-      const res = await authFetch(`${BASE}/tank-readings/deliveries`, {
+      const res = await fetch(`${BASE}/tank-readings/deliveries`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
         },
         body: JSON.stringify(payload)
       })

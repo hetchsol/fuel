@@ -137,7 +137,8 @@ export default function DailyTankReading() {
       const token = localStorage.getItem('accessToken')
       const response = await authFetch(`${BASE}/customers?active_only=true`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
         }
       })
 
@@ -174,7 +175,10 @@ export default function DailyTankReading() {
       const response = await authFetch(
         `${BASE}/tank-readings/deliveries/${selectedTank}?date=${formData.date}&shift_type=${formData.shift_type}&unlinked_only=true`,
         {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+          }
         }
       )
 
@@ -195,7 +199,10 @@ export default function DailyTankReading() {
       const response = await authFetch(
         `${BASE}/tank-readings/readings/${selectedTank}/previous-shift?current_date=${formData.date}&shift_type=${formData.shift_type}`,
         {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+          }
         }
       )
 
@@ -751,7 +758,8 @@ export default function DailyTankReading() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
         },
         body: JSON.stringify(payload)
       })

@@ -1,7 +1,7 @@
-import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 export default function Inventory() {
   const { setFuelType } = useTheme()
@@ -33,7 +33,9 @@ export default function Inventory() {
 
   const fetchLPGAccessories = async () => {
     try {
-      const res = await authFetch(`${BASE}/lpg/accessories`)
+      const res = await fetch(`${BASE}/lpg/accessories`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setLpgAccessories(data)
@@ -45,7 +47,9 @@ export default function Inventory() {
 
   const fetchLubricants = async () => {
     try {
-      const res = await authFetch(`${BASE}/lubricants/`)
+      const res = await fetch(`${BASE}/lubricants/`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setLubricants(data)

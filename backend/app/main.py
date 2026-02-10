@@ -2,7 +2,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import router
-from app.database.storage import STORAGE
+from app.database.stations_registry import load_stations, STATIONS
+from app.database.station_files import migrate_existing_data
+from app.database.storage import get_station_storage, STORAGE as _global_storage
+from app.database.seed_defaults import seed_station_defaults
+import app.database.storage as storage_module
 
 app = FastAPI(title="Fuel Management API (Prototype)", version="0.1.0")
 
@@ -16,12 +20,26 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api/v1")
 
+
+@app.on_event("startup")
+def startup():
+    # Migrate flat files to station directories
+    migrate_existing_data()
+
+    # Load station registry (seeds ST001 if empty)
+    load_stations()
+
+    # Initialize storage and seed defaults for all stations
+    for station_id in list(STATIONS.keys()):
+        storage = get_station_storage(station_id)
+        seed_station_defaults(storage)
+
+    # Backward compat: global STORAGE points to ST001
+    st001 = get_station_storage("ST001")
+    storage_module.STORAGE = st001
+
+
 @app.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "islands": list(STORAGE.get('islands', {}).keys()),
-        "tanks": list(STORAGE.get('tanks', {}).keys()),
-        "shifts": len(STORAGE.get('shifts', {})),
-    }
+    return {"status": "ok"}
 

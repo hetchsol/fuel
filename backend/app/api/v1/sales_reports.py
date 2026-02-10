@@ -3,24 +3,26 @@ Sales Reports API
 Provides sales analytics and reporting
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict
 import json
 import os
 from collections import defaultdict
 
+from .auth import get_station_context
+from ...database.station_files import get_station_file
+
 router = APIRouter()
 
-SALES_FILE = "storage/sales.json"
 
-
-def load_sales() -> List[dict]:
-    """Load sales from file"""
-    if not os.path.exists(SALES_FILE):
+def load_sales(station_id: str) -> List[dict]:
+    """Load sales from station-specific file"""
+    filepath = get_station_file(station_id, 'sales.json')
+    if not os.path.exists(filepath):
         return []
 
     try:
-        with open(SALES_FILE, 'r') as f:
+        with open(filepath, 'r') as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading sales: {e}")
@@ -28,7 +30,7 @@ def load_sales() -> List[dict]:
 
 
 @router.get("/daily/{date}")
-def get_daily_sales_report(date: str):
+def get_daily_sales_report(date: str, ctx: dict = Depends(get_station_context)):
     """
     Get daily sales report for a specific date
 
@@ -39,7 +41,7 @@ def get_daily_sales_report(date: str):
         Summary of sales by fuel type for the date
     """
     try:
-        sales = load_sales()
+        sales = load_sales(ctx["station_id"])
 
         # Filter sales for the specific date
         daily_sales = [s for s in sales if s.get("date") == date]
@@ -108,12 +110,12 @@ def get_daily_sales_report(date: str):
 
 
 @router.get("/summary")
-def get_sales_summary():
+def get_sales_summary(ctx: dict = Depends(get_station_context)):
     """
     Get overall sales summary across all dates
     """
     try:
-        sales = load_sales()
+        sales = load_sales(ctx["station_id"])
 
         if not sales:
             return {

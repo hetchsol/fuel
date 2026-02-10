@@ -1,6 +1,6 @@
-import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface ReconciliationSource {
   tank_movement_liters?: number
@@ -59,7 +59,11 @@ export default function ThreeWayReconciliation() {
   const fetchDailySummary = async () => {
     setLoading(true)
     try {
-      const response = await authFetch(`${BASE}/reconciliation/three-way/daily-summary/${selectedDate}`)
+      const response = await fetch(`${BASE}/reconciliation/three-way/daily-summary/${selectedDate}`, {
+        headers: {
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
+      })
       if (response.ok) {
         const data = await response.json()
         setDailySummary(data)

@@ -34,6 +34,7 @@ export default function Login() {
       // Store user data and token in localStorage
       localStorage.setItem('accessToken', data.access_token)
       localStorage.setItem('user', JSON.stringify(data.user))
+      localStorage.setItem('stationId', data.user.station_id || 'ST001')
 
       // Redirect to dashboard
       router.push('/')

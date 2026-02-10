@@ -1,7 +1,7 @@
-import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { getStaffList, getNozzleList, getIslandList, getProductList } from '../lib/api'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 export default function AdvancedReports() {
   const [reportType, setReportType] = useState('custom')
@@ -175,7 +175,11 @@ export default function AdvancedReports() {
           break
       }
 
-      const response = await authFetch(url)
+      const response = await fetch(url, {
+        headers: {
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
+      })
       if (!response.ok) {
         throw new Error('Failed to generate report')
       }

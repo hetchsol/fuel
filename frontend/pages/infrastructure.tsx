@@ -1,7 +1,7 @@
-import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface Tank {
   tank_id: string
@@ -78,7 +78,9 @@ export default function Infrastructure() {
 
   const fetchTanks = async () => {
     try {
-      const res = await authFetch(`${BASE}/tanks/levels`)
+      const res = await fetch(`${BASE}/tanks/levels`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setTanks(data)
@@ -90,7 +92,9 @@ export default function Infrastructure() {
 
   const fetchIslands = async () => {
     try {
-      const res = await authFetch(`${BASE}/islands/`)
+      const res = await fetch(`${BASE}/islands/`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setIslands(data)
@@ -103,8 +107,9 @@ export default function Infrastructure() {
   const updateTankCapacity = async (tankId: string, capacity: number) => {
     setLoading(true)
     try {
-      const res = await authFetch(`${BASE}/tanks/${tankId}/capacity?new_capacity=${capacity}`, {
+      const res = await fetch(`${BASE}/tanks/${tankId}/capacity?new_capacity=${capacity}`, {
         method: 'PUT',
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
       })
 
       if (res.ok) {
@@ -126,8 +131,9 @@ export default function Infrastructure() {
   const updatePumpTankMapping = async (islandId: string, tankId: string) => {
     setLoading(true)
     try {
-      const res = await authFetch(`${BASE}/islands/${islandId}/pump-station/tank?tank_id=${tankId}`, {
+      const res = await fetch(`${BASE}/islands/${islandId}/pump-station/tank?tank_id=${tankId}`, {
         method: 'PUT',
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
       })
 
       if (res.ok) {
@@ -162,9 +168,9 @@ export default function Infrastructure() {
         }
       }
 
-      const res = await authFetch(`${BASE}/islands/`, {
+      const res = await fetch(`${BASE}/islands/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: JSON.stringify(islandData),
       })
 
@@ -198,8 +204,9 @@ export default function Infrastructure() {
 
     setLoading(true)
     try {
-      const res = await authFetch(`${BASE}/islands/${islandId}`, {
+      const res = await fetch(`${BASE}/islands/${islandId}`, {
         method: 'DELETE',
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
       })
 
       if (res.ok) {
@@ -228,9 +235,9 @@ export default function Infrastructure() {
         mechanical_reading: 0.0
       }
 
-      const res = await authFetch(`${BASE}/islands/${islandId}/nozzle`, {
+      const res = await fetch(`${BASE}/islands/${islandId}/nozzle`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: JSON.stringify(nozzleData),
       })
 
@@ -258,8 +265,9 @@ export default function Infrastructure() {
 
     setLoading(true)
     try {
-      const res = await authFetch(`${BASE}/islands/${islandId}/nozzle/${nozzleId}`, {
+      const res = await fetch(`${BASE}/islands/${islandId}/nozzle/${nozzleId}`, {
         method: 'DELETE',
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
       })
 
       if (res.ok) {
@@ -344,7 +352,7 @@ export default function Infrastructure() {
               <div
                 key={tank.tank_id}
                 className={`bg-white rounded-lg shadow-lg p-6 border-2 ${
-                  tank.fuel_type === 'Diesel' ? 'border-yellow-300' : 'border-green-300'
+                  tank.fuel_type === 'Diesel' ? 'border-purple-300' : 'border-green-300'
                 }`}
               >
                 <div className="flex justify-between items-start mb-4">
@@ -354,7 +362,7 @@ export default function Infrastructure() {
                   </div>
                   <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                     tank.fuel_type === 'Diesel'
-                      ? 'bg-yellow-100 text-yellow-800'
+                      ? 'bg-purple-100 text-purple-800'
                       : 'bg-green-100 text-green-800'
                   }`}>
                     {tank.percentage.toFixed(1)}% Full
@@ -389,8 +397,6 @@ export default function Infrastructure() {
                   {editingTank === tank.tank_id ? (
                     <div className="flex gap-2">
                       <input
-                        id="tank-capacity"
-                        name="tank-capacity"
                         type="number"
                         value={newCapacity}
                         onChange={(e) => setNewCapacity(Number(e.target.value))}
@@ -485,8 +491,6 @@ export default function Infrastructure() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Island ID</label>
                   <input
-                    id="island-id"
-                    name="island-id"
                     type="text"
                     value={newIsland.island_id}
                     onChange={(e) => setNewIsland({...newIsland, island_id: e.target.value})}
@@ -497,8 +501,6 @@ export default function Infrastructure() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Island Name</label>
                   <input
-                    id="island-name"
-                    name="island-name"
                     type="text"
                     value={newIsland.name}
                     onChange={(e) => setNewIsland({...newIsland, name: e.target.value})}
@@ -509,8 +511,6 @@ export default function Infrastructure() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Location</label>
                   <input
-                    id="island-location"
-                    name="island-location"
                     type="text"
                     value={newIsland.location}
                     onChange={(e) => setNewIsland({...newIsland, location: e.target.value})}
@@ -521,8 +521,6 @@ export default function Infrastructure() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Pump Station ID</label>
                   <input
-                    id="pump-station-id"
-                    name="pump-station-id"
                     type="text"
                     value={newIsland.pump_station_id}
                     onChange={(e) => setNewIsland({...newIsland, pump_station_id: e.target.value})}
@@ -533,8 +531,6 @@ export default function Infrastructure() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Pump Station Name</label>
                   <input
-                    id="pump-station-name"
-                    name="pump-station-name"
                     type="text"
                     value={newIsland.pump_station_name}
                     onChange={(e) => setNewIsland({...newIsland, pump_station_name: e.target.value})}
@@ -545,8 +541,6 @@ export default function Infrastructure() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Tank Source</label>
                   <select
-                    id="island-tank-source"
-                    name="island-tank-source"
                     value={newIsland.tank_id}
                     onChange={(e) => {
                       const value = e.target.value
@@ -637,8 +631,6 @@ export default function Infrastructure() {
                   {editingPumpMapping === island.island_id ? (
                     <div className="flex gap-2 mt-2">
                       <select
-                        id="pump-tank-mapping"
-                        name="pump-tank-mapping"
                         value={selectedTankForPump}
                         onChange={(e) => {
                           const value = e.target.value
@@ -707,8 +699,6 @@ export default function Infrastructure() {
                     <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
                       <div className="grid grid-cols-3 gap-2 mb-2">
                         <input
-                          id="nozzle-id"
-                          name="nozzle-id"
                           type="text"
                           value={newNozzle.nozzle_id}
                           onChange={(e) => setNewNozzle({...newNozzle, nozzle_id: e.target.value})}
@@ -716,8 +706,6 @@ export default function Infrastructure() {
                           placeholder="Nozzle ID (e.g., UNL-3A)"
                         />
                         <select
-                          id="nozzle-fuel-type"
-                          name="nozzle-fuel-type"
                           value={newNozzle.fuel_type}
                           onChange={(e) => {
                             const value = e.target.value
@@ -760,7 +748,7 @@ export default function Infrastructure() {
                         key={nozzle.nozzle_id}
                         className={`p-3 rounded-lg border-2 ${
                           nozzle.fuel_type === 'Diesel'
-                            ? 'bg-yellow-50 border-yellow-300'
+                            ? 'bg-purple-50 border-purple-300'
                             : 'bg-green-50 border-green-300'
                         }`}
                       >
@@ -775,7 +763,7 @@ export default function Infrastructure() {
                           </button>
                         </div>
                         <p className={`text-xs font-semibold ${
-                          nozzle.fuel_type === 'Diesel' ? 'text-yellow-700' : 'text-green-700'
+                          nozzle.fuel_type === 'Diesel' ? 'text-purple-700' : 'text-green-700'
                         }`}>
                           {nozzle.fuel_type}
                         </p>

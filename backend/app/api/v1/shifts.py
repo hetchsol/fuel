@@ -10,23 +10,23 @@ from datetime import datetime
 from ...models.models import Shift, ShiftType, DualReading, NozzleShiftSummary, TankDipReading
 from ...services.relationship_validation import validate_create, validate_delete_operation
 from ...services.shift_validation import validate_shift_assignments
-from ...database.storage import STORAGE
-from .auth import get_current_user, require_supervisor_or_owner
+from .auth import get_current_user, require_supervisor_or_owner, get_station_context
 
 router = APIRouter()
-
-# Use central storage
-shifts_data = STORAGE['shifts']
-readings_data = STORAGE['readings']
 
 # Sample attendants from the spreadsheet
 attendants_list = ["Violet", "Shaka", "Trevor", "Chileshe", "Matthew", "Mubanga", "Isabel", "Prosper"]
 
 @router.post("/", dependencies=[Depends(require_supervisor_or_owner)])
-def create_shift(shift: Shift, current_user: dict = Depends(get_current_user)):
+def create_shift(shift: Shift, ctx: dict = Depends(get_station_context)):
     """
     Create a new shift with attendant assignments (supervisor/owner only)
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+    current_user = ctx
+
     # Validate assignments if present
     if shift.assignments:
         try:
@@ -72,28 +72,40 @@ def create_shift(shift: Shift, current_user: dict = Depends(get_current_user)):
     return JSONResponse(content=shift_dict)
 
 @router.get("/", response_model=List[Shift])
-def get_all_shifts():
+def get_all_shifts(ctx: dict = Depends(get_station_context)):
     """
     Get all shifts
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+
     return [Shift(**shift) for shift in shifts_data.values()]
 
 @router.get("/{shift_id}", response_model=Shift)
-def get_shift(shift_id: str):
+def get_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get specific shift details
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
 
     return Shift(**shifts_data[shift_id])
 
 @router.get("/date/{date}")
-def get_shifts_by_date(date: str):
+def get_shifts_by_date(date: str, ctx: dict = Depends(get_station_context)):
     """
     Get shifts for a specific date (YYYY-MM-DD)
     Returns both Day and Night shifts
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+
     date_shifts = [
         Shift(**shift) for shift in shifts_data.values()
         if shift["date"] == date
@@ -101,10 +113,14 @@ def get_shifts_by_date(date: str):
     return date_shifts
 
 @router.get("/current/active")
-def get_current_shift():
+def get_current_shift(ctx: dict = Depends(get_station_context)):
     """
     Get the currently active shift based on time
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+
     now = datetime.now()
     hour = now.hour
     date_str = now.strftime("%Y-%m-%d")
@@ -130,10 +146,14 @@ def get_current_shift():
     return new_shift
 
 @router.post("/readings", response_model=DualReading)
-def submit_dual_reading(reading: DualReading):
+def submit_dual_reading(reading: DualReading, ctx: dict = Depends(get_station_context)):
     """
     Submit dual reading (Electronic + Mechanical) for a nozzle
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+
     # Validate foreign keys (nozzle_id, shift_id)
     validate_create('readings', reading.dict())
 
@@ -141,10 +161,14 @@ def submit_dual_reading(reading: DualReading):
     return reading
 
 @router.get("/{shift_id}/readings")
-def get_shift_readings(shift_id: str):
+def get_shift_readings(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get all readings for a specific shift
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+
     shift_readings = [
         DualReading(**r) for r in readings_data
         if r["shift_id"] == shift_id
@@ -152,11 +176,15 @@ def get_shift_readings(shift_id: str):
     return shift_readings
 
 @router.get("/{shift_id}/nozzle/{nozzle_id}/summary")
-def get_nozzle_shift_summary(shift_id: str, nozzle_id: str):
+def get_nozzle_shift_summary(shift_id: str, nozzle_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get summary for a specific nozzle during a shift
     Calculates opening, closing, and movement for both electronic and mechanical
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+
     nozzle_readings = [
         r for r in readings_data
         if r["shift_id"] == shift_id and r["nozzle_id"] == nozzle_id
@@ -198,10 +226,14 @@ def get_attendants():
     return {"attendants": attendants_list}
 
 @router.put("/{shift_id}/complete")
-def complete_shift(shift_id: str):
+def complete_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
     Mark shift as completed
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
 
@@ -209,10 +241,14 @@ def complete_shift(shift_id: str):
     return {"status": "success", "shift_id": shift_id, "new_status": "completed"}
 
 @router.put("/{shift_id}/reconcile")
-def reconcile_shift(shift_id: str):
+def reconcile_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
     Mark shift as reconciled (after banking and cash verification)
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
 
@@ -220,10 +256,15 @@ def reconcile_shift(shift_id: str):
     return {"status": "success", "shift_id": shift_id, "new_status": "reconciled"}
 
 @router.put("/{shift_id}", response_model=Shift, dependencies=[Depends(require_supervisor_or_owner)])
-def update_shift(shift_id: str, shift: Shift, current_user: dict = Depends(get_current_user)):
+def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_context)):
     """
     Update shift assignments (supervisor/owner only)
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+    current_user = ctx
+
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
 
@@ -245,19 +286,23 @@ def update_shift(shift_id: str, shift: Shift, current_user: dict = Depends(get_c
 
 
 @router.post("/{shift_id}/tank-dip-reading", dependencies=[Depends(require_supervisor_or_owner)])
-def record_tank_dip_reading(shift_id: str, reading: TankDipReading, current_user: dict = Depends(get_current_user)):
+def record_tank_dip_reading(shift_id: str, reading: TankDipReading, ctx: dict = Depends(get_station_context)):
     """
     Record tank dip reading (opening or closing) for a shift
     Converts dip measurement (cm) to volume (liters) using tank conversion factor
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+    current_user = ctx
+
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
 
     # Validate tank exists
-    from ...database.storage import STORAGE
     from ...config import TANK_CONVERSION_FACTOR
 
-    tanks = STORAGE.get('tanks', {})
+    tanks = storage.get('tanks', {})
     if reading.tank_id not in tanks:
         raise HTTPException(status_code=404, detail=f"Tank {reading.tank_id} not found")
 
@@ -298,13 +343,16 @@ def record_tank_dip_reading(shift_id: str, reading: TankDipReading, current_user
 
 
 @router.get("/{shift_id}/tank-dip-readings")
-def get_shift_tank_dip_readings(shift_id: str):
+def get_shift_tank_dip_readings(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get all tank dip readings for a shift
     """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+    readings_data = storage['readings']
+
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
 
     shift = shifts_data[shift_id]
     return shift.get('tank_dip_readings', [])
-

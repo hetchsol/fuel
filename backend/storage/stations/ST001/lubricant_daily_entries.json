@@ -1,0 +1,38 @@
+{
+  "LUB-LI3-2026-02-09-a7651f49": {
+    "entry_id": "LUB-LI3-2026-02-09-a7651f49",
+    "date": "2026-02-09",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "EO-SAE30-1L",
+        "description": "SAE 30 Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": "1L",
+        "selling_price": 450.0,
+        "opening_stock": 20,
+        "additions": 5,
+        "sold_or_drawn": 8,
+        "balance": 17,
+        "sales_value": 3600.0
+      },
+      {
+        "product_code": "BF-DOT3-1L",
+        "description": "Brake Fluid DOT 3 1L",
+        "category": "Brake Fluid",
+        "unit_size": "1L",
+        "selling_price": 600.0,
+        "opening_stock": 10,
+        "additions": 0,
+        "sold_or_drawn": 3,
+        "balance": 7,
+        "sales_value": 1800.0
+      }
+    ],
+    "total_daily_sales_value": 5400.0,
+    "total_items_moved": 11,
+    "recorded_by": "O001",
+    "created_at": "2026-02-09T14:50:55.198516",
+    "notes": null
+  }
+}

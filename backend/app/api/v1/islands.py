@@ -1,137 +1,47 @@
 """
 Islands, Pump Stations, and Nozzles Management API
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from ...models.models import Island, PumpStation, Nozzle
 from ...services.relationship_validation import validate_create, validate_delete_operation
-from ...database.storage import STORAGE
+from .auth import get_station_context
 
 router = APIRouter()
 
-# Use central storage
-islands_data = STORAGE['islands']
-
-# Initialize default configuration if empty
-# Configuration matches Luanshya Station: 2 Islands, each with 1 pump station containing 2 nozzles (1 for each fuel type)
-if not islands_data:
-    STORAGE['islands'] = {
-    "ISL-001": {
-        "island_id": "ISL-001",
-        "name": "Island 1",
-        "location": "Main Station",
-        "pump_station": {
-            "pump_station_id": "PS-001",
-            "island_id": "ISL-001",
-            "name": "Pump Station 1",
-            "tank_id": "TANK-PETROL",  # This pump draws from Petrol tank
-            "nozzles": [
-                {
-                    "nozzle_id": "UNL-1A",
-                    "pump_station_id": "PS-001",
-                    "fuel_type": "Petrol",
-                    "status": "Active",
-                    "electronic_reading": 609176.526,
-                    "mechanical_reading": 611984
-                },
-                {
-                    "nozzle_id": "UNL-1B",
-                    "pump_station_id": "PS-001",
-                    "fuel_type": "Petrol",
-                    "status": "Active",
-                    "electronic_reading": 825565.474,
-                    "mechanical_reading": 829030
-                },
-                {
-                    "nozzle_id": "LSD-1A",
-                    "pump_station_id": "PS-001",
-                    "fuel_type": "Diesel",
-                    "status": "Active",
-                    "electronic_reading": 211532.970,
-                    "mechanical_reading": 281964
-                },
-                {
-                    "nozzle_id": "LSD-1B",
-                    "pump_station_id": "PS-001",
-                    "fuel_type": "Diesel",
-                    "status": "Active",
-                    "electronic_reading": 216085.638,
-                    "mechanical_reading": 284970
-                }
-            ]
-        }
-    },
-    "ISL-002": {
-        "island_id": "ISL-002",
-        "name": "Island 2",
-        "location": "Main Station",
-        "pump_station": {
-            "pump_station_id": "PS-002",
-            "island_id": "ISL-002",
-            "name": "Pump Station 2",
-            "tank_id": "TANK-DIESEL",  # This pump draws from Diesel tank
-            "nozzles": [
-                {
-                    "nozzle_id": "UNL-2A",
-                    "pump_station_id": "PS-002",
-                    "fuel_type": "Petrol",
-                    "status": "Active",
-                    "electronic_reading": 801332.477,
-                    "mechanical_reading": 801430
-                },
-                {
-                    "nozzle_id": "UNL-2B",
-                    "pump_station_id": "PS-002",
-                    "fuel_type": "Petrol",
-                    "status": "Active",
-                    "electronic_reading": 1270044.517,
-                    "mechanical_reading": 1270144
-                },
-                {
-                    "nozzle_id": "LSD-2A",
-                    "pump_station_id": "PS-002",
-                    "fuel_type": "Diesel",
-                    "status": "Active",
-                    "electronic_reading": 448641.242,
-                    "mechanical_reading": 448887
-                },
-                {
-                    "nozzle_id": "LSD-2B",
-                    "pump_station_id": "PS-002",
-                    "fuel_type": "Diesel",
-                    "status": "Active",
-                    "electronic_reading": 639272.611,
-                    "mechanical_reading": 639579
-                }
-            ]
-        }
-    }
-}
-    islands_data = STORAGE['islands']  # Re-assign after initialization
-    print(f"[STARTUP] Islands seeded: {list(STORAGE['islands'].keys())}")
 
 @router.get("/", response_model=List[Island])
-def get_all_islands():
+async def get_all_islands(ctx: dict = Depends(get_station_context)):
     """
     Get all islands with their pump stations and nozzles
     """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
     return [Island(**island) for island in islands_data.values()]
 
+
 @router.get("/{island_id}", response_model=Island)
-def get_island(island_id: str):
+async def get_island(island_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get specific island details
     """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
 
     return Island(**islands_data[island_id])
 
+
 @router.get("/{island_id}/pump-station", response_model=PumpStation)
-def get_pump_station(island_id: str):
+async def get_pump_station(island_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get pump station for a specific island
     """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
 
@@ -141,11 +51,15 @@ def get_pump_station(island_id: str):
 
     return PumpStation(**pump_station)
 
+
 @router.get("/{island_id}/nozzles", response_model=List[Nozzle])
-def get_island_nozzles(island_id: str):
+async def get_island_nozzles(island_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get all nozzles for a specific island
     """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
 
@@ -155,11 +69,15 @@ def get_island_nozzles(island_id: str):
 
     return [Nozzle(**nozzle) for nozzle in pump_station.get("nozzles", [])]
 
+
 @router.get("/nozzle/{nozzle_id}")
-def get_nozzle_info(nozzle_id: str):
+async def get_nozzle_info(nozzle_id: str, ctx: dict = Depends(get_station_context)):
     """
     Get nozzle info including its island and pump station
     """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
     for island_id, island in islands_data.items():
         pump_station = island.get("pump_station")
         if pump_station:
@@ -180,22 +98,30 @@ def get_nozzle_info(nozzle_id: str):
 
     return {"error": "Nozzle not found"}
 
+
 @router.post("/")
-def create_island(island: Island):
+async def create_island(island: Island, ctx: dict = Depends(get_station_context)):
     """
     Create a new island with pump station and nozzles
     """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
     if island.island_id in islands_data:
         return {"error": "Island already exists"}
 
     islands_data[island.island_id] = island.dict()
     return {"status": "success", "island": island}
 
+
 @router.put("/{island_id}/nozzle/{nozzle_id}/status")
-def update_nozzle_status(island_id: str, nozzle_id: str, status: str):
+async def update_nozzle_status(island_id: str, nozzle_id: str, status: str, ctx: dict = Depends(get_station_context)):
     """
     Update nozzle status (Active, Inactive, Maintenance)
     """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
     if island_id not in islands_data:
         return {"error": "Island not found"}
 
@@ -212,7 +138,7 @@ def update_nozzle_status(island_id: str, nozzle_id: str, status: str):
 
 
 @router.delete("/{island_id}")
-def delete_island(island_id: str, cascade: bool = False):
+async def delete_island(island_id: str, cascade: bool = False, ctx: dict = Depends(get_station_context)):
     """
     Delete an island (Owner only)
 
@@ -220,6 +146,9 @@ def delete_island(island_id: str, cascade: bool = False):
         island_id: Island ID to delete
         cascade: If True, delete all dependent records (readings, sales)
     """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
 
@@ -238,7 +167,7 @@ def delete_island(island_id: str, cascade: bool = False):
 
 
 @router.put("/{island_id}/pump-station/tank")
-def update_pump_tank_mapping(island_id: str, tank_id: str):
+async def update_pump_tank_mapping(island_id: str, tank_id: str, ctx: dict = Depends(get_station_context)):
     """
     Update which tank the pump station draws fuel from (Owner only)
 
@@ -246,11 +175,14 @@ def update_pump_tank_mapping(island_id: str, tank_id: str):
         island_id: Island ID
         tank_id: Tank ID (TANK-DIESEL or TANK-PETROL)
     """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
 
     # Validate tank exists
-    if tank_id not in STORAGE['tanks']:
+    if tank_id not in storage['tanks']:
         raise HTTPException(status_code=404, detail=f"Tank {tank_id} not found")
 
     pump_station = islands_data[island_id].get("pump_station")
@@ -271,12 +203,15 @@ def update_pump_tank_mapping(island_id: str, tank_id: str):
 
 
 @router.post("/{island_id}/nozzle")
-def add_nozzle(island_id: str, nozzle: Nozzle):
+async def add_nozzle(island_id: str, nozzle: Nozzle, ctx: dict = Depends(get_station_context)):
     """
     Add a nozzle to an island's pump station (Owner only)
 
     Note: Typically each pump has 2 nozzles
     """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
 
@@ -302,10 +237,13 @@ def add_nozzle(island_id: str, nozzle: Nozzle):
 
 
 @router.delete("/{island_id}/nozzle/{nozzle_id}")
-def remove_nozzle(island_id: str, nozzle_id: str):
+async def remove_nozzle(island_id: str, nozzle_id: str, ctx: dict = Depends(get_station_context)):
     """
     Remove a nozzle from an island's pump station (Owner only)
     """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
 

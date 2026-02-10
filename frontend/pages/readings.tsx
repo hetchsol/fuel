@@ -50,6 +50,7 @@ export default function Readings() {
 
       const uploadRes = await authFetch(`${BASE}/attachments`, {
         method: 'POST',
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: uploadFormData,
       })
 
@@ -65,6 +66,7 @@ export default function Readings() {
       setLoadingOcrPreview(true)
       const ocrRes = await authFetch(`${BASE}/ocr/preview/${uploadData.attachment_id}`, {
         method: 'POST',
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
       })
 
       if (ocrRes.ok) {
@@ -128,7 +130,7 @@ export default function Readings() {
 
       const res = await authFetch(`${BASE}/nozzles/${formData.nozzleId}/readings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: JSON.stringify(payload),
       })
 

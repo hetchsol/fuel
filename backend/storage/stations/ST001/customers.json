@@ -1,0 +1,47 @@
+{
+  "CUST-DRIVE-IN": {
+    "customer_id": "CUST-DRIVE-IN",
+    "customer_name": "Drive-In Customers",
+    "customer_type": "Drive-In",
+    "default_price_per_liter": 26.98,
+    "is_active": true,
+    "created_at": "2026-01-09T12:02:23.001473",
+    "notes": "Walk-in cash customers (Column AR)"
+  },
+  "CUST-VOLCANO": {
+    "customer_id": "CUST-VOLCANO",
+    "customer_name": "Volcano",
+    "customer_type": "Corporate",
+    "default_price_per_liter": 26.98,
+    "is_active": true,
+    "created_at": "2026-01-09T12:02:23.001482",
+    "notes": "Corporate account - Volcano (Column AS)"
+  },
+  "CUST-HAMMINGTON": {
+    "customer_id": "CUST-HAMMINGTON",
+    "customer_name": "Hammington",
+    "customer_type": "Corporate",
+    "default_price_per_liter": 26.98,
+    "is_active": true,
+    "created_at": "2026-01-09T12:02:23.001485",
+    "notes": "Corporate account - Hammington (Column AT)"
+  },
+  "CUST-SPECIAL-3": {
+    "customer_id": "CUST-SPECIAL-3",
+    "customer_name": "Special Customer 3",
+    "customer_type": "Corporate",
+    "default_price_per_liter": 26.98,
+    "is_active": true,
+    "created_at": "2026-01-09T12:02:23.001487",
+    "notes": "Special customer account (Column AU)"
+  },
+  "CUST-SPECIAL-4": {
+    "customer_id": "CUST-SPECIAL-4",
+    "customer_name": "Special Customer 4",
+    "customer_type": "Corporate",
+    "default_price_per_liter": 26.98,
+    "is_active": true,
+    "created_at": "2026-01-09T12:02:23.001489",
+    "notes": "Special customer account (Column AV)"
+  }
+}

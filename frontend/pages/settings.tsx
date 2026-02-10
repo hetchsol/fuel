@@ -1,6 +1,6 @@
-import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface Tank {
   tank_id: string
@@ -65,7 +65,9 @@ export default function Settings() {
 
   const loadSettings = async () => {
     try {
-      const res = await authFetch(`${BASE}/settings/fuel`)
+      const res = await fetch(`${BASE}/settings/fuel`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setSettings(data)
@@ -77,7 +79,9 @@ export default function Settings() {
 
   const loadSystemSettings = async () => {
     try {
-      const res = await authFetch(`${BASE}/settings/system`)
+      const res = await fetch(`${BASE}/settings/system`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setSystemSettings(data)
@@ -89,7 +93,9 @@ export default function Settings() {
 
   const loadValidationThresholds = async () => {
     try {
-      const res = await authFetch(`${BASE}/settings/validation-thresholds`)
+      const res = await fetch(`${BASE}/settings/validation-thresholds`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setValidationThresholds(data)
@@ -104,9 +110,9 @@ export default function Settings() {
     setThresholdsMessage('')
     setThresholdsError('')
     try {
-      const res = await authFetch(`${BASE}/settings/validation-thresholds`, {
+      const res = await fetch(`${BASE}/settings/validation-thresholds`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: JSON.stringify(validationThresholds),
       })
       if (res.ok) {
@@ -124,7 +130,9 @@ export default function Settings() {
 
   const loadTanks = async () => {
     try {
-      const res = await authFetch(`${BASE}/tanks/levels`)
+      const res = await fetch(`${BASE}/tanks/levels`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setTanks(data)
@@ -138,8 +146,9 @@ export default function Settings() {
     setTankLoading(true)
     setTankMessage(null)
     try {
-      const res = await authFetch(`${BASE}/tanks/create?tank_id=${encodeURIComponent(newTank.tank_id)}&fuel_type=${encodeURIComponent(newTank.fuel_type)}&capacity=${newTank.capacity}&initial_level=${newTank.initial_level}`, {
+      const res = await fetch(`${BASE}/tanks/create?tank_id=${encodeURIComponent(newTank.tank_id)}&fuel_type=${encodeURIComponent(newTank.fuel_type)}&capacity=${newTank.capacity}&initial_level=${newTank.initial_level}`, {
         method: 'POST',
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
       })
 
       if (res.ok) {
@@ -173,8 +182,9 @@ export default function Settings() {
     setTankLoading(true)
     setTankMessage(null)
     try {
-      const res = await authFetch(`${BASE}/tanks/${tankId}`, {
+      const res = await fetch(`${BASE}/tanks/${tankId}`, {
         method: 'DELETE',
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
       })
 
       if (res.ok) {
@@ -200,9 +210,9 @@ export default function Settings() {
     setMessage('')
 
     try {
-      const res = await authFetch(`${BASE}/settings/fuel`, {
+      const res = await fetch(`${BASE}/settings/fuel`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: JSON.stringify(settings),
       })
 
@@ -227,9 +237,9 @@ export default function Settings() {
     setSystemMessage('')
 
     try {
-      const res = await authFetch(`${BASE}/settings/system`, {
+      const res = await fetch(`${BASE}/settings/system`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: JSON.stringify(systemSettings),
       })
 

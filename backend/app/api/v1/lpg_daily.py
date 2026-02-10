@@ -21,6 +21,8 @@ from ...models.models import (
     LPGAccessoriesDailyOutput,
 )
 from ...api.v1.auth import get_current_user
+from .auth import get_station_context
+from ...database.station_files import get_station_file
 
 router = APIRouter()
 
@@ -43,68 +45,61 @@ DEFAULT_LPG_ACCESSORIES = [
     {"product_code": "ACC-CLIP", "description": "Hose Clip", "selling_price": 150},
 ]
 
+
 # ===== FILE PERSISTENCE =====
-STORAGE_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'storage')
-LPG_DAILY_FILE = os.path.join(STORAGE_DIR, 'lpg_daily_entries.json')
-LPG_ACCESSORIES_FILE = os.path.join(STORAGE_DIR, 'lpg_accessories_daily.json')
-LPG_PRICING_FILE = os.path.join(STORAGE_DIR, 'lpg_pricing.json')
 
-
-def load_lpg_pricing():
-    if os.path.exists(LPG_PRICING_FILE):
+def load_lpg_pricing(station_id: str) -> dict:
+    filepath = get_station_file(station_id, 'lpg_pricing.json')
+    if os.path.exists(filepath):
         try:
-            with open(LPG_PRICING_FILE, 'r') as f:
+            with open(filepath, 'r') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return dict(DEFAULT_LPG_PRICING)
     return dict(DEFAULT_LPG_PRICING)
 
 
-def save_lpg_pricing():
-    os.makedirs(STORAGE_DIR, exist_ok=True)
-    with open(LPG_PRICING_FILE, 'w') as f:
-        json.dump(lpg_pricing_db, f, indent=2, default=str)
+def save_lpg_pricing(pricing_db: dict, station_id: str):
+    filepath = get_station_file(station_id, 'lpg_pricing.json')
+    with open(filepath, 'w') as f:
+        json.dump(pricing_db, f, indent=2, default=str)
 
 
-def load_lpg_daily():
-    if os.path.exists(LPG_DAILY_FILE):
+def load_lpg_daily(station_id: str) -> dict:
+    filepath = get_station_file(station_id, 'lpg_daily_entries.json')
+    if os.path.exists(filepath):
         try:
-            with open(LPG_DAILY_FILE, 'r') as f:
+            with open(filepath, 'r') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return {}
     return {}
 
 
-def save_lpg_daily():
-    os.makedirs(STORAGE_DIR, exist_ok=True)
-    with open(LPG_DAILY_FILE, 'w') as f:
-        json.dump(lpg_daily_db, f, indent=2, default=str)
+def save_lpg_daily(db: dict, station_id: str):
+    filepath = get_station_file(station_id, 'lpg_daily_entries.json')
+    with open(filepath, 'w') as f:
+        json.dump(db, f, indent=2, default=str)
 
 
-def load_lpg_accessories():
-    if os.path.exists(LPG_ACCESSORIES_FILE):
+def load_lpg_accessories(station_id: str) -> dict:
+    filepath = get_station_file(station_id, 'lpg_accessories_daily.json')
+    if os.path.exists(filepath):
         try:
-            with open(LPG_ACCESSORIES_FILE, 'r') as f:
+            with open(filepath, 'r') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return {}
     return {}
 
 
-def save_lpg_accessories():
-    os.makedirs(STORAGE_DIR, exist_ok=True)
-    with open(LPG_ACCESSORIES_FILE, 'w') as f:
-        json.dump(lpg_accessories_db, f, indent=2, default=str)
+def save_lpg_accessories(db: dict, station_id: str):
+    filepath = get_station_file(station_id, 'lpg_accessories_daily.json')
+    with open(filepath, 'w') as f:
+        json.dump(db, f, indent=2, default=str)
 
 
-# Load on startup
-lpg_pricing_db = load_lpg_pricing()
-lpg_daily_db = load_lpg_daily()
-lpg_accessories_db = load_lpg_accessories()
-
-
-def get_pricing_for_size(size_kg: int) -> dict:
+def get_pricing_for_size(size_kg: int, lpg_pricing_db: dict) -> dict:
     """Calculate pricing for a given cylinder size using editable pricing."""
     price_per_kg = lpg_pricing_db.get('price_per_kg', 49)
     deposits = lpg_pricing_db.get('deposits', {})
@@ -121,28 +116,32 @@ def get_pricing_for_size(size_kg: int) -> dict:
 # ===== ENDPOINTS =====
 
 @router.get("/pricing")
-def get_lpg_pricing(current_user: dict = Depends(get_current_user)):
+def get_lpg_pricing_endpoint(ctx: dict = Depends(get_station_context)):
     """Return pricing table for all 6 LPG cylinder sizes."""
+    lpg_pricing_db = load_lpg_pricing(ctx["station_id"])
     return {
         "price_per_kg": lpg_pricing_db.get('price_per_kg', 49),
         "deposits": lpg_pricing_db.get('deposits', {}),
-        "sizes": [get_pricing_for_size(s) for s in LPG_SIZES],
+        "sizes": [get_pricing_for_size(s, lpg_pricing_db) for s in LPG_SIZES],
     }
 
 
 @router.put("/pricing")
 def update_lpg_pricing(
     pricing_data: dict,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """
     Update LPG pricing. Requires supervisor or owner role.
 
     Body: { "price_per_kg": 49, "deposits": {"3": 330, "6": 550, ...} }
     """
-    role = current_user.get('role', '')
+    role = ctx.get('role', '')
     if role not in ('supervisor', 'owner'):
         raise HTTPException(status_code=403, detail="Only supervisors and owners can update pricing")
+
+    station_id = ctx["station_id"]
+    lpg_pricing_db = load_lpg_pricing(station_id)
 
     if 'price_per_kg' in pricing_data:
         val = pricing_data['price_per_kg']
@@ -159,13 +158,13 @@ def update_lpg_pricing(
                 raise HTTPException(status_code=400, detail=f"Deposit for {key}kg must be a non-negative number")
         lpg_pricing_db['deposits'] = {str(k): v for k, v in deps.items()}
 
-    save_lpg_pricing()
+    save_lpg_pricing(lpg_pricing_db, station_id)
 
     return {
         "message": "LPG pricing updated successfully",
         "price_per_kg": lpg_pricing_db.get('price_per_kg'),
         "deposits": lpg_pricing_db.get('deposits'),
-        "sizes": [get_pricing_for_size(s) for s in LPG_SIZES],
+        "sizes": [get_pricing_for_size(s, lpg_pricing_db) for s in LPG_SIZES],
     }
 
 
@@ -173,16 +172,18 @@ def update_lpg_pricing(
 def get_previous_shift(
     current_date: str,
     shift_type: str,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """
     Get previous shift's closing balances to auto-populate opening balances.
 
     Logic:
-    - Night shift → look for Day shift of same date
-    - Day shift → look for Night shift of previous date
+    - Night shift -> look for Day shift of same date
+    - Day shift -> look for Night shift of previous date
     - Fallback: most recent entry
     """
+    lpg_daily_db = load_lpg_daily(ctx["station_id"])
+
     if shift_type.lower() == 'night':
         target_date = current_date
         target_shift = 'Day'
@@ -234,12 +235,16 @@ def get_previous_shift(
 @router.post("/entry", response_model=LPGDailyEntryOutput)
 def submit_lpg_entry(
     entry_input: LPGDailyEntryInput,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """
     Submit a full LPG shift entry (6 cylinder rows).
     Server calculates balance, values, and totals.
     """
+    station_id = ctx["station_id"]
+    lpg_pricing_db = load_lpg_pricing(station_id)
+    lpg_daily_db = load_lpg_daily(station_id)
+
     # Validate cylinder rows cover all sizes
     submitted_sizes = {row.size_kg for row in entry_input.cylinder_rows}
     expected_sizes = set(LPG_SIZES)
@@ -255,7 +260,7 @@ def submit_lpg_entry(
     grand_total = 0.0
 
     for row in entry_input.cylinder_rows:
-        pricing = get_pricing_for_size(row.size_kg)
+        pricing = get_pricing_for_size(row.size_kg, lpg_pricing_db)
 
         balance = row.opening_balance + row.receipts - row.sold_refill - row.sold_with_cylinder
         value_refill = pricing['price_refill'] * row.sold_refill
@@ -298,7 +303,7 @@ def submit_lpg_entry(
     )
 
     lpg_daily_db[entry_id] = output.model_dump(mode='json')
-    save_lpg_daily()
+    save_lpg_daily(lpg_daily_db, station_id)
 
     return output
 
@@ -306,9 +311,10 @@ def submit_lpg_entry(
 @router.get("/entries")
 def list_lpg_entries(
     date: Optional[str] = None,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """List LPG daily entries, optionally filtered by date."""
+    lpg_daily_db = load_lpg_daily(ctx["station_id"])
     entries = list(lpg_daily_db.values())
 
     if date:
@@ -323,12 +329,13 @@ def list_lpg_entries(
 @router.get("/accessories/previous-day")
 def get_accessories_previous_day(
     current_date: str,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """
     Get previous day's closing accessory balances to auto-populate opening stock.
     Falls back to most recent entry if exact previous day not found.
     """
+    lpg_accessories_db = load_lpg_accessories(ctx["station_id"])
     prev_date = (datetime.strptime(current_date, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
 
     matching = [
@@ -370,9 +377,12 @@ def get_accessories_previous_day(
 @router.post("/accessories/entry", response_model=LPGAccessoriesDailyOutput)
 def submit_accessories_entry(
     entry_input: LPGAccessoriesDailyInput,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """Submit LPG accessories daily entry. Server calculates balance and sales values."""
+    station_id = ctx["station_id"]
+    lpg_accessories_db = load_lpg_accessories(station_id)
+
     calculated_rows = []
     total_sales = 0.0
 
@@ -405,7 +415,7 @@ def submit_accessories_entry(
     )
 
     lpg_accessories_db[entry_id] = output.model_dump(mode='json')
-    save_lpg_accessories()
+    save_lpg_accessories(lpg_accessories_db, station_id)
 
     return output
 
@@ -413,9 +423,10 @@ def submit_accessories_entry(
 @router.get("/accessories/entries")
 def list_accessories_entries(
     date: Optional[str] = None,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """List LPG accessories entries, optionally filtered by date."""
+    lpg_accessories_db = load_lpg_accessories(ctx["station_id"])
     entries = list(lpg_accessories_db.values())
 
     if date:

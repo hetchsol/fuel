@@ -89,7 +89,8 @@ export default function Reports() {
             const response = await authFetch(url, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
                 }
             });
 

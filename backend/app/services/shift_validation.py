@@ -7,11 +7,12 @@ from typing import List, Dict, Any
 from ..database.storage import STORAGE
 
 
-def get_nozzle(nozzle_id: str) -> Dict[str, Any]:
+def get_nozzle(nozzle_id: str, storage: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Helper function to get nozzle across all islands
     """
-    for island_id, island in STORAGE.get('islands', {}).items():
+    store = storage if storage is not None else STORAGE
+    for island_id, island in store.get('islands', {}).items():
         if island.get('pump_station') and island['pump_station'].get('nozzles'):
             for nozzle in island['pump_station']['nozzles']:
                 if nozzle.get('nozzle_id') == nozzle_id:
@@ -31,19 +32,21 @@ def validate_attendant_exists(attendant_id: str) -> bool:
     return False
 
 
-def validate_island_exists(island_id: str) -> bool:
-    """Check if island exists in STORAGE"""
-    return island_id in STORAGE.get('islands', {})
+def validate_island_exists(island_id: str, storage: Dict[str, Any] = None) -> bool:
+    """Check if island exists in storage"""
+    store = storage if storage is not None else STORAGE
+    return island_id in store.get('islands', {})
 
 
-def validate_nozzle_exists(nozzle_id: str) -> bool:
+def validate_nozzle_exists(nozzle_id: str, storage: Dict[str, Any] = None) -> bool:
     """Check if nozzle exists across all islands"""
-    return get_nozzle(nozzle_id) is not None
+    return get_nozzle(nozzle_id, storage) is not None
 
 
-def validate_nozzle_belongs_to_island(nozzle_id: str, island_id: str) -> bool:
+def validate_nozzle_belongs_to_island(nozzle_id: str, island_id: str, storage: Dict[str, Any] = None) -> bool:
     """Check if nozzle belongs to specified island"""
-    island = STORAGE['islands'].get(island_id)
+    store = storage if storage is not None else STORAGE
+    island = store.get('islands', {}).get(island_id)
     if not island or not island.get('pump_station'):
         return False
 
@@ -62,7 +65,7 @@ def validate_unique_nozzle_assignment(assignments: List[Dict[str, Any]]) -> None
         raise ValueError(f"Nozzles assigned to multiple attendants: {', '.join(duplicates)}")
 
 
-def validate_shift_assignments(assignments: List[Dict[str, Any]]) -> None:
+def validate_shift_assignments(assignments: List[Dict[str, Any]], storage: Dict[str, Any] = None) -> None:
     """Validate all assignments in a shift"""
     errors = []
 
@@ -77,16 +80,16 @@ def validate_shift_assignments(assignments: List[Dict[str, Any]]) -> None:
 
         # Validate islands exist
         for island_id in island_ids:
-            if not validate_island_exists(island_id):
+            if not validate_island_exists(island_id, storage):
                 errors.append(f"Island {island_id} does not exist")
 
         # Validate nozzles exist and belong to assigned islands
         for nozzle_id in nozzle_ids:
-            if not validate_nozzle_exists(nozzle_id):
+            if not validate_nozzle_exists(nozzle_id, storage):
                 errors.append(f"Nozzle {nozzle_id} does not exist")
             elif island_ids:
                 belongs_to_any = any(
-                    validate_nozzle_belongs_to_island(nozzle_id, island_id)
+                    validate_nozzle_belongs_to_island(nozzle_id, island_id, storage)
                     for island_id in island_ids
                 )
                 if not belongs_to_any:

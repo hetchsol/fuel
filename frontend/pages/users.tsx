@@ -1,6 +1,6 @@
-import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface User {
   user_id: string
@@ -30,7 +30,11 @@ export default function UsersManagement() {
 
   const fetchUsers = async () => {
     try {
-      const res = await authFetch(`${BASE}/auth/users`)
+      const res = await fetch(`${BASE}/auth/users`, {
+        headers: {
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
+      })
       if (!res.ok) throw new Error('Failed to fetch users')
       const data = await res.json()
       setUsers(data)
@@ -76,9 +80,12 @@ export default function UsersManagement() {
 
       const method = editingUser ? 'PUT' : 'POST'
 
-      const res = await authFetch(url, {
+      const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        },
         body: JSON.stringify(formData)
       })
 
@@ -99,8 +106,11 @@ export default function UsersManagement() {
     if (!confirm(`Are you sure you want to delete user ${username}?`)) return
 
     try {
-      const res = await authFetch(`${BASE}/auth/users/${username}`, {
-        method: 'DELETE'
+      const res = await fetch(`${BASE}/auth/users/${username}`, {
+        method: 'DELETE',
+        headers: {
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        }
       })
 
       if (!res.ok) {

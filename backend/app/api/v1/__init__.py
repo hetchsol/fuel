@@ -1,8 +1,9 @@
 
 from fastapi import APIRouter
-from . import auth, attachments, readings, sales, reports, discrepancies, ocr_preview, tanks, settings, islands, shifts, accounts, reconciliation, lpg, lubricants, validated_readings, sales_reports, tank_readings, customers, lpg_daily, lubricants_daily, attendant_handover
+from . import auth, attachments, readings, sales, reports, discrepancies, ocr_preview, tanks, settings, islands, shifts, accounts, reconciliation, lpg, lubricants, validated_readings, sales_reports, tank_readings, customers, lpg_daily, lubricants_daily, attendant_handover, stations
 
 router = APIRouter()
+router.include_router(stations.router, prefix="/stations", tags=["stations"])
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
 router.include_router(attachments.router, prefix="/attachments", tags=["attachments"])
 router.include_router(ocr_preview.router, prefix="/ocr", tags=["ocr"])

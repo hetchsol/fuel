@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import useSWR from 'swr'
-import { authFetch, BASE, getDaily, getFlags, getTankLevels } from '../lib/api'
+import { getDaily, getFlags, getTankLevels } from '../lib/api'
 import TankCard from '../components/TankCard'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function Home() {
   const today = new Date().toISOString().split('T')[0]
@@ -37,9 +38,16 @@ export default function Home() {
       const userData = localStorage.getItem('user')
       const user = userData ? JSON.parse(userData).full_name : 'Unknown'
 
-      const res = await authFetch(`${BASE}/tanks/dip-reading/${tankId}`, {
+      const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
+      const token = localStorage.getItem('accessToken')
+      const stationId = localStorage.getItem('stationId')
+      const res = await fetch(`${BASE}/tanks/dip-reading/${tankId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(stationId ? { 'X-Station-Id': stationId } : {}),
+        },
         body: JSON.stringify({
           opening_dip: dipReadings.openingDip ? parseFloat(dipReadings.openingDip) : null,
           closing_dip: dipReadings.closingDip ? parseFloat(dipReadings.closingDip) : null,
@@ -112,7 +120,7 @@ export default function Home() {
             <div className="text-red-600 text-sm">Failed to load daily summary</div>
           )}
           {!dailyError && !daily && (
-            <div className="text-gray-500 text-sm">Loading...</div>
+            <LoadingSpinner text="Loading..." />
           )}
           {daily && (
             <div className="space-y-4">
@@ -142,7 +150,7 @@ export default function Home() {
             <div className="text-red-600 text-sm">Failed to load discrepancies</div>
           )}
           {!flagsError && !flags && (
-            <div className="text-gray-500 text-sm">Loading...</div>
+            <LoadingSpinner text="Loading..." />
           )}
           {flags && (
             <div>

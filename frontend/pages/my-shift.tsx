@@ -1,7 +1,8 @@
-import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
+import LoadingSpinner from '../components/LoadingSpinner'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface NozzleInfo {
   nozzle_id: string
@@ -63,6 +64,14 @@ interface HandoverResult {
   created_at: string
 }
 
+function getAuthHeaders() {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+  }
+}
 
 let lineIdCounter = 0
 function nextLineId() { return `line-${++lineIdCounter}` }
@@ -106,7 +115,7 @@ export default function MyShift() {
   // Fetch active shift on mount
   useEffect(() => {
     setLoading(true)
-    authFetch(`${BASE}/handover/my-shift`, )
+    fetch(`${BASE}/handover/my-shift`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
         if (data.found) {
@@ -133,7 +142,7 @@ export default function MyShift() {
   // Fetch product lists for dropdowns
   const fetchProducts = useCallback(() => {
     // LPG cylinders from pricing
-    authFetch(`${BASE}/lpg-daily/pricing`, )
+    fetch(`${BASE}/lpg-daily/pricing`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
         const sizes = data.sizes || []
@@ -146,7 +155,7 @@ export default function MyShift() {
       .catch(() => {})
 
     // LPG Accessories
-    authFetch(`${BASE}/lpg/accessories`, )
+    fetch(`${BASE}/lpg/accessories`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
         const items = Array.isArray(data) ? data : []
@@ -159,7 +168,7 @@ export default function MyShift() {
       .catch(() => {})
 
     // Lubricants
-    authFetch(`${BASE}/lubricants-daily/products/Island 3`, )
+    fetch(`${BASE}/lubricants-daily/products/Island 3`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
         const items = data.products || []
@@ -177,7 +186,7 @@ export default function MyShift() {
 
   // Fetch past handovers
   useEffect(() => {
-    authFetch(`${BASE}/handover/entries`, )
+    fetch(`${BASE}/handover/entries`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => setPastHandovers(Array.isArray(data) ? data : []))
       .catch(() => {})
@@ -278,9 +287,9 @@ export default function MyShift() {
     setSuccess('')
 
     try {
-      const res = await authFetch(`${BASE}/handover/submit`, {
+      const res = await fetch(`${BASE}/handover/submit`, {
         method: 'POST',
-        
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           shift_id: shiftInfo.shift_id,
           nozzle_readings: nozzleRows.map(r => ({
@@ -320,9 +329,7 @@ export default function MyShift() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-lg" style={{ color: theme.textSecondary }}>Loading shift data...</div>
-      </div>
+      <LoadingSpinner text="Loading shift data..." />
     )
   }
 

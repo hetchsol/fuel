@@ -73,7 +73,8 @@ export default function ValidatedReadingsPage() {
       const token = localStorage.getItem('accessToken')
       const headers = {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
       }
 
       // Load shifts
@@ -95,7 +96,8 @@ export default function ValidatedReadingsPage() {
       const token = localStorage.getItem('accessToken')
       const response = await authFetch(`${BASE}/validated-readings`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
         }
       })
 
@@ -132,7 +134,8 @@ export default function ValidatedReadingsPage() {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
         },
         body: JSON.stringify(payload)
       })

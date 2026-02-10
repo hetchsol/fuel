@@ -12,51 +12,51 @@ from ...models.models import (
     HandoverNozzleReadingInput, HandoverNozzleReadingSummary
 )
 from ...config import get_fuel_price
-from ...database.storage import STORAGE, get_nozzle
-from .auth import get_current_user, require_supervisor_or_owner
+from ...database.storage import get_nozzle
+from .auth import get_current_user, require_supervisor_or_owner, get_station_context
+from ...database.station_files import get_station_file
 
 router = APIRouter()
 
-# JSON file persistence
-HANDOVER_FILE = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'storage', 'attendant_handovers.json')
 
-
-def _load_handovers() -> dict:
-    if os.path.exists(HANDOVER_FILE):
-        with open(HANDOVER_FILE, 'r') as f:
+def _load_handovers(station_id: str) -> dict:
+    filepath = get_station_file(station_id, 'attendant_handovers.json')
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as f:
             return json.load(f)
     return {}
 
 
-def _save_handovers(data: dict):
-    os.makedirs(os.path.dirname(HANDOVER_FILE), exist_ok=True)
-    with open(HANDOVER_FILE, 'w') as f:
+def _save_handovers(data: dict, station_id: str):
+    filepath = get_station_file(station_id, 'attendant_handovers.json')
+    with open(filepath, 'w') as f:
         json.dump(data, f, indent=2)
 
 
-def _get_fuel_type(nozzle_id: str) -> str:
+def _get_fuel_type(nozzle_id: str, storage: dict = None) -> str:
     """Determine fuel type from nozzle ID prefix"""
     if nozzle_id.upper().startswith("UNL"):
         return "Petrol"
     elif nozzle_id.upper().startswith("LSD"):
         return "Diesel"
     # Fallback: look up from island data
-    nozzle = get_nozzle(nozzle_id)
+    nozzle = get_nozzle(nozzle_id, storage=storage)
     if nozzle:
         return nozzle.get("fuel_type", "Diesel")
     return "Diesel"
 
 
 @router.get("/my-shift")
-async def get_my_shift(current_user: dict = Depends(get_current_user)):
+async def get_my_shift(ctx: dict = Depends(get_station_context)):
     """
     Find the current user's active shift and return shift info
     with assigned nozzles and their last known readings.
     """
-    user_id = current_user["user_id"]
-    user_name = current_user["full_name"]
-    shifts_data = STORAGE.get('shifts', {})
-    islands_data = STORAGE.get('islands', {})
+    storage = ctx["storage"]
+    user_id = ctx["user_id"]
+    user_name = ctx["full_name"]
+    shifts_data = storage.get('shifts', {})
+    islands_data = storage.get('islands', {})
 
     # Search active shifts for one with an assignment matching this user
     my_shift = None
@@ -94,9 +94,9 @@ async def get_my_shift(current_user: dict = Depends(get_current_user)):
 
     nozzle_details = []
     for nozzle_id in assigned_nozzle_ids:
-        nozzle = get_nozzle(nozzle_id)
+        nozzle = get_nozzle(nozzle_id, storage=storage)
         if nozzle:
-            fuel_type = _get_fuel_type(nozzle_id)
+            fuel_type = _get_fuel_type(nozzle_id, storage=storage)
             price = get_fuel_price(fuel_type)
             nozzle_details.append({
                 "nozzle_id": nozzle_id,
@@ -125,12 +125,14 @@ async def get_my_shift(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/submit", response_model=HandoverOutput)
-async def submit_handover(data: HandoverInput, current_user: dict = Depends(get_current_user)):
+async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_context)):
     """
     Submit shift handover with closing nozzle readings, other sales, and actual cash.
     Computes volumes, revenue, expected cash, and difference.
     """
-    shifts_data = STORAGE.get('shifts', {})
+    storage = ctx["storage"]
+    station_id = ctx["station_id"]
+    shifts_data = storage.get('shifts', {})
 
     # Validate shift exists and is active
     shift = shifts_data.get(data.shift_id)
@@ -140,8 +142,8 @@ async def submit_handover(data: HandoverInput, current_user: dict = Depends(get_
         raise HTTPException(status_code=400, detail="Shift is not active")
 
     # Find user's assignment in this shift
-    user_id = current_user["user_id"]
-    user_name = current_user["full_name"]
+    user_id = ctx["user_id"]
+    user_name = ctx["full_name"]
     my_assignment = None
     for assignment in shift.get("assignments", []):
         if assignment.get("attendant_id") == user_id or \
@@ -156,7 +158,7 @@ async def submit_handover(data: HandoverInput, current_user: dict = Depends(get_
     allowed_nozzle_ids = set(my_assignment.get("nozzle_ids", []))
     if not allowed_nozzle_ids:
         # Derive from island_ids
-        islands_data = STORAGE.get('islands', {})
+        islands_data = storage.get('islands', {})
         for isl_id in my_assignment.get("island_ids", []):
             island = islands_data.get(isl_id, {})
             ps = island.get("pump_station")
@@ -177,7 +179,7 @@ async def submit_handover(data: HandoverInput, current_user: dict = Depends(get_
     fuel_revenue = 0.0
 
     for reading in data.nozzle_readings:
-        fuel_type = _get_fuel_type(reading.nozzle_id)
+        fuel_type = _get_fuel_type(reading.nozzle_id, storage=storage)
         volume = reading.closing_reading - reading.opening_reading
 
         if volume < 0:
@@ -206,7 +208,7 @@ async def submit_handover(data: HandoverInput, current_user: dict = Depends(get_
     difference = round(data.actual_cash - expected_cash, 2)
 
     # Generate handover ID
-    handovers = _load_handovers()
+    handovers = _load_handovers(station_id)
     handover_id = f"HO-{data.shift_id}-{user_id}-{datetime.now().strftime('%H%M%S')}"
 
     handover_output = HandoverOutput(
@@ -233,11 +235,11 @@ async def submit_handover(data: HandoverInput, current_user: dict = Depends(get_
 
     # Save handover
     handovers[handover_id] = handover_output.dict()
-    _save_handovers(handovers)
+    _save_handovers(handovers, station_id)
 
     # Update nozzle electronic readings in islands data
     for reading in data.nozzle_readings:
-        nozzle = get_nozzle(reading.nozzle_id)
+        nozzle = get_nozzle(reading.nozzle_id, storage=storage)
         if nozzle:
             nozzle["electronic_reading"] = reading.closing_reading
 
@@ -248,17 +250,17 @@ async def submit_handover(data: HandoverInput, current_user: dict = Depends(get_
 async def list_handovers(
     shift_id: str = None,
     date: str = None,
-    current_user: dict = Depends(get_current_user),
+    ctx: dict = Depends(get_station_context),
 ):
     """
     List handover entries. Regular users see only their own; supervisors/owners see all.
     """
-    handovers = _load_handovers()
+    handovers = _load_handovers(ctx["station_id"])
     results = list(handovers.values())
 
     # Filter by role: regular users see only their own
-    if current_user["role"] == "user":
-        results = [h for h in results if h.get("attendant_id") == current_user["user_id"]]
+    if ctx["role"] == "user":
+        results = [h for h in results if h.get("attendant_id") == ctx["user_id"]]
 
     # Optional filters
     if shift_id:
@@ -275,12 +277,23 @@ async def list_handovers(
 @router.delete("/{handover_id}/reopen")
 async def reopen_handover(
     handover_id: str,
-    current_user: dict = Depends(require_supervisor_or_owner),
+    ctx: dict = Depends(get_station_context),
 ):
     """
     Reopen a submitted handover for correction (supervisor/owner only).
     """
-    handovers = _load_handovers()
+    # Check supervisor/owner role
+    from ...models.models import UserRole
+    role = ctx["role"]
+    role_str = role.value if isinstance(role, UserRole) else str(role)
+    if role_str not in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]:
+        raise HTTPException(
+            status_code=403,
+            detail="Access forbidden. This endpoint is restricted to supervisors and owners only."
+        )
+
+    station_id = ctx["station_id"]
+    handovers = _load_handovers(station_id)
 
     if handover_id not in handovers:
         raise HTTPException(status_code=404, detail="Handover not found")
@@ -290,6 +303,6 @@ async def reopen_handover(
         raise HTTPException(status_code=400, detail="Handover is already reopened")
 
     handover["status"] = "reopened"
-    _save_handovers(handovers)
+    _save_handovers(handovers, station_id)
 
     return {"status": "success", "message": f"Handover {handover_id} reopened for correction"}

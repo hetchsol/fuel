@@ -10,7 +10,7 @@ from .validation_engine import (
 )
 
 
-def validate_create(entity_type: str, data: Dict[str, Any]) -> None:
+def validate_create(entity_type: str, data: Dict[str, Any], storage: Dict[str, Any] = None) -> None:
     """
     Validate entity data before creating
 
@@ -41,7 +41,7 @@ def validate_create(entity_type: str, data: Dict[str, Any]) -> None:
         ```
     """
     # Validate foreign keys
-    _validate_foreign_keys(entity_type, data)
+    _validate_foreign_keys(entity_type, data, storage=storage)
 
     # Validate unique constraints
     from ..database.relationships import get_foreign_keys
@@ -50,10 +50,10 @@ def validate_create(entity_type: str, data: Dict[str, Any]) -> None:
         if fk_def.get('unique', False):
             field_value = data.get(field_name)
             if field_value:
-                _validate_unique_constraint(entity_type, field_name, field_value)
+                _validate_unique_constraint(entity_type, field_name, field_value, storage=storage)
 
 
-def validate_update(entity_type: str, entity_id: str, data: Dict[str, Any]) -> None:
+def validate_update(entity_type: str, entity_id: str, data: Dict[str, Any], storage: Dict[str, Any] = None) -> None:
     """
     Validate entity data before updating
 
@@ -85,7 +85,7 @@ def validate_update(entity_type: str, entity_id: str, data: Dict[str, Any]) -> N
         ```
     """
     # Validate foreign keys
-    _validate_foreign_keys(entity_type, data)
+    _validate_foreign_keys(entity_type, data, storage=storage)
 
     # Validate unique constraints (excluding the current entity)
     from ..database.relationships import get_foreign_keys
@@ -98,14 +98,16 @@ def validate_update(entity_type: str, entity_id: str, data: Dict[str, Any]) -> N
                     entity_type,
                     field_name,
                     field_value,
-                    exclude_id=entity_id
+                    exclude_id=entity_id,
+                    storage=storage
                 )
 
 
 def validate_delete_operation(
     entity_type: str,
     entity_id: str,
-    cascade: bool = False
+    cascade: bool = False,
+    storage: Dict[str, Any] = None
 ) -> None:
     """
     Validate entity can be deleted before deleting
@@ -147,7 +149,7 @@ def validate_delete_operation(
             return {"status": "success", "cascade": cascade}
         ```
     """
-    _validate_delete(entity_type, entity_id, cascade)
+    _validate_delete(entity_type, entity_id, cascade, storage=storage)
 
 
 def check_foreign_key(
@@ -185,7 +187,7 @@ def check_foreign_key(
     return entity_exists(referenced_entity, foreign_key_value)
 
 
-def get_dependent_count(entity_type: str, entity_id: str) -> int:
+def get_dependent_count(entity_type: str, entity_id: str, storage: Dict[str, Any] = None) -> int:
     """
     Get the total count of dependent records for an entity
 
@@ -212,11 +214,11 @@ def get_dependent_count(entity_type: str, entity_id: str) -> int:
     """
     from .validation_engine import check_dependents
 
-    dependents = check_dependents(entity_type, entity_id)
+    dependents = check_dependents(entity_type, entity_id, storage)
     return sum(dep.count for dep in dependents)
 
 
-def get_dependent_details(entity_type: str, entity_id: str) -> Dict[str, Any]:
+def get_dependent_details(entity_type: str, entity_id: str, storage: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Get detailed information about dependent records
 
@@ -257,7 +259,7 @@ def get_dependent_details(entity_type: str, entity_id: str) -> Dict[str, Any]:
     """
     from .validation_engine import check_dependents
 
-    dependents = check_dependents(entity_type, entity_id)
+    dependents = check_dependents(entity_type, entity_id, storage)
 
     return {
         'entity_type': entity_type,

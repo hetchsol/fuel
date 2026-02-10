@@ -1,6 +1,7 @@
-import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
+import LoadingSpinner from '../components/LoadingSpinner'
 
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 export default function Shifts() {
   const [activeShift, setActiveShift] = useState<any>(null)
@@ -66,7 +67,9 @@ export default function Shifts() {
 
   const fetchActiveShift = async () => {
     try {
-      const res = await authFetch(`${BASE}/shifts/current/active`)
+      const res = await fetch(`${BASE}/shifts/current/active`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setActiveShift(data)
@@ -78,7 +81,9 @@ export default function Shifts() {
 
   const fetchNozzles = async () => {
     try {
-      const res = await authFetch(`${BASE}/islands/`)
+      const res = await fetch(`${BASE}/islands/`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         // Extract all nozzles from islands
@@ -97,7 +102,9 @@ export default function Shifts() {
 
   const fetchStaffList = async () => {
     try {
-      const res = await authFetch(`${BASE}/auth/staff`)
+      const res = await fetch(`${BASE}/auth/staff`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         // Extract full names from staff data
@@ -111,7 +118,9 @@ export default function Shifts() {
 
   const loadAvailableStaff = async () => {
     try {
-      const res = await authFetch(`${BASE}/auth/staff`)
+      const res = await fetch(`${BASE}/auth/staff`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         // Filter only users with role='user' (attendants)
@@ -125,7 +134,9 @@ export default function Shifts() {
 
   const loadIslandsData = async () => {
     try {
-      const res = await authFetch(`${BASE}/islands/`)
+      const res = await fetch(`${BASE}/islands/`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setIslandsData(data)
@@ -137,7 +148,9 @@ export default function Shifts() {
 
   const fetchTanks = async () => {
     try {
-      const res = await authFetch(`${BASE}/tanks/levels`)
+      const res = await fetch(`${BASE}/tanks/levels`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setTanks(data)
@@ -150,7 +163,9 @@ export default function Shifts() {
   const fetchTankDipReadings = async () => {
     if (!activeShift) return
     try {
-      const res = await authFetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-readings`)
+      const res = await fetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-readings`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       if (res.ok) {
         const data = await res.json()
         setTankDipReadings(data)
@@ -166,14 +181,20 @@ export default function Shifts() {
 
     setLoading(true)
     try {
+      const token = localStorage.getItem('token')
       const payload = {
         tank_id: tankDipForm.tank_id,
         opening_dip_cm: tankDipForm.opening_dip_cm ? parseFloat(tankDipForm.opening_dip_cm) : null,
         closing_dip_cm: tankDipForm.closing_dip_cm ? parseFloat(tankDipForm.closing_dip_cm) : null
       }
 
-      const res = await authFetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-reading`, {
+      const res = await fetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-reading`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        },
         body: JSON.stringify(payload)
       })
 
@@ -210,8 +231,9 @@ export default function Shifts() {
         tank_dip_cm: readingForm.tank_dip_cm ? parseFloat(readingForm.tank_dip_cm) : null
       }
 
-      const res = await authFetch(`${BASE}/shifts/readings`, {
+      const res = await fetch(`${BASE}/shifts/readings`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
         body: JSON.stringify(payload)
       })
 
@@ -333,8 +355,12 @@ export default function Shifts() {
     }
 
     try {
+      const token = localStorage.getItem('accessToken')
+
       // First, check if shift already exists
-      const checkRes = await authFetch(`${BASE}/shifts/${shift_id}`)
+      const checkRes = await fetch(`${BASE}/shifts/${shift_id}`, {
+        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+      })
       const shiftExists = checkRes.ok
       setIsEditMode(shiftExists)
 
@@ -342,8 +368,13 @@ export default function Shifts() {
       const method = shiftExists ? 'PUT' : 'POST'
       const url = shiftExists ? `${BASE}/shifts/${shift_id}` : `${BASE}/shifts/`
 
-      const res = await authFetch(url, {
+      const res = await fetch(url, {
         method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
+        },
         body: JSON.stringify(payload)
       })
 
@@ -603,7 +634,7 @@ export default function Shifts() {
 
           <div className="space-y-3">
             {nozzles.length === 0 ? (
-              <p className="text-gray-500 text-sm">Loading nozzles...</p>
+              <LoadingSpinner text="Loading nozzles..." />
             ) : (
               nozzles.map(nozzle => (
                 <div
@@ -916,7 +947,7 @@ export default function Shifts() {
                         <label
                           key={nozzle.nozzle_id}
                           className={`flex items-center space-x-2 p-2 border rounded hover:bg-blue-50 cursor-pointer ${
-                            nozzle.fuel_type === 'Petrol' ? 'border-blue-300' : 'border-orange-300'
+                            nozzle.fuel_type === 'Petrol' ? 'border-green-300' : 'border-purple-300'
                           }`}
                         >
                           <input
