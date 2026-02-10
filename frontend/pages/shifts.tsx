@@ -277,6 +277,12 @@ export default function Shifts() {
   // Shift management handlers
   const canManageShifts = currentUser?.role === 'supervisor' || currentUser?.role === 'owner'
 
+  const openShiftModal = () => {
+    loadAvailableStaff()
+    loadIslandsData()
+    setShowManagementModal(true)
+  }
+
   const handleAttendantToggle = (staff: any, checked: boolean) => {
     if (checked) {
       setSelectedAttendants([...selectedAttendants, {
@@ -422,7 +428,7 @@ export default function Shifts() {
                 </span>
                 {canManageShifts && (
                   <button
-                    onClick={() => setShowManagementModal(true)}
+                    onClick={openShiftModal}
                     className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md"
                   >
                     Manage Shift
@@ -502,7 +508,7 @@ export default function Shifts() {
             <p className="text-yellow-800">No active shift found.</p>
             {canManageShifts && (
               <button
-                onClick={() => setShowManagementModal(true)}
+                onClick={openShiftModal}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium"
               >
                 Create Shift
