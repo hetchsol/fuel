@@ -389,6 +389,8 @@ export default function Infrastructure() {
                   {editingTank === tank.tank_id ? (
                     <div className="flex gap-2">
                       <input
+                        id="tank-capacity"
+                        name="tank-capacity"
                         type="number"
                         value={newCapacity}
                         onChange={(e) => setNewCapacity(Number(e.target.value))}
@@ -483,6 +485,8 @@ export default function Infrastructure() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Island ID</label>
                   <input
+                    id="island-id"
+                    name="island-id"
                     type="text"
                     value={newIsland.island_id}
                     onChange={(e) => setNewIsland({...newIsland, island_id: e.target.value})}
@@ -493,6 +497,8 @@ export default function Infrastructure() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Island Name</label>
                   <input
+                    id="island-name"
+                    name="island-name"
                     type="text"
                     value={newIsland.name}
                     onChange={(e) => setNewIsland({...newIsland, name: e.target.value})}
@@ -503,6 +509,8 @@ export default function Infrastructure() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Location</label>
                   <input
+                    id="island-location"
+                    name="island-location"
                     type="text"
                     value={newIsland.location}
                     onChange={(e) => setNewIsland({...newIsland, location: e.target.value})}
@@ -513,6 +521,8 @@ export default function Infrastructure() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Pump Station ID</label>
                   <input
+                    id="pump-station-id"
+                    name="pump-station-id"
                     type="text"
                     value={newIsland.pump_station_id}
                     onChange={(e) => setNewIsland({...newIsland, pump_station_id: e.target.value})}
@@ -523,6 +533,8 @@ export default function Infrastructure() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Pump Station Name</label>
                   <input
+                    id="pump-station-name"
+                    name="pump-station-name"
                     type="text"
                     value={newIsland.pump_station_name}
                     onChange={(e) => setNewIsland({...newIsland, pump_station_name: e.target.value})}
@@ -533,6 +545,8 @@ export default function Infrastructure() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Tank Source</label>
                   <select
+                    id="island-tank-source"
+                    name="island-tank-source"
                     value={newIsland.tank_id}
                     onChange={(e) => {
                       const value = e.target.value
@@ -623,6 +637,8 @@ export default function Infrastructure() {
                   {editingPumpMapping === island.island_id ? (
                     <div className="flex gap-2 mt-2">
                       <select
+                        id="pump-tank-mapping"
+                        name="pump-tank-mapping"
                         value={selectedTankForPump}
                         onChange={(e) => {
                           const value = e.target.value
@@ -691,6 +707,8 @@ export default function Infrastructure() {
                     <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
                       <div className="grid grid-cols-3 gap-2 mb-2">
                         <input
+                          id="nozzle-id"
+                          name="nozzle-id"
                           type="text"
                           value={newNozzle.nozzle_id}
                           onChange={(e) => setNewNozzle({...newNozzle, nozzle_id: e.target.value})}
@@ -698,6 +716,8 @@ export default function Infrastructure() {
                           placeholder="Nozzle ID (e.g., UNL-3A)"
                         />
                         <select
+                          id="nozzle-fuel-type"
+                          name="nozzle-fuel-type"
                           value={newNozzle.fuel_type}
                           onChange={(e) => {
                             const value = e.target.value
