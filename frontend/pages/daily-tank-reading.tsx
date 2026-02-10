@@ -1,8 +1,8 @@
+import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { useTheme } from '../contexts/ThemeContext'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface NozzleReading {
   nozzle_id: string
@@ -135,7 +135,7 @@ export default function DailyTankReading() {
   const fetchCustomers = async () => {
     try {
       const token = localStorage.getItem('accessToken')
-      const response = await fetch(`${BASE}/customers?active_only=true`, {
+      const response = await authFetch(`${BASE}/customers?active_only=true`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -171,7 +171,7 @@ export default function DailyTankReading() {
   const fetchUnlinkedDeliveries = async () => {
     try {
       const token = localStorage.getItem('accessToken')
-      const response = await fetch(
+      const response = await authFetch(
         `${BASE}/tank-readings/deliveries/${selectedTank}?date=${formData.date}&shift_type=${formData.shift_type}&unlinked_only=true`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -192,7 +192,7 @@ export default function DailyTankReading() {
     try {
       setFetchingPrevious(true)
       const token = localStorage.getItem('accessToken')
-      const response = await fetch(
+      const response = await authFetch(
         `${BASE}/tank-readings/readings/${selectedTank}/previous-shift?current_date=${formData.date}&shift_type=${formData.shift_type}`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -747,7 +747,7 @@ export default function DailyTankReading() {
         }
       }
 
-      const res = await fetch(`${BASE}/tank-readings/readings`, {
+      const res = await authFetch(`${BASE}/tank-readings/readings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

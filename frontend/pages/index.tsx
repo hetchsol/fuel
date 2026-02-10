@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import useSWR from 'swr'
-import { getDaily, getFlags, getTankLevels } from '../lib/api'
+import { authFetch, BASE, getDaily, getFlags, getTankLevels } from '../lib/api'
 import TankCard from '../components/TankCard'
 
 export default function Home() {
@@ -37,8 +37,7 @@ export default function Home() {
       const userData = localStorage.getItem('user')
       const user = userData ? JSON.parse(userData).full_name : 'Unknown'
 
-      const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
-      const res = await fetch(`${BASE}/tanks/dip-reading/${tankId}`, {
+      const res = await authFetch(`${BASE}/tanks/dip-reading/${tankId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

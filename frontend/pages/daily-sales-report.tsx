@@ -1,6 +1,6 @@
+import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface DailySalesReport {
   date: string
@@ -52,7 +52,7 @@ export default function DailySalesReport() {
     setError('')
 
     try {
-      const res = await fetch(`${BASE}/sales-reports/daily/${date}`)
+      const res = await authFetch(`${BASE}/sales-reports/daily/${date}`)
 
       if (!res.ok) {
         throw new Error('Failed to load report')

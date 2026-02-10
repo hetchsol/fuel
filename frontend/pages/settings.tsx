@@ -1,6 +1,6 @@
+import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface Tank {
   tank_id: string
@@ -65,7 +65,7 @@ export default function Settings() {
 
   const loadSettings = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/fuel`)
+      const res = await authFetch(`${BASE}/settings/fuel`)
       if (res.ok) {
         const data = await res.json()
         setSettings(data)
@@ -77,7 +77,7 @@ export default function Settings() {
 
   const loadSystemSettings = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/system`)
+      const res = await authFetch(`${BASE}/settings/system`)
       if (res.ok) {
         const data = await res.json()
         setSystemSettings(data)
@@ -89,7 +89,7 @@ export default function Settings() {
 
   const loadValidationThresholds = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/validation-thresholds`)
+      const res = await authFetch(`${BASE}/settings/validation-thresholds`)
       if (res.ok) {
         const data = await res.json()
         setValidationThresholds(data)
@@ -104,7 +104,7 @@ export default function Settings() {
     setThresholdsMessage('')
     setThresholdsError('')
     try {
-      const res = await fetch(`${BASE}/settings/validation-thresholds`, {
+      const res = await authFetch(`${BASE}/settings/validation-thresholds`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(validationThresholds),
@@ -124,7 +124,7 @@ export default function Settings() {
 
   const loadTanks = async () => {
     try {
-      const res = await fetch(`${BASE}/tanks/levels`)
+      const res = await authFetch(`${BASE}/tanks/levels`)
       if (res.ok) {
         const data = await res.json()
         setTanks(data)
@@ -138,7 +138,7 @@ export default function Settings() {
     setTankLoading(true)
     setTankMessage(null)
     try {
-      const res = await fetch(`${BASE}/tanks/create?tank_id=${encodeURIComponent(newTank.tank_id)}&fuel_type=${encodeURIComponent(newTank.fuel_type)}&capacity=${newTank.capacity}&initial_level=${newTank.initial_level}`, {
+      const res = await authFetch(`${BASE}/tanks/create?tank_id=${encodeURIComponent(newTank.tank_id)}&fuel_type=${encodeURIComponent(newTank.fuel_type)}&capacity=${newTank.capacity}&initial_level=${newTank.initial_level}`, {
         method: 'POST',
       })
 
@@ -173,7 +173,7 @@ export default function Settings() {
     setTankLoading(true)
     setTankMessage(null)
     try {
-      const res = await fetch(`${BASE}/tanks/${tankId}`, {
+      const res = await authFetch(`${BASE}/tanks/${tankId}`, {
         method: 'DELETE',
       })
 
@@ -200,7 +200,7 @@ export default function Settings() {
     setMessage('')
 
     try {
-      const res = await fetch(`${BASE}/settings/fuel`, {
+      const res = await authFetch(`${BASE}/settings/fuel`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
@@ -227,7 +227,7 @@ export default function Settings() {
     setSystemMessage('')
 
     try {
-      const res = await fetch(`${BASE}/settings/system`, {
+      const res = await authFetch(`${BASE}/settings/system`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(systemSettings),

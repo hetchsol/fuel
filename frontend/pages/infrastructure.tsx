@@ -1,7 +1,7 @@
+import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface Tank {
   tank_id: string
@@ -78,7 +78,7 @@ export default function Infrastructure() {
 
   const fetchTanks = async () => {
     try {
-      const res = await fetch(`${BASE}/tanks/levels`)
+      const res = await authFetch(`${BASE}/tanks/levels`)
       if (res.ok) {
         const data = await res.json()
         setTanks(data)
@@ -90,7 +90,7 @@ export default function Infrastructure() {
 
   const fetchIslands = async () => {
     try {
-      const res = await fetch(`${BASE}/islands/`)
+      const res = await authFetch(`${BASE}/islands/`)
       if (res.ok) {
         const data = await res.json()
         setIslands(data)
@@ -103,7 +103,7 @@ export default function Infrastructure() {
   const updateTankCapacity = async (tankId: string, capacity: number) => {
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/tanks/${tankId}/capacity?new_capacity=${capacity}`, {
+      const res = await authFetch(`${BASE}/tanks/${tankId}/capacity?new_capacity=${capacity}`, {
         method: 'PUT',
       })
 
@@ -126,7 +126,7 @@ export default function Infrastructure() {
   const updatePumpTankMapping = async (islandId: string, tankId: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/islands/${islandId}/pump-station/tank?tank_id=${tankId}`, {
+      const res = await authFetch(`${BASE}/islands/${islandId}/pump-station/tank?tank_id=${tankId}`, {
         method: 'PUT',
       })
 
@@ -162,7 +162,7 @@ export default function Infrastructure() {
         }
       }
 
-      const res = await fetch(`${BASE}/islands/`, {
+      const res = await authFetch(`${BASE}/islands/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(islandData),
@@ -198,7 +198,7 @@ export default function Infrastructure() {
 
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/islands/${islandId}`, {
+      const res = await authFetch(`${BASE}/islands/${islandId}`, {
         method: 'DELETE',
       })
 
@@ -228,7 +228,7 @@ export default function Infrastructure() {
         mechanical_reading: 0.0
       }
 
-      const res = await fetch(`${BASE}/islands/${islandId}/nozzle`, {
+      const res = await authFetch(`${BASE}/islands/${islandId}/nozzle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(nozzleData),
@@ -258,7 +258,7 @@ export default function Infrastructure() {
 
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/islands/${islandId}/nozzle/${nozzleId}`, {
+      const res = await authFetch(`${BASE}/islands/${islandId}/nozzle/${nozzleId}`, {
         method: 'DELETE',
       })
 

@@ -1,21 +1,40 @@
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
 
+export { BASE };
+
+/**
+ * Authenticated fetch wrapper - automatically includes Authorization header
+ */
+export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string> || {}),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (options.body && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+  return fetch(url, { ...options, headers });
+}
+
 export async function getDaily(date?: string) {
   const qs = date ? `?date=${date}` : '';
-  const res = await fetch(`${BASE}/reports/daily${qs}`);
+  const res = await authFetch(`${BASE}/reports/daily${qs}`);
   if (!res.ok) throw new Error('Failed to load daily');
   return res.json();
 }
 
 export async function getFlags(limit: number = 10) {
-  const res = await fetch(`${BASE}/discrepancies?limit=${limit}`);
+  const res = await authFetch(`${BASE}/discrepancies?limit=${limit}`);
   if (!res.ok) throw new Error('Failed to load flags');
   return res.json();
 }
 
 export async function getTankLevels() {
-  const res = await fetch(`${BASE}/tanks/levels`);
+  const res = await authFetch(`${BASE}/tanks/levels`);
   if (!res.ok) throw new Error('Failed to load tank levels');
   return res.json();
 }
@@ -28,7 +47,7 @@ export async function getStaffReport(staffName: string, startDate?: string, endD
   if (endDate) params.append('end_date', endDate);
   if (params.toString()) url += `?${params.toString()}`;
 
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Failed to load staff report');
   return res.json();
 }
@@ -40,7 +59,7 @@ export async function getNozzleReport(nozzleId: string, startDate?: string, endD
   if (endDate) params.append('end_date', endDate);
   if (params.toString()) url += `?${params.toString()}`;
 
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Failed to load nozzle report');
   return res.json();
 }
@@ -52,7 +71,7 @@ export async function getIslandReport(islandId: string, startDate?: string, endD
   if (endDate) params.append('end_date', endDate);
   if (params.toString()) url += `?${params.toString()}`;
 
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Failed to load island report');
   return res.json();
 }
@@ -64,7 +83,7 @@ export async function getProductReport(productType: string, startDate?: string, 
   if (endDate) params.append('end_date', endDate);
   if (params.toString()) url += `?${params.toString()}`;
 
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Failed to load product report');
   return res.json();
 }
@@ -83,13 +102,13 @@ export async function getCustomReport(filters: {
     if (value) params.append(key, value);
   });
 
-  const res = await fetch(`${BASE}/reports/custom?${params.toString()}`);
+  const res = await authFetch(`${BASE}/reports/custom?${params.toString()}`);
   if (!res.ok) throw new Error('Failed to load custom report');
   return res.json();
 }
 
 export async function getMonthlyReport(year: number, month: number) {
-  const res = await fetch(`${BASE}/reports/monthly?year=${year}&month=${month}`);
+  const res = await authFetch(`${BASE}/reports/monthly?year=${year}&month=${month}`);
   if (!res.ok) throw new Error('Failed to load monthly report');
   return res.json();
 }
@@ -102,7 +121,7 @@ export async function getStaffList(startDate?: string, endDate?: string) {
   if (endDate) params.append('end_date', endDate);
   if (params.toString()) url += `?${params.toString()}`;
 
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Failed to load staff list');
   return res.json();
 }
@@ -114,7 +133,7 @@ export async function getAllStaffReports(startDate?: string, endDate?: string) {
   if (endDate) params.append('end_date', endDate);
   if (params.toString()) url += `?${params.toString()}`;
 
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Failed to load all staff reports');
   return res.json();
 }
@@ -126,7 +145,7 @@ export async function getNozzleList(startDate?: string, endDate?: string) {
   if (endDate) params.append('end_date', endDate);
   if (params.toString()) url += `?${params.toString()}`;
 
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Failed to load nozzle list');
   return res.json();
 }
@@ -138,7 +157,7 @@ export async function getAllNozzleReports(startDate?: string, endDate?: string) 
   if (endDate) params.append('end_date', endDate);
   if (params.toString()) url += `?${params.toString()}`;
 
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Failed to load all nozzle reports');
   return res.json();
 }
@@ -150,7 +169,7 @@ export async function getIslandList(startDate?: string, endDate?: string) {
   if (endDate) params.append('end_date', endDate);
   if (params.toString()) url += `?${params.toString()}`;
 
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Failed to load island list');
   return res.json();
 }
@@ -162,7 +181,7 @@ export async function getAllIslandReports(startDate?: string, endDate?: string) 
   if (endDate) params.append('end_date', endDate);
   if (params.toString()) url += `?${params.toString()}`;
 
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Failed to load all island reports');
   return res.json();
 }
@@ -174,7 +193,7 @@ export async function getProductList(startDate?: string, endDate?: string) {
   if (endDate) params.append('end_date', endDate);
   if (params.toString()) url += `?${params.toString()}`;
 
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Failed to load product list');
   return res.json();
 }
@@ -186,7 +205,7 @@ export async function getAllProductReports(startDate?: string, endDate?: string)
   if (endDate) params.append('end_date', endDate);
   if (params.toString()) url += `?${params.toString()}`;
 
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Failed to load all product reports');
   return res.json();
 }

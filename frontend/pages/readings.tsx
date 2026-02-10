@@ -1,6 +1,6 @@
+import { authFetch, BASE } from '../lib/api'
 import { useState } from 'react'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 export default function Readings() {
   const [formData, setFormData] = useState({
@@ -48,7 +48,7 @@ export default function Readings() {
       const uploadFormData = new FormData()
       uploadFormData.append('file', file)
 
-      const uploadRes = await fetch(`${BASE}/attachments`, {
+      const uploadRes = await authFetch(`${BASE}/attachments`, {
         method: 'POST',
         body: uploadFormData,
       })
@@ -63,7 +63,7 @@ export default function Readings() {
 
       // Step 2: Get OCR preview
       setLoadingOcrPreview(true)
-      const ocrRes = await fetch(`${BASE}/ocr/preview/${uploadData.attachment_id}`, {
+      const ocrRes = await authFetch(`${BASE}/ocr/preview/${uploadData.attachment_id}`, {
         method: 'POST',
       })
 
@@ -126,7 +126,7 @@ export default function Readings() {
         payload.attachment_id = attachmentId
       }
 
-      const res = await fetch(`${BASE}/nozzles/${formData.nozzleId}/readings`, {
+      const res = await authFetch(`${BASE}/nozzles/${formData.nozzleId}/readings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

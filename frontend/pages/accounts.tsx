@@ -1,6 +1,6 @@
+import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 export default function Accounts() {
   const [accounts, setAccounts] = useState<any[]>([])
@@ -34,7 +34,7 @@ export default function Accounts() {
   const fetchAccounts = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/accounts/`)
+      const res = await authFetch(`${BASE}/accounts/`)
       if (res.ok) {
         const data = await res.json()
         setAccounts(data)
@@ -103,7 +103,7 @@ export default function Accounts() {
         invoice_number: saleForm.notes || null
       }
 
-      const res = await fetch(`${BASE}/accounts/sales`, {
+      const res = await authFetch(`${BASE}/accounts/sales`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

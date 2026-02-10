@@ -1,7 +1,7 @@
+import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface NozzleInfo {
   nozzle_id: string
@@ -113,7 +113,7 @@ export default function MyShift() {
   // Fetch active shift on mount
   useEffect(() => {
     setLoading(true)
-    fetch(`${BASE}/handover/my-shift`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/handover/my-shift`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
         if (data.found) {
@@ -140,7 +140,7 @@ export default function MyShift() {
   // Fetch product lists for dropdowns
   const fetchProducts = useCallback(() => {
     // LPG cylinders from pricing
-    fetch(`${BASE}/lpg-daily/pricing`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/lpg-daily/pricing`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
         const sizes = data.sizes || []
@@ -153,7 +153,7 @@ export default function MyShift() {
       .catch(() => {})
 
     // LPG Accessories
-    fetch(`${BASE}/lpg/accessories`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/lpg/accessories`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
         const items = Array.isArray(data) ? data : []
@@ -166,7 +166,7 @@ export default function MyShift() {
       .catch(() => {})
 
     // Lubricants
-    fetch(`${BASE}/lubricants-daily/products/Island 3`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/lubricants-daily/products/Island 3`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
         const items = data.products || []
@@ -184,7 +184,7 @@ export default function MyShift() {
 
   // Fetch past handovers
   useEffect(() => {
-    fetch(`${BASE}/handover/entries`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/handover/entries`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => setPastHandovers(Array.isArray(data) ? data : []))
       .catch(() => {})
@@ -285,7 +285,7 @@ export default function MyShift() {
     setSuccess('')
 
     try {
-      const res = await fetch(`${BASE}/handover/submit`, {
+      const res = await authFetch(`${BASE}/handover/submit`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({

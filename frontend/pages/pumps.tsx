@@ -1,9 +1,9 @@
+import { authFetch, BASE } from '../lib/api'
 import useSWR from 'swr'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 const fetchIslands = async () => {
-  const res = await fetch(`${BASE}/islands/`)
+  const res = await authFetch(`${BASE}/islands/`)
   if (!res.ok) throw new Error('Failed to load islands')
   return res.json()
 }

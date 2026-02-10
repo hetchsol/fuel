@@ -1,7 +1,7 @@
+import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect, useMemo } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface ProductRow {
   product_code: string
@@ -53,7 +53,7 @@ export default function LubricantsDaily() {
 
   // Fetch products for location
   useEffect(() => {
-    fetch(`${BASE}/lubricants-daily/products/${encodeURIComponent(location)}`, {
+    authFetch(`${BASE}/lubricants-daily/products/${encodeURIComponent(location)}`, {
       headers: getAuthHeaders(),
     })
       .then(r => r.json())
@@ -61,7 +61,7 @@ export default function LubricantsDaily() {
         setCategories(data.categories || [])
         const products = data.products || []
         // Now fetch previous day to set opening stock
-        fetch(`${BASE}/lubricants-daily/previous-day?current_date=${date}&location=${encodeURIComponent(location)}`, {
+        authFetch(`${BASE}/lubricants-daily/previous-day?current_date=${date}&location=${encodeURIComponent(location)}`, {
           headers: getAuthHeaders(),
         })
           .then(r => r.json())
@@ -100,7 +100,7 @@ export default function LubricantsDaily() {
 
   // Fetch entries for display
   useEffect(() => {
-    fetch(`${BASE}/lubricants-daily/entries?date=${date}&location=${encodeURIComponent(location)}`, {
+    authFetch(`${BASE}/lubricants-daily/entries?date=${date}&location=${encodeURIComponent(location)}`, {
       headers: getAuthHeaders(),
     })
       .then(r => r.json())
@@ -169,7 +169,7 @@ export default function LubricantsDaily() {
     setSuccess('')
 
     try {
-      const res = await fetch(`${BASE}/lubricants-daily/entry`, {
+      const res = await authFetch(`${BASE}/lubricants-daily/entry`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -217,7 +217,7 @@ export default function LubricantsDaily() {
     setSuccess('')
 
     try {
-      const res = await fetch(`${BASE}/lubricants-daily/transfer?date=${date}&recorded_by=${user?.user_id || 'unknown'}`, {
+      const res = await authFetch(`${BASE}/lubricants-daily/transfer?date=${date}&recorded_by=${user?.user_id || 'unknown'}`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(items),
