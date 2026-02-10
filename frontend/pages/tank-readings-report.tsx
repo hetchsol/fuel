@@ -1,7 +1,7 @@
+import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface NozzleReading {
   nozzle_id: string
@@ -104,7 +104,7 @@ export default function TankReadingsReport() {
       const token = localStorage.getItem('accessToken')
       const url = `${BASE}/tank-readings/readings/${selectedTank}?start_date=${startDate}&end_date=${endDate}`
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'X-Station-Id': localStorage.getItem('stationId') || 'ST001',

@@ -1,3 +1,4 @@
+import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import DateRangePicker from '../components/DateRangePicker';
@@ -84,9 +85,8 @@ export default function Reports() {
                 throw new Error('No access token found');
             }
 
-            const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
             const url = `${BASE}/reports/date-range?start_date=${startDate}&end_date=${endDate}`;
-            const response = await fetch(url, {
+            const response = await authFetch(url, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',

@@ -1,0 +1,83 @@
+{
+  "LPG-2026-02-09-D-04c73371": {
+    "entry_id": "LPG-2026-02-09-D-04c73371",
+    "date": "2026-02-09",
+    "shift_type": "Day",
+    "salesperson": "John",
+    "cylinder_rows": [
+      {
+        "size_kg": 3,
+        "opening_balance": 10,
+        "receipts": 5,
+        "sold_refill": 3,
+        "sold_with_cylinder": 1,
+        "balance": 11,
+        "value_refill": 441.0,
+        "value_with_cylinder": 477.0,
+        "total_value": 918.0
+      },
+      {
+        "size_kg": 6,
+        "opening_balance": 20,
+        "receipts": 10,
+        "sold_refill": 8,
+        "sold_with_cylinder": 2,
+        "balance": 20,
+        "value_refill": 2352.0,
+        "value_with_cylinder": 1688.0,
+        "total_value": 4040.0
+      },
+      {
+        "size_kg": 9,
+        "opening_balance": 15,
+        "receipts": 5,
+        "sold_refill": 4,
+        "sold_with_cylinder": 1,
+        "balance": 15,
+        "value_refill": 1764.0,
+        "value_with_cylinder": 1241.0,
+        "total_value": 3005.0
+      },
+      {
+        "size_kg": 19,
+        "opening_balance": 8,
+        "receipts": 3,
+        "sold_refill": 2,
+        "sold_with_cylinder": 0,
+        "balance": 9,
+        "value_refill": 1862.0,
+        "value_with_cylinder": 0.0,
+        "total_value": 1862.0
+      },
+      {
+        "size_kg": 45,
+        "opening_balance": 5,
+        "receipts": 2,
+        "sold_refill": 1,
+        "sold_with_cylinder": 0,
+        "balance": 6,
+        "value_refill": 2205.0,
+        "value_with_cylinder": 0.0,
+        "total_value": 2205.0
+      },
+      {
+        "size_kg": 48,
+        "opening_balance": 3,
+        "receipts": 1,
+        "sold_refill": 0,
+        "sold_with_cylinder": 1,
+        "balance": 3,
+        "value_refill": 0.0,
+        "value_with_cylinder": 4052.0,
+        "total_value": 4052.0
+      }
+    ],
+    "grand_total_value": 16082.0,
+    "book_cylinder_population": 100,
+    "actual_cylinder_population": 98,
+    "population_difference": 2,
+    "recorded_by": "O001",
+    "created_at": "2026-02-09T14:48:24.445639",
+    "notes": null
+  }
+}

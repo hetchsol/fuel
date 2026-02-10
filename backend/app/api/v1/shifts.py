@@ -29,7 +29,10 @@ def create_shift(shift: Shift, ctx: dict = Depends(get_station_context)):
 
     # Validate assignments if present
     if shift.assignments:
-        validate_shift_assignments([a.dict() for a in shift.assignments])
+        try:
+            validate_shift_assignments([a.dict() for a in shift.assignments])
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     # Populate metadata
     shift.created_by = current_user['user_id']
@@ -267,7 +270,10 @@ def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_co
 
     # Validate assignments if present
     if shift.assignments:
-        validate_shift_assignments([a.dict() for a in shift.assignments])
+        try:
+            validate_shift_assignments([a.dict() for a in shift.assignments])
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     # Update attendants list for backward compatibility
     if shift.assignments:

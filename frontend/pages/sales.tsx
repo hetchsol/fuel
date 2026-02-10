@@ -1,7 +1,7 @@
+import { authFetch, BASE } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 interface SaleResult {
   sale_id: string
@@ -58,7 +58,7 @@ export default function Sales() {
     setResult(null)
 
     try {
-      const res = await fetch(`${BASE}/sales`, {
+      const res = await authFetch(`${BASE}/sales`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
