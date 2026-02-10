@@ -1,5 +1,5 @@
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+export const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 function getHeaders(): Record<string, string> {
   if (typeof window === 'undefined') return {}
@@ -9,6 +9,31 @@ function getHeaders(): Record<string, string> {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(stationId ? { 'X-Station-Id': stationId } : {}),
   }
+}
+
+export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = {
+    ...getHeaders(),
+    ...(options.headers as Record<string, string> || {}),
+  };
+  if (options.body && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const response = await fetch(url, { ...options, headers });
+  if (!response.ok) {
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const errorBody = JSON.stringify({
+        detail: `Server unavailable (${response.status}). The API may be starting up — please wait 30-60 seconds and try again.`
+      });
+      return new Response(errorBody, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+  return response;
 }
 
 export async function getDaily(date?: string) {
