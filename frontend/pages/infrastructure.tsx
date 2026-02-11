@@ -404,20 +404,15 @@ export default function Infrastructure() {
                 <div className="mb-4">
                   <button
                     onClick={() => toggleIslandStatus(island.island_id, island.status)}
-                    disabled={loading || (!island.product_type && island.status !== 'active')}
+                    disabled={loading}
                     className={`w-full px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
                       island.status === 'active'
                         ? 'bg-red-100 text-red-700 hover:bg-red-200 border border-red-300'
-                        : island.product_type
-                          ? 'bg-green-600 text-white hover:bg-green-700'
-                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'bg-green-600 text-white hover:bg-green-700'
                     }`}
                   >
                     {island.status === 'active' ? 'Deactivate' : 'Activate'}
                   </button>
-                  {!island.product_type && island.status !== 'active' && (
-                    <p className="text-xs text-gray-500 mt-1">Configure product type before activating</p>
-                  )}
                 </div>
 
                 {/* Pump Station Info (read-only) */}

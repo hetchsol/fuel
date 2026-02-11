@@ -94,7 +94,7 @@ def run_setup_wizard(station_id: str, current_user: dict = Depends(get_current_u
 
     return {
         "status": "success",
-        "message": f"Station {station_id} seeded with 4 standard islands (all inactive until configured), 2 tanks, and default accounts",
+        "message": f"Station {station_id} seeded with 4 standard islands (all active by default), 2 tanks, and default accounts",
         "islands": len(storage.get('islands', {})),
         "tanks": len(storage.get('tanks', {})),
         "nozzles": sum(

@@ -137,7 +137,7 @@ async def update_island_status(
 ):
     """
     Toggle island active/inactive.
-    Cannot activate if product_type is not configured.
+    Islands default to active; owner can deactivate as needed.
     """
     storage = ctx["storage"]
     islands_data = storage['islands']
@@ -150,13 +150,6 @@ async def update_island_status(
         raise HTTPException(status_code=400, detail="Status must be 'active' or 'inactive'")
 
     island = islands_data[island_id]
-
-    if new_status == "active" and not island.get("product_type"):
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot activate island without configuring product type first"
-        )
-
     island["status"] = new_status
     return {"status": "success", "island_id": island_id, "new_status": new_status}
 

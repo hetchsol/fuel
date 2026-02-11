@@ -12,6 +12,7 @@ def seed_station_defaults(storage: dict):
     """
     _seed_islands(storage)
     _migrate_islands_add_display_fields(storage)
+    _migrate_islands_default_active(storage)
     _seed_tanks(storage)
     _seed_accounts(storage)
     _seed_lpg_accessories(storage)
@@ -39,7 +40,7 @@ def _seed_islands(storage: dict):
             "island_id": isl_id,
             "name": f"Island {i}",
             "location": "Main Station",
-            "status": "inactive",
+            "status": "active",
             "product_type": None,
             "display_number": None,
             "fuel_type_abbrev": None,
@@ -199,3 +200,16 @@ def _migrate_islands_add_display_fields(storage: dict):
     # Recompute labels for any islands that already have a product_type
     from ..services.naming_convention import compute_display_labels
     compute_display_labels(islands)
+
+
+def _migrate_islands_default_active(storage: dict):
+    """
+    Migration: flip existing inactive islands to active.
+    Islands now default to active; owner can deactivate as needed.
+    """
+    islands = storage.get('islands')
+    if not islands:
+        return
+    for island in islands.values():
+        if island.get("status") == "inactive":
+            island["status"] = "active"

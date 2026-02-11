@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/router'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 const BASE = '/api/v1'
 
@@ -57,7 +58,13 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center px-4">
       <div className="max-w-md w-full">
-        <div className="bg-white rounded-lg shadow-2xl p-8">
+        <div className="bg-white rounded-lg shadow-2xl p-8 relative">
+          {loading && (
+            <div className="absolute inset-0 bg-white bg-opacity-80 rounded-lg flex items-center justify-center z-10">
+              <LoadingSpinner text="Signing in..." />
+            </div>
+          )}
+
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900">⛽ Fuel Management</h1>
             <p className="text-gray-600 mt-2">Sign in to your account</p>

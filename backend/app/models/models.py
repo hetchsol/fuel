@@ -126,7 +126,7 @@ class Island(BaseModel):
     island_id: str
     name: str
     location: Optional[str] = None
-    status: str = "inactive"          # "active" or "inactive"
+    status: str = "active"            # "active" or "inactive"
     product_type: Optional[str] = None  # "Petrol" or "Diesel"
     pump_station: Optional[PumpStation] = None
     display_number: Optional[int] = None      # e.g. 1, 2 within fuel type group
