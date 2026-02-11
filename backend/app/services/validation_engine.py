@@ -4,7 +4,8 @@ Core validation logic for foreign keys and referential integrity
 """
 from fastapi import HTTPException
 from typing import Dict, List, Any, Optional
-from ..database.storage import STORAGE, entity_exists, filter_list_storage
+from ..database.storage import entity_exists, filter_list_storage
+from ..database import storage as storage_module
 from ..database.relationships import (
     get_foreign_keys,
     get_dependents,
@@ -58,7 +59,7 @@ def validate_foreign_keys(entity_type: str, data: Dict[str, Any], storage: Dict[
 
         # If field has a value (or is required), validate it exists
         if field_value:
-            store = storage if storage is not None else STORAGE
+            store = storage if storage is not None else storage_module.STORAGE
             exists = False
             if referenced_entity == 'nozzles':
                 from ..database.storage import get_nozzle
@@ -121,7 +122,7 @@ def check_dependents(entity_type: str, entity_id: str, storage: Dict[str, Any] =
             count = len(matching_nozzles)
         else:
             # Check in storage
-            store = storage if storage is not None else STORAGE
+            store = storage if storage is not None else storage_module.STORAGE
             storage_data = store.get(storage_key)
 
             if isinstance(storage_data, dict):
@@ -225,7 +226,7 @@ def _cascade_delete_dependents(
             # Would need to modify island data structure
             continue
 
-        store = storage if storage is not None else STORAGE
+        store = storage if storage is not None else storage_module.STORAGE
         storage_data = store.get(storage_key)
 
         if isinstance(storage_data, dict):
@@ -300,7 +301,7 @@ def validate_unique_constraint(
     if not fk_def.get('unique', False):
         return  # Not a unique constraint
 
-    store = storage if storage is not None else STORAGE
+    store = storage if storage is not None else storage_module.STORAGE
     storage_data = store.get(entity_type)
 
     if isinstance(storage_data, dict):

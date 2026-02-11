@@ -4,14 +4,14 @@ Shift Assignment Validation Service
 Validates attendant assignments to islands and nozzles in shifts.
 """
 from typing import List, Dict, Any
-from ..database.storage import STORAGE
+from ..database import storage as storage_module
 
 
 def get_nozzle(nozzle_id: str, storage: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Helper function to get nozzle across all islands
     """
-    store = storage if storage is not None else STORAGE
+    store = storage if storage is not None else storage_module.STORAGE
     for island_id, island in store.get('islands', {}).items():
         if island.get('pump_station') and island['pump_station'].get('nozzles'):
             for nozzle in island['pump_station']['nozzles']:
@@ -34,7 +34,7 @@ def validate_attendant_exists(attendant_id: str) -> bool:
 
 def validate_island_exists(island_id: str, storage: Dict[str, Any] = None) -> bool:
     """Check if island exists in storage"""
-    store = storage if storage is not None else STORAGE
+    store = storage if storage is not None else storage_module.STORAGE
     return island_id in store.get('islands', {})
 
 
@@ -45,7 +45,7 @@ def validate_nozzle_exists(nozzle_id: str, storage: Dict[str, Any] = None) -> bo
 
 def validate_nozzle_belongs_to_island(nozzle_id: str, island_id: str, storage: Dict[str, Any] = None) -> bool:
     """Check if nozzle belongs to specified island"""
-    store = storage if storage is not None else STORAGE
+    store = storage if storage is not None else storage_module.STORAGE
     island = store.get('islands', {}).get(island_id)
     if not island or not island.get('pump_station'):
         return False

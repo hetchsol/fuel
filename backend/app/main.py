@@ -2,9 +2,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import router
-from app.database.stations_registry import load_stations, STATIONS
+from app.database.stations_registry import load_stations
+import app.database.stations_registry as stations_registry
 from app.database.station_files import migrate_existing_data
-from app.database.storage import get_station_storage, STORAGE as _global_storage
+from app.database.storage import get_station_storage
 from app.database.seed_defaults import seed_station_defaults
 import app.database.storage as storage_module
 
@@ -30,7 +31,7 @@ def startup():
     load_stations()
 
     # Initialize storage and seed defaults for all stations
-    for station_id in list(STATIONS.keys()):
+    for station_id in list(stations_registry.STATIONS.keys()):
         storage = get_station_storage(station_id)
         seed_station_defaults(storage)
 

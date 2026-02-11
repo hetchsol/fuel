@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import Layout from '../components/Layout'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getHeaders } from '../lib/api'
@@ -121,8 +120,7 @@ export default function StationsPage() {
   }
 
   return (
-    <Layout>
-      <div className="space-y-6">
+    <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Station Management</h1>
           <button
@@ -309,6 +307,5 @@ export default function StationsPage() {
           </div>
         )}
       </div>
-    </Layout>
   )
 }

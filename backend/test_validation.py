@@ -8,7 +8,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.database.storage import STORAGE
+from app.database import storage as storage_module
 from app.services.validation_engine import (
     validate_foreign_keys,
     check_dependents,
@@ -61,17 +61,17 @@ def setup_test_data():
     print("="*60 + "\n")
 
     # Clear existing data
-    STORAGE['users'] = {}
-    STORAGE['shifts'] = {}
-    STORAGE['accounts'] = {}
-    STORAGE['lubricants'] = {}
-    STORAGE['readings'] = []
-    STORAGE['credit_sales'] = []
-    STORAGE['lpg_sales'] = []
-    STORAGE['lubricant_sales'] = []
+    storage_module.STORAGE['users'] = {}
+    storage_module.STORAGE['shifts'] = {}
+    storage_module.STORAGE['accounts'] = {}
+    storage_module.STORAGE['lubricants'] = {}
+    storage_module.STORAGE['readings'] = []
+    storage_module.STORAGE['credit_sales'] = []
+    storage_module.STORAGE['lpg_sales'] = []
+    storage_module.STORAGE['lubricant_sales'] = []
 
     # Add test users
-    STORAGE['users']['USER-001'] = {
+    storage_module.STORAGE['users']['USER-001'] = {
         'user_id': 'USER-001',
         'username': 'testuser',
         'full_name': 'Test User',
@@ -79,7 +79,7 @@ def setup_test_data():
     }
 
     # Add test shift
-    STORAGE['shifts']['SHIFT-001'] = {
+    storage_module.STORAGE['shifts']['SHIFT-001'] = {
         'shift_id': 'SHIFT-001',
         'date': '2024-01-15',
         'shift_type': 'Day',
@@ -88,7 +88,7 @@ def setup_test_data():
     }
 
     # Add test account
-    STORAGE['accounts']['ACC-TEST'] = {
+    storage_module.STORAGE['accounts']['ACC-TEST'] = {
         'account_id': 'ACC-TEST',
         'account_name': 'Test Account',
         'account_type': 'Corporate',
@@ -97,7 +97,7 @@ def setup_test_data():
     }
 
     # Add test lubricant
-    STORAGE['lubricants']['LUB-TEST'] = {
+    storage_module.STORAGE['lubricants']['LUB-TEST'] = {
         'product_code': 'LUB-TEST',
         'description': 'Test Lubricant',
         'category': 'Engine Oil',
@@ -213,7 +213,7 @@ def test_dependent_records(results: TestResults):
     print("="*60 + "\n")
 
     # Add some dependent records
-    STORAGE['credit_sales'].append({
+    storage_module.STORAGE['credit_sales'].append({
         'sale_id': 'SALE-001',
         'account_id': 'ACC-TEST',
         'shift_id': 'SHIFT-001',
@@ -223,7 +223,7 @@ def test_dependent_records(results: TestResults):
         'amount': 2698.0
     })
 
-    STORAGE['lpg_sales'].append({
+    storage_module.STORAGE['lpg_sales'].append({
         'sale_id': 'LPG-001',
         'shift_id': 'SHIFT-001',
         'cylinder_size': '13kg',
@@ -268,7 +268,7 @@ def test_cascade_delete(results: TestResults):
     print("="*60 + "\n")
 
     # Create a new shift with dependents for cascade testing
-    STORAGE['shifts']['SHIFT-CASCADE'] = {
+    storage_module.STORAGE['shifts']['SHIFT-CASCADE'] = {
         'shift_id': 'SHIFT-CASCADE',
         'date': '2024-01-16',
         'shift_type': 'Night',
@@ -276,7 +276,7 @@ def test_cascade_delete(results: TestResults):
         'status': 'active'
     }
 
-    STORAGE['lpg_sales'].append({
+    storage_module.STORAGE['lpg_sales'].append({
         'sale_id': 'LPG-CASCADE',
         'shift_id': 'SHIFT-CASCADE',
         'cylinder_size': '9kg',
@@ -287,13 +287,13 @@ def test_cascade_delete(results: TestResults):
     })
 
     # Count initial LPG sales
-    initial_lpg_count = len(STORAGE['lpg_sales'])
+    initial_lpg_count = len(storage_module.STORAGE['lpg_sales'])
 
     # Test 3.1: Cascade delete should work
     try:
         validate_delete('shifts', 'SHIFT-CASCADE', cascade=True)
         # Check if dependent was removed
-        remaining_lpg = [s for s in STORAGE['lpg_sales'] if s['shift_id'] == 'SHIFT-CASCADE']
+        remaining_lpg = [s for s in storage_module.STORAGE['lpg_sales'] if s['shift_id'] == 'SHIFT-CASCADE']
         if len(remaining_lpg) == 0:
             results.record("3.1: Cascade delete removes dependents", True)
         else:
@@ -304,7 +304,7 @@ def test_cascade_delete(results: TestResults):
     # Test 3.2: Can delete entity after cascade removes dependents
     try:
         # After cascade, shift should be deletable
-        del STORAGE['shifts']['SHIFT-CASCADE']
+        del storage_module.STORAGE['shifts']['SHIFT-CASCADE']
         results.record("3.2: Can delete entity after cascade", True)
     except Exception as e:
         results.record("3.2: Can delete entity after cascade", False, str(e))
@@ -347,7 +347,7 @@ def test_valid_operations(results: TestResults):
         results.record("4.2: Can create valid LPG sale", False, f"Should not fail: {e.detail}")
 
     # Test 4.3: Can delete entity without dependents
-    STORAGE['users']['USER-ORPHAN'] = {
+    storage_module.STORAGE['users']['USER-ORPHAN'] = {
         'user_id': 'USER-ORPHAN',
         'username': 'orphan',
         'full_name': 'Orphan User',
@@ -356,7 +356,7 @@ def test_valid_operations(results: TestResults):
 
     try:
         validate_delete_operation('users', 'USER-ORPHAN', cascade=False)
-        del STORAGE['users']['USER-ORPHAN']
+        del storage_module.STORAGE['users']['USER-ORPHAN']
         results.record("4.3: Can delete entity without dependents", True)
     except HTTPException as e:
         results.record("4.3: Can delete entity without dependents", False, f"Should not fail: {e.detail}")
