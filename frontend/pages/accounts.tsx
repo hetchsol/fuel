@@ -117,8 +117,12 @@ export default function Accounts() {
         const errorData = await res.json()
         // Handle FastAPI validation errors which come as an array
         if (Array.isArray(errorData.detail)) {
-          const errorMessages = errorData.detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ')
+          const errorMessages = errorData.detail.map((err: any) => `${err.loc?.join('.') || ''}: ${err.msg || err}`).join(', ')
           throw new Error(errorMessages)
+        }
+        // Handle structured error objects (e.g. foreign_key_violation)
+        if (typeof errorData.detail === 'object' && errorData.detail !== null) {
+          throw new Error(errorData.detail.message || JSON.stringify(errorData.detail))
         }
         throw new Error(errorData.detail || 'Failed to record credit sale')
       }
