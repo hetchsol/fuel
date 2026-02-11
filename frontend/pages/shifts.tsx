@@ -357,9 +357,85 @@ export default function Shifts() {
     return nozzles
   }
 
-  const handleCreateShift = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Validate shift before creation — returns array of error strings (empty = valid)
+  const validateShift = (): string[] => {
+    const errors: string[] = []
+    const warnings: string[] = []
 
+    // 1. Must have at least one attendant
+    if (selectedAttendants.length === 0) {
+      errors.push('At least one attendant must be selected.')
+    }
+
+    // 2. Every attendant must have at least one island assigned
+    selectedAttendants.forEach(a => {
+      if (!a.island_ids || a.island_ids.length === 0) {
+        errors.push(`${a.full_name} has no islands assigned.`)
+      }
+    })
+
+    // 3. Every attendant must have at least one nozzle assigned
+    selectedAttendants.forEach(a => {
+      if (!a.nozzle_ids || a.nozzle_ids.length === 0) {
+        errors.push(`${a.full_name} has no nozzles assigned.`)
+      }
+    })
+
+    // 4. Check for duplicate nozzle assignments across attendants
+    const allNozzleIds: string[] = []
+    selectedAttendants.forEach(a => {
+      (a.nozzle_ids || []).forEach((nid: string) => {
+        if (allNozzleIds.includes(nid)) {
+          const otherAttendant = selectedAttendants.find(
+            other => other.user_id !== a.user_id && other.nozzle_ids?.includes(nid)
+          )
+          const nozzle = nozzles.find(n => n.nozzle_id === nid)
+          const label = nozzle ? getNozzleDisplayName(nozzle) : nid
+          errors.push(`Nozzle ${label} is assigned to both ${otherAttendant?.full_name} and ${a.full_name}.`)
+        }
+        allNozzleIds.push(nid)
+      })
+    })
+
+    // 5. Check for unassigned active nozzles (warning, not error)
+    const assignedNozzleIds = new Set(allNozzleIds)
+    const unassignedNozzles = nozzles.filter(n => n.status === 'Active' && !assignedNozzleIds.has(n.nozzle_id))
+    if (unassignedNozzles.length > 0) {
+      const labels = unassignedNozzles.map(n => getNozzleDisplayName(n)).join(', ')
+      warnings.push(`Unassigned active nozzles: ${labels}`)
+    }
+
+    // 6. Date validation — warn if not today
+    const today = new Date().toISOString().split('T')[0]
+    if (shiftForm.date !== today) {
+      warnings.push(`Date is ${shiftForm.date}, which is not today (${today}).`)
+    }
+
+    // Combine: errors are blocking, warnings are advisory
+    return [...errors.map(e => `ERROR: ${e}`), ...warnings.map(w => `WARNING: ${w}`)]
+  }
+
+  // State for confirmation step
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  const [validationMessages, setValidationMessages] = useState<string[]>([])
+
+  const handleValidateAndConfirm = (e: React.FormEvent) => {
+    e.preventDefault()
+    const messages = validateShift()
+    const hasErrors = messages.some(m => m.startsWith('ERROR:'))
+
+    if (hasErrors) {
+      setValidationMessages(messages)
+      setShowConfirmation(false) // Stay on form, show errors
+      return
+    }
+
+    // No blocking errors — show confirmation with any warnings
+    setValidationMessages(messages)
+    setShowConfirmation(true)
+  }
+
+  const handleCreateShift = async () => {
     const shift_id = `${shiftForm.date}-${shiftForm.shift_type}`
     const payload = {
       shift_id,
@@ -376,13 +452,18 @@ export default function Shifts() {
     }
 
     try {
-
       // First, check if shift already exists
       const checkRes = await fetch(`${BASE}/shifts/${shift_id}`, {
         headers: getHeaders()
       })
       const shiftExists = checkRes.ok
       setIsEditMode(shiftExists)
+
+      if (shiftExists) {
+        if (!confirm(`A shift already exists for ${shiftForm.date} (${shiftForm.shift_type}). This will overwrite the existing assignments. Continue?`)) {
+          return
+        }
+      }
 
       // Use PUT if shift exists, POST if new
       const method = shiftExists ? 'PUT' : 'POST'
@@ -404,6 +485,8 @@ export default function Shifts() {
 
       alert(`Shift ${shiftExists ? 'updated' : 'created'} successfully!`)
       setShowManagementModal(false)
+      setShowConfirmation(false)
+      setValidationMessages([])
       setSelectedAttendants([])
       fetchActiveShift()
     } catch (err: any) {
@@ -896,7 +979,22 @@ export default function Shifts() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateShift}>
+            <form onSubmit={handleValidateAndConfirm}>
+              {/* Validation Messages */}
+              {validationMessages.length > 0 && !showConfirmation && (
+                <div className="mb-4 p-4 rounded-lg border bg-red-50 border-red-200">
+                  <h4 className="font-semibold text-red-800 mb-2">Please fix the following before creating the shift:</h4>
+                  <ul className="space-y-1">
+                    {validationMessages.filter(m => m.startsWith('ERROR:')).map((msg, i) => (
+                      <li key={i} className="text-sm text-red-700 flex items-start gap-2">
+                        <span className="mt-0.5">&#x2717;</span>
+                        <span>{msg.replace('ERROR: ', '')}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Date and Shift Type */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
@@ -992,23 +1090,90 @@ export default function Shifts() {
                 </div>
               ))}
 
-              {/* Submit Buttons */}
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowManagementModal(false)}
-                  className="px-4 py-2 border rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                  disabled={selectedAttendants.length === 0}
-                >
-                  {isEditMode ? 'Update Shift' : 'Create Shift'}
-                </button>
-              </div>
+              {/* Confirmation Summary */}
+              {showConfirmation && (
+                <div className="mt-6 p-4 rounded-lg border-2 border-blue-300 bg-blue-50">
+                  <h4 className="font-bold text-blue-900 mb-3">Confirm Shift Details</h4>
+                  <div className="text-sm text-blue-800 space-y-2 mb-4">
+                    <p><strong>Date:</strong> {shiftForm.date}</p>
+                    <p><strong>Type:</strong> {shiftForm.shift_type} Shift</p>
+                    <p><strong>Shift ID:</strong> {shiftForm.date}-{shiftForm.shift_type}</p>
+                    <div className="mt-2">
+                      <strong>Assignments:</strong>
+                      {selectedAttendants.map(a => (
+                        <div key={a.user_id} className="ml-4 mt-1">
+                          <span className="font-medium">{a.full_name}</span>
+                          <span className="text-blue-600">
+                            {' '}&#8212; {(a.island_ids || []).length} island(s), {(a.nozzle_ids || []).length} nozzle(s)
+                          </span>
+                          <div className="ml-2 text-xs text-blue-700">
+                            Nozzles: {(a.nozzle_ids || []).map((nid: string) => {
+                              const nozzle = nozzles.find(n => n.nozzle_id === nid)
+                              return nozzle ? getNozzleDisplayName(nozzle) : nid
+                            }).join(', ') || 'None'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Warnings (non-blocking) */}
+                  {validationMessages.filter(m => m.startsWith('WARNING:')).length > 0 && (
+                    <div className="mb-4 p-3 rounded bg-yellow-50 border border-yellow-200">
+                      <h5 className="font-semibold text-yellow-800 text-sm mb-1">Warnings:</h5>
+                      <ul className="space-y-1">
+                        {validationMessages.filter(m => m.startsWith('WARNING:')).map((msg, i) => (
+                          <li key={i} className="text-sm text-yellow-700 flex items-start gap-2">
+                            <span className="mt-0.5">&#9888;</span>
+                            <span>{msg.replace('WARNING: ', '')}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <p className="text-sm text-blue-900 font-medium mb-3">
+                    This action cannot be undone. Are you sure you want to proceed?
+                  </p>
+
+                  <div className="flex justify-end space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => { setShowConfirmation(false); setValidationMessages([]) }}
+                      className="px-4 py-2 border rounded-md hover:bg-gray-50"
+                    >
+                      Go Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCreateShift}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold"
+                    >
+                      {isEditMode ? 'Confirm Update' : 'Confirm & Create Shift'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Submit Buttons (pre-confirmation) */}
+              {!showConfirmation && (
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => { setShowManagementModal(false); setValidationMessages([]) }}
+                    className="px-4 py-2 border rounded-md hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    disabled={selectedAttendants.length === 0}
+                  >
+                    Review & {isEditMode ? 'Update' : 'Create'} Shift
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>
