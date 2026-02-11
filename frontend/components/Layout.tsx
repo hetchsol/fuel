@@ -2,9 +2,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
-import { getHeaders } from '../lib/api'
-
-const BASE = '/api/v1'
+import { authFetch, BASE } from '../lib/api'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -30,9 +28,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Load stations for owners
   useEffect(() => {
     if (user && user.role === 'owner') {
-      fetch(`${BASE}/stations/`, {
-        headers: getHeaders()
-      })
+      authFetch(`${BASE}/stations/`)
         .then(r => r.ok ? r.json() : [])
         .then(data => setStations(data))
         .catch(() => {})

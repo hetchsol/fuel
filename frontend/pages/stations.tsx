@@ -1,15 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { getHeaders } from '../lib/api'
-
-const BASE = '/api/v1'
-
-function getAuthHeaders() {
-  return { ...getHeaders(), 'Content-Type': 'application/json' }
-}
+import { authFetch, BASE } from '../lib/api'
 
 export default function StationsPage() {
+  const router = useRouter()
   const { theme } = useTheme()
   const [stations, setStations] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -21,21 +17,25 @@ export default function StationsPage() {
   const [editingStation, setEditingStation] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ name: '', location: '' })
 
-  const loadStations = () => {
+  const loadStations = async () => {
     setLoading(true)
-    fetch(`${BASE}/stations/`, { headers: getHeaders() })
-      .then(r => {
-        if (!r.ok) throw new Error('Failed to load stations')
-        return r.json()
-      })
-      .then(data => {
-        setStations(data)
-        setLoading(false)
-      })
-      .catch(err => {
-        setError(err.message)
-        setLoading(false)
-      })
+    try {
+      const r = await authFetch(`${BASE}/stations/`)
+      if (r.status === 401) {
+        router.push('/login')
+        return
+      }
+      if (!r.ok) {
+        const data = await r.json()
+        throw new Error(data.detail || 'Failed to load stations')
+      }
+      const data = await r.json()
+      setStations(data)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { loadStations() }, [])
@@ -51,9 +51,8 @@ export default function StationsPage() {
       const stationId = `ST${String(stations.length + 1).padStart(3, '0')}`
 
       // Create the station
-      const res = await fetch(`${BASE}/stations/`, {
+      const res = await authFetch(`${BASE}/stations/`, {
         method: 'POST',
-        headers: getAuthHeaders(),
         body: JSON.stringify({
           station_id: stationId,
           name: newStation.name,
@@ -71,9 +70,8 @@ export default function StationsPage() {
       // Run setup wizard if quick setup selected
       if (newStation.quickSetup) {
         setSetupMessage('Running setup wizard...')
-        const setupRes = await fetch(`${BASE}/stations/${created.station_id}/setup-wizard`, {
+        const setupRes = await authFetch(`${BASE}/stations/${created.station_id}/setup-wizard`, {
           method: 'POST',
-          headers: getAuthHeaders(),
         })
         if (setupRes.ok) {
           const setupData = await setupRes.json()
@@ -94,9 +92,8 @@ export default function StationsPage() {
   const handleRename = async (stationId: string) => {
     setError('')
     try {
-      const res = await fetch(`${BASE}/stations/${stationId}`, {
+      const res = await authFetch(`${BASE}/stations/${stationId}`, {
         method: 'PUT',
-        headers: getAuthHeaders(),
         body: JSON.stringify({
           station_id: stationId,
           name: editForm.name,
