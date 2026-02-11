@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     const raw = await getRawBody(req)
-    fetchOptions.body = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
+    fetchOptions.body = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as unknown as BodyInit
   }
 
   try {
