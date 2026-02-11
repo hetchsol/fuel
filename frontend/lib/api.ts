@@ -1,4 +1,3 @@
-
 export const BASE = '/api/v1';
 
 export function getHeaders(): Record<string, string> {
@@ -225,5 +224,3 @@ export async function getAllProductReports(startDate?: string, endDate?: string)
   if (!res.ok) throw new Error('Failed to load all product reports');
   return res.json();
 }
-
-export default {} as any
