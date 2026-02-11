@@ -82,7 +82,11 @@ export default function Pumps() {
                                 {nozzle.fuel_type === 'Diesel' ? '🛢️' : '⛽'}
                               </span>
                               <div>
-                                <p className="text-xs font-bold text-gray-900">{nozzle.nozzle_id}</p>
+                                <p className="text-xs font-bold text-gray-900">
+                                  {island.fuel_type_abbrev && nozzle.display_label
+                                    ? `${island.fuel_type_abbrev} ${nozzle.display_label}`
+                                    : nozzle.nozzle_id}
+                                </p>
                                 <p className={`text-xs ${
                                   nozzle.fuel_type === 'Diesel' ? 'text-purple-700' : 'text-green-700'
                                 }`}>

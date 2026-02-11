@@ -80,6 +80,14 @@ export default function Shifts() {
     }
   }
 
+  // Helper: get display name for a nozzle (e.g. "LSD 1A" or fallback to nozzle_id)
+  const getNozzleDisplayName = (nozzle: any) => {
+    if (nozzle.fuel_type_abbrev && nozzle.display_label) {
+      return `${nozzle.fuel_type_abbrev} ${nozzle.display_label}`
+    }
+    return nozzle.display_label || nozzle.nozzle_id
+  }
+
   const fetchNozzles = async () => {
     try {
       const res = await fetch(`${BASE}/islands/?status=active`, {
@@ -87,11 +95,16 @@ export default function Shifts() {
       })
       if (res.ok) {
         const data = await res.json()
-        // Extract all nozzles from active islands only
+        // Extract all nozzles from active islands, carrying island context
         const allNozzles: any[] = []
         data.forEach((island: any) => {
           if (island.pump_station?.nozzles) {
-            allNozzles.push(...island.pump_station.nozzles)
+            island.pump_station.nozzles.forEach((nozzle: any) => {
+              allNozzles.push({
+                ...nozzle,
+                fuel_type_abbrev: island.fuel_type_abbrev,
+              })
+            })
           }
         })
         setNozzles(allNozzles)
@@ -333,7 +346,12 @@ export default function Shifts() {
     selectedIslandIds.forEach(islandId => {
       const island = islandsData.find(i => i.island_id === islandId)
       if (island?.pump_station?.nozzles) {
-        nozzles.push(...island.pump_station.nozzles)
+        island.pump_station.nozzles.forEach((nozzle: any) => {
+          nozzles.push({
+            ...nozzle,
+            fuel_type_abbrev: island.fuel_type_abbrev,
+          })
+        })
       }
     })
     return nozzles
@@ -465,7 +483,7 @@ export default function Shifts() {
                                       : 'bg-orange-100 text-orange-700'
                                   }`}
                                 >
-                                  {nozzleId}
+                                  {nozzle ? getNozzleDisplayName(nozzle) : nozzleId}
                                 </span>
                               )
                             })}
@@ -529,7 +547,7 @@ export default function Shifts() {
                 <option value="">Select Nozzle</option>
                 {nozzles.map(nozzle => (
                   <option key={nozzle.nozzle_id} value={nozzle.nozzle_id}>
-                    {nozzle.nozzle_id} - {nozzle.fuel_type}
+                    {getNozzleDisplayName(nozzle)} - {nozzle.fuel_type}
                   </option>
                 ))}
               </select>
@@ -653,7 +671,8 @@ export default function Shifts() {
                 >
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="font-bold text-gray-900">{nozzle.nozzle_id}</p>
+                      <p className="font-bold text-gray-900">{getNozzleDisplayName(nozzle)}</p>
+                      <p className="text-xs text-gray-500">{nozzle.nozzle_id}</p>
                       <p className="text-xs text-gray-600">{nozzle.fuel_type}</p>
                     </div>
                     <span className={`px-2 py-1 text-xs font-semibold rounded ${
@@ -939,7 +958,7 @@ export default function Shifts() {
                             onChange={(e) => handleIslandToggle(attendant.user_id, island.island_id, e.target.checked)}
                             className="form-checkbox"
                           />
-                          <span className="text-sm">{island.name}</span>
+                          <span className="text-sm">{island.name}{island.fuel_type_abbrev ? ` (${island.fuel_type_abbrev})` : ''}</span>
                         </label>
                       ))}
                     </div>
@@ -962,7 +981,7 @@ export default function Shifts() {
                             onChange={(e) => handleNozzleToggle(attendant.user_id, nozzle.nozzle_id, e.target.checked)}
                             className="form-checkbox"
                           />
-                          <span className="text-sm">{nozzle.nozzle_id}</span>
+                          <span className="text-sm">{getNozzleDisplayName(nozzle)}</span>
                         </label>
                       ))}
                     </div>

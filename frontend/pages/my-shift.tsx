@@ -11,6 +11,8 @@ interface NozzleInfo {
   opening_reading: number
   price_per_liter: number
   status: string
+  display_label?: string | null
+  fuel_type_abbrev?: string | null
 }
 
 interface NozzleRow {
@@ -19,6 +21,8 @@ interface NozzleRow {
   opening_reading: number
   closing_reading: string
   price_per_liter: number
+  display_label?: string | null
+  fuel_type_abbrev?: string | null
 }
 
 interface SaleLineItem {
@@ -128,6 +132,8 @@ export default function MyShift() {
               opening_reading: n.opening_reading,
               closing_reading: '',
               price_per_liter: n.price_per_liter,
+              display_label: n.display_label,
+              fuel_type_abbrev: n.fuel_type_abbrev,
             }))
           )
         } else {
@@ -441,7 +447,9 @@ export default function MyShift() {
               return (
                 <tr key={row.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                   <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>
-                    {row.nozzle_id}
+                    {row.fuel_type_abbrev && row.display_label
+                      ? `${row.fuel_type_abbrev} ${row.display_label}`
+                      : row.nozzle_id}
                   </td>
                   <td className="px-3 py-2" style={{ color: theme.textSecondary }}>
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
@@ -750,9 +758,14 @@ export default function MyShift() {
               </tr>
             </thead>
             <tbody>
-              {handoverResult.nozzle_summaries.map(ns => (
+              {handoverResult.nozzle_summaries.map(ns => {
+                const row = nozzleRows.find(r => r.nozzle_id === ns.nozzle_id)
+                const displayName = row?.fuel_type_abbrev && row?.display_label
+                  ? `${row.fuel_type_abbrev} ${row.display_label}`
+                  : ns.nozzle_id
+                return (
                 <tr key={ns.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                  <td className="px-3 py-1 font-medium" style={{ color: theme.textPrimary }}>{ns.nozzle_id}</td>
+                  <td className="px-3 py-1 font-medium" style={{ color: theme.textPrimary }}>{displayName}</td>
                   <td className="px-3 py-1" style={{ color: theme.textSecondary }}>{ns.fuel_type}</td>
                   <td className="px-3 py-1 text-right font-mono" style={{ color: theme.textSecondary }}>
                     {ns.opening_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })}
@@ -767,7 +780,8 @@ export default function MyShift() {
                     {ns.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
 

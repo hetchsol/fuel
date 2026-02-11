@@ -93,12 +93,25 @@ async def get_my_shift(ctx: dict = Depends(get_station_context)):
         if nozzle:
             fuel_type = _get_fuel_type(nozzle_id, storage=storage)
             price = get_fuel_price(fuel_type)
+            # Find parent island for fuel_type_abbrev
+            fuel_type_abbrev = None
+            for isl in islands_data.values():
+                ps = isl.get("pump_station")
+                if ps:
+                    for nz in ps.get("nozzles", []):
+                        if nz.get("nozzle_id") == nozzle_id:
+                            fuel_type_abbrev = isl.get("fuel_type_abbrev")
+                            break
+                    if fuel_type_abbrev:
+                        break
             nozzle_details.append({
                 "nozzle_id": nozzle_id,
                 "fuel_type": fuel_type,
                 "opening_reading": nozzle.get("electronic_reading", 0) or 0,
                 "price_per_liter": price,
                 "status": nozzle.get("status", "Active"),
+                "display_label": nozzle.get("display_label"),
+                "fuel_type_abbrev": fuel_type_abbrev,
             })
 
     return {
