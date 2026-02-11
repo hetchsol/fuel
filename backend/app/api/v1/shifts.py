@@ -10,7 +10,7 @@ from datetime import datetime
 from ...models.models import Shift, ShiftType, DualReading, NozzleShiftSummary, TankDipReading
 from ...services.relationship_validation import validate_create, validate_delete_operation
 from ...services.shift_validation import validate_shift_assignments
-from .auth import get_current_user, require_supervisor_or_owner, get_station_context
+from .auth import get_current_user, require_supervisor_or_owner, require_owner, get_station_context
 
 router = APIRouter()
 
@@ -255,6 +255,53 @@ def reconcile_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     shifts_data[shift_id]["status"] = "reconciled"
     return {"status": "success", "shift_id": shift_id, "new_status": "reconciled"}
 
+@router.put("/{shift_id}/deactivate", dependencies=[Depends(require_supervisor_or_owner)])
+def deactivate_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
+    """
+    Deactivate a shift (supervisor/owner only).
+    Only active shifts can be deactivated.
+    """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+
+    if shift_id not in shifts_data:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    current_status = shifts_data[shift_id].get("status", "active")
+    if current_status != "active":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only active shifts can be deactivated. Current status: {current_status}"
+        )
+
+    shifts_data[shift_id]["status"] = "inactive"
+    return {"status": "success", "shift_id": shift_id, "new_status": "inactive"}
+
+@router.delete("/{shift_id}", dependencies=[Depends(require_owner)])
+def delete_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
+    """
+    Delete an inactive shift (owner only).
+    Only inactive shifts can be deleted.
+    """
+    storage = ctx["storage"]
+    shifts_data = storage['shifts']
+
+    if shift_id not in shifts_data:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    current_status = shifts_data[shift_id].get("status", "active")
+    if current_status != "inactive":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only inactive shifts can be deleted. Deactivate the shift first. Current status: {current_status}"
+        )
+
+    # Check for dependent records before deleting
+    validate_delete_operation('shifts', shift_id, storage=storage)
+
+    del shifts_data[shift_id]
+    return {"status": "success", "shift_id": shift_id, "message": "Shift deleted permanently"}
+
 @router.put("/{shift_id}", response_model=Shift, dependencies=[Depends(require_supervisor_or_owner)])
 def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_context)):
     """
@@ -267,6 +314,10 @@ def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_co
 
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
+
+    # Reject updates to inactive shifts
+    if shifts_data[shift_id].get("status") == "inactive":
+        raise HTTPException(status_code=400, detail="Cannot update an inactive shift")
 
     # Validate assignments if present
     if shift.assignments:

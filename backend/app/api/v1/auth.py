@@ -180,6 +180,30 @@ async def require_supervisor_or_owner(current_user: dict = Depends(get_current_u
     return current_user
 
 
+async def require_owner(current_user: dict = Depends(get_current_user)):
+    """
+    Restrict access to owners only
+
+    Args:
+        current_user: User object from get_current_user dependency
+
+    Returns:
+        User object if authorized (role is owner)
+
+    Raises:
+        HTTPException 403: If user role is not owner
+    """
+    role = current_user["role"]
+    role_str = role.value if isinstance(role, UserRole) else str(role)
+    if role_str != UserRole.OWNER.value:
+        raise HTTPException(
+            status_code=403,
+            detail="Access forbidden. This endpoint is restricted to owners only."
+        )
+
+    return current_user
+
+
 async def get_station_context(
     current_user: dict = Depends(get_current_user),
     x_station_id: Optional[str] = Header(None)
