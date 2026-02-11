@@ -28,6 +28,15 @@ class NozzleLabelUpdate(BaseModel):
 
 # ── READ endpoints ──────────────────────────────────────
 
+@router.get("/fuel-types")
+async def get_fuel_types():
+    """Return fuel type abbreviation mappings used by the spreadsheet convention."""
+    return {
+        "abbreviations": FUEL_TYPE_ABBREVIATIONS,
+        "from_abbrev": FUEL_TYPE_FROM_ABBREV,
+    }
+
+
 @router.get("/", response_model=List[Island])
 async def get_all_islands(
     status: Optional[str] = Query(None, description="Filter by status: active or inactive"),
@@ -255,14 +264,6 @@ async def update_nozzle_label(
 
     raise HTTPException(status_code=404, detail="Nozzle not found")
 
-
-@router.get("/fuel-types")
-async def get_fuel_types():
-    """Return fuel type abbreviation mappings used by the spreadsheet convention."""
-    return {
-        "abbreviations": FUEL_TYPE_ABBREVIATIONS,
-        "from_abbrev": FUEL_TYPE_FROM_ABBREV,
-    }
 
 
 # ── Owner CRUD endpoints ─────────────────────────────────
