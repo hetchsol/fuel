@@ -12,5 +12,19 @@
     "location": "Test Location",
     "created_by": "O001",
     "created_at": "2026-02-09T19:03:16.651005"
+  },
+  "ST003": {
+    "station_id": "ST003",
+    "name": "Test Station 3",
+    "location": "Test Location 3",
+    "created_by": "O001",
+    "created_at": "2026-02-11T06:18:29.210280"
+  },
+  "ST004": {
+    "station_id": "ST004",
+    "name": "New Test Station",
+    "location": "Lusaka",
+    "created_by": "O001",
+    "created_at": "2026-02-11T06:21:49.181495"
   }
 }
