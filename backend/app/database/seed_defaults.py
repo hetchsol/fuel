@@ -11,6 +11,7 @@ def seed_station_defaults(storage: dict):
     if the relevant keys are empty.
     """
     _seed_islands(storage)
+    _migrate_islands_add_display_fields(storage)
     _seed_tanks(storage)
     _seed_accounts(storage)
     _seed_lpg_accessories(storage)
@@ -40,6 +41,8 @@ def _seed_islands(storage: dict):
             "location": "Main Station",
             "status": "inactive",
             "product_type": None,
+            "display_number": None,
+            "fuel_type_abbrev": None,
             "pump_station": {
                 "pump_station_id": ps_id,
                 "island_id": isl_id,
@@ -53,6 +56,8 @@ def _seed_islands(storage: dict):
                         "status": "Active",
                         "electronic_reading": 0,
                         "mechanical_reading": 0,
+                        "display_label": None,
+                        "custom_label": None,
                     },
                     {
                         "nozzle_id": f"ISL{i}-B",
@@ -61,6 +66,8 @@ def _seed_islands(storage: dict):
                         "status": "Active",
                         "electronic_reading": 0,
                         "mechanical_reading": 0,
+                        "display_label": None,
+                        "custom_label": None,
                     },
                 ],
             },
@@ -164,3 +171,31 @@ def _seed_settings(storage: dict):
             "pass_threshold": 0.5,
             "warning_threshold": 1.0,
         }
+
+
+def _migrate_islands_add_display_fields(storage: dict):
+    """
+    Migration guard: if existing islands lack display_number field,
+    add defaults and recompute display labels.
+    """
+    islands = storage.get('islands')
+    if not islands:
+        return
+
+    first_island = next(iter(islands.values()), None)
+    if first_island and "display_number" in first_island:
+        return  # Already migrated
+
+    # Add missing fields to all islands and nozzles
+    for island in islands.values():
+        island.setdefault("display_number", None)
+        island.setdefault("fuel_type_abbrev", None)
+        pump_station = island.get("pump_station")
+        if pump_station:
+            for nozzle in pump_station.get("nozzles", []):
+                nozzle.setdefault("display_label", None)
+                nozzle.setdefault("custom_label", None)
+
+    # Recompute labels for any islands that already have a product_type
+    from ..services.naming_convention import compute_display_labels
+    compute_display_labels(islands)

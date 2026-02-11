@@ -20,6 +20,8 @@ interface Nozzle {
   status: string
   electronic_reading: number
   mechanical_reading: number
+  display_label: string | null
+  custom_label: string | null
 }
 
 interface PumpStation {
@@ -37,6 +39,8 @@ interface Island {
   status: string
   product_type: string | null
   pump_station: PumpStation
+  display_number: number | null
+  fuel_type_abbrev: string | null
 }
 
 export default function Infrastructure() {
@@ -391,8 +395,8 @@ export default function Infrastructure() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Not configured</option>
-                    <option value="Petrol">Petrol</option>
-                    <option value="Diesel">Diesel</option>
+                    <option value="Petrol">Petrol (UNL)</option>
+                    <option value="Diesel">Diesel (LSD)</option>
                   </select>
                 </div>
 
@@ -448,7 +452,12 @@ export default function Infrastructure() {
                           key={nozzle.nozzle_id}
                           className={`flex-1 p-2 rounded-lg border text-center ${getNozzleColor(nozzle.fuel_type)}`}
                         >
-                          <p className="font-bold text-sm">{nozzle.nozzle_id}</p>
+                          <p className="font-bold text-sm">
+                            {island.fuel_type_abbrev && nozzle.display_label
+                              ? `${island.fuel_type_abbrev} ${nozzle.display_label}`
+                              : nozzle.nozzle_id}
+                          </p>
+                          <p className="text-xs opacity-75">{nozzle.nozzle_id}</p>
                           <p className="text-xs">{nozzle.fuel_type || 'Unconfigured'}</p>
                         </div>
                       ))}

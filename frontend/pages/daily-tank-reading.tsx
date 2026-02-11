@@ -61,13 +61,8 @@ export default function DailyTankReading() {
     opening_volume: '',
     closing_volume: '',
 
-    // Nozzle Readings (Columns D-AE)
-    nozzles: [
-      { nozzle_id: '1A', attendant: '', electronic_opening: '', electronic_closing: '', mechanical_opening: '', mechanical_closing: '' },
-      { nozzle_id: '1B', attendant: '', electronic_opening: '', electronic_closing: '', mechanical_opening: '', mechanical_closing: '' },
-      { nozzle_id: '2A', attendant: '', electronic_opening: '', electronic_closing: '', mechanical_opening: '', mechanical_closing: '' },
-      { nozzle_id: '2B', attendant: '', electronic_opening: '', electronic_closing: '', mechanical_opening: '', mechanical_closing: '' },
-    ] as any[],
+    // Nozzle Readings (Columns D-AE) — populated dynamically from islands API
+    nozzles: [] as any[],
 
     // Delivery info
     delivery_occurred: false,
@@ -89,6 +84,9 @@ export default function DailyTankReading() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  // Dynamic nozzle list from islands API
+  const [islandsLoaded, setIslandsLoaded] = useState(false)
 
   // Customer allocation state (DIESEL ONLY)
   const [customers, setCustomers] = useState<any[]>([])
@@ -124,6 +122,79 @@ export default function DailyTankReading() {
     }
     setUser(JSON.parse(userData))
   }, [])
+
+  // Fetch active islands and build nozzle list dynamically from API
+  useEffect(() => {
+    const fetchNozzlesFromIslands = async () => {
+      try {
+        const fuelType = selectedTank === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'
+        const res = await authFetch(`${BASE}/islands/?status=active`, {
+          headers: getHeaders(),
+        })
+        if (!res.ok) return
+
+        const allIslands = await res.json()
+        // Filter to islands matching the selected fuel type
+        const matchingIslands = allIslands.filter(
+          (isl: any) => isl.product_type === fuelType
+        )
+
+        // Build nozzle entries from matching islands, using display_label
+        const nozzleEntries: any[] = []
+        matchingIslands.forEach((isl: any) => {
+          if (isl.pump_station?.nozzles) {
+            isl.pump_station.nozzles.forEach((nz: any) => {
+              nozzleEntries.push({
+                nozzle_id: nz.display_label || nz.nozzle_id,
+                internal_nozzle_id: nz.nozzle_id,
+                attendant: '',
+                electronic_opening: '',
+                electronic_closing: '',
+                mechanical_opening: '',
+                mechanical_closing: '',
+              })
+            })
+          }
+        })
+
+        // Fallback: if no active islands configured, use default hardcoded labels
+        if (nozzleEntries.length === 0) {
+          const defaults = ['1A', '1B', '2A', '2B']
+          defaults.forEach(id => {
+            nozzleEntries.push({
+              nozzle_id: id,
+              internal_nozzle_id: null,
+              attendant: '',
+              electronic_opening: '',
+              electronic_closing: '',
+              mechanical_opening: '',
+              mechanical_closing: '',
+            })
+          })
+        }
+
+        setFormData(prev => ({ ...prev, nozzles: nozzleEntries }))
+        setIslandsLoaded(true)
+      } catch (err) {
+        console.error('Failed to fetch islands for nozzle list:', err)
+        // Fallback to defaults on error
+        const defaults = ['1A', '1B', '2A', '2B']
+        const fallbackNozzles = defaults.map(id => ({
+          nozzle_id: id,
+          internal_nozzle_id: null,
+          attendant: '',
+          electronic_opening: '',
+          electronic_closing: '',
+          mechanical_opening: '',
+          mechanical_closing: '',
+        }))
+        setFormData(prev => ({ ...prev, nozzles: fallbackNozzles }))
+        setIslandsLoaded(true)
+      }
+    }
+
+    fetchNozzlesFromIslands()
+  }, [selectedTank])
 
   // Fetch customers for allocation (diesel only)
   useEffect(() => {
@@ -238,8 +309,9 @@ export default function DailyTankReading() {
   }
 
   // NEW: Auto-fetch previous shift data when tank, date, or shift changes
+  // Wait for islandsLoaded so nozzle list is populated before matching previous readings
   useEffect(() => {
-    if (selectedTank && formData.date && formData.shift_type) {
+    if (selectedTank && formData.date && formData.shift_type && islandsLoaded) {
       // Only auto-fetch if opening values are empty
       const hasOpeningValues = formData.opening_dip_cm || formData.opening_volume ||
         formData.nozzles.some(n => n.electronic_opening || n.mechanical_opening)
@@ -248,7 +320,7 @@ export default function DailyTankReading() {
         fetchPreviousShiftData()
       }
     }
-  }, [selectedTank, formData.date, formData.shift_type])
+  }, [selectedTank, formData.date, formData.shift_type, islandsLoaded])
 
   // NEW: Get current tank reading estimate for new delivery
   const getCurrentTankReading = () => {

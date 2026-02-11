@@ -7,7 +7,8 @@ Owners retain full CRUD capabilities.
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 from pydantic import BaseModel
-from ...models.models import Island, PumpStation, Nozzle
+from ...models.models import Island, PumpStation, Nozzle, FUEL_TYPE_ABBREVIATIONS, FUEL_TYPE_FROM_ABBREV
+from ...services.naming_convention import compute_display_labels
 from .auth import get_station_context
 
 router = APIRouter()
@@ -20,6 +21,9 @@ class StatusUpdate(BaseModel):
 
 class ProductUpdate(BaseModel):
     product_type: str  # "Petrol" or "Diesel"
+
+class NozzleLabelUpdate(BaseModel):
+    custom_label: Optional[str] = None  # Set to None to clear and use auto-computed label
 
 
 # ── READ endpoints ──────────────────────────────────────
@@ -180,11 +184,16 @@ async def update_island_product(
         for nozzle in pump_station.get("nozzles", []):
             nozzle["fuel_type"] = product
 
+    # Recompute display labels across all islands
+    compute_display_labels(islands_data)
+
     return {
         "status": "success",
         "island_id": island_id,
         "product_type": product,
         "tank_id": tank_id,
+        "display_number": island.get("display_number"),
+        "fuel_type_abbrev": island.get("fuel_type_abbrev"),
     }
 
 
@@ -207,6 +216,53 @@ async def update_nozzle_status(island_id: str, nozzle_id: str, status: str, ctx:
             return {"status": "success", "nozzle_id": nozzle_id, "new_status": status}
 
     return {"error": "Nozzle not found"}
+
+
+# ── Label endpoints ───────────────────────────────────────
+
+@router.put("/{island_id}/nozzle/{nozzle_id}/label")
+async def update_nozzle_label(
+    island_id: str,
+    nozzle_id: str,
+    body: NozzleLabelUpdate,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Set or clear a custom display label for a nozzle (Owner only).
+    Setting custom_label to None reverts to the auto-computed label.
+    """
+    storage = ctx["storage"]
+    islands_data = storage['islands']
+
+    if island_id not in islands_data:
+        raise HTTPException(status_code=404, detail="Island not found")
+
+    pump_station = islands_data[island_id].get("pump_station")
+    if not pump_station:
+        raise HTTPException(status_code=404, detail="Pump station not found")
+
+    for nozzle in pump_station.get("nozzles", []):
+        if nozzle["nozzle_id"] == nozzle_id:
+            nozzle["custom_label"] = body.custom_label
+            # Recompute all labels (will use custom_label where set)
+            compute_display_labels(islands_data)
+            return {
+                "status": "success",
+                "nozzle_id": nozzle_id,
+                "custom_label": body.custom_label,
+                "display_label": nozzle.get("display_label"),
+            }
+
+    raise HTTPException(status_code=404, detail="Nozzle not found")
+
+
+@router.get("/fuel-types")
+async def get_fuel_types():
+    """Return fuel type abbreviation mappings used by the spreadsheet convention."""
+    return {
+        "abbreviations": FUEL_TYPE_ABBREVIATIONS,
+        "from_abbrev": FUEL_TYPE_FROM_ABBREV,
+    }
 
 
 # ── Owner CRUD endpoints ─────────────────────────────────

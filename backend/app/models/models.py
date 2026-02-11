@@ -112,6 +112,8 @@ class Nozzle(BaseModel):
     status: str  # Active, Inactive, Maintenance
     electronic_reading: Optional[float] = None  # Current cumulative electronic reading
     mechanical_reading: Optional[float] = None  # Current cumulative mechanical reading
+    display_label: Optional[str] = None  # e.g. "1A", "2B" — auto-computed per fuel type
+    custom_label: Optional[str] = None   # Owner override for display_label
 
 class PumpStation(BaseModel):
     pump_station_id: str
@@ -127,6 +129,13 @@ class Island(BaseModel):
     status: str = "inactive"          # "active" or "inactive"
     product_type: Optional[str] = None  # "Petrol" or "Diesel"
     pump_station: Optional[PumpStation] = None
+    display_number: Optional[int] = None      # e.g. 1, 2 within fuel type group
+    fuel_type_abbrev: Optional[str] = None    # e.g. "LSD", "UNL"
+
+
+# Fuel type abbreviation mappings (spreadsheet convention)
+FUEL_TYPE_ABBREVIATIONS = {"Diesel": "LSD", "Petrol": "UNL"}
+FUEL_TYPE_FROM_ABBREV = {v: k for k, v in FUEL_TYPE_ABBREVIATIONS.items()}
 
 # Shift Management
 class ShiftType(str, Enum):

@@ -81,7 +81,12 @@ export default function Nozzles() {
                               {nozzle.fuel_type === 'Diesel' ? '🛢️' : '⛽'}
                             </div>
                             <div>
-                              <p className="font-bold text-gray-900">{nozzle.nozzle_id}</p>
+                              <p className="font-bold text-gray-900">
+                                {island.fuel_type_abbrev && nozzle.display_label
+                                  ? `${island.fuel_type_abbrev} ${nozzle.display_label}`
+                                  : nozzle.nozzle_id}
+                              </p>
+                              <p className="text-xs text-gray-500">{nozzle.nozzle_id}</p>
                               <p className={`text-xs font-medium ${
                                 nozzle.fuel_type === 'Diesel' ? 'text-purple-700' : 'text-green-700'
                               }`}>
@@ -143,12 +148,13 @@ export default function Nozzles() {
 
       {/* Info Box */}
       <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-blue-900 mb-2">ℹ️ Island Structure</h3>
+        <h3 className="text-sm font-semibold text-blue-900 mb-2">ℹ️ Island Structure & Naming</h3>
         <ul className="text-sm text-blue-700 space-y-1">
-          <li>• Each <strong>Island</strong> contains one <strong>Pump Station</strong></li>
-          <li>• Each <strong>Pump Station</strong> has <strong>2 Nozzles</strong> (1 Diesel + 1 Petrol)</li>
+          <li>• Each <strong>Island</strong> contains one <strong>Pump Station</strong> with <strong>2 Nozzles</strong></li>
+          <li>• Nozzles use the spreadsheet naming convention: <strong>LSD 1A</strong>, <strong>LSD 1B</strong> (Diesel) / <strong>UNL 1A</strong>, <strong>UNL 1B</strong> (Petrol)</li>
+          <li>• <strong>LSD</strong> = Low Sulphur Diesel, <strong>UNL</strong> = Unleaded Petrol</li>
+          <li>• Islands are numbered 1, 2 within each fuel type group</li>
           <li>• Nozzles can be in Active, Inactive, or Maintenance status</li>
-          <li>• Use the readings page to record nozzle meter readings</li>
         </ul>
       </div>
     </div>
