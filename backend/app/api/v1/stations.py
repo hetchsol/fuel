@@ -5,9 +5,10 @@ Owner-only endpoints for creating and managing fuel stations.
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from ...models.models import Station
+from ...database import stations_registry
 from ...database.stations_registry import (
-    STATIONS, load_stations, save_stations, get_station,
-    list_stations, create_station as registry_create_station
+    get_station, list_stations, save_stations,
+    create_station as registry_create_station
 )
 from ...database.storage import get_station_storage
 from ...database.seed_defaults import seed_station_defaults
@@ -39,7 +40,7 @@ def create_new_station(station: Station, current_user: dict = Depends(get_curren
     if role_str != "owner":
         raise HTTPException(status_code=403, detail="Only owners can create stations")
 
-    if station.station_id in STATIONS:
+    if station.station_id in stations_registry.STATIONS:
         raise HTTPException(status_code=400, detail="Station ID already exists")
 
     created = registry_create_station(
@@ -63,15 +64,15 @@ def update_station(station_id: str, station: Station, current_user: dict = Depen
     if role_str != "owner":
         raise HTTPException(status_code=403, detail="Only owners can update stations")
 
-    if station_id not in STATIONS:
+    if station_id not in stations_registry.STATIONS:
         raise HTTPException(status_code=404, detail="Station not found")
 
-    STATIONS[station_id]["name"] = station.name
+    stations_registry.STATIONS[station_id]["name"] = station.name
     if station.location is not None:
-        STATIONS[station_id]["location"] = station.location
+        stations_registry.STATIONS[station_id]["location"] = station.location
     save_stations()
 
-    return Station(**STATIONS[station_id])
+    return Station(**stations_registry.STATIONS[station_id])
 
 
 @router.post("/{station_id}/setup-wizard")
@@ -85,7 +86,7 @@ def run_setup_wizard(station_id: str, current_user: dict = Depends(get_current_u
     if role_str != "owner":
         raise HTTPException(status_code=403, detail="Only owners can run setup wizard")
 
-    if station_id not in STATIONS:
+    if station_id not in stations_registry.STATIONS:
         raise HTTPException(status_code=404, detail="Station not found")
 
     storage = get_station_storage(station_id)

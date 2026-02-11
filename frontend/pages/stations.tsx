@@ -24,7 +24,7 @@ export default function StationsPage() {
 
   const loadStations = () => {
     setLoading(true)
-    fetch(`${BASE}/stations/`, { headers: getAuthHeaders() })
+    fetch(`${BASE}/stations/`, { headers: getHeaders() })
       .then(r => {
         if (!r.ok) throw new Error('Failed to load stations')
         return r.json()
