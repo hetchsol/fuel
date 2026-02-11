@@ -1,4 +1,4 @@
-import { authFetch, BASE } from '../lib/api'
+import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -51,12 +51,8 @@ export default function ReadingsMonitor() {
   const loadReadings = async () => {
     setLoading(true)
     try {
-      const token = localStorage.getItem('accessToken')
       const response = await authFetch(`${BASE}/validated-readings`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
-        }
+        headers: getHeaders()
       })
 
       if (response.ok) {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getStaffList, getNozzleList, getIslandList, getProductList } from '../lib/api'
+import { getStaffList, getNozzleList, getIslandList, getProductList, getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -176,9 +176,7 @@ export default function AdvancedReports() {
       }
 
       const response = await fetch(url, {
-        headers: {
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
-        }
+        headers: getHeaders()
       })
       if (!response.ok) {
         throw new Error('Failed to generate report')

@@ -1,4 +1,4 @@
-import { authFetch, BASE } from '../lib/api'
+import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -61,8 +61,8 @@ export default function Sales() {
       const res = await authFetch(`${BASE}/sales`, {
         method: 'POST',
         headers: {
+          ...getHeaders(),
           'Content-Type': 'application/json',
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
         },
         body: JSON.stringify({
           shift_id: formData.shiftId,

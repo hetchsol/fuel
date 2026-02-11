@@ -2,17 +2,12 @@ import { useState, useEffect } from 'react'
 import Layout from '../components/Layout'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
 function getAuthHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-  const stationId = typeof window !== 'undefined' ? localStorage.getItem('stationId') : null
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(stationId ? { 'X-Station-Id': stationId } : {}),
-  }
+  return { ...getHeaders(), 'Content-Type': 'application/json' }
 }
 
 export default function StationsPage() {
@@ -187,7 +182,7 @@ export default function StationsPage() {
                   className="h-4 w-4 text-blue-600 rounded"
                 />
                 <label htmlFor="quickSetup" className="text-sm" style={{ color: theme.textPrimary }}>
-                  Quick Setup (seed 2 islands, 8 nozzles, 2 tanks, accounts)
+                  Quick Setup (seed 4 islands, 8 nozzles, 2 tanks, accounts)
                 </label>
               </div>
               <div className="flex space-x-3">

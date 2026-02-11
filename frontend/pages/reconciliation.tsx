@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -14,9 +15,7 @@ export default function Reconciliation() {
     setError('')
     try {
       const res = await fetch(`${BASE}/reconciliation/date/${selectedDate}`, {
-        headers: {
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
-        }
+        headers: getHeaders()
       })
       if (!res.ok) {
         throw new Error('Failed to fetch reconciliations')

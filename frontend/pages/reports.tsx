@@ -1,4 +1,4 @@
-import { authFetch, BASE } from '../lib/api'
+import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import DateRangePicker from '../components/DateRangePicker';
@@ -80,17 +80,11 @@ export default function Reports() {
         setError('');
 
         try {
-            const token = localStorage.getItem('accessToken');
-            if (!token) {
-                throw new Error('No access token found');
-            }
-
             const url = `${BASE}/reports/date-range?start_date=${startDate}&end_date=${endDate}`;
             const response = await authFetch(url, {
                 headers: {
-                    'Authorization': `Bearer ${token}`,
+                    ...getHeaders(),
                     'Content-Type': 'application/json',
-                    'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
                 }
             });
 

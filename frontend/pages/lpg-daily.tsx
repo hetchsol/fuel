@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 const LPG_SIZES = [3, 6, 9, 19, 45, 48]
@@ -35,11 +36,9 @@ interface AccessoryRow {
 }
 
 function getAuthHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
   return {
+    ...getHeaders(),
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
   }
 }
 

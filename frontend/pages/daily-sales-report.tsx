@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -53,12 +54,8 @@ export default function DailySalesReport() {
     setError('')
 
     try {
-      const token = localStorage.getItem('accessToken')
       const res = await fetch(`${BASE}/sales-reports/daily/${date}`, {
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
-        },
+        headers: getHeaders(),
       })
 
       if (!res.ok) {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -34,7 +35,7 @@ export default function Inventory() {
   const fetchLPGAccessories = async () => {
     try {
       const res = await fetch(`${BASE}/lpg/accessories`, {
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+        headers: getHeaders()
       })
       if (res.ok) {
         const data = await res.json()
@@ -48,7 +49,7 @@ export default function Inventory() {
   const fetchLubricants = async () => {
     try {
       const res = await fetch(`${BASE}/lubricants/`, {
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+        headers: getHeaders()
       })
       if (res.ok) {
         const data = await res.json()

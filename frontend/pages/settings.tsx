@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -66,7 +67,7 @@ export default function Settings() {
   const loadSettings = async () => {
     try {
       const res = await fetch(`${BASE}/settings/fuel`, {
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+        headers: getHeaders()
       })
       if (res.ok) {
         const data = await res.json()
@@ -80,7 +81,7 @@ export default function Settings() {
   const loadSystemSettings = async () => {
     try {
       const res = await fetch(`${BASE}/settings/system`, {
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+        headers: getHeaders()
       })
       if (res.ok) {
         const data = await res.json()
@@ -94,7 +95,7 @@ export default function Settings() {
   const loadValidationThresholds = async () => {
     try {
       const res = await fetch(`${BASE}/settings/validation-thresholds`, {
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+        headers: getHeaders()
       })
       if (res.ok) {
         const data = await res.json()
@@ -112,7 +113,7 @@ export default function Settings() {
     try {
       const res = await fetch(`${BASE}/settings/validation-thresholds`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(validationThresholds),
       })
       if (res.ok) {
@@ -131,7 +132,7 @@ export default function Settings() {
   const loadTanks = async () => {
     try {
       const res = await fetch(`${BASE}/tanks/levels`, {
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+        headers: getHeaders()
       })
       if (res.ok) {
         const data = await res.json()
@@ -148,7 +149,7 @@ export default function Settings() {
     try {
       const res = await fetch(`${BASE}/tanks/create?tank_id=${encodeURIComponent(newTank.tank_id)}&fuel_type=${encodeURIComponent(newTank.fuel_type)}&capacity=${newTank.capacity}&initial_level=${newTank.initial_level}`, {
         method: 'POST',
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
+        headers: getHeaders(),
       })
 
       if (res.ok) {
@@ -184,7 +185,7 @@ export default function Settings() {
     try {
       const res = await fetch(`${BASE}/tanks/${tankId}`, {
         method: 'DELETE',
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
+        headers: getHeaders(),
       })
 
       if (res.ok) {
@@ -212,7 +213,7 @@ export default function Settings() {
     try {
       const res = await fetch(`${BASE}/settings/fuel`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
       })
 
@@ -239,7 +240,7 @@ export default function Settings() {
     try {
       const res = await fetch(`${BASE}/settings/system`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(systemSettings),
       })
 

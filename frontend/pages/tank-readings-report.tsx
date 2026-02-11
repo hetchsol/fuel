@@ -1,4 +1,4 @@
-import { authFetch, BASE } from '../lib/api'
+import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -101,14 +101,10 @@ export default function TankReadingsReport() {
     setError('')
 
     try {
-      const token = localStorage.getItem('accessToken')
       const url = `${BASE}/tank-readings/readings/${selectedTank}?start_date=${startDate}&end_date=${endDate}`
 
       const res = await authFetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
-        }
+        headers: getHeaders()
       })
 
       if (!res.ok) {

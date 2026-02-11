@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -29,9 +30,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Load stations for owners
   useEffect(() => {
     if (user && user.role === 'owner') {
-      const token = localStorage.getItem('accessToken')
       fetch(`${BASE}/stations/`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: getHeaders()
       })
         .then(r => r.ok ? r.json() : [])
         .then(data => setStations(data))

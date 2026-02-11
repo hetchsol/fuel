@@ -1,4 +1,4 @@
-import { authFetch, BASE } from '../lib/api'
+import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { useTheme } from '../contexts/ThemeContext'
@@ -70,11 +70,9 @@ export default function ValidatedReadingsPage() {
 
   const loadInitialData = async () => {
     try {
-      const token = localStorage.getItem('accessToken')
       const headers = {
-        'Authorization': `Bearer ${token}`,
+        ...getHeaders(),
         'Content-Type': 'application/json',
-        'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
       }
 
       // Load shifts
@@ -93,12 +91,8 @@ export default function ValidatedReadingsPage() {
 
   const loadValidatedReadings = async () => {
     try {
-      const token = localStorage.getItem('accessToken')
       const response = await authFetch(`${BASE}/validated-readings`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
-        }
+        headers: getHeaders()
       })
 
       if (response.ok) {
@@ -117,8 +111,6 @@ export default function ValidatedReadingsPage() {
     setSuccess('')
 
     try {
-      const token = localStorage.getItem('accessToken')
-
       const payload = {
         shift_id: formData.shift_id,
         tank_id: formData.tank_id,
@@ -133,9 +125,8 @@ export default function ValidatedReadingsPage() {
       const response = await authFetch(`${BASE}/validated-readings`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...getHeaders(),
           'Content-Type': 'application/json',
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
         },
         body: JSON.stringify(payload)
       })

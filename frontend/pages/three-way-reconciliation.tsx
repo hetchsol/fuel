@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -60,9 +61,7 @@ export default function ThreeWayReconciliation() {
     setLoading(true)
     try {
       const response = await fetch(`${BASE}/reconciliation/three-way/daily-summary/${selectedDate}`, {
-        headers: {
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
-        }
+        headers: getHeaders()
       })
       if (response.ok) {
         const data = await response.json()

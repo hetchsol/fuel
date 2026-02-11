@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -31,9 +32,7 @@ export default function UsersManagement() {
   const fetchUsers = async () => {
     try {
       const res = await fetch(`${BASE}/auth/users`, {
-        headers: {
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
-        }
+        headers: getHeaders()
       })
       if (!res.ok) throw new Error('Failed to fetch users')
       const data = await res.json()
@@ -83,8 +82,8 @@ export default function UsersManagement() {
       const res = await fetch(url, {
         method,
         headers: {
+          ...getHeaders(),
           'Content-Type': 'application/json',
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
         },
         body: JSON.stringify(formData)
       })
@@ -108,9 +107,7 @@ export default function UsersManagement() {
     try {
       const res = await fetch(`${BASE}/auth/users/${username}`, {
         method: 'DELETE',
-        headers: {
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001'
-        }
+        headers: getHeaders()
       })
 
       if (!res.ok) {

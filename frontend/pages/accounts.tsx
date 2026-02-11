@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -36,7 +37,7 @@ export default function Accounts() {
     setLoading(true)
     try {
       const res = await fetch(`${BASE}/accounts/`, {
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+        headers: getHeaders()
       })
       if (res.ok) {
         const data = await res.json()
@@ -108,7 +109,7 @@ export default function Accounts() {
 
       const res = await fetch(`${BASE}/accounts/sales`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
 

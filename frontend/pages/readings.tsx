@@ -1,4 +1,4 @@
-import { authFetch, BASE } from '../lib/api'
+import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState } from 'react'
 
 
@@ -50,7 +50,7 @@ export default function Readings() {
 
       const uploadRes = await authFetch(`${BASE}/attachments`, {
         method: 'POST',
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
+        headers: getHeaders(),
         body: uploadFormData,
       })
 
@@ -66,7 +66,7 @@ export default function Readings() {
       setLoadingOcrPreview(true)
       const ocrRes = await authFetch(`${BASE}/ocr/preview/${uploadData.attachment_id}`, {
         method: 'POST',
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
+        headers: getHeaders(),
       })
 
       if (ocrRes.ok) {
@@ -130,7 +130,7 @@ export default function Readings() {
 
       const res = await authFetch(`${BASE}/nozzles/${formData.nozzleId}/readings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
 

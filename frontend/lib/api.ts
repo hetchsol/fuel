@@ -1,7 +1,7 @@
 
 export const BASE = '/api/v1';
 
-function getHeaders(): Record<string, string> {
+export function getHeaders(): Record<string, string> {
   if (typeof window === 'undefined') return {}
   const token = localStorage.getItem('accessToken')
   const stationId = localStorage.getItem('stationId')

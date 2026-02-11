@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import { useTheme } from '../contexts/ThemeContext'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
 const fetchDeliveries = async () => {
   const res = await fetch(`${BASE}/tanks/deliveries`, {
-    headers: {
-      'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
-    }
+    headers: getHeaders()
   })
   if (!res.ok) throw new Error('Failed to load deliveries')
   return res.json()
@@ -44,9 +43,7 @@ export default function StockMovement() {
     try {
       // Fetch REAL-TIME tank levels (cumulative with all deliveries and sales)
       const response = await fetch(`${BASE}/tanks/levels`, {
-        headers: {
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
-        }
+        headers: getHeaders()
       })
 
       if (response.ok) {
@@ -99,8 +96,8 @@ export default function StockMovement() {
       const res = await fetch(`${BASE}/tanks/delivery`, {
         method: 'POST',
         headers: {
+          ...getHeaders(),
           'Content-Type': 'application/json',
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
         },
         body: JSON.stringify(payload),
       })

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -17,11 +18,9 @@ interface ProductRow {
 }
 
 function getAuthHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
   return {
+    ...getHeaders(),
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
   }
 }
 

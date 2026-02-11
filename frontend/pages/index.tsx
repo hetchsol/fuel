@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import useSWR from 'swr'
-import { getDaily, getFlags, getTankLevels } from '../lib/api'
+import { getDaily, getFlags, getTankLevels, getHeaders } from '../lib/api'
 import TankCard from '../components/TankCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 
@@ -39,15 +39,9 @@ export default function Home() {
       const user = userData ? JSON.parse(userData).full_name : 'Unknown'
 
       const BASE = '/api/v1'
-      const token = localStorage.getItem('accessToken')
-      const stationId = localStorage.getItem('stationId')
       const res = await fetch(`${BASE}/tanks/dip-reading/${tankId}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(stationId ? { 'X-Station-Id': stationId } : {}),
-        },
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
           opening_dip: dipReadings.openingDip ? parseFloat(dipReadings.openingDip) : null,
           closing_dip: dipReadings.closingDip ? parseFloat(dipReadings.closingDip) : null,

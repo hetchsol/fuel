@@ -1,4 +1,4 @@
-import { authFetch, BASE } from '../lib/api'
+import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { useTheme } from '../contexts/ThemeContext'
@@ -134,12 +134,8 @@ export default function DailyTankReading() {
 
   const fetchCustomers = async () => {
     try {
-      const token = localStorage.getItem('accessToken')
       const response = await authFetch(`${BASE}/customers?active_only=true`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
-        }
+        headers: getHeaders()
       })
 
       if (response.ok) {
@@ -171,14 +167,10 @@ export default function DailyTankReading() {
   // NEW: Fetch unlinked deliveries for auto-linking
   const fetchUnlinkedDeliveries = async () => {
     try {
-      const token = localStorage.getItem('accessToken')
       const response = await authFetch(
         `${BASE}/tank-readings/deliveries/${selectedTank}?date=${formData.date}&shift_type=${formData.shift_type}&unlinked_only=true`,
         {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
-          }
+          headers: getHeaders()
         }
       )
 
@@ -195,14 +187,10 @@ export default function DailyTankReading() {
   const fetchPreviousShiftData = async () => {
     try {
       setFetchingPrevious(true)
-      const token = localStorage.getItem('accessToken')
       const response = await authFetch(
         `${BASE}/tank-readings/readings/${selectedTank}/previous-shift?current_date=${formData.date}&shift_type=${formData.shift_type}`,
         {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
-          }
+          headers: getHeaders()
         }
       )
 
@@ -667,8 +655,6 @@ export default function DailyTankReading() {
     setSuccess('')
 
     try {
-      const token = localStorage.getItem('accessToken')
-
       // Prepare nozzle readings
       const nozzleReadings = getNozzleReadings().filter(n => n.attendant) // Only include filled nozzles
 
@@ -757,9 +743,8 @@ export default function DailyTankReading() {
       const res = await authFetch(`${BASE}/tank-readings/readings`, {
         method: 'POST',
         headers: {
+          ...getHeaders(),
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
         },
         body: JSON.stringify(payload)
       })

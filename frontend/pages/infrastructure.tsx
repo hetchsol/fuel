@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -58,7 +59,7 @@ export default function Infrastructure() {
   const fetchTanks = async () => {
     try {
       const res = await fetch(`${BASE}/tanks/levels`, {
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+        headers: getHeaders(),
       })
       if (res.ok) {
         const data = await res.json()
@@ -72,7 +73,7 @@ export default function Infrastructure() {
   const fetchIslands = async () => {
     try {
       const res = await fetch(`${BASE}/islands/`, {
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' }
+        headers: getHeaders(),
       })
       if (res.ok) {
         const data = await res.json()
@@ -88,7 +89,7 @@ export default function Infrastructure() {
     try {
       const res = await fetch(`${BASE}/tanks/${tankId}/capacity?new_capacity=${capacity}`, {
         method: 'PUT',
-        headers: { 'X-Station-Id': localStorage.getItem('stationId') || 'ST001' },
+        headers: getHeaders(),
       })
 
       if (res.ok) {
@@ -112,10 +113,7 @@ export default function Infrastructure() {
     try {
       const res = await fetch(`${BASE}/islands/${islandId}/product`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
-        },
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ product_type: productType }),
       })
 
@@ -142,10 +140,7 @@ export default function Infrastructure() {
     try {
       const res = await fetch(`${BASE}/islands/${islandId}/status`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
-        },
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       })
 

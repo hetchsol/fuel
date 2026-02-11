@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -65,11 +66,9 @@ interface HandoverResult {
 }
 
 function getAuthHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
   return {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    'X-Station-Id': localStorage.getItem('stationId') || 'ST001',
+    ...getHeaders(),
   }
 }
 
