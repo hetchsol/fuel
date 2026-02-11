@@ -13,6 +13,7 @@ def seed_station_defaults(storage: dict):
     _seed_islands(storage)
     _migrate_islands_add_display_fields(storage)
     _migrate_islands_default_active(storage)
+    _migrate_islands_assign_product_types(storage)
     _seed_tanks(storage)
     _seed_accounts(storage)
     _seed_lpg_accessories(storage)
@@ -32,8 +33,18 @@ def _seed_islands(storage: dict):
     if existing:
         return
 
+    # Pre-assigned layout matching the spreadsheet:
+    # ISL-001/002 = Diesel (LSD), ISL-003/004 = Petrol (UNL)
+    # Display number 1 for ISL-001/003, 2 for ISL-002/004
+    island_config = [
+        (1, "Diesel", "LSD", "TANK-DIESEL", 1),
+        (2, "Diesel", "LSD", "TANK-DIESEL", 2),
+        (3, "Petrol", "UNL", "TANK-PETROL", 1),
+        (4, "Petrol", "UNL", "TANK-PETROL", 2),
+    ]
+
     storage['islands'] = {}
-    for i in range(1, 5):
+    for i, product_type, abbrev, tank_id, display_num in island_config:
         isl_id = f"ISL-00{i}"
         ps_id = f"PS-00{i}"
         storage['islands'][isl_id] = {
@@ -41,38 +52,42 @@ def _seed_islands(storage: dict):
             "name": f"Island {i}",
             "location": "Main Station",
             "status": "active",
-            "product_type": None,
-            "display_number": None,
-            "fuel_type_abbrev": None,
+            "product_type": product_type,
+            "display_number": display_num,
+            "fuel_type_abbrev": abbrev,
             "pump_station": {
                 "pump_station_id": ps_id,
                 "island_id": isl_id,
                 "name": f"Pump Station {i}",
-                "tank_id": "",
+                "tank_id": tank_id,
                 "nozzles": [
                     {
                         "nozzle_id": f"ISL{i}-A",
                         "pump_station_id": ps_id,
-                        "fuel_type": "",
+                        "fuel_type": product_type,
                         "status": "Active",
                         "electronic_reading": 0,
                         "mechanical_reading": 0,
-                        "display_label": None,
+                        "display_label": f"{display_num}A",
                         "custom_label": None,
                     },
                     {
                         "nozzle_id": f"ISL{i}-B",
                         "pump_station_id": ps_id,
-                        "fuel_type": "",
+                        "fuel_type": product_type,
                         "status": "Active",
                         "electronic_reading": 0,
                         "mechanical_reading": 0,
-                        "display_label": None,
+                        "display_label": f"{display_num}B",
                         "custom_label": None,
                     },
                 ],
             },
         }
+
+    # Safety call: recompute labels for consistency
+    from ..services.naming_convention import compute_display_labels
+    compute_display_labels(storage['islands'])
 
 
 def _seed_tanks(storage: dict):
@@ -213,3 +228,44 @@ def _migrate_islands_default_active(storage: dict):
     for island in islands.values():
         if island.get("status") == "inactive":
             island["status"] = "active"
+
+
+def _migrate_islands_assign_product_types(storage: dict):
+    """
+    Migration: assign Diesel/Petrol product types to the 4 default islands
+    for existing stations that were seeded with the old defaults (product_type: None).
+    Skips entirely if any island already has a product_type set (owner configured manually).
+    """
+    islands = storage.get('islands')
+    if not islands:
+        return
+
+    default_ids = ["ISL-001", "ISL-002", "ISL-003", "ISL-004"]
+    # All 4 default islands must exist
+    if not all(isl_id in islands for isl_id in default_ids):
+        return
+
+    # Skip if ANY island already has a product_type assigned
+    if any(islands[isl_id].get("product_type") for isl_id in default_ids):
+        return
+
+    # Assign product types matching the spreadsheet layout
+    assignments = {
+        "ISL-001": ("Diesel", "TANK-DIESEL"),
+        "ISL-002": ("Diesel", "TANK-DIESEL"),
+        "ISL-003": ("Petrol", "TANK-PETROL"),
+        "ISL-004": ("Petrol", "TANK-PETROL"),
+    }
+
+    for isl_id, (product_type, tank_id) in assignments.items():
+        island = islands[isl_id]
+        island["product_type"] = product_type
+
+        pump_station = island.get("pump_station")
+        if pump_station:
+            pump_station["tank_id"] = tank_id
+            for nozzle in pump_station.get("nozzles", []):
+                nozzle["fuel_type"] = product_type
+
+    from ..services.naming_convention import compute_display_labels
+    compute_display_labels(islands)
