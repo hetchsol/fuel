@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     const raw = await getRawBody(req)
-    fetchOptions.body = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as unknown as BodyInit
+    fetchOptions.body = raw
   }
 
   try {
@@ -59,6 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.send(text)
     }
   } catch (error) {
+    console.error('Proxy error forwarding to backend:', error)
     res.status(502).json({ detail: 'Backend unavailable. Please try again shortly.' })
   }
 }
