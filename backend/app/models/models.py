@@ -711,6 +711,7 @@ class HandoverInput(BaseModel):
     credit_sales: float = 0     # total credit sales (not collected as cash)
     actual_cash: float          # cash being handed in
     notes: Optional[str] = None
+    stock_snapshot: Optional[ShiftStockSnapshot] = None
 
 class HandoverOutput(BaseModel):
     """Output after submitting a shift handover with all computed values"""
@@ -733,6 +734,7 @@ class HandoverOutput(BaseModel):
     status: str                 # "submitted" or "reopened"
     notes: Optional[str] = None
     created_at: str
+    stock_snapshot: Optional[dict] = None
 
 
 # ===== Enter Readings (Dual Meter) Models =====
@@ -758,3 +760,35 @@ class SupervisorReviewInput(BaseModel):
     attendant_id: str
     action: str  # "approve" or "return"
     overall_note: Optional[str] = None  # Required when returning
+
+
+# ===== Shift-Level Stock Snapshot Models =====
+
+class LPGStockLineItem(BaseModel):
+    size_kg: int
+    opening_full: int = 0
+    opening_empty: int = 0
+    additions: int = 0
+    closing_full: int = 0
+    closing_empty: int = 0
+    sold_refill: int = 0          # attendant splits total sold into refill vs with-cylinder
+    sold_with_cylinder: int = 0   # priced differently (gas + deposit)
+
+class AccessoryStockLineItem(BaseModel):
+    product_code: str
+    description: str
+    opening_stock: int = 0
+    additions: int = 0
+    closing_stock: int = 0
+
+class LubricantStockLineItem(BaseModel):
+    product_code: str
+    description: str
+    opening_stock: int = 0
+    additions: int = 0
+    closing_stock: int = 0
+
+class ShiftStockSnapshot(BaseModel):
+    lpg_cylinders: List[LPGStockLineItem] = []
+    accessories: List[AccessoryStockLineItem] = []
+    lubricants: List[LubricantStockLineItem] = []
