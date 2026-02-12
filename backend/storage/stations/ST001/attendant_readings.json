@@ -5,16 +5,8 @@
     "user_name": "Shaka",
     "reading_type": "Opening",
     "nozzle_readings": [
-      {
-        "nozzle_id": "ISL1-A",
-        "electronic_reading": 609176.526,
-        "mechanical_reading": 611984.0
-      },
-      {
-        "nozzle_id": "ISL1-B",
-        "electronic_reading": 445021.118,
-        "mechanical_reading": 447200.0
-      }
+      { "nozzle_id": "ISL1-A", "electronic_reading": 609176.526, "mechanical_reading": 611984.0 },
+      { "nozzle_id": "ISL1-B", "electronic_reading": 445021.118, "mechanical_reading": 447200.0 }
     ],
     "notes": null,
     "submitted_at": "2026-02-12T06:05:00.000000"
@@ -25,16 +17,8 @@
     "user_name": "Shaka",
     "reading_type": "Closing",
     "nozzle_readings": [
-      {
-        "nozzle_id": "ISL1-A",
-        "electronic_reading": 609454.572,
-        "mechanical_reading": 612262.0
-      },
-      {
-        "nozzle_id": "ISL1-B",
-        "electronic_reading": 451833.254,
-        "mechanical_reading": 454010.0
-      }
+      { "nozzle_id": "ISL1-A", "electronic_reading": 609454.572, "mechanical_reading": 612262.0 },
+      { "nozzle_id": "ISL1-B", "electronic_reading": 451833.254, "mechanical_reading": 454010.0 }
     ],
     "notes": null,
     "submitted_at": "2026-02-12T17:55:00.000000"
@@ -45,16 +29,8 @@
     "user_name": "Trevor",
     "reading_type": "Opening",
     "nozzle_readings": [
-      {
-        "nozzle_id": "ISL2-A",
-        "electronic_reading": 312887.41,
-        "mechanical_reading": 314100.0
-      },
-      {
-        "nozzle_id": "ISL2-B",
-        "electronic_reading": 528990.003,
-        "mechanical_reading": 530400.0
-      }
+      { "nozzle_id": "ISL2-A", "electronic_reading": 312887.410, "mechanical_reading": 314100.0 },
+      { "nozzle_id": "ISL2-B", "electronic_reading": 528990.003, "mechanical_reading": 530400.0 }
     ],
     "notes": null,
     "submitted_at": "2026-02-12T06:07:00.000000"
@@ -65,16 +41,8 @@
     "user_name": "Trevor",
     "reading_type": "Closing",
     "nozzle_readings": [
-      {
-        "nozzle_id": "ISL2-A",
-        "electronic_reading": 318530.68,
-        "mechanical_reading": 319742.0
-      },
-      {
-        "nozzle_id": "ISL2-B",
-        "electronic_reading": 538693.551,
-        "mechanical_reading": 540102.0
-      }
+      { "nozzle_id": "ISL2-A", "electronic_reading": 318530.680, "mechanical_reading": 319742.0 },
+      { "nozzle_id": "ISL2-B", "electronic_reading": 538693.551, "mechanical_reading": 540102.0 }
     ],
     "notes": null,
     "submitted_at": "2026-02-12T17:57:00.000000"
@@ -85,16 +53,10 @@
     "user_name": "Shaka",
     "reading_type": "Opening",
     "nozzle_readings": [
-      {
-        "nozzle_id": "ISL1-A",
-        "electronic_reading": 609454.572,
-        "mechanical_reading": 612262.0
-      },
-      {
-        "nozzle_id": "ISL1-B",
-        "electronic_reading": 451833.254,
-        "mechanical_reading": 454010.0
-      }
+      { "nozzle_id": "ISL1-A", "electronic_reading": 609454.572, "mechanical_reading": 612262.0 },
+      { "nozzle_id": "ISL1-B", "electronic_reading": 451833.254, "mechanical_reading": 454010.0 },
+      { "nozzle_id": "ISL3-A", "electronic_reading": 285100.000, "mechanical_reading": 286500.0 },
+      { "nozzle_id": "ISL3-B", "electronic_reading": 198750.000, "mechanical_reading": 199800.0 }
     ],
     "notes": null,
     "submitted_at": "2026-02-13T06:05:00.000000"
