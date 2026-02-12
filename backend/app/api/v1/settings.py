@@ -83,6 +83,7 @@ def update_validation_thresholds(thresholds: ValidationThresholds, ctx: dict = D
     storage = ctx["storage"]
     storage['validation_thresholds']["pass_threshold"] = thresholds.pass_threshold
     storage['validation_thresholds']["warning_threshold"] = thresholds.warning_threshold
+    storage['validation_thresholds']["meter_discrepancy_threshold"] = thresholds.meter_discrepancy_threshold
 
     return {
         "status": "success",

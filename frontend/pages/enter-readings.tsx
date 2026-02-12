@@ -105,6 +105,16 @@ export default function EnterReadings() {
   const [closingElectronic, setClosingElectronic] = useState<Record<string, string>>({})
   const [closingMechanical, setClosingMechanical] = useState<Record<string, string>>({})
 
+  // Per-nozzle notes for discrepancy explanation
+  const [nozzleNotes, setNozzleNotes] = useState<Record<string, string>>({})
+
+  // Meter discrepancy threshold
+  const [meterThreshold, setMeterThreshold] = useState(0.5)
+
+  // Review status from server
+  const [reviewStatus, setReviewStatus] = useState<string | null>(null)
+  const [returnNote, setReturnNote] = useState<string | null>(null)
+
   // UI state
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -129,6 +139,14 @@ export default function EnterReadings() {
 
   const isSupervisor = user && (user.role === 'supervisor' || user.role === 'owner')
 
+  // Fetch meter discrepancy threshold on mount
+  useEffect(() => {
+    fetch(`${BASE}/settings/validation-thresholds`, { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.meter_discrepancy_threshold !== undefined) setMeterThreshold(data.meter_discrepancy_threshold) })
+      .catch(() => {})
+  }, [])
+
   // Fetch active shift on mount
   useEffect(() => {
     setLoading(true)
@@ -141,7 +159,14 @@ export default function EnterReadings() {
           setAssignmentInfo(data.assignment)
           setNozzles(data.nozzles || [])
           setOpeningSubmitted(data.opening_submitted)
-          setClosingSubmitted(data.closing_submitted)
+          setReviewStatus(data.review_status || null)
+          setReturnNote(data.return_note || null)
+          // If readings were returned, unlock closing form for re-entry
+          if (data.review_status === 'returned') {
+            setClosingSubmitted(false)
+          } else {
+            setClosingSubmitted(data.closing_submitted)
+          }
 
           // Pre-fill form values from server data
           const elecOpen: Record<string, string> = {}
@@ -238,6 +263,7 @@ export default function EnterReadings() {
         nozzle_id: n.nozzle_id,
         electronic_reading: parseFloat(closingElectronic[n.nozzle_id]) || 0,
         mechanical_reading: parseFloat(closingMechanical[n.nozzle_id]) || 0,
+        note: nozzleNotes[n.nozzle_id] || null,
       }))
       const res = await fetch(`${BASE}/enter-readings/submit`, {
         method: 'POST',
@@ -316,6 +342,15 @@ export default function EnterReadings() {
     closingMechanical[n.nozzle_id] !== undefined && closingMechanical[n.nozzle_id] !== ''
   )
   const allClosingValid = closingComputations.every(c => !c.valid ? true : c.elecDisp >= 0 && c.mechDisp >= 0)
+
+  // Check all required discrepancy notes are provided
+  const allNotesProvided = nozzles.every((n, idx) => {
+    const comp = closingComputations[idx]
+    if (comp.valid && comp.disc > meterThreshold) {
+      return (nozzleNotes[n.nozzle_id] || '').trim().length > 0
+    }
+    return true
+  })
 
   // -- Render --
 
@@ -465,6 +500,22 @@ export default function EnterReadings() {
         </div>
       )}
 
+      {/* Returned Banner */}
+      {reviewStatus === 'returned' && returnNote && (
+        <div className="rounded-lg p-4 mb-4"
+          style={{ backgroundColor: '#fef2f2', borderColor: '#fecaca', borderWidth: 2 }}>
+          <div className="font-semibold text-sm mb-1" style={{ color: '#dc2626' }}>
+            Readings Returned by Supervisor
+          </div>
+          <p className="text-sm" style={{ color: '#991b1b' }}>
+            {returnNote}
+          </p>
+          <p className="text-xs mt-2" style={{ color: '#b91c1c' }}>
+            Please re-enter your closing readings and re-submit.
+          </p>
+        </div>
+      )}
+
       {/* Phase 4: Closing Readings */}
       {openingSubmitted && !closingSubmitted && (
         <div className="rounded-lg shadow mb-6 overflow-x-auto"
@@ -476,7 +527,7 @@ export default function EnterReadings() {
           <table className="min-w-full text-sm">
             <thead>
               <tr style={{ backgroundColor: theme.background }}>
-                {['Nozzle', 'Fuel', 'Elec Open', 'Mech Open', 'Elec Closing', 'Mech Closing', 'Elec Disp', 'Mech Disp', 'Disc %'].map(h => (
+                {['Nozzle', 'Fuel', 'Elec Open', 'Mech Open', 'Elec Closing', 'Mech Closing', 'Elec Disp', 'Mech Disp', 'Disc %', 'Note'].map(h => (
                   <th key={h} className="px-2 py-2 text-left text-xs font-medium uppercase"
                     style={{ color: theme.textSecondary }}>{h}</th>
                 ))}
@@ -491,6 +542,8 @@ export default function EnterReadings() {
                 const mechOpen = parseFloat(openingMechanical[n.nozzle_id]) || 0
                 const elecErr = !isNaN(elecCloseVal) && elecCloseVal < elecOpen
                 const mechErr = !isNaN(mechCloseVal) && mechCloseVal < mechOpen
+                const noteRequired = comp.valid && comp.disc > meterThreshold
+                const noteValue = nozzleNotes[n.nozzle_id] || ''
                 return (
                   <tr key={n.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                     <td className="px-2 py-2 font-medium" style={{ color: theme.textPrimary }}>
@@ -528,9 +581,27 @@ export default function EnterReadings() {
                       {comp.valid ? comp.mechDisp.toLocaleString(undefined, { minimumFractionDigits: 3 }) : '-'}
                     </td>
                     <td className="px-2 py-2 text-right font-mono" style={{
-                      color: comp.valid ? (comp.disc <= 0.5 ? '#16a34a' : comp.disc <= 1 ? '#a16207' : '#dc2626') : theme.textSecondary
+                      color: comp.valid ? (comp.disc <= meterThreshold ? '#16a34a' : comp.disc <= 1 ? '#a16207' : '#dc2626') : theme.textSecondary
                     }}>
                       {comp.valid ? comp.disc.toFixed(2) + '%' : '-'}
+                    </td>
+                    <td className="px-2 py-2">
+                      <textarea
+                        value={noteValue}
+                        onChange={e => setNozzleNotes(prev => ({ ...prev, [n.nozzle_id]: e.target.value }))}
+                        placeholder={noteRequired ? 'Required: explain discrepancy' : 'Optional note'}
+                        rows={2}
+                        className="w-40 px-2 py-1 rounded border text-xs"
+                        style={{
+                          ...inputStyle,
+                          borderColor: noteRequired && !noteValue.trim() ? '#ef4444' : theme.border,
+                          borderWidth: noteRequired ? 2 : 1,
+                        }} />
+                      {noteRequired && !noteValue.trim() && (
+                        <div className="text-xs mt-0.5" style={{ color: '#ef4444' }}>
+                          Note required ({comp.disc.toFixed(2)}% &gt; {meterThreshold}%)
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )
@@ -547,16 +618,21 @@ export default function EnterReadings() {
                 <td className="px-2 py-2 text-right font-mono font-semibold" style={{ color: theme.textPrimary }}>
                   {closingComputations.reduce((s, c) => s + (c.valid ? c.mechDisp : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 3 })}
                 </td>
-                <td className="px-2 py-2"></td>
+                <td className="px-2 py-2" colSpan={2}></td>
               </tr>
             </tfoot>
           </table>
-          <div className="p-4 flex justify-end">
+          <div className="p-4 flex justify-end gap-3 items-center">
+            {!allNotesProvided && (
+              <span className="text-xs" style={{ color: '#dc2626' }}>
+                Please provide notes for all nozzles with discrepancy above {meterThreshold}%
+              </span>
+            )}
             <button
               onClick={handleSubmitClosing}
-              disabled={submitting || !allClosingEntered || !allClosingValid}
+              disabled={submitting || !allClosingEntered || !allClosingValid || !allNotesProvided}
               className="px-6 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: (allClosingEntered && allClosingValid) ? theme.primary : '#9ca3af' }}>
+              style={{ backgroundColor: (allClosingEntered && allClosingValid && allNotesProvided) ? theme.primary : '#9ca3af' }}>
               {submitting ? 'Submitting...' : 'Submit Closing Readings'}
             </button>
           </div>
@@ -689,6 +765,53 @@ function VerdictBadge({ verdict }: { verdict: string }) {
   )
 }
 
+function ReviewStatusBadge({ status }: { status: string }) {
+  const colors: Record<string, { bg: string; fg: string }> = {
+    submitted: { bg: '#fef3c7', fg: '#a16207' },
+    approved: { bg: '#dcfce7', fg: '#16a34a' },
+    returned: { bg: '#fef2f2', fg: '#dc2626' },
+  }
+  const c = colors[status] || colors.submitted
+  return (
+    <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold"
+      style={{ backgroundColor: c.bg, color: c.fg }}>
+      {status}
+    </span>
+  )
+}
+
+interface ReviewAttendant {
+  attendant_id: string
+  attendant_name: string
+  review_status: string
+  has_discrepancy: boolean
+  submitted_at: string
+  nozzle_details: {
+    nozzle_id: string
+    fuel_type: string
+    electronic_dispensed: number
+    mechanical_dispensed: number
+    discrepancy_percent: number
+    exceeds_threshold: boolean
+    attendant_note: string | null
+  }[]
+  supervisor_review: {
+    reviewed_by: string
+    reviewed_by_name: string
+    reviewed_at: string
+    action: string
+    overall_note: string | null
+  } | null
+}
+
+interface ReviewQueueData {
+  shift_id: string
+  date: string
+  shift_type: string
+  meter_discrepancy_threshold: number
+  attendants: ReviewAttendant[]
+}
+
 function SupervisorSection({
   theme, inputStyle, allShifts,
   supervisorShiftId, setSupervisorShiftId,
@@ -704,6 +827,70 @@ function SupervisorSection({
   reconError: string
   shiftRecon: ShiftReconciliation | null
 }) {
+  const [reviewQueue, setReviewQueue] = useState<ReviewQueueData | null>(null)
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({})
+  const [reviewLoading, setReviewLoading] = useState<string | null>(null)
+  const [reviewMsg, setReviewMsg] = useState('')
+  const [reviewErr, setReviewErr] = useState('')
+
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const isOwner = user.role === 'owner'
+
+  const fetchReviewQueue = async (shiftId: string) => {
+    try {
+      const res = await fetch(`${BASE}/enter-readings/shift/${shiftId}/review-queue`, {
+        headers: getAuthHeaders(),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setReviewQueue(data)
+      }
+    } catch {}
+  }
+
+  const handleViewSummary = async () => {
+    handleFetchRecon()
+    if (supervisorShiftId) {
+      fetchReviewQueue(supervisorShiftId)
+    }
+  }
+
+  const handleReview = async (attendantId: string, action: 'approve' | 'return') => {
+    if (!supervisorShiftId) return
+    const note = reviewNotes[attendantId] || ''
+    if (action === 'return' && !note.trim()) {
+      setReviewErr('A reason is required when returning readings')
+      return
+    }
+    setReviewLoading(attendantId)
+    setReviewErr('')
+    setReviewMsg('')
+    try {
+      const res = await fetch(`${BASE}/enter-readings/review`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          shift_id: supervisorShiftId,
+          attendant_id: attendantId,
+          action,
+          overall_note: note || null,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Review failed')
+      }
+      const data = await res.json()
+      setReviewMsg(data.message)
+      // Refresh review queue
+      fetchReviewQueue(supervisorShiftId)
+    } catch (err: any) {
+      setReviewErr(err.message || 'Review failed')
+    } finally {
+      setReviewLoading(null)
+    }
+  }
+
   return (
     <div className="mt-8">
       <h2 className="text-xl font-bold mb-4" style={{ color: theme.textPrimary }}>
@@ -727,7 +914,7 @@ function SupervisorSection({
               ))}
             </select>
           </div>
-          <button onClick={handleFetchRecon}
+          <button onClick={handleViewSummary}
             disabled={!supervisorShiftId || reconLoading}
             className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
             style={{ backgroundColor: theme.primary }}>
@@ -739,6 +926,131 @@ function SupervisorSection({
       {reconError && (
         <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: '#fef2f2', color: '#dc2626', borderColor: '#fecaca', borderWidth: 1 }}>
           {reconError}
+        </div>
+      )}
+
+      {reviewMsg && (
+        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0', borderWidth: 1 }}>
+          {reviewMsg}
+        </div>
+      )}
+
+      {reviewErr && (
+        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: '#fef2f2', color: '#dc2626', borderColor: '#fecaca', borderWidth: 1 }}>
+          {reviewErr}
+        </div>
+      )}
+
+      {/* Review Queue — Per-attendant review cards */}
+      {reviewQueue && reviewQueue.attendants.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-3" style={{ color: theme.textPrimary }}>
+            Readings Review
+          </h3>
+          {reviewQueue.attendants.map(att => (
+            <div key={att.attendant_id} className="rounded-lg shadow mb-4 overflow-hidden"
+              style={{
+                backgroundColor: theme.cardBg,
+                borderColor: att.review_status === 'approved' ? '#86efac' : att.review_status === 'returned' ? '#fecaca' : theme.border,
+                borderWidth: 2,
+              }}>
+              {/* Header */}
+              <div className="p-4 flex items-center justify-between"
+                style={{ borderBottomColor: theme.border, borderBottomWidth: 1 }}>
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold" style={{ color: theme.textPrimary }}>{att.attendant_name}</span>
+                  <ReviewStatusBadge status={att.review_status} />
+                  {att.has_discrepancy && (
+                    <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                      style={{ backgroundColor: '#fef3c7', color: '#a16207' }}>
+                      Has Discrepancy
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs" style={{ color: theme.textSecondary }}>
+                  Submitted: {att.submitted_at ? new Date(att.submitted_at).toLocaleString() : '-'}
+                </span>
+              </div>
+
+              {/* Nozzle details table */}
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr style={{ backgroundColor: theme.background }}>
+                    {['Nozzle', 'Fuel', 'Elec Dispensed', 'Mech Dispensed', 'Disc %', 'Attendant Note'].map(h => (
+                      <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
+                        style={{ color: theme.textSecondary }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {att.nozzle_details.map(nd => (
+                    <tr key={nd.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                      <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{nd.nozzle_id}</td>
+                      <td className="px-3 py-2"><FuelBadge fuelType={nd.fuel_type} /></td>
+                      <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
+                        {nd.electronic_dispensed.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
+                        {nd.mechanical_dispensed.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono font-medium" style={{
+                        color: nd.exceeds_threshold ? '#dc2626' : '#16a34a',
+                      }}>
+                        {nd.discrepancy_percent.toFixed(2)}%
+                        {nd.exceeds_threshold && ' !'}
+                      </td>
+                      <td className="px-3 py-2 text-sm" style={{ color: theme.textSecondary }}>
+                        {nd.attendant_note || '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Previous supervisor review info */}
+              {att.supervisor_review && (
+                <div className="px-4 py-2 text-xs" style={{ backgroundColor: theme.background, color: theme.textSecondary }}>
+                  Reviewed by {att.supervisor_review.reviewed_by_name} on {new Date(att.supervisor_review.reviewed_at).toLocaleString()}
+                  {att.supervisor_review.overall_note && ` — "${att.supervisor_review.overall_note}"`}
+                </div>
+              )}
+
+              {/* Action area — only for non-approved and non-owner */}
+              {att.review_status !== 'approved' && !isOwner && (
+                <div className="p-4 flex items-end gap-3"
+                  style={{ borderTopColor: theme.border, borderTopWidth: 1, backgroundColor: theme.background }}>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+                      Overall Note {att.review_status === 'submitted' ? '(required when returning)' : ''}
+                    </label>
+                    <textarea
+                      value={reviewNotes[att.attendant_id] || ''}
+                      onChange={e => setReviewNotes(prev => ({ ...prev, [att.attendant_id]: e.target.value }))}
+                      placeholder="Add a note (required when returning)"
+                      rows={2}
+                      className="w-full px-3 py-2 rounded border text-sm"
+                      style={inputStyle} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleReview(att.attendant_id, 'approve')}
+                      disabled={reviewLoading === att.attendant_id}
+                      className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
+                      style={{ backgroundColor: '#16a34a' }}>
+                      {reviewLoading === att.attendant_id ? '...' : 'Approve'}
+                    </button>
+                    <button
+                      onClick={() => handleReview(att.attendant_id, 'return')}
+                      disabled={reviewLoading === att.attendant_id || !(reviewNotes[att.attendant_id] || '').trim()}
+                      className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ backgroundColor: !(reviewNotes[att.attendant_id] || '').trim() ? '#9ca3af' : '#dc2626' }}>
+                      {reviewLoading === att.attendant_id ? '...' : 'Return'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

@@ -186,7 +186,13 @@ def _seed_settings(storage: dict):
         storage['validation_thresholds'] = {
             "pass_threshold": 0.5,
             "warning_threshold": 1.0,
+            "meter_discrepancy_threshold": 0.5,
         }
+
+    # Migration guard: backfill meter_discrepancy_threshold for existing stations
+    vt = storage.get('validation_thresholds', {})
+    if 'meter_discrepancy_threshold' not in vt:
+        vt['meter_discrepancy_threshold'] = 0.5
 
 
 def _migrate_islands_add_display_fields(storage: dict):

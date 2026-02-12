@@ -87,6 +87,7 @@ class ValidationThresholds(BaseModel):
     pass_threshold: float = 0.5  # Variance <= this % = PASS
     warning_threshold: float = 1.0  # Variance <= this % = WARNING
     # Variance > warning_threshold = FAIL
+    meter_discrepancy_threshold: float = 0.5  # Electronic vs mechanical discrepancy % requiring note
 
 class SystemSettings(BaseModel):
     business_name: str
@@ -741,6 +742,7 @@ class NozzleDualReadingEntry(BaseModel):
     nozzle_id: str
     electronic_reading: float
     mechanical_reading: float
+    note: Optional[str] = None  # Required when discrepancy > threshold
 
 class AttendantReadingsInput(BaseModel):
     """Input for submitting attendant opening or closing readings"""
@@ -748,3 +750,11 @@ class AttendantReadingsInput(BaseModel):
     reading_type: str  # "Opening" or "Closing"
     nozzle_readings: List[NozzleDualReadingEntry]
     notes: Optional[str] = None
+
+
+class SupervisorReviewInput(BaseModel):
+    """Input for supervisor review of attendant readings"""
+    shift_id: str
+    attendant_id: str
+    action: str  # "approve" or "return"
+    overall_note: Optional[str] = None  # Required when returning

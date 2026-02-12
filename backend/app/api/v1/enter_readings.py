@@ -7,7 +7,7 @@ from datetime import datetime
 import json
 import os
 from ...models.models import (
-    AttendantReadingsInput, NozzleDualReadingEntry, UserRole
+    AttendantReadingsInput, NozzleDualReadingEntry, UserRole, SupervisorReviewInput
 )
 from ...config import get_fuel_price
 from ...database.storage import get_nozzle
@@ -49,6 +49,10 @@ def _get_assigned_nozzle_ids(assignment: dict, islands_data: dict) -> list:
 def _is_supervisor_or_owner(role) -> bool:
     role_str = role.value if isinstance(role, UserRole) else str(role)
     return role_str in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]
+
+
+def _get_meter_discrepancy_threshold(storage: dict) -> float:
+    return storage.get('validation_thresholds', {}).get('meter_discrepancy_threshold', 0.5)
 
 
 def _load_tank_readings_db(station_id: str) -> dict:
@@ -251,6 +255,15 @@ async def get_my_shift_readings(ctx: dict = Depends(get_station_context)):
 
         nozzle_details.append(detail)
 
+    # Extract review status and return note from closing record
+    review_status = None
+    return_note = None
+    if closing_record:
+        review_status = closing_record.get("review_status", "submitted")
+        supervisor_review = closing_record.get("supervisor_review")
+        if supervisor_review and review_status == "returned":
+            return_note = supervisor_review.get("overall_note", "")
+
     return {
         "found": True,
         "shift": {
@@ -268,6 +281,8 @@ async def get_my_shift_readings(ctx: dict = Depends(get_station_context)):
         "nozzles": nozzle_details,
         "opening_submitted": opening_submitted,
         "closing_submitted": closing_submitted,
+        "review_status": review_status,
+        "return_note": return_note,
     }
 
 
@@ -356,9 +371,14 @@ async def submit_readings(data: AttendantReadingsInput, ctx: dict = Depends(get_
         if opening_key not in readings_db:
             raise HTTPException(status_code=400, detail="Opening readings must be submitted before closing")
 
-        # Block re-submission unless supervisor
-        if closing_key in readings_db and not _is_supervisor_or_owner(role):
-            raise HTTPException(status_code=400, detail="Closing readings already submitted")
+        # Block re-submission unless supervisor OR returned status
+        existing_closing = readings_db.get(closing_key)
+        if existing_closing and not _is_supervisor_or_owner(role):
+            review_status = existing_closing.get("review_status", "submitted")
+            if review_status == "returned":
+                pass  # Allow re-submission when returned
+            else:
+                raise HTTPException(status_code=400, detail="Closing readings already submitted")
 
         # Validate closing >= opening
         opening_record = readings_db[opening_key]
@@ -380,6 +400,22 @@ async def submit_readings(data: AttendantReadingsInput, ctx: dict = Depends(get_
                         detail=f"Mechanical closing for {nr.nozzle_id} must be >= opening ({opening_nr['mechanical_reading']})"
                     )
 
+        # Discrepancy validation: require note when elec vs mech discrepancy exceeds threshold
+        threshold = _get_meter_discrepancy_threshold(storage)
+        for nr in data.nozzle_readings:
+            opening_nr = opening_map.get(nr.nozzle_id)
+            if opening_nr:
+                elec_dispensed = nr.electronic_reading - opening_nr.get("electronic_reading", 0)
+                mech_dispensed = nr.mechanical_reading - opening_nr.get("mechanical_reading", 0)
+                avg_dispensed = (elec_dispensed + mech_dispensed) / 2
+                if avg_dispensed > 0:
+                    disc = abs(elec_dispensed - mech_dispensed) / avg_dispensed * 100
+                    if disc > threshold and not nr.note:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Nozzle {nr.nozzle_id} has {disc:.2f}% discrepancy (threshold: {threshold}%). A note explaining the discrepancy is required."
+                        )
+
         record = {
             "shift_id": data.shift_id,
             "user_id": user_id,
@@ -388,6 +424,7 @@ async def submit_readings(data: AttendantReadingsInput, ctx: dict = Depends(get_
             "nozzle_readings": [nr.dict() for nr in data.nozzle_readings],
             "notes": data.notes,
             "submitted_at": datetime.now().isoformat(),
+            "review_status": "submitted",
         }
         readings_db[closing_key] = record
         _save_readings(readings_db, station_id)
@@ -798,4 +835,166 @@ async def get_nozzle_readings_for_tank(
         "fuel_type": target_fuel,
         "nozzle_count": len(result),
         "nozzle_readings": result,
+    }
+
+
+@router.get("/shift/{shift_id}/review-queue")
+async def get_review_queue(shift_id: str, ctx: dict = Depends(get_station_context)):
+    """
+    Supervisor/Owner: Get all attendants' closing readings for review with discrepancy analysis.
+    """
+    role = ctx["role"]
+    if not _is_supervisor_or_owner(role):
+        raise HTTPException(status_code=403, detail="Supervisors and owners only")
+
+    storage = ctx["storage"]
+    station_id = ctx["station_id"]
+    shifts_data = storage.get('shifts', {})
+
+    shift = shifts_data.get(shift_id)
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    readings_db = _load_readings(station_id)
+    threshold = _get_meter_discrepancy_threshold(storage)
+
+    attendant_reviews = []
+    for assignment in shift.get("assignments", []):
+        att_id = assignment.get("attendant_id", "")
+        att_name = assignment.get("attendant_name", "")
+        opening_key = f"AR-{shift_id}-{att_id}-O"
+        closing_key = f"AR-{shift_id}-{att_id}-C"
+
+        opening_record = readings_db.get(opening_key)
+        closing_record = readings_db.get(closing_key)
+
+        if not closing_record:
+            continue  # Only show attendants who have submitted closing readings
+
+        opening_map = {}
+        if opening_record:
+            for nr in opening_record.get("nozzle_readings", []):
+                opening_map[nr["nozzle_id"]] = nr
+
+        review_status = closing_record.get("review_status", "submitted")
+        supervisor_review = closing_record.get("supervisor_review")
+        submitted_at = closing_record.get("submitted_at", "")
+
+        nozzle_details = []
+        has_discrepancy = False
+        for nr in closing_record.get("nozzle_readings", []):
+            nid = nr["nozzle_id"]
+            onr = opening_map.get(nid, {})
+            elec_dispensed = round(nr["electronic_reading"] - onr.get("electronic_reading", 0), 3)
+            mech_dispensed = round(nr["mechanical_reading"] - onr.get("mechanical_reading", 0), 3)
+            avg_dispensed = (elec_dispensed + mech_dispensed) / 2
+            disc_pct = round(abs(elec_dispensed - mech_dispensed) / avg_dispensed * 100, 2) if avg_dispensed > 0 else 0
+            exceeds = disc_pct > threshold
+
+            if exceeds:
+                has_discrepancy = True
+
+            nozzle_obj = get_nozzle(nid, storage=storage)
+            ft = nozzle_obj.get("fuel_type", "Diesel") if nozzle_obj else "Diesel"
+
+            nozzle_details.append({
+                "nozzle_id": nid,
+                "fuel_type": ft,
+                "electronic_dispensed": elec_dispensed,
+                "mechanical_dispensed": mech_dispensed,
+                "discrepancy_percent": disc_pct,
+                "exceeds_threshold": exceeds,
+                "attendant_note": nr.get("note"),
+            })
+
+        attendant_reviews.append({
+            "attendant_id": att_id,
+            "attendant_name": att_name,
+            "review_status": review_status,
+            "has_discrepancy": has_discrepancy,
+            "submitted_at": submitted_at,
+            "nozzle_details": nozzle_details,
+            "supervisor_review": supervisor_review,
+        })
+
+    return {
+        "shift_id": shift_id,
+        "date": shift.get("date"),
+        "shift_type": shift.get("shift_type"),
+        "meter_discrepancy_threshold": threshold,
+        "attendants": attendant_reviews,
+    }
+
+
+@router.post("/review")
+async def review_readings(data: SupervisorReviewInput, ctx: dict = Depends(get_station_context)):
+    """
+    Supervisor: Approve or return an attendant's closing readings.
+    """
+    role = ctx["role"]
+    user_id = ctx["user_id"]
+    user_name = ctx["full_name"]
+    role_str = role.value if isinstance(role, UserRole) else str(role)
+    if role_str != UserRole.SUPERVISOR.value:
+        raise HTTPException(status_code=403, detail="Only supervisors can review readings")
+
+    if data.action not in ("approve", "return"):
+        raise HTTPException(status_code=400, detail="Action must be 'approve' or 'return'")
+
+    if data.action == "return" and not data.overall_note:
+        raise HTTPException(status_code=400, detail="A reason (overall_note) is required when returning readings")
+
+    storage = ctx["storage"]
+    station_id = ctx["station_id"]
+    readings_db = _load_readings(station_id)
+
+    closing_key = f"AR-{data.shift_id}-{data.attendant_id}-C"
+    closing_record = readings_db.get(closing_key)
+    if not closing_record:
+        raise HTTPException(status_code=404, detail="No closing readings found for this attendant")
+
+    current_status = closing_record.get("review_status", "submitted")
+    if current_status == "approved":
+        raise HTTPException(status_code=400, detail="These readings have already been approved")
+
+    # Safety check: if approving and there are discrepancies without notes
+    if data.action == "approve":
+        threshold = _get_meter_discrepancy_threshold(storage)
+        opening_key = f"AR-{data.shift_id}-{data.attendant_id}-O"
+        opening_record = readings_db.get(opening_key, {})
+        opening_map = {}
+        for nr in opening_record.get("nozzle_readings", []):
+            opening_map[nr["nozzle_id"]] = nr
+
+        for nr in closing_record.get("nozzle_readings", []):
+            onr = opening_map.get(nr["nozzle_id"], {})
+            elec_dispensed = nr["electronic_reading"] - onr.get("electronic_reading", 0)
+            mech_dispensed = nr["mechanical_reading"] - onr.get("mechanical_reading", 0)
+            avg_dispensed = (elec_dispensed + mech_dispensed) / 2
+            if avg_dispensed > 0:
+                disc = abs(elec_dispensed - mech_dispensed) / avg_dispensed * 100
+                if disc > threshold and not nr.get("note"):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Cannot approve: nozzle {nr['nozzle_id']} has {disc:.2f}% discrepancy without an attendant note"
+                    )
+
+    # Update the record
+    new_status = "approved" if data.action == "approve" else "returned"
+    closing_record["review_status"] = new_status
+    closing_record["supervisor_review"] = {
+        "reviewed_by": user_id,
+        "reviewed_by_name": user_name,
+        "reviewed_at": datetime.now().isoformat(),
+        "action": data.action,
+        "overall_note": data.overall_note,
+    }
+
+    readings_db[closing_key] = closing_record
+    _save_readings(readings_db, station_id)
+
+    return {
+        "status": "success",
+        "message": f"Readings {new_status} successfully",
+        "review_status": new_status,
     }

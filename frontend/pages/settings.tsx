@@ -39,6 +39,7 @@ export default function Settings() {
   const [validationThresholds, setValidationThresholds] = useState({
     pass_threshold: 0.5,
     warning_threshold: 1.0,
+    meter_discrepancy_threshold: 0.5,
   })
   const [thresholdsLoading, setThresholdsLoading] = useState(false)
   const [thresholdsMessage, setThresholdsMessage] = useState('')
@@ -789,6 +790,25 @@ export default function Settings() {
                     Variance ≤ this % = WARNING (Yellow status)
                   </p>
                 </div>
+              </div>
+
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Meter Discrepancy Threshold (%)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="10"
+                  value={validationThresholds.meter_discrepancy_threshold}
+                  onChange={(e) => setValidationThresholds({ ...validationThresholds, meter_discrepancy_threshold: parseFloat(e.target.value) })}
+                  className="w-full px-3 py-2 border border-orange-300 rounded-md focus:outline-none focus:ring-orange-500 focus:border-orange-500"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  When electronic vs mechanical dispensed discrepancy exceeds this threshold, attendants must provide a note explaining the difference.
+                </p>
               </div>
 
               {/* Current Data Analysis */}
