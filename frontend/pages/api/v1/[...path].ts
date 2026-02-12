@@ -35,18 +35,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.headers['x-station-id']) headers['X-Station-Id'] = req.headers['x-station-id'] as string
   if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type'] as string
 
+  // Read body for non-GET/HEAD methods
+  let rawBody: Buffer | undefined
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    rawBody = await getRawBody(req)
+  }
+
   const fetchOptions: RequestInit = {
     method: req.method,
     headers,
+    redirect: 'manual',
   }
-
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    const raw = await getRawBody(req)
-    fetchOptions.body = raw
+  if (rawBody && rawBody.length > 0) {
+    fetchOptions.body = rawBody
   }
 
   try {
-    const response = await fetch(url.toString(), fetchOptions)
+    let response = await fetch(url.toString(), fetchOptions)
+
+    // Handle 307/308 redirects (e.g. FastAPI trailing-slash redirects)
+    // Re-issue the request with the same method and body to the redirected URL
+    if ((response.status === 307 || response.status === 308) && response.headers.get('location')) {
+      const redirectUrl = new URL(response.headers.get('location')!, BACKEND_URL)
+      const redirectOptions: RequestInit = {
+        method: req.method,
+        headers,
+        redirect: 'manual',
+      }
+      if (rawBody && rawBody.length > 0) {
+        redirectOptions.body = Buffer.from(rawBody)
+      }
+      response = await fetch(redirectUrl.toString(), redirectOptions)
+    }
+
     const contentType = response.headers.get('content-type') || ''
 
     res.status(response.status)
