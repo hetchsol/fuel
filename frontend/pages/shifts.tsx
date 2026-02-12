@@ -37,6 +37,10 @@ export default function Shifts() {
   const [allShifts, setAllShifts] = useState<any[]>([])
   const [showHistory, setShowHistory] = useState(false)
 
+  // Manage existing shift state
+  const [selectedShiftId, setSelectedShiftId] = useState<string>('')
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null)
+
   // Tank dip reading state
   const [tanks, setTanks] = useState<any[]>([])
   const [tankDipReadings, setTankDipReadings] = useState<any[]>([])
@@ -374,6 +378,36 @@ export default function Shifts() {
     loadAvailableStaff()
     loadIslandsData()  // Re-fetch active islands
     fetchNozzles()     // Re-fetch nozzles from active islands
+    setEditingShiftId(null)
+    setShiftForm({ date: new Date().toISOString().split('T')[0], shift_type: 'Day', assignments: [] })
+    setSelectedAttendants([])
+    setShowConfirmation(false)
+    setValidationMessages([])
+    setShowManagementModal(true)
+  }
+
+  const openEditModal = (shift: any) => {
+    loadAvailableStaff()
+    loadIslandsData()
+    fetchNozzles()
+    setShiftForm({
+      date: shift.date,
+      shift_type: shift.shift_type,
+      assignments: []
+    })
+    if (shift.assignments && shift.assignments.length > 0) {
+      setSelectedAttendants(shift.assignments.map((a: any) => ({
+        user_id: a.attendant_id,
+        full_name: a.attendant_name,
+        island_ids: a.island_ids || [],
+        nozzle_ids: a.nozzle_ids || []
+      })))
+    } else {
+      setSelectedAttendants([])
+    }
+    setEditingShiftId(shift.shift_id)
+    setShowConfirmation(false)
+    setValidationMessages([])
     setShowManagementModal(true)
   }
 
@@ -520,50 +554,88 @@ export default function Shifts() {
   }
 
   const handleCreateShift = async () => {
-    const shift_id = `${shiftForm.date}-${shiftForm.shift_type}`
-    const payload = {
-      shift_id,
-      date: shiftForm.date,
-      shift_type: shiftForm.shift_type,
-      attendants: selectedAttendants.map(a => a.full_name),
-      assignments: selectedAttendants.map(a => ({
-        attendant_id: a.user_id,
-        attendant_name: a.full_name,
-        island_ids: a.island_ids || [],
-        nozzle_ids: a.nozzle_ids || []
-      })),
-      status: 'active'
-    }
+    const assignments = selectedAttendants.map(a => ({
+      attendant_id: a.user_id,
+      attendant_name: a.full_name,
+      island_ids: a.island_ids || [],
+      nozzle_ids: a.nozzle_ids || []
+    }))
 
-    try {
-      const res = await fetch(`${BASE}/shifts/`, {
-        method: 'POST',
-        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        const errorMessage = error.detail || JSON.stringify(error)
-        if (res.status === 400 && errorMessage.includes('already exists')) {
-          alert('A shift for this date and type already exists. Deactivate the existing shift first if it was created in error.')
-        } else {
-          alert(`Error creating shift: ${errorMessage}`)
-        }
-        console.error('Shift creation error:', error)
-        return
+    if (editingShiftId) {
+      // Edit mode — PUT to update existing shift
+      const payload = {
+        attendants: selectedAttendants.map(a => a.full_name),
+        assignments
       }
 
-      alert('Shift created successfully!')
-      setShowManagementModal(false)
-      setShowConfirmation(false)
-      setValidationMessages([])
-      setSelectedAttendants([])
-      fetchActiveShift()
-      fetchAllShifts()
-    } catch (err: any) {
-      console.error('Failed to create shift:', err)
-      alert(`Failed to create shift: ${err.message || err.toString()}`)
+      try {
+        const res = await fetch(`${BASE}/shifts/${editingShiftId}`, {
+          method: 'PUT',
+          headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+
+        if (!res.ok) {
+          const error = await res.json()
+          alert(`Error updating shift: ${error.detail || JSON.stringify(error)}`)
+          console.error('Shift update error:', error)
+          return
+        }
+
+        alert('Shift updated successfully!')
+        setShowManagementModal(false)
+        setShowConfirmation(false)
+        setValidationMessages([])
+        setSelectedAttendants([])
+        setEditingShiftId(null)
+        fetchActiveShift()
+        fetchAllShifts()
+      } catch (err: any) {
+        console.error('Failed to update shift:', err)
+        alert(`Failed to update shift: ${err.message || err.toString()}`)
+      }
+    } else {
+      // Create mode — POST new shift
+      const shift_id = `${shiftForm.date}-${shiftForm.shift_type}`
+      const payload = {
+        shift_id,
+        date: shiftForm.date,
+        shift_type: shiftForm.shift_type,
+        attendants: selectedAttendants.map(a => a.full_name),
+        assignments,
+        status: 'active'
+      }
+
+      try {
+        const res = await fetch(`${BASE}/shifts/`, {
+          method: 'POST',
+          headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+
+        if (!res.ok) {
+          const error = await res.json()
+          const errorMessage = error.detail || JSON.stringify(error)
+          if (res.status === 400 && errorMessage.includes('already exists')) {
+            alert('A shift for this date and type already exists. Deactivate the existing shift first if it was created in error.')
+          } else {
+            alert(`Error creating shift: ${errorMessage}`)
+          }
+          console.error('Shift creation error:', error)
+          return
+        }
+
+        alert('Shift created successfully!')
+        setShowManagementModal(false)
+        setShowConfirmation(false)
+        setValidationMessages([])
+        setSelectedAttendants([])
+        fetchActiveShift()
+        fetchAllShifts()
+      } catch (err: any) {
+        console.error('Failed to create shift:', err)
+        alert(`Failed to create shift: ${err.message || err.toString()}`)
+      }
     }
   }
 
@@ -1052,6 +1124,116 @@ export default function Shifts() {
         </div>
       )}
 
+      {/* Manage Existing Shift Section */}
+      {canManageShifts && (
+        <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Manage Existing Shift</h2>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[250px]">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Select a shift</label>
+              <select
+                value={selectedShiftId}
+                onChange={(e) => setSelectedShiftId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">-- Select Shift --</option>
+                {(() => {
+                  const statusOrder: Record<string, number> = { active: 0, completed: 1, reconciled: 2, inactive: 3 }
+                  const sorted = [...allShifts].sort((a, b) => {
+                    const aO = statusOrder[a.status] ?? 99
+                    const bO = statusOrder[b.status] ?? 99
+                    if (aO !== bO) return aO - bO
+                    if (b.date !== a.date) return b.date.localeCompare(a.date)
+                    return a.shift_type.localeCompare(b.shift_type)
+                  })
+                  return sorted.map((shift: any) => (
+                    <option key={shift.shift_id} value={shift.shift_id}>
+                      {shift.date} — {shift.shift_type} Shift ({shift.status.toUpperCase()})
+                    </option>
+                  ))
+                })()}
+              </select>
+            </div>
+
+            {/* Action buttons — shown when a shift is selected */}
+            {selectedShiftId && (() => {
+              const shift = allShifts.find(s => s.shift_id === selectedShiftId)
+              if (!shift) return null
+              return (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openEditModal(shift)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium"
+                  >
+                    Edit Shift
+                  </button>
+                  {shift.status === 'active' && (
+                    <button
+                      onClick={() => { handleDeactivateShift(shift.shift_id); setSelectedShiftId('') }}
+                      className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md text-sm font-medium"
+                    >
+                      Deactivate
+                    </button>
+                  )}
+                  {currentUser?.role === 'owner' && shift.status === 'inactive' && (
+                    <button
+                      onClick={() => { handleDeleteShift(shift.shift_id); setSelectedShiftId('') }}
+                      className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-md text-sm font-medium"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* Selected shift summary card */}
+          {selectedShiftId && (() => {
+            const shift = allShifts.find(s => s.shift_id === selectedShiftId)
+            if (!shift) return null
+            return (
+              <div className={`mt-4 p-4 rounded-lg border-2 ${
+                shift.status === 'active' ? 'bg-green-50 border-green-200'
+                : shift.status === 'completed' ? 'bg-blue-50 border-blue-200'
+                : shift.status === 'reconciled' ? 'bg-purple-50 border-purple-200'
+                : shift.status === 'inactive' ? 'bg-red-50 border-red-200'
+                : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="font-semibold text-gray-900">{shift.date} — {shift.shift_type === 'Day' ? 'Day Shift' : 'Night Shift'}</span>
+                  <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${getShiftStatusColor(shift.status)}`}>
+                    {shift.status.toUpperCase()}
+                  </span>
+                </div>
+                {shift.assignments && shift.assignments.length > 0 ? (
+                  <div className="space-y-2">
+                    {shift.assignments.map((a: any) => (
+                      <div key={a.attendant_id} className="text-sm">
+                        <span className="font-medium text-gray-800">{a.attendant_name}</span>
+                        {a.nozzle_ids && a.nozzle_ids.length > 0 && (
+                          <span className="text-gray-500 ml-2">
+                            — {a.nozzle_ids.map((nid: string) => {
+                              const nozzle = nozzles.find(n => n.nozzle_id === nid)
+                              return nozzle ? getNozzleDisplayName(nozzle) : nid
+                            }).join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : shift.attendants && shift.attendants.length > 0 ? (
+                  <p className="text-sm text-gray-600">Attendants: {shift.attendants.join(', ')}</p>
+                ) : (
+                  <p className="text-sm text-gray-500">No attendant assignments</p>
+                )}
+              </div>
+            )
+          })()}
+        </div>
+      )}
+
       {/* Shift History Section */}
       {canManageShifts && (
         <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
@@ -1151,8 +1333,8 @@ export default function Shifts() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold">Create Shift</h2>
-              <button onClick={() => setShowManagementModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl">
+              <h2 className="text-2xl font-bold">{editingShiftId ? 'Edit Shift' : 'Create Shift'}</h2>
+              <button onClick={() => { setShowManagementModal(false); setEditingShiftId(null) }} className="text-gray-500 hover:text-gray-700 text-2xl">
                 ✕
               </button>
             </div>
@@ -1161,7 +1343,7 @@ export default function Shifts() {
               {/* Validation Messages */}
               {validationMessages.length > 0 && !showConfirmation && (
                 <div className="mb-4 p-4 rounded-lg border bg-red-50 border-red-200">
-                  <h4 className="font-semibold text-red-800 mb-2">Please fix the following before creating the shift:</h4>
+                  <h4 className="font-semibold text-red-800 mb-2">Please fix the following before {editingShiftId ? 'saving' : 'creating'} the shift:</h4>
                   <ul className="space-y-1">
                     {validationMessages.filter(m => m.startsWith('ERROR:')).map((msg, i) => (
                       <li key={i} className="text-sm text-red-700 flex items-start gap-2">
@@ -1181,8 +1363,9 @@ export default function Shifts() {
                     type="date"
                     value={shiftForm.date}
                     onChange={(e) => setShiftForm({...shiftForm, date: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-md"
+                    className={`w-full px-3 py-2 border rounded-md ${editingShiftId ? 'bg-gray-100 text-gray-500' : ''}`}
                     required
+                    disabled={!!editingShiftId}
                   />
                 </div>
                 <div>
@@ -1190,12 +1373,16 @@ export default function Shifts() {
                   <select
                     value={shiftForm.shift_type}
                     onChange={(e) => setShiftForm({...shiftForm, shift_type: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-md"
+                    className={`w-full px-3 py-2 border rounded-md ${editingShiftId ? 'bg-gray-100 text-gray-500' : ''}`}
                     required
+                    disabled={!!editingShiftId}
                   >
                     <option value="Day">Day (6AM - 6PM)</option>
                     <option value="Night">Night (6PM - 6AM)</option>
                   </select>
+                  {editingShiftId && (
+                    <p className="text-xs text-gray-500 mt-1">Date and shift type cannot be changed</p>
+                  )}
                 </div>
               </div>
 
@@ -1327,7 +1514,7 @@ export default function Shifts() {
                       onClick={handleCreateShift}
                       className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold"
                     >
-                      Confirm & Create Shift
+                      {editingShiftId ? 'Confirm & Save Changes' : 'Confirm & Create Shift'}
                     </button>
                   </div>
                 </div>
@@ -1338,7 +1525,7 @@ export default function Shifts() {
                 <div className="flex justify-end space-x-3 mt-6">
                   <button
                     type="button"
-                    onClick={() => { setShowManagementModal(false); setValidationMessages([]) }}
+                    onClick={() => { setShowManagementModal(false); setEditingShiftId(null); setValidationMessages([]) }}
                     className="px-4 py-2 border rounded-md hover:bg-gray-50"
                   >
                     Cancel
@@ -1348,7 +1535,7 @@ export default function Shifts() {
                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                     disabled={selectedAttendants.length === 0}
                   >
-                    Review & Create Shift
+                    {editingShiftId ? 'Review & Save Changes' : 'Review & Create Shift'}
                   </button>
                 </div>
               )}
