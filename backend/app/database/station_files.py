@@ -34,6 +34,7 @@ MIGRATABLE_FILES = [
     'lubricant_products.json',
     'validated_readings.json',
     'attendant_handovers.json',
+    'attendant_readings.json',
 ]
 
 

@@ -732,3 +732,19 @@ class HandoverOutput(BaseModel):
     status: str                 # "submitted" or "reopened"
     notes: Optional[str] = None
     created_at: str
+
+
+# ===== Enter Readings (Dual Meter) Models =====
+
+class NozzleDualReadingEntry(BaseModel):
+    """Single nozzle dual reading (electronic + mechanical) for enter-readings"""
+    nozzle_id: str
+    electronic_reading: float
+    mechanical_reading: float
+
+class AttendantReadingsInput(BaseModel):
+    """Input for submitting attendant opening or closing readings"""
+    shift_id: str
+    reading_type: str  # "Opening" or "Closing"
+    nozzle_readings: List[NozzleDualReadingEntry]
+    notes: Optional[str] = None

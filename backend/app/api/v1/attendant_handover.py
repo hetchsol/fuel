@@ -15,6 +15,7 @@ from ...config import get_fuel_price
 from ...database.storage import get_nozzle
 from .auth import get_current_user, require_supervisor_or_owner, get_station_context
 from ...database.station_files import get_station_file
+from .enter_readings import _load_readings as _load_enter_readings
 
 router = APIRouter()
 
@@ -114,10 +115,17 @@ async def get_my_shift(ctx: dict = Depends(get_station_context)):
                 "fuel_type_abbrev": fuel_type_abbrev,
             })
 
+    # Check enter_readings status
+    enter_readings_db = _load_enter_readings(ctx["station_id"])
+    shift_id = my_shift.get("shift_id", "")
+    er_closing_key = f"AR-{shift_id}-{user_id}-C"
+    enter_readings_submitted = er_closing_key in enter_readings_db
+    enter_readings_closing = enter_readings_db.get(er_closing_key)
+
     return {
         "found": True,
         "shift": {
-            "shift_id": my_shift.get("shift_id"),
+            "shift_id": shift_id,
             "date": my_shift.get("date"),
             "shift_type": my_shift.get("shift_type"),
             "status": my_shift.get("status"),
@@ -129,6 +137,8 @@ async def get_my_shift(ctx: dict = Depends(get_station_context)):
             "nozzle_ids": assigned_nozzle_ids,
         },
         "nozzles": nozzle_details,
+        "enter_readings_submitted": enter_readings_submitted,
+        "enter_readings_closing": enter_readings_closing,
     }
 
 
@@ -182,13 +192,44 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
                 detail=f"Nozzle {reading.nozzle_id} is not in your assignment"
             )
 
+    # Check for enter_readings closing data — use those values when available
+    enter_readings_db = _load_enter_readings(station_id)
+    er_opening_key = f"AR-{data.shift_id}-{user_id}-O"
+    er_closing_key = f"AR-{data.shift_id}-{user_id}-C"
+    er_opening = enter_readings_db.get(er_opening_key)
+    er_closing = enter_readings_db.get(er_closing_key)
+
+    # Build lookup from enter_readings for nozzle opening/closing
+    er_nozzle_map = {}
+    if er_opening and er_closing:
+        opening_map = {}
+        for nr in er_opening.get("nozzle_readings", []):
+            opening_map[nr["nozzle_id"]] = nr
+        for nr in er_closing.get("nozzle_readings", []):
+            nid = nr["nozzle_id"]
+            onr = opening_map.get(nid, {})
+            er_nozzle_map[nid] = {
+                "opening": onr.get("electronic_reading", 0),
+                "closing": nr["electronic_reading"],
+            }
+
     # Process each nozzle reading
     nozzle_summaries = []
     fuel_revenue = 0.0
 
     for reading in data.nozzle_readings:
         fuel_type = _get_fuel_type(reading.nozzle_id, storage=storage)
-        volume = reading.closing_reading - reading.opening_reading
+
+        # If enter_readings data exists for this nozzle, prefer it
+        if reading.nozzle_id in er_nozzle_map:
+            er = er_nozzle_map[reading.nozzle_id]
+            opening_val = er["opening"]
+            closing_val = er["closing"]
+        else:
+            opening_val = reading.opening_reading
+            closing_val = reading.closing_reading
+
+        volume = closing_val - opening_val
 
         if volume < 0:
             raise HTTPException(
@@ -203,8 +244,8 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
         nozzle_summaries.append(HandoverNozzleReadingSummary(
             nozzle_id=reading.nozzle_id,
             fuel_type=fuel_type,
-            opening_reading=reading.opening_reading,
-            closing_reading=reading.closing_reading,
+            opening_reading=opening_val,
+            closing_reading=closing_val,
             volume_sold=round(volume, 3),
             price_per_liter=price,
             revenue=revenue,
@@ -246,10 +287,12 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     _save_handovers(handovers, station_id)
 
     # Update nozzle electronic readings in islands data
-    for reading in data.nozzle_readings:
-        nozzle = get_nozzle(reading.nozzle_id, storage=storage)
-        if nozzle:
-            nozzle["electronic_reading"] = reading.closing_reading
+    # Skip if enter_readings already handled nozzle state updates
+    if not er_closing:
+        for reading in data.nozzle_readings:
+            nozzle = get_nozzle(reading.nozzle_id, storage=storage)
+            if nozzle:
+                nozzle["electronic_reading"] = reading.closing_reading
 
     return handover_output
 
