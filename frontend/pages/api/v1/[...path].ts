@@ -38,7 +38,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Read body for non-GET/HEAD methods
   let rawBody: Buffer | undefined
   if (req.method !== 'GET' && req.method !== 'HEAD') {
-    rawBody = await getRawBody(req)
+    const buf = await getRawBody(req)
+    if (buf.length > 0) rawBody = buf
   }
 
   const fetchOptions: RequestInit = {
@@ -46,8 +47,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     headers,
     redirect: 'manual',
   }
-  if (rawBody && rawBody.length > 0) {
-    fetchOptions.body = rawBody
+  if (rawBody) {
+    fetchOptions.body = rawBody as unknown as BodyInit
   }
 
   try {
@@ -62,8 +63,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         headers,
         redirect: 'manual',
       }
-      if (rawBody && rawBody.length > 0) {
-        redirectOptions.body = Buffer.from(rawBody)
+      if (rawBody) {
+        redirectOptions.body = Buffer.from(rawBody) as unknown as BodyInit
       }
       response = await fetch(redirectUrl.toString(), redirectOptions)
     }
