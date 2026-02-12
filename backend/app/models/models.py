@@ -701,6 +701,37 @@ class HandoverNozzleReadingSummary(BaseModel):
     price_per_liter: float
     revenue: float              # volume × price
 
+# ===== Shift-Level Stock Snapshot Models =====
+
+class LPGStockLineItem(BaseModel):
+    size_kg: int
+    opening_full: int = 0
+    opening_empty: int = 0
+    additions: int = 0
+    closing_full: int = 0
+    closing_empty: int = 0
+    sold_refill: int = 0          # attendant splits total sold into refill vs with-cylinder
+    sold_with_cylinder: int = 0   # priced differently (gas + deposit)
+
+class AccessoryStockLineItem(BaseModel):
+    product_code: str
+    description: str
+    opening_stock: int = 0
+    additions: int = 0
+    closing_stock: int = 0
+
+class LubricantStockLineItem(BaseModel):
+    product_code: str
+    description: str
+    opening_stock: int = 0
+    additions: int = 0
+    closing_stock: int = 0
+
+class ShiftStockSnapshot(BaseModel):
+    lpg_cylinders: List[LPGStockLineItem] = []
+    accessories: List[AccessoryStockLineItem] = []
+    lubricants: List[LubricantStockLineItem] = []
+
 class HandoverInput(BaseModel):
     """Input for submitting a shift handover"""
     shift_id: str
@@ -760,35 +791,3 @@ class SupervisorReviewInput(BaseModel):
     attendant_id: str
     action: str  # "approve" or "return"
     overall_note: Optional[str] = None  # Required when returning
-
-
-# ===== Shift-Level Stock Snapshot Models =====
-
-class LPGStockLineItem(BaseModel):
-    size_kg: int
-    opening_full: int = 0
-    opening_empty: int = 0
-    additions: int = 0
-    closing_full: int = 0
-    closing_empty: int = 0
-    sold_refill: int = 0          # attendant splits total sold into refill vs with-cylinder
-    sold_with_cylinder: int = 0   # priced differently (gas + deposit)
-
-class AccessoryStockLineItem(BaseModel):
-    product_code: str
-    description: str
-    opening_stock: int = 0
-    additions: int = 0
-    closing_stock: int = 0
-
-class LubricantStockLineItem(BaseModel):
-    product_code: str
-    description: str
-    opening_stock: int = 0
-    additions: int = 0
-    closing_stock: int = 0
-
-class ShiftStockSnapshot(BaseModel):
-    lpg_cylinders: List[LPGStockLineItem] = []
-    accessories: List[AccessoryStockLineItem] = []
-    lubricants: List[LubricantStockLineItem] = []
