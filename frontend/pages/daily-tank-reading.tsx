@@ -114,6 +114,11 @@ export default function DailyTankReading() {
   } | null>(null)
   const [fetchingPrevious, setFetchingPrevious] = useState(false)
 
+  // Pull from Enter Readings state
+  const [pullingFromER, setPullingFromER] = useState(false)
+  const [erPulled, setErPulled] = useState(false)
+  const [erPullError, setErPullError] = useState('')
+
   useEffect(() => {
     const userData = localStorage.getItem('user')
     if (!userData) {
@@ -305,6 +310,57 @@ export default function DailyTankReading() {
       console.error('Error fetching previous shift data:', err)
     } finally {
       setFetchingPrevious(false)
+    }
+  }
+
+  // Pull nozzle readings from Enter Readings (attendant submissions)
+  const fetchFromEnterReadings = async () => {
+    const shiftId = `${formData.date}-${formData.shift_type}`
+    setPullingFromER(true)
+    setErPullError('')
+    setErPulled(false)
+    try {
+      const res = await authFetch(
+        `${BASE}/enter-readings/shift/${shiftId}/nozzle-readings-for-tank?tank_id=${selectedTank}`,
+        { headers: getHeaders() }
+      )
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Failed to fetch attendant readings')
+      }
+      const data = await res.json()
+      if (!data.nozzle_readings || data.nozzle_readings.length === 0) {
+        setErPullError('No attendant readings found for this shift and tank.')
+        return
+      }
+
+      // Auto-fill nozzle rows by matching internal_nozzle_id
+      setFormData(prev => {
+        const updatedNozzles = [...prev.nozzles]
+        for (const er of data.nozzle_readings) {
+          // Match on internal_nozzle_id (e.g. ISL1-A) or display label (e.g. 1A)
+          const idx = updatedNozzles.findIndex(
+            n => n.internal_nozzle_id === er.internal_nozzle_id ||
+                 n.nozzle_id === er.nozzle_id
+          )
+          if (idx !== -1) {
+            updatedNozzles[idx] = {
+              ...updatedNozzles[idx],
+              attendant: er.attendant || updatedNozzles[idx].attendant,
+              electronic_opening: er.electronic_opening?.toString() || updatedNozzles[idx].electronic_opening,
+              electronic_closing: er.electronic_closing?.toString() || updatedNozzles[idx].electronic_closing,
+              mechanical_opening: er.mechanical_opening?.toString() || updatedNozzles[idx].mechanical_opening,
+              mechanical_closing: er.mechanical_closing?.toString() || updatedNozzles[idx].mechanical_closing,
+            }
+          }
+        }
+        return { ...prev, nozzles: updatedNozzles }
+      })
+      setErPulled(true)
+    } catch (err: any) {
+      setErPullError(err.message || 'Failed to pull readings')
+    } finally {
+      setPullingFromER(false)
     }
   }
 
@@ -1170,8 +1226,56 @@ export default function DailyTankReading() {
           {/* Section 2: Nozzle Readings (Columns D-AE) */}
           {activeSection === 2 && (
             <div className="rounded-lg shadow p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
-              <h2 className="text-xl font-semibold mb-4 transition-colors duration-300" style={{ color: theme.textPrimary }}>⛽ Nozzle Readings (Columns D-AE)</h2>
-              <p className="text-sm mb-6 transition-colors duration-300" style={{ color: theme.textSecondary }}>Individual pump nozzle readings with attendant assignments</p>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>⛽ Nozzle Readings (Columns D-AE)</h2>
+                  <p className="text-sm mt-1 transition-colors duration-300" style={{ color: theme.textSecondary }}>Individual pump nozzle readings with attendant assignments</p>
+                </div>
+                {!erPulled && (
+                  <button
+                    type="button"
+                    onClick={fetchFromEnterReadings}
+                    disabled={pullingFromER}
+                    className="px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                    style={{ backgroundColor: '#EFF6FF', color: '#2563EB', border: '1px solid #3B82F6' }}
+                  >
+                    {pullingFromER ? 'Pulling...' : 'Pull from Enter Readings'}
+                  </button>
+                )}
+              </div>
+
+              {/* Error pulling from enter readings */}
+              {erPullError && (
+                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: '1px' }}>
+                  <span className="text-red-600 text-sm font-medium">{erPullError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setErPullError('')}
+                    className="ml-auto text-red-400 hover:text-red-600 text-xs underline"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
+              {/* Pulled from enter readings indicator */}
+              {erPulled && (
+                <div className="mb-4 p-3 rounded-lg flex items-center justify-between" style={{ backgroundColor: '#EFF6FF', borderColor: '#3B82F6', borderWidth: '1px' }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-blue-600 text-lg">&#x21BB;</span>
+                    <span className="text-blue-700 text-sm font-medium">
+                      Nozzle readings pulled from attendant submissions (Enter Readings)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setErPulled(false)}
+                    className="text-blue-600 hover:text-blue-800 text-sm underline"
+                  >
+                    Pull again
+                  </button>
+                </div>
+              )}
 
               {/* Auto-populated indicator for nozzle readings */}
               {autoPopulated?.active && (

@@ -51,6 +51,36 @@ def _is_supervisor_or_owner(role) -> bool:
     return role_str in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]
 
 
+def _load_tank_readings_db(station_id: str) -> dict:
+    """Load tank_readings.json safely, handling empty/list/dict formats."""
+    filepath = get_station_file(station_id, 'tank_readings.json')
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+            # tank_readings.json should be a dict keyed by reading_id
+            # but may be [] if never written to — treat as empty
+            if isinstance(data, dict):
+                return data
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {}
+
+
+def _find_tank_reading(tank_readings_db: dict, tank_id: str, date: str, shift_type: str) -> dict | None:
+    """Find the most recent tank reading matching tank_id + date + shift_type."""
+    best = None
+    for tr_id, tr in tank_readings_db.items():
+        if not isinstance(tr, dict):
+            continue
+        if (tr.get("tank_id") == tank_id and
+                tr.get("date") == date and
+                tr.get("shift_type") == shift_type):
+            if not best or (tr.get("created_at", "") > best.get("created_at", "")):
+                best = tr
+    return best
+
+
 def _find_previous_shift_readings(shift: dict, user_id: str, storage: dict, station_id: str) -> dict:
     """
     Try to auto-fill opening readings from the previous shift's closing.
@@ -577,16 +607,36 @@ async def get_shift_summary(shift_id: str, ctx: dict = Depends(get_station_conte
             else:
                 petrol_total += ns["average_dispensed"]
 
-    # Tank dip comparison
+    # Load tank_readings.json for delivery-adjusted tank movement
+    tank_readings_db = _load_tank_readings_db(station_id)
+
+    # Tank dip comparison — use delivery-adjusted movement when available
     tank_dips = shift.get("tank_dip_readings", [])
+    shift_date = shift.get("date", "")
+    shift_type = shift.get("shift_type", "")
     reconciliation = []
     for dip in tank_dips:
         tank_id = dip.get("tank_id", "")
-        opening_vol = dip.get("opening_volume_liters") or 0
-        closing_vol = dip.get("closing_volume_liters") or 0
-        tank_movement = round(opening_vol - closing_vol, 3) if opening_vol and closing_vol else 0
 
-        fuel_type = "Diesel" if "DIESEL" in tank_id.upper() else "Petrol"
+        # Look up the matching daily tank reading for delivery-adjusted values
+        matched = _find_tank_reading(tank_readings_db, tank_id, shift_date, shift_type)
+
+        if matched:
+            tank_movement = round(matched.get("tank_volume_movement", 0), 3)
+            delivery_count = matched.get("delivery_count", 0)
+            total_delivery_volume = round(matched.get("total_delivery_volume", 0), 3)
+            fuel_type = matched.get("fuel_type", "Diesel" if "DIESEL" in tank_id.upper() else "Petrol")
+            data_source = "tank_reading"
+        else:
+            # Fallback: simple dip formula (no delivery data available)
+            opening_vol = dip.get("opening_volume_liters") or 0
+            closing_vol = dip.get("closing_volume_liters") or 0
+            tank_movement = round(opening_vol - closing_vol, 3) if opening_vol and closing_vol else 0
+            delivery_count = 0
+            total_delivery_volume = 0
+            fuel_type = "Diesel" if "DIESEL" in tank_id.upper() else "Petrol"
+            data_source = "dip_only"
+
         nozzle_total = diesel_total if fuel_type == "Diesel" else petrol_total
 
         variance = round(nozzle_total - tank_movement, 3) if tank_movement else 0
@@ -607,6 +657,9 @@ async def get_shift_summary(shift_id: str, ctx: dict = Depends(get_station_conte
             "variance": variance,
             "variance_percent": variance_pct,
             "verdict": verdict,
+            "delivery_count": delivery_count,
+            "total_delivery_volume": total_delivery_volume,
+            "data_source": data_source,
         })
 
     return {
@@ -642,4 +695,107 @@ async def get_attendant_readings(shift_id: str, attendant_id: str, ctx: dict = D
         "attendant_id": attendant_id,
         "opening": readings_db.get(opening_key),
         "closing": readings_db.get(closing_key),
+    }
+
+
+@router.get("/shift/{shift_id}/nozzle-readings-for-tank")
+async def get_nozzle_readings_for_tank(
+    shift_id: str,
+    tank_id: str,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Aggregate all attendant nozzle readings for a shift, filtered by tank fuel type.
+    Returns data in a format compatible with the daily tank reading nozzle section,
+    so supervisors can auto-populate instead of re-entering readings manually.
+    """
+    role = ctx["role"]
+    if not _is_supervisor_or_owner(role):
+        raise HTTPException(status_code=403, detail="Supervisors and owners only")
+
+    storage = ctx["storage"]
+    station_id = ctx["station_id"]
+    islands_data = storage.get('islands', {})
+
+    # Determine target fuel type from tank_id
+    target_fuel = "Diesel" if "DIESEL" in tank_id.upper() else "Petrol"
+
+    readings_db = _load_readings(station_id)
+
+    # Collect all opening and closing records for this shift
+    opening_prefix = f"AR-{shift_id}-"
+    openings = {}  # nozzle_id -> {electronic, mechanical, attendant}
+    closings = {}  # nozzle_id -> {electronic, mechanical}
+
+    for key, record in readings_db.items():
+        if not key.startswith(opening_prefix):
+            continue
+        if record.get("shift_id") != shift_id:
+            continue
+
+        attendant_name = record.get("user_name", "")
+        is_opening = key.endswith("-O")
+        is_closing = key.endswith("-C")
+
+        for nr in record.get("nozzle_readings", []):
+            nid = nr["nozzle_id"]
+
+            # Filter by fuel type — look up nozzle to check
+            nozzle_obj = get_nozzle(nid, storage=storage)
+            nozzle_fuel = nozzle_obj.get("fuel_type", "") if nozzle_obj else ""
+            if nozzle_fuel != target_fuel:
+                continue
+
+            if is_opening:
+                openings[nid] = {
+                    "electronic": nr.get("electronic_reading", 0),
+                    "mechanical": nr.get("mechanical_reading", 0),
+                    "attendant": attendant_name,
+                }
+            elif is_closing:
+                closings[nid] = {
+                    "electronic": nr.get("electronic_reading", 0),
+                    "mechanical": nr.get("mechanical_reading", 0),
+                }
+
+    # Build display_label lookup from islands
+    nozzle_labels = {}
+    for isl in islands_data.values():
+        ps = isl.get("pump_station")
+        if ps:
+            for nz in ps.get("nozzles", []):
+                nozzle_labels[nz["nozzle_id"]] = nz.get("display_label", nz["nozzle_id"])
+
+    # Pair opening + closing for each nozzle
+    all_nozzle_ids = set(openings.keys()) | set(closings.keys())
+    result = []
+    for nid in sorted(all_nozzle_ids):
+        o = openings.get(nid, {})
+        c = closings.get(nid, {})
+        elec_open = o.get("electronic", 0)
+        elec_close = c.get("electronic", 0)
+        mech_open = o.get("mechanical", 0)
+        mech_close = c.get("mechanical", 0)
+        elec_movement = round(elec_close - elec_open, 3) if c else 0
+        mech_movement = round(mech_close - mech_open, 3) if c else 0
+
+        result.append({
+            "nozzle_id": nozzle_labels.get(nid, nid),
+            "internal_nozzle_id": nid,
+            "attendant": o.get("attendant", ""),
+            "electronic_opening": elec_open,
+            "electronic_closing": elec_close if c else None,
+            "electronic_movement": elec_movement,
+            "mechanical_opening": mech_open,
+            "mechanical_closing": mech_close if c else None,
+            "mechanical_movement": mech_movement,
+            "has_closing": bool(c),
+        })
+
+    return {
+        "shift_id": shift_id,
+        "tank_id": tank_id,
+        "fuel_type": target_fuel,
+        "nozzle_count": len(result),
+        "nozzle_readings": result,
     }

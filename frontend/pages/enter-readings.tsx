@@ -70,6 +70,9 @@ interface Reconciliation {
   variance: number
   variance_percent: number
   verdict: string
+  delivery_count?: number
+  total_delivery_volume?: number
+  data_source?: string
 }
 
 interface ShiftReconciliation {
@@ -826,7 +829,7 @@ function SupervisorSection({
               <table className="min-w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
-                    {['Tank', 'Fuel Type', 'Tank Movement (L)', 'Nozzle Total (L)', 'Variance (L)', 'Variance %', 'Verdict'].map(h => (
+                    {['Tank', 'Fuel Type', 'Deliveries', 'Delivered (L)', 'Tank Movement (L)', 'Nozzle Total (L)', 'Variance (L)', 'Variance %', 'Verdict'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
                         style={{ color: theme.textSecondary }}>{h}</th>
                     ))}
@@ -837,6 +840,19 @@ function SupervisorSection({
                     <tr key={r.tank_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                       <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{r.tank_id}</td>
                       <td className="px-3 py-2"><FuelBadge fuelType={r.fuel_type} /></td>
+                      <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>
+                        {(r.delivery_count ?? 0) > 0 ? (
+                          <span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold"
+                            style={{ backgroundColor: '#dbeafe', color: '#1d4ed8' }}>
+                            {r.delivery_count}
+                          </span>
+                        ) : (
+                          <span style={{ color: theme.textSecondary }}>0</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono" style={{ color: (r.total_delivery_volume ?? 0) > 0 ? '#1d4ed8' : theme.textSecondary }}>
+                        {(r.total_delivery_volume ?? 0).toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                      </td>
                       <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
                         {r.tank_movement.toLocaleString(undefined, { minimumFractionDigits: 3 })}
                       </td>
@@ -854,6 +870,12 @@ function SupervisorSection({
                   ))}
                 </tbody>
               </table>
+              {/* Warning when daily tank reading not submitted */}
+              {shiftRecon.reconciliation.some(r => r.data_source === 'dip_only') && (
+                <div className="p-3 text-sm" style={{ backgroundColor: '#fef3c7', color: '#a16207', borderTopColor: theme.border, borderTopWidth: 1 }}>
+                  Note: Daily tank reading not yet submitted for one or more tanks — delivery data unavailable, using simple dip calculation.
+                </div>
+              )}
             </div>
           )}
         </>
