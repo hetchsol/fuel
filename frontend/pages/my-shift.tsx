@@ -238,6 +238,12 @@ export default function MyShift() {
     )
   }
 
+  const updateOpeningReading = (nozzleId: string, value: string) => {
+    setNozzleRows(prev =>
+      prev.map(r => r.nozzle_id === nozzleId ? { ...r, opening_reading: parseFloat(value) || 0 } : r)
+    )
+  }
+
   // --- Sale line management ---
   const addLine = (
     products: ProductOption[],
@@ -460,8 +466,16 @@ export default function MyShift() {
                       {row.fuel_type}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textSecondary }}>
-                    {row.opening_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                  <td className="px-3 py-2">
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={row.opening_reading || ''}
+                      onChange={e => updateOpeningReading(row.nozzle_id, e.target.value)}
+                      placeholder="Enter opening"
+                      className="w-36 px-2 py-1 rounded border text-sm text-right font-mono"
+                      style={inputStyle}
+                    />
                   </td>
                   <td className="px-3 py-2">
                     <input
