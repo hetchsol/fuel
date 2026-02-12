@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getHeaders } from '../lib/api'
@@ -25,20 +25,37 @@ interface NozzleRow {
   fuel_type_abbrev?: string | null
 }
 
-interface SaleLineItem {
-  id: string
-  product_code: string
-  description: string
-  unit_price: number
-  quantity: string
-  amount: number
+// Stock count row types
+interface LPGCylinderRow {
+  size_kg: number
+  opening_full: number
+  opening_empty: number
+  additions: string
+  closing_full: string
+  closing_empty: string
+  sold_refill: string
+  sold_with_cylinder: string
+  refill_price: number
+  price_with_cylinder: number
 }
 
-interface ProductOption {
+interface AccessoryRow {
   product_code: string
   description: string
+  opening_stock: number
+  additions: string
+  closing_stock: string
   unit_price: number
-  category?: string
+}
+
+interface LubricantRow {
+  product_code: string
+  description: string
+  category: string
+  opening_stock: number
+  additions: string
+  closing_stock: string
+  unit_price: number
 }
 
 interface HandoverResult {
@@ -76,12 +93,8 @@ function getAuthHeaders() {
   }
 }
 
-let lineIdCounter = 0
-function nextLineId() { return `line-${++lineIdCounter}` }
-
 export default function MyShift() {
   const { theme } = useTheme()
-  const [user, setUser] = useState<any>(null)
 
   // Shift state
   const [shiftFound, setShiftFound] = useState<boolean | null>(null)
@@ -89,14 +102,11 @@ export default function MyShift() {
   const [assignmentInfo, setAssignmentInfo] = useState<any>(null)
   const [nozzleRows, setNozzleRows] = useState<NozzleRow[]>([])
 
-  // Other sales — item-by-item
-  const [lpgProducts, setLpgProducts] = useState<ProductOption[]>([])
-  const [lubricantProducts, setLubricantProducts] = useState<ProductOption[]>([])
-  const [accessoryProducts, setAccessoryProducts] = useState<ProductOption[]>([])
-
-  const [lpgLines, setLpgLines] = useState<SaleLineItem[]>([])
-  const [lubricantLines, setLubricantLines] = useState<SaleLineItem[]>([])
-  const [accessoryLines, setAccessoryLines] = useState<SaleLineItem[]>([])
+  // Stock count state
+  const [lpgRows, setLpgRows] = useState<LPGCylinderRow[]>([])
+  const [accessoryRows, setAccessoryRows] = useState<AccessoryRow[]>([])
+  const [lubricantRows, setLubricantRows] = useState<LubricantRow[]>([])
+  const [lubSearch, setLubSearch] = useState('')
 
   const [creditSales, setCreditSales] = useState('')
   const [actualCash, setActualCash] = useState('')
@@ -110,84 +120,83 @@ export default function MyShift() {
   const [handoverResult, setHandoverResult] = useState<HandoverResult | null>(null)
   const [pastHandovers, setPastHandovers] = useState<HandoverResult[]>([])
 
-  useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (userData) setUser(JSON.parse(userData))
-  }, [])
-
-  // Fetch active shift on mount
+  // Fetch active shift first, then stock opening separately (so stock failure doesn't kill the page)
   useEffect(() => {
     setLoading(true)
     fetch(`${BASE}/handover/my-shift`, { headers: getAuthHeaders() })
       .then(r => r.json())
-      .then(data => {
-        if (data.found) {
-          setShiftFound(true)
-          setShiftInfo(data.shift)
-          setAssignmentInfo(data.assignment)
-          setNozzleRows(
-            (data.nozzles || []).map((n: NozzleInfo) => ({
-              nozzle_id: n.nozzle_id,
-              fuel_type: n.fuel_type,
-              opening_reading: n.opening_reading,
-              closing_reading: '',
-              price_per_liter: n.price_per_liter,
-              display_label: n.display_label,
-              fuel_type_abbrev: n.fuel_type_abbrev,
-            }))
-          )
-        } else {
+      .then(shiftData => {
+        if (!shiftData.found) {
           setShiftFound(false)
+          setLoading(false)
+          return
         }
+
+        setShiftFound(true)
+        setShiftInfo(shiftData.shift)
+        setAssignmentInfo(shiftData.assignment)
+        setNozzleRows(
+          (shiftData.nozzles || []).map((n: NozzleInfo) => ({
+            nozzle_id: n.nozzle_id,
+            fuel_type: n.fuel_type,
+            opening_reading: n.opening_reading,
+            closing_reading: '',
+            price_per_liter: n.price_per_liter,
+            display_label: n.display_label,
+            fuel_type_abbrev: n.fuel_type_abbrev,
+          }))
+        )
+
+        // Fetch stock opening separately — failure returns empty defaults
+        fetch(`${BASE}/handover/stock-opening`, { headers: getAuthHeaders() })
+          .then(r => r.ok ? r.json() : Promise.reject())
+          .catch(() => ({ lpg_cylinders: [], accessories: [], lubricants: [] }))
+          .then(stockData => {
+            setLpgRows(
+              (stockData.lpg_cylinders || []).map((c: any) => ({
+                size_kg: c.size_kg,
+                opening_full: c.opening_full || 0,
+                opening_empty: c.opening_empty || 0,
+                additions: '',
+                closing_full: '',
+                closing_empty: '',
+                sold_refill: '',
+                sold_with_cylinder: '',
+                refill_price: c.refill_price || 0,
+                price_with_cylinder: c.price_with_cylinder || 0,
+              }))
+            )
+
+            setAccessoryRows(
+              (stockData.accessories || []).map((a: any) => ({
+                product_code: a.product_code,
+                description: a.description,
+                opening_stock: a.opening_stock || 0,
+                additions: '',
+                closing_stock: '',
+                unit_price: a.unit_price || 0,
+              }))
+            )
+
+            setLubricantRows(
+              (stockData.lubricants || []).map((l: any) => ({
+                product_code: l.product_code,
+                description: l.description,
+                category: l.category || '',
+                opening_stock: l.opening_stock || 0,
+                additions: '',
+                closing_stock: '',
+                unit_price: l.unit_price || 0,
+              }))
+            )
+          })
+          .finally(() => setLoading(false))
       })
-      .catch(() => setShiftFound(false))
-      .finally(() => setLoading(false))
+      .catch(() => {
+        setShiftFound(false)
+        setLoading(false)
+      })
   }, [])
-
-  // Fetch product lists for dropdowns
-  const fetchProducts = useCallback(() => {
-    // LPG cylinders from pricing
-    fetch(`${BASE}/lpg-daily/pricing`, { headers: getAuthHeaders() })
-      .then(r => r.json())
-      .then(data => {
-        const sizes = data.sizes || []
-        setLpgProducts(sizes.map((s: any) => ({
-          product_code: `LPG-${s.size_kg}KG`,
-          description: `LPG ${s.size_kg}kg Refill`,
-          unit_price: s.price_refill || 0,
-        })))
-      })
-      .catch(() => {})
-
-    // LPG Accessories
-    fetch(`${BASE}/lpg/accessories`, { headers: getAuthHeaders() })
-      .then(r => r.json())
-      .then(data => {
-        const items = Array.isArray(data) ? data : []
-        setAccessoryProducts(items.map((a: any) => ({
-          product_code: a.product_code,
-          description: a.description,
-          unit_price: a.unit_price || a.selling_price || 0,
-        })))
-      })
-      .catch(() => {})
-
-    // Lubricants
-    fetch(`${BASE}/lubricants-daily/products/Island 3`, { headers: getAuthHeaders() })
-      .then(r => r.json())
-      .then(data => {
-        const items = data.products || []
-        setLubricantProducts(items.map((l: any) => ({
-          product_code: l.product_code,
-          description: l.description,
-          unit_price: l.selling_price || l.unit_price || 0,
-          category: l.category,
-        })))
-      })
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => { fetchProducts() }, [fetchProducts])
 
   // Fetch past handovers
   useEffect(() => {
@@ -197,7 +206,7 @@ export default function MyShift() {
       .catch(() => {})
   }, [success])
 
-  // --- Nozzle computation (inline, no useMemo) ---
+  // --- Nozzle computation ---
   const nozzleComputations = nozzleRows.map(row => {
     const closing = parseFloat(row.closing_reading)
     if (isNaN(closing) || row.closing_reading === '') {
@@ -211,15 +220,38 @@ export default function MyShift() {
   const fuelRevenue = nozzleComputations.reduce((s, c) => s + c.revenue, 0)
   const totalVolume = nozzleComputations.reduce((s, c) => s + c.volume, 0)
 
-  // --- Other sales line totals ---
-  const computeLineAmount = (line: SaleLineItem) => {
-    const qty = parseFloat(line.quantity) || 0
-    return qty * line.unit_price
-  }
+  // --- LPG cylinder computations ---
+  const lpgComputations = lpgRows.map(row => {
+    const additions = parseInt(row.additions) || 0
+    const closingFull = parseInt(row.closing_full) || 0
+    const totalSold = Math.max(0, row.opening_full + additions - closingFull)
+    const refill = parseInt(row.sold_refill) || 0
+    const withCyl = parseInt(row.sold_with_cylinder) || 0
+    const splitValid = refill + withCyl === totalSold
+    const value = refill * row.refill_price + withCyl * row.price_with_cylinder
+    return { totalSold, refill, withCyl, splitValid, value, additions, closingFull }
+  })
+  const lpgTotal = lpgComputations.reduce((s, c) => s + c.value, 0)
 
-  const lpgTotal = lpgLines.reduce((s, l) => s + computeLineAmount(l), 0)
-  const lubricantTotal = lubricantLines.reduce((s, l) => s + computeLineAmount(l), 0)
-  const accessoryTotal = accessoryLines.reduce((s, l) => s + computeLineAmount(l), 0)
+  // --- Accessory computations ---
+  const accComputations = accessoryRows.map(row => {
+    const additions = parseInt(row.additions) || 0
+    const closing = parseInt(row.closing_stock) || 0
+    const sold = Math.max(0, row.opening_stock + additions - closing)
+    const value = sold * row.unit_price
+    return { sold, value, additions, closing }
+  })
+  const accessoryTotal = accComputations.reduce((s, c) => s + c.value, 0)
+
+  // --- Lubricant computations ---
+  const lubComputations = lubricantRows.map(row => {
+    const additions = parseInt(row.additions) || 0
+    const closing = parseInt(row.closing_stock) || 0
+    const sold = Math.max(0, row.opening_stock + additions - closing)
+    const value = sold * row.unit_price
+    return { sold, value, additions, closing }
+  })
+  const lubricantTotal = lubComputations.reduce((s, c) => s + c.value, 0)
 
   const creditVal = parseFloat(creditSales) || 0
   const actualCashVal = parseFloat(actualCash) || 0
@@ -230,7 +262,9 @@ export default function MyShift() {
 
   const allClosingsEntered = nozzleRows.length > 0 && nozzleRows.every(r => r.closing_reading !== '')
   const allValid = nozzleComputations.every(c => c.valid || c.volume === 0)
-  const canSubmit = allClosingsEntered && allValid && actualCash !== '' && !submitting
+  // LPG split validation: for rows where total sold > 0, refill + with_cylinder must equal total
+  const lpgSplitValid = lpgComputations.every(c => c.totalSold === 0 || c.splitValid)
+  const canSubmit = allClosingsEntered && allValid && lpgSplitValid && actualCash !== '' && !submitting
 
   const updateClosingReading = (nozzleId: string, value: string) => {
     setNozzleRows(prev =>
@@ -244,51 +278,16 @@ export default function MyShift() {
     )
   }
 
-  // --- Sale line management ---
-  const addLine = (
-    products: ProductOption[],
-    setLines: React.Dispatch<React.SetStateAction<SaleLineItem[]>>
-  ) => {
-    if (products.length === 0) return
-    const p = products[0]
-    setLines(prev => [...prev, {
-      id: nextLineId(),
-      product_code: p.product_code,
-      description: p.description,
-      unit_price: p.unit_price,
-      quantity: '',
-      amount: 0,
-    }])
+  const updateLpgRow = (idx: number, field: keyof LPGCylinderRow, value: string) => {
+    setLpgRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
   }
 
-  const removeLine = (
-    lineId: string,
-    setLines: React.Dispatch<React.SetStateAction<SaleLineItem[]>>
-  ) => {
-    setLines(prev => prev.filter(l => l.id !== lineId))
+  const updateAccRow = (idx: number, field: keyof AccessoryRow, value: string) => {
+    setAccessoryRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
   }
 
-  const updateLineProduct = (
-    lineId: string,
-    productCode: string,
-    products: ProductOption[],
-    setLines: React.Dispatch<React.SetStateAction<SaleLineItem[]>>
-  ) => {
-    const product = products.find(p => p.product_code === productCode)
-    if (!product) return
-    setLines(prev => prev.map(l =>
-      l.id === lineId ? { ...l, product_code: product.product_code, description: product.description, unit_price: product.unit_price } : l
-    ))
-  }
-
-  const updateLineQuantity = (
-    lineId: string,
-    qty: string,
-    setLines: React.Dispatch<React.SetStateAction<SaleLineItem[]>>
-  ) => {
-    setLines(prev => prev.map(l =>
-      l.id === lineId ? { ...l, quantity: qty } : l
-    ))
+  const updateLubRow = (idx: number, field: keyof LubricantRow, value: string) => {
+    setLubricantRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
   }
 
   const handleSubmit = async () => {
@@ -298,6 +297,33 @@ export default function MyShift() {
     setSuccess('')
 
     try {
+      const stockSnapshot = {
+        lpg_cylinders: lpgRows.map((row, idx) => ({
+          size_kg: row.size_kg,
+          opening_full: row.opening_full,
+          opening_empty: row.opening_empty,
+          additions: parseInt(row.additions) || 0,
+          closing_full: parseInt(row.closing_full) || 0,
+          closing_empty: parseInt(row.closing_empty) || 0,
+          sold_refill: parseInt(row.sold_refill) || 0,
+          sold_with_cylinder: parseInt(row.sold_with_cylinder) || 0,
+        })),
+        accessories: accessoryRows.map((row, idx) => ({
+          product_code: row.product_code,
+          description: row.description,
+          opening_stock: row.opening_stock,
+          additions: parseInt(row.additions) || 0,
+          closing_stock: parseInt(row.closing_stock) || 0,
+        })),
+        lubricants: lubricantRows.map((row, idx) => ({
+          product_code: row.product_code,
+          description: row.description,
+          opening_stock: row.opening_stock,
+          additions: parseInt(row.additions) || 0,
+          closing_stock: parseInt(row.closing_stock) || 0,
+        })),
+      }
+
       const res = await fetch(`${BASE}/handover/submit`, {
         method: 'POST',
         headers: getAuthHeaders(),
@@ -314,6 +340,7 @@ export default function MyShift() {
           credit_sales: creditVal,
           actual_cash: actualCashVal,
           notes: notes || null,
+          stock_snapshot: stockSnapshot,
         }),
       })
 
@@ -338,10 +365,10 @@ export default function MyShift() {
     borderColor: theme.border,
   }
 
+  const fmtZMW = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2 })
+
   if (loading) {
-    return (
-      <LoadingSpinner text="Loading shift data..." />
-    )
+    return <LoadingSpinner text="Loading shift data..." />
   }
 
   if (shiftFound === false) {
@@ -367,12 +394,22 @@ export default function MyShift() {
     )
   }
 
+  // Filtered lubricant rows for search
+  const filteredLubIdx: number[] = []
+  lubricantRows.forEach((row, idx) => {
+    if (!lubSearch) { filteredLubIdx.push(idx); return }
+    const q = lubSearch.toLowerCase()
+    if (row.description.toLowerCase().includes(q) || row.category.toLowerCase().includes(q) || row.product_code.toLowerCase().includes(q)) {
+      filteredLubIdx.push(idx)
+    }
+  })
+
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>My Shift</h1>
         <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
-          Enter closing readings and cash handover for your shift
+          Enter closing readings, stock counts, and cash handover for your shift
         </p>
       </div>
 
@@ -523,110 +560,248 @@ export default function MyShift() {
               </td>
               <td className="px-3 py-2"></td>
               <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: theme.primary }}>
-                {fuelRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
+                {fmtZMW(fuelRevenue)} ZMW
               </td>
             </tr>
           </tfoot>
         </table>
       </div>
 
-      {/* 3. Other Sales — Item-by-item with dropdowns */}
-      <div className="rounded-lg shadow p-4 mb-6"
+      {/* 3. LPG Cylinders Stock Count */}
+      <div className="rounded-lg shadow mb-6 overflow-x-auto"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <h2 className="text-sm font-semibold mb-4 uppercase tracking-wide" style={{ color: theme.textSecondary }}>
-          Other Sales
-        </h2>
-
-        {/* LPG Sales */}
-        <SalesLineSection
-          title="LPG Sales"
-          products={lpgProducts}
-          lines={lpgLines}
-          setLines={setLpgLines}
-          total={lpgTotal}
-          theme={theme}
-          inputStyle={inputStyle}
-          addLine={addLine}
-          removeLine={removeLine}
-          updateLineProduct={updateLineProduct}
-          updateLineQuantity={updateLineQuantity}
-          computeLineAmount={computeLineAmount}
-        />
-
-        {/* Lubricant Sales */}
-        <SalesLineSection
-          title="Lubricant Sales"
-          products={lubricantProducts}
-          lines={lubricantLines}
-          setLines={setLubricantLines}
-          total={lubricantTotal}
-          theme={theme}
-          inputStyle={inputStyle}
-          addLine={addLine}
-          removeLine={removeLine}
-          updateLineProduct={updateLineProduct}
-          updateLineQuantity={updateLineQuantity}
-          computeLineAmount={computeLineAmount}
-        />
-
-        {/* Accessory Sales */}
-        <SalesLineSection
-          title="Accessory Sales"
-          products={accessoryProducts}
-          lines={accessoryLines}
-          setLines={setAccessoryLines}
-          total={accessoryTotal}
-          theme={theme}
-          inputStyle={inputStyle}
-          addLine={addLine}
-          removeLine={removeLine}
-          updateLineProduct={updateLineProduct}
-          updateLineQuantity={updateLineQuantity}
-          computeLineAmount={computeLineAmount}
-        />
-
-        {/* Credit Sales */}
-        <div className="mt-4 pt-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-          <div className="flex items-center gap-4">
-            <label className="text-sm font-medium" style={{ color: theme.textSecondary }}>
-              Credit Sales (ZMW)
-            </label>
-            <input type="number" min={0} step="0.01" value={creditSales}
-              onChange={e => setCreditSales(e.target.value)} placeholder="0.00"
-              className="w-40 px-3 py-2 rounded border text-sm text-right" style={inputStyle} />
-          </div>
+        <div className="p-4 font-semibold text-sm"
+          style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
+          LPG Cylinders
         </div>
-
-        {/* Other Sales Summary */}
-        <div className="mt-4 pt-4 grid grid-cols-2 md:grid-cols-4 gap-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-          <div>
-            <div className="text-xs" style={{ color: theme.textSecondary }}>LPG Total</div>
-            <div className="font-mono font-medium text-sm" style={{ color: theme.textPrimary }}>
-              {lpgTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
-            </div>
-          </div>
-          <div>
-            <div className="text-xs" style={{ color: theme.textSecondary }}>Lubricant Total</div>
-            <div className="font-mono font-medium text-sm" style={{ color: theme.textPrimary }}>
-              {lubricantTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
-            </div>
-          </div>
-          <div>
-            <div className="text-xs" style={{ color: theme.textSecondary }}>Accessory Total</div>
-            <div className="font-mono font-medium text-sm" style={{ color: theme.textPrimary }}>
-              {accessoryTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
-            </div>
-          </div>
-          <div>
-            <div className="text-xs" style={{ color: theme.textSecondary }}>Other Sales Grand Total</div>
-            <div className="font-mono font-bold text-sm" style={{ color: theme.primary }}>
-              {(lpgTotal + lubricantTotal + accessoryTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
-            </div>
-          </div>
-        </div>
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr style={{ backgroundColor: theme.background }}>
+              {['Size', 'Open Full', 'Open Empty', 'Additions', 'Close Full', 'Close Empty', 'Sold', 'Refill', 'With Cyl', 'Value (ZMW)'].map(h => (
+                <th key={h} className="px-2 py-2 text-center text-xs font-medium uppercase whitespace-nowrap"
+                  style={{ color: theme.textSecondary }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {lpgRows.map((row, idx) => {
+              const comp = lpgComputations[idx]
+              const splitError = comp.totalSold > 0 && !comp.splitValid && (row.sold_refill !== '' || row.sold_with_cylinder !== '')
+              return (
+                <tr key={row.size_kg} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                  <td className="px-2 py-1 text-center font-medium whitespace-nowrap" style={{ color: theme.textPrimary }}>
+                    {row.size_kg}kg
+                  </td>
+                  <td className="px-2 py-1 text-center font-mono" style={{ color: theme.textSecondary }}>
+                    {row.opening_full}
+                  </td>
+                  <td className="px-2 py-1 text-center font-mono" style={{ color: theme.textSecondary }}>
+                    {row.opening_empty}
+                  </td>
+                  <td className="px-2 py-1">
+                    <input type="number" min={0} step={1}
+                      value={row.additions} onChange={e => updateLpgRow(idx, 'additions', e.target.value)}
+                      placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input type="number" min={0} step={1}
+                      value={row.closing_full} onChange={e => updateLpgRow(idx, 'closing_full', e.target.value)}
+                      placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input type="number" min={0} step={1}
+                      value={row.closing_empty} onChange={e => updateLpgRow(idx, 'closing_empty', e.target.value)}
+                      placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
+                  </td>
+                  <td className="px-2 py-1 text-center font-mono font-medium" style={{ color: theme.textPrimary }}>
+                    {comp.totalSold}
+                  </td>
+                  <td className="px-2 py-1">
+                    <input type="number" min={0} step={1}
+                      value={row.sold_refill} onChange={e => updateLpgRow(idx, 'sold_refill', e.target.value)}
+                      placeholder="0"
+                      className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
+                      style={{ ...inputStyle, borderColor: splitError ? '#ef4444' : theme.border }} />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input type="number" min={0} step={1}
+                      value={row.sold_with_cylinder} onChange={e => updateLpgRow(idx, 'sold_with_cylinder', e.target.value)}
+                      placeholder="0"
+                      className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
+                      style={{ ...inputStyle, borderColor: splitError ? '#ef4444' : theme.border }} />
+                    {splitError && (
+                      <div className="text-xs mt-0.5 whitespace-nowrap" style={{ color: '#ef4444' }}>
+                        Must sum to {comp.totalSold}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
+                    {fmtZMW(comp.value)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTopColor: theme.border, borderTopWidth: 2, backgroundColor: theme.background }}>
+              <td colSpan={9} className="px-2 py-2 text-right font-semibold" style={{ color: theme.textPrimary }}>
+                LPG Total
+              </td>
+              <td className="px-2 py-2 text-right font-mono font-bold" style={{ color: theme.primary }}>
+                {fmtZMW(lpgTotal)} ZMW
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
 
-      {/* 4. Cash Handover Section */}
+      {/* 4. Accessories Stock Count */}
+      {accessoryRows.length > 0 && (
+        <div className="rounded-lg shadow mb-6 overflow-x-auto"
+          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+          <div className="p-4 font-semibold text-sm"
+            style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
+            LPG Accessories
+          </div>
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr style={{ backgroundColor: theme.background }}>
+                {['Product', 'Opening', 'Additions', 'Closing', 'Sold', 'Value (ZMW)'].map(h => (
+                  <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
+                    style={{ color: theme.textSecondary }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {accessoryRows.map((row, idx) => {
+                const comp = accComputations[idx]
+                return (
+                  <tr key={row.product_code} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <td className="px-3 py-1" style={{ color: theme.textPrimary }}>
+                      <div className="font-medium text-sm">{row.description}</div>
+                      <div className="text-xs" style={{ color: theme.textSecondary }}>@ {fmtZMW(row.unit_price)}</div>
+                    </td>
+                    <td className="px-3 py-1 text-center font-mono" style={{ color: theme.textSecondary }}>
+                      {row.opening_stock}
+                    </td>
+                    <td className="px-3 py-1">
+                      <input type="number" min={0} step={1}
+                        value={row.additions} onChange={e => updateAccRow(idx, 'additions', e.target.value)}
+                        placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
+                    </td>
+                    <td className="px-3 py-1">
+                      <input type="number" min={0} step={1}
+                        value={row.closing_stock} onChange={e => updateAccRow(idx, 'closing_stock', e.target.value)}
+                        placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
+                    </td>
+                    <td className="px-3 py-1 text-center font-mono font-medium" style={{ color: theme.textPrimary }}>
+                      {comp.sold}
+                    </td>
+                    <td className="px-3 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
+                      {fmtZMW(comp.value)}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            <tfoot>
+              <tr style={{ borderTopColor: theme.border, borderTopWidth: 2, backgroundColor: theme.background }}>
+                <td colSpan={5} className="px-3 py-2 text-right font-semibold" style={{ color: theme.textPrimary }}>
+                  Accessories Total
+                </td>
+                <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: theme.primary }}>
+                  {fmtZMW(accessoryTotal)} ZMW
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      {/* 5. Lubricants Stock Count */}
+      {lubricantRows.length > 0 && (
+        <div className="rounded-lg shadow mb-6 overflow-x-auto"
+          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+          <div className="p-4 flex items-center justify-between"
+            style={{ borderBottomColor: theme.border, borderBottomWidth: 1 }}>
+            <span className="font-semibold text-sm" style={{ color: theme.textPrimary }}>
+              Lubricants
+            </span>
+            <input
+              type="text"
+              value={lubSearch}
+              onChange={e => setLubSearch(e.target.value)}
+              placeholder="Search lubricants..."
+              className="px-3 py-1 rounded border text-sm w-48"
+              style={inputStyle}
+            />
+          </div>
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr style={{ backgroundColor: theme.background }}>
+                {['Product', 'Opening', 'Additions', 'Closing', 'Sold', 'Value (ZMW)'].map(h => (
+                  <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
+                    style={{ color: theme.textSecondary }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredLubIdx.map(idx => {
+                const row = lubricantRows[idx]
+                const comp = lubComputations[idx]
+                return (
+                  <tr key={row.product_code} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <td className="px-3 py-1" style={{ color: theme.textPrimary }}>
+                      <div className="font-medium text-sm">{row.description}</div>
+                      <div className="text-xs" style={{ color: theme.textSecondary }}>
+                        {row.category} &middot; @ {fmtZMW(row.unit_price)}
+                      </div>
+                    </td>
+                    <td className="px-3 py-1 text-center font-mono" style={{ color: theme.textSecondary }}>
+                      {row.opening_stock}
+                    </td>
+                    <td className="px-3 py-1">
+                      <input type="number" min={0} step={1}
+                        value={row.additions} onChange={e => updateLubRow(idx, 'additions', e.target.value)}
+                        placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
+                    </td>
+                    <td className="px-3 py-1">
+                      <input type="number" min={0} step={1}
+                        value={row.closing_stock} onChange={e => updateLubRow(idx, 'closing_stock', e.target.value)}
+                        placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
+                    </td>
+                    <td className="px-3 py-1 text-center font-mono font-medium" style={{ color: theme.textPrimary }}>
+                      {comp.sold}
+                    </td>
+                    <td className="px-3 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
+                      {fmtZMW(comp.value)}
+                    </td>
+                  </tr>
+                )
+              })}
+              {filteredLubIdx.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-4 text-center text-sm" style={{ color: theme.textSecondary }}>
+                    No lubricants match "{lubSearch}"
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            <tfoot>
+              <tr style={{ borderTopColor: theme.border, borderTopWidth: 2, backgroundColor: theme.background }}>
+                <td colSpan={5} className="px-3 py-2 text-right font-semibold" style={{ color: theme.textPrimary }}>
+                  Lubricants Total
+                </td>
+                <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: theme.primary }}>
+                  {fmtZMW(lubricantTotal)} ZMW
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      {/* 6. Cash Handover Section */}
       <div className="rounded-lg shadow p-4 mb-6"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
         <h2 className="text-sm font-semibold mb-3 uppercase tracking-wide" style={{ color: theme.textSecondary }}>
@@ -638,49 +813,58 @@ export default function MyShift() {
             <div className="flex justify-between text-sm">
               <span style={{ color: theme.textSecondary }}>Fuel Revenue</span>
               <span className="font-mono font-medium" style={{ color: theme.textPrimary }}>
-                {fuelRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {fmtZMW(fuelRevenue)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span style={{ color: theme.textSecondary }}>+ LPG Sales</span>
               <span className="font-mono" style={{ color: theme.textPrimary }}>
-                {lpgTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {fmtZMW(lpgTotal)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span style={{ color: theme.textSecondary }}>+ Lubricant Sales</span>
               <span className="font-mono" style={{ color: theme.textPrimary }}>
-                {lubricantTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {fmtZMW(lubricantTotal)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span style={{ color: theme.textSecondary }}>+ Accessory Sales</span>
               <span className="font-mono" style={{ color: theme.textPrimary }}>
-                {accessoryTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {fmtZMW(accessoryTotal)}
               </span>
             </div>
             <div className="flex justify-between text-sm pt-2" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
               <span className="font-semibold" style={{ color: theme.textPrimary }}>Total Expected</span>
               <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>
-                {totalExpected.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {fmtZMW(totalExpected)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span style={{ color: theme.textSecondary }}>- Credit Sales</span>
               <span className="font-mono" style={{ color: '#dc2626' }}>
-                -{creditVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                -{fmtZMW(creditVal)}
               </span>
             </div>
             <div className="flex justify-between text-sm pt-2" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
               <span className="font-bold" style={{ color: theme.textPrimary }}>Expected Cash</span>
               <span className="font-mono font-bold" style={{ color: theme.primary }}>
-                {expectedCash.toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
+                {fmtZMW(expectedCash)} ZMW
               </span>
             </div>
           </div>
 
           {/* Right: actual cash + difference */}
           <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+                Credit Sales (ZMW)
+              </label>
+              <input type="number" min={0} step="0.01" value={creditSales}
+                onChange={e => setCreditSales(e.target.value)} placeholder="0.00"
+                className="w-full px-3 py-2 rounded border text-sm text-right font-mono"
+                style={inputStyle} />
+            </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
                 Actual Cash Handed In (ZMW)
@@ -704,7 +888,7 @@ export default function MyShift() {
                 </div>
                 <div className="text-2xl font-bold font-mono"
                   style={{ color: difference >= 0 ? '#16a34a' : '#dc2626' }}>
-                  {difference >= 0 ? '+' : ''}{difference.toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
+                  {difference >= 0 ? '+' : ''}{fmtZMW(difference)} ZMW
                 </div>
               </div>
             )}
@@ -723,7 +907,7 @@ export default function MyShift() {
         </div>
       </div>
 
-      {/* 5. Submit Button */}
+      {/* 7. Submit Button */}
       {!handoverResult && (
         <div className="flex justify-end mb-6">
           <button
@@ -736,7 +920,7 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* 6. Result Display */}
+      {/* 8. Result Display */}
       {handoverResult && (
         <div className="rounded-lg shadow p-6 mb-6"
           style={{ backgroundColor: theme.cardBg, borderColor: '#86efac', borderWidth: 2 }}>
@@ -791,7 +975,7 @@ export default function MyShift() {
                     {ns.volume_sold.toLocaleString(undefined, { minimumFractionDigits: 3 })}
                   </td>
                   <td className="px-3 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
-                    {ns.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {fmtZMW(ns.revenue)}
                   </td>
                 </tr>
                 )
@@ -822,7 +1006,7 @@ export default function MyShift() {
             </div>
             <div className="text-3xl font-bold font-mono"
               style={{ color: handoverResult.difference >= 0 ? '#16a34a' : '#dc2626' }}>
-              {handoverResult.difference >= 0 ? '+' : ''}{handoverResult.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
+              {handoverResult.difference >= 0 ? '+' : ''}{fmtZMW(handoverResult.difference)} ZMW
             </div>
           </div>
         </div>
@@ -831,118 +1015,6 @@ export default function MyShift() {
       {/* Past Handovers */}
       {pastHandovers.length > 0 && (
         <PastHandoversTable handovers={pastHandovers} theme={theme} />
-      )}
-    </div>
-  )
-}
-
-// --- Reusable Sales Line Section Component ---
-function SalesLineSection({
-  title, products, lines, setLines, total, theme, inputStyle,
-  addLine, removeLine, updateLineProduct, updateLineQuantity, computeLineAmount,
-}: {
-  title: string
-  products: ProductOption[]
-  lines: SaleLineItem[]
-  setLines: React.Dispatch<React.SetStateAction<SaleLineItem[]>>
-  total: number
-  theme: any
-  inputStyle: any
-  addLine: (p: ProductOption[], s: React.Dispatch<React.SetStateAction<SaleLineItem[]>>) => void
-  removeLine: (id: string, s: React.Dispatch<React.SetStateAction<SaleLineItem[]>>) => void
-  updateLineProduct: (id: string, code: string, p: ProductOption[], s: React.Dispatch<React.SetStateAction<SaleLineItem[]>>) => void
-  updateLineQuantity: (id: string, qty: string, s: React.Dispatch<React.SetStateAction<SaleLineItem[]>>) => void
-  computeLineAmount: (l: SaleLineItem) => number
-}) {
-  return (
-    <div className="mb-4">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium" style={{ color: theme.textPrimary }}>{title}</h3>
-        <button
-          onClick={() => addLine(products, setLines)}
-          disabled={products.length === 0}
-          className="px-3 py-1 rounded text-xs font-medium text-white disabled:opacity-40"
-          style={{ backgroundColor: theme.primary }}>
-          + Add Item
-        </button>
-      </div>
-
-      {lines.length === 0 && (
-        <div className="text-xs py-2" style={{ color: theme.textSecondary }}>
-          No items added. Click "+ Add Item" to add a sale.
-        </div>
-      )}
-
-      {lines.length > 0 && (
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr style={{ backgroundColor: theme.background }}>
-              <th className="px-2 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Product</th>
-              <th className="px-2 py-1 text-right text-xs font-medium uppercase w-24" style={{ color: theme.textSecondary }}>Unit Price</th>
-              <th className="px-2 py-1 text-right text-xs font-medium uppercase w-20" style={{ color: theme.textSecondary }}>Qty</th>
-              <th className="px-2 py-1 text-right text-xs font-medium uppercase w-28" style={{ color: theme.textSecondary }}>Amount</th>
-              <th className="px-2 py-1 w-10"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map(line => {
-              const amt = computeLineAmount(line)
-              return (
-                <tr key={line.id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                  <td className="px-2 py-1">
-                    <select
-                      value={line.product_code}
-                      onChange={e => updateLineProduct(line.id, e.target.value, products, setLines)}
-                      className="w-full px-2 py-1 rounded border text-sm"
-                      style={inputStyle}>
-                      {products.map(p => (
-                        <option key={p.product_code} value={p.product_code}>
-                          {p.description} {p.category ? `(${p.category})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-2 py-1 text-right font-mono" style={{ color: theme.textSecondary }}>
-                    {line.unit_price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-2 py-1">
-                    <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={line.quantity}
-                      onChange={e => updateLineQuantity(line.id, e.target.value, setLines)}
-                      placeholder="0"
-                      className="w-full px-2 py-1 rounded border text-sm text-right"
-                      style={inputStyle}
-                    />
-                  </td>
-                  <td className="px-2 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
-                    {amt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-2 py-1 text-center">
-                    <button
-                      onClick={() => removeLine(line.id, setLines)}
-                      className="text-red-500 hover:text-red-700 text-xs font-bold px-1">
-                      X
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-          <tfoot>
-            <tr style={{ borderTopColor: theme.border, borderTopWidth: 2, backgroundColor: theme.background }}>
-              <td colSpan={3} className="px-2 py-1 text-right font-semibold text-xs" style={{ color: theme.textPrimary }}>
-                Subtotal
-              </td>
-              <td className="px-2 py-1 text-right font-mono font-bold" style={{ color: theme.primary }}>
-                {total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
       )}
     </div>
   )

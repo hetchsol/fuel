@@ -54,6 +54,8 @@ interface TankReading {
   recorded_by: string
   created_at: string
   notes: string
+  deliveries?: any[]
+  delivery_timeline?: any
 }
 
 export default function TankReadingsReport() {
@@ -302,6 +304,9 @@ export default function TankReadingsReport() {
                     Expected Revenue
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.primary }}>
+                    Deliveries
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.primary }}>
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.primary }}>
@@ -346,6 +351,19 @@ export default function TankReadingsReport() {
                       <div className="text-sm font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>
                         {formatCurrency(reading.expected_amount_electronic)}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {reading.deliveries && reading.deliveries.length > 0 ? (
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 border border-blue-300">
+                          {reading.deliveries.length}
+                        </span>
+                      ) : reading.delivery_timeline?.has_deliveries ? (
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 border border-blue-300">
+                          {reading.delivery_timeline.number_of_deliveries}
+                        </span>
+                      ) : (
+                        <span className="text-sm transition-colors duration-300" style={{ color: theme.textSecondary }}>-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(reading.validation_status)}`}>
@@ -523,6 +541,118 @@ export default function TankReadingsReport() {
                         {selectedReading.allocation_balance_check?.toFixed(3) || '0.000'} L
                       </span>
                     </div>
+                  </div>
+                )}
+
+                {/* Deliveries & Timeline */}
+                {(selectedReading.delivery_timeline?.has_deliveries || (selectedReading.deliveries && selectedReading.deliveries.length > 0)) && (
+                  <div className="rounded-lg p-4 mb-4 border-2 border-blue-300 bg-blue-50">
+                    <h3 className="text-lg font-semibold mb-3 text-blue-900">Deliveries & Timeline</h3>
+
+                    {/* Delivery Summary */}
+                    <div className="flex items-center gap-4 mb-4 p-3 rounded-lg bg-blue-100 border border-blue-300">
+                      <span className="text-2xl font-bold text-blue-800">
+                        {selectedReading.delivery_timeline?.number_of_deliveries || selectedReading.deliveries?.length || 0}
+                      </span>
+                      <span className="text-sm text-blue-700">
+                        {(selectedReading.delivery_timeline?.number_of_deliveries || selectedReading.deliveries?.length || 0) === 1 ? 'Delivery' : 'Deliveries'}
+                      </span>
+                      <span className="mx-2 text-blue-400">|</span>
+                      <span className="text-sm text-blue-700">
+                        Total Delivered: <strong>
+                          {(selectedReading.delivery_timeline?.total_delivered ||
+                            selectedReading.deliveries?.reduce((s: number, d: any) => s + (d.volume_delivered || 0), 0) || 0
+                          ).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} L
+                        </strong>
+                      </span>
+                    </div>
+
+                    {/* Delivery List */}
+                    {selectedReading.delivery_timeline?.timeline?.filter((e: any) => e.event_type === 'DELIVERY').map((event: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-3 mb-2 p-2 bg-white rounded border border-blue-200 text-sm">
+                        <span className="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
+                          {event.delivery_number || idx + 1}
+                        </span>
+                        <span className="text-blue-800">
+                          +{event.change?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}L
+                          {event.supplier && <> from <strong>{event.supplier}</strong></>}
+                          {event.time && <> at <strong>{event.time}</strong></>}
+                        </span>
+                      </div>
+                    ))}
+
+                    {/* Fallback: show deliveries array if no timeline events */}
+                    {!selectedReading.delivery_timeline?.timeline && selectedReading.deliveries?.map((d: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-3 mb-2 p-2 bg-white rounded border border-blue-200 text-sm">
+                        <span className="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
+                          {idx + 1}
+                        </span>
+                        <span className="text-blue-800">
+                          +{(d.volume_delivered || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}L
+                          {d.supplier && <> from <strong>{d.supplier}</strong></>}
+                          {d.delivery_time && <> at <strong>{d.delivery_time}</strong></>}
+                        </span>
+                      </div>
+                    ))}
+
+                    {/* Segment Sales Table */}
+                    {selectedReading.delivery_timeline?.inter_delivery_sales?.length > 0 && (
+                      <div className="mt-4 overflow-x-auto">
+                        <h4 className="text-sm font-semibold text-blue-900 mb-2">Segment Sales Breakdown</h4>
+                        <table className="min-w-full text-sm border border-blue-200">
+                          <thead>
+                            <tr className="bg-blue-100">
+                              <th className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Segment</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Period</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-blue-800 uppercase">Start Level</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-blue-800 uppercase">End Level</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-blue-800 uppercase">Sales (L)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedReading.delivery_timeline.inter_delivery_sales.map((seg: any, idx: number) => (
+                              <tr key={idx} className="border-t border-blue-200">
+                                <td className="px-3 py-2 font-medium text-blue-900">{idx + 1}</td>
+                                <td className="px-3 py-2 text-blue-700">{seg.period}</td>
+                                <td className="px-3 py-2 text-right font-mono text-blue-800">{seg.start_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                                <td className="px-3 py-2 text-right font-mono text-blue-800">{seg.end_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                                <td className="px-3 py-2 text-right font-mono font-semibold text-blue-900">{seg.sales_volume?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              </tr>
+                            ))}
+                            <tr className="border-t-2 border-blue-400 bg-blue-100">
+                              <td colSpan={4} className="px-3 py-2 text-right font-bold text-blue-900">Total</td>
+                              <td className="px-3 py-2 text-right font-mono font-bold text-blue-900">
+                                {selectedReading.delivery_timeline.total_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Cross-check */}
+                    {selectedReading.delivery_timeline?.formula_sales !== undefined && (
+                      <div className="mt-3 p-2 rounded bg-white border border-blue-200 text-xs text-blue-700">
+                        <strong>Cross-check:</strong> Formula sales = {selectedReading.delivery_timeline.formula_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L
+                        {' | '}Segment sum = {selectedReading.delivery_timeline.total_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L
+                        {Math.abs((selectedReading.delivery_timeline.formula_sales || 0) - (selectedReading.delivery_timeline.total_sales || 0)) < 1
+                          ? <span className="ml-2 text-green-700 font-semibold">Match</span>
+                          : <span className="ml-2 text-red-700 font-semibold">Mismatch</span>
+                        }
+                      </div>
+                    )}
+
+                    {/* Validation */}
+                    {selectedReading.delivery_timeline?.validation?.warnings?.length > 0 && (
+                      <div className="mt-3 p-3 rounded bg-yellow-50 border border-yellow-300">
+                        <p className="text-xs font-semibold text-yellow-800 mb-1">Warnings</p>
+                        <ul className="text-xs text-yellow-700 space-y-1">
+                          {selectedReading.delivery_timeline.validation.warnings.map((w: string, i: number) => (
+                            <li key={i}>- {w}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 

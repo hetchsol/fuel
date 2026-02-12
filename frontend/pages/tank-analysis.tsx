@@ -20,6 +20,8 @@ interface TankReconciliation {
   mechanical_discrepancy_percent: number
   status: 'acceptable' | 'warning' | 'critical'
   message: string
+  deliveries?: any[]
+  delivery_timeline?: any
 }
 
 export default function TankAnalysis() {
@@ -193,15 +195,91 @@ export default function TankAnalysis() {
                   </span>
                 </div>
 
-                {/* Delivery Indicator */}
-                {tank.tank_movement > 0 && tank.tank_movement < -5000 && (
-                  <div className="mb-4 bg-green-50 border-2 border-green-400 rounded-lg p-3">
-                    <p className="text-sm font-bold text-green-900 flex items-center gap-2">
-                      <span>🚚</span> Fuel Delivery Detected
-                    </p>
-                    <p className="text-xs text-green-700 mt-1">
-                      Tank volume increased during this shift - Delivery recorded
-                    </p>
+                {/* Delivery Data */}
+                {(tank.deliveries?.length > 0 || tank.delivery_timeline?.has_deliveries) && (
+                  <div className="mb-4 bg-blue-50 border-2 border-blue-400 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-bold text-blue-900">
+                        Fuel Deliveries During Shift
+                      </p>
+                      <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold border border-blue-300">
+                        {tank.delivery_timeline?.number_of_deliveries || tank.deliveries?.length || 0} Delivery(s)
+                      </span>
+                    </div>
+
+                    {/* Delivery summary */}
+                    <div className="flex items-center gap-4 mb-3 p-2 rounded bg-blue-100 border border-blue-300 text-sm">
+                      <span className="text-blue-700">
+                        Total Delivered: <strong>
+                          {(tank.delivery_timeline?.total_delivered ||
+                            tank.deliveries?.reduce((s: number, d: any) => s + (d.volume_delivered || 0), 0) || 0
+                          ).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} L
+                        </strong>
+                      </span>
+                    </div>
+
+                    {/* Delivery list */}
+                    {tank.delivery_timeline?.timeline?.filter((e: any) => e.event_type === 'DELIVERY').map((event: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-3 mb-1 p-2 bg-white rounded border border-blue-200 text-sm">
+                        <span className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
+                          {event.delivery_number || idx + 1}
+                        </span>
+                        <span className="text-blue-800">
+                          +{event.change?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}L
+                          {event.supplier && <> from <strong>{event.supplier}</strong></>}
+                          {event.time && <> at <strong>{event.time}</strong></>}
+                        </span>
+                      </div>
+                    ))}
+
+                    {/* Fallback: show raw deliveries if no timeline */}
+                    {!tank.delivery_timeline?.timeline && tank.deliveries?.map((d: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-3 mb-1 p-2 bg-white rounded border border-blue-200 text-sm">
+                        <span className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
+                          {idx + 1}
+                        </span>
+                        <span className="text-blue-800">
+                          +{(d.volume_delivered || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}L
+                          {d.supplier && <> from <strong>{d.supplier}</strong></>}
+                          {d.delivery_time && <> at <strong>{d.delivery_time}</strong></>}
+                        </span>
+                      </div>
+                    ))}
+
+                    {/* Segment breakdown from delivery_timeline */}
+                    {tank.delivery_timeline?.inter_delivery_sales?.length > 0 && (
+                      <div className="mt-3 overflow-x-auto">
+                        <h5 className="text-xs font-semibold text-blue-900 mb-2">Segment Sales Breakdown</h5>
+                        <table className="min-w-full text-xs border border-blue-200">
+                          <thead>
+                            <tr className="bg-blue-100">
+                              <th className="px-2 py-1 text-left font-medium text-blue-800">Segment</th>
+                              <th className="px-2 py-1 text-left font-medium text-blue-800">Period</th>
+                              <th className="px-2 py-1 text-right font-medium text-blue-800">Start Level</th>
+                              <th className="px-2 py-1 text-right font-medium text-blue-800">End Level</th>
+                              <th className="px-2 py-1 text-right font-medium text-blue-800">Sales (L)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tank.delivery_timeline.inter_delivery_sales.map((seg: any, idx: number) => (
+                              <tr key={idx} className="border-t border-blue-200">
+                                <td className="px-2 py-1 font-medium text-blue-900">{idx + 1}</td>
+                                <td className="px-2 py-1 text-blue-700">{seg.period}</td>
+                                <td className="px-2 py-1 text-right font-mono text-blue-800">{seg.start_level?.toLocaleString()}</td>
+                                <td className="px-2 py-1 text-right font-mono text-blue-800">{seg.end_level?.toLocaleString()}</td>
+                                <td className="px-2 py-1 text-right font-mono font-semibold text-blue-900">{seg.sales_volume?.toFixed(2)}</td>
+                              </tr>
+                            ))}
+                            <tr className="border-t-2 border-blue-400 bg-blue-100">
+                              <td colSpan={4} className="px-2 py-1 text-right font-bold text-blue-900">Total</td>
+                              <td className="px-2 py-1 text-right font-mono font-bold text-blue-900">
+                                {tank.delivery_timeline.total_sales?.toFixed(2)}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -339,7 +417,7 @@ export default function TankAnalysis() {
               <li>• <strong>Acceptable</strong>: {'<'} 2% variance (normal operational variation)</li>
               <li>• <strong>Warning</strong>: 2-5% variance (requires attention)</li>
               <li>• <strong>Critical</strong>: {'>'} 5% variance (immediate investigation required)</li>
-              <li>• <strong>Delivery Days</strong>: 🚚 Large negative tank movement indicates fuel delivery during shift</li>
+              <li>• <strong>Delivery Days</strong>: Delivery data is shown directly from recorded deliveries when available</li>
             </ul>
           </div>
 

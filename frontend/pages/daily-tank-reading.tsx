@@ -2600,6 +2600,114 @@ export default function DailyTankReading() {
                     </span>
                   </div>
 
+                  {/* Delivery Timeline Section */}
+                  {calculatedValues.delivery_timeline?.has_deliveries && (
+                    <div className="border-2 border-blue-300 rounded-lg p-4 bg-blue-50">
+                      <h4 className="font-semibold text-blue-900 mb-3 text-lg">Deliveries & Timeline</h4>
+
+                      {/* Delivery Summary */}
+                      <div className="flex items-center gap-4 mb-4 p-3 rounded-lg bg-blue-100 border border-blue-300">
+                        <span className="text-2xl font-bold text-blue-800">
+                          {calculatedValues.delivery_timeline.number_of_deliveries}
+                        </span>
+                        <span className="text-sm text-blue-700">
+                          {calculatedValues.delivery_timeline.number_of_deliveries === 1 ? 'Delivery' : 'Deliveries'}
+                        </span>
+                        <span className="mx-2 text-blue-400">|</span>
+                        <span className="text-sm text-blue-700">
+                          Total Delivered: <strong>{calculatedValues.delivery_timeline.total_delivered?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} L</strong>
+                        </span>
+                      </div>
+
+                      {/* Delivery List */}
+                      {calculatedValues.delivery_timeline.timeline?.filter((e: any) => e.event_type === 'DELIVERY').map((event: any, idx: number) => (
+                        <div key={idx} className="flex items-center gap-3 mb-2 p-2 bg-white rounded border border-blue-200 text-sm">
+                          <span className="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
+                            {event.delivery_number || idx + 1}
+                          </span>
+                          <span className="text-blue-800">
+                            +{event.change?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}L
+                            {event.supplier && <> from <strong>{event.supplier}</strong></>}
+                            {event.time && <> at <strong>{event.time}</strong></>}
+                          </span>
+                        </div>
+                      ))}
+
+                      {/* Segment Sales Table */}
+                      {calculatedValues.delivery_timeline.inter_delivery_sales?.length > 0 && (
+                        <div className="mt-4 overflow-x-auto">
+                          <h5 className="text-sm font-semibold text-blue-900 mb-2">Segment Sales Breakdown</h5>
+                          <table className="min-w-full text-sm border border-blue-200">
+                            <thead>
+                              <tr className="bg-blue-100">
+                                <th className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Segment</th>
+                                <th className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Period</th>
+                                <th className="px-3 py-2 text-right text-xs font-medium text-blue-800 uppercase">Start Level</th>
+                                <th className="px-3 py-2 text-right text-xs font-medium text-blue-800 uppercase">End Level</th>
+                                <th className="px-3 py-2 text-right text-xs font-medium text-blue-800 uppercase">Sales (L)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {calculatedValues.delivery_timeline.inter_delivery_sales.map((seg: any, idx: number) => (
+                                <tr key={idx} className="border-t border-blue-200">
+                                  <td className="px-3 py-2 font-medium text-blue-900">{idx + 1}</td>
+                                  <td className="px-3 py-2 text-blue-700">{seg.period}</td>
+                                  <td className="px-3 py-2 text-right font-mono text-blue-800">{seg.start_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                                  <td className="px-3 py-2 text-right font-mono text-blue-800">{seg.end_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                                  <td className="px-3 py-2 text-right font-mono font-semibold text-blue-900">{seg.sales_volume?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                </tr>
+                              ))}
+                              <tr className="border-t-2 border-blue-400 bg-blue-100">
+                                <td colSpan={4} className="px-3 py-2 text-right font-bold text-blue-900">Total</td>
+                                <td className="px-3 py-2 text-right font-mono font-bold text-blue-900">
+                                  {calculatedValues.delivery_timeline.total_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Cross-check line */}
+                      {calculatedValues.delivery_timeline.formula_sales !== undefined && (
+                        <div className="mt-3 p-2 rounded bg-white border border-blue-200 text-xs text-blue-700">
+                          <strong>Cross-check:</strong> Formula sales = {calculatedValues.delivery_timeline.formula_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L
+                          {' | '}Segment sum = {calculatedValues.delivery_timeline.total_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L
+                          {Math.abs((calculatedValues.delivery_timeline.formula_sales || 0) - (calculatedValues.delivery_timeline.total_sales || 0)) < 1
+                            ? <span className="ml-2 text-green-700 font-semibold">Match</span>
+                            : <span className="ml-2 text-red-700 font-semibold">Mismatch</span>
+                          }
+                        </div>
+                      )}
+
+                      {/* Validation Warnings */}
+                      {calculatedValues.delivery_timeline.validation && (
+                        <>
+                          {calculatedValues.delivery_timeline.validation.warnings?.length > 0 && (
+                            <div className="mt-3 p-3 rounded bg-yellow-50 border border-yellow-300">
+                              <p className="text-xs font-semibold text-yellow-800 mb-1">Warnings</p>
+                              <ul className="text-xs text-yellow-700 space-y-1">
+                                {calculatedValues.delivery_timeline.validation.warnings.map((w: string, i: number) => (
+                                  <li key={i}>- {w}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {calculatedValues.delivery_timeline.validation.errors?.length > 0 && (
+                            <div className="mt-3 p-3 rounded bg-red-50 border border-red-300">
+                              <p className="text-xs font-semibold text-red-800 mb-1">Errors</p>
+                              <ul className="text-xs text-red-700 space-y-1">
+                                {calculatedValues.delivery_timeline.validation.errors.map((e: string, i: number) => (
+                                  <li key={i}>- {e}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex justify-center">
                     <button
                       type="button"

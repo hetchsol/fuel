@@ -179,6 +179,20 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
         electronic_discrepancy_percent = (electronic_vs_tank_discrepancy / tank_movement * 100) if tank_movement > 0 else 0
         mechanical_discrepancy_percent = (mechanical_vs_tank_discrepancy / tank_movement * 100) if tank_movement > 0 else 0
 
+        # Look up delivery data from tank readings store
+        shift_date = shift.get('date', '')
+        shift_type_str = shift.get('shift_type', '')
+        station_tank_readings = _load_station_tank_readings(ctx["station_id"])
+        delivery_data = None
+        deliveries_list = []
+        for tr in station_tank_readings.values():
+            if (tr.get('tank_id') == tank_id and
+                tr.get('date') == shift_date and
+                tr.get('shift_type') == shift_type_str):
+                deliveries_list = tr.get('deliveries', [])
+                delivery_data = tr.get('delivery_timeline')
+                break
+
         tank_reconciliations.append({
             "tank_id": tank_id,
             "fuel_type": fuel_type,
@@ -195,7 +209,9 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
             "electronic_discrepancy_percent": round(electronic_discrepancy_percent, 2),
             "mechanical_discrepancy_percent": round(mechanical_discrepancy_percent, 2),
             "status": "acceptable" if abs(electronic_discrepancy_percent) < 2.0 else "warning" if abs(electronic_discrepancy_percent) < 5.0 else "critical",
-            "message": f"Tank movement: {tank_movement:.2f}L, Electronic sales: {total_electronic:.2f}L, Variance: {electronic_vs_tank_discrepancy:.2f}L ({electronic_discrepancy_percent:.2f}%)"
+            "message": f"Tank movement: {tank_movement:.2f}L, Electronic sales: {total_electronic:.2f}L, Variance: {electronic_vs_tank_discrepancy:.2f}L ({electronic_discrepancy_percent:.2f}%)",
+            "deliveries": deliveries_list,
+            "delivery_timeline": delivery_data,
         })
 
     return {
