@@ -40,6 +40,7 @@ export default function Shifts() {
   // Manage existing shift state
   const [selectedShiftId, setSelectedShiftId] = useState<string>('')
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null)
+  const [showManageDropdown, setShowManageDropdown] = useState(false)
 
   // Tank dip reading state
   const [tanks, setTanks] = useState<any[]>([])
@@ -671,6 +672,12 @@ export default function Shifts() {
                     >
                       Manage Shift
                     </button>
+                    <button
+                      onClick={() => setShowManageDropdown(!showManageDropdown)}
+                      className="px-3 py-1 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-md"
+                    >
+                      Manage Existing Shift
+                    </button>
                     {activeShift.status === 'active' && (
                       <button
                         onClick={() => handleDeactivateShift(activeShift.shift_id)}
@@ -683,6 +690,114 @@ export default function Shifts() {
                 )}
               </div>
             </div>
+
+            {/* Manage Existing Shift Dropdown */}
+            {showManageDropdown && canManageShifts && (
+              <div className="mb-4 p-4 bg-white rounded-lg border border-indigo-200">
+                <h3 className="font-semibold text-gray-900 mb-3">Manage Existing Shift</h3>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex-1 min-w-[250px]">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Select a shift</label>
+                    <select
+                      value={selectedShiftId}
+                      onChange={(e) => setSelectedShiftId(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="">-- Select Shift --</option>
+                      {(() => {
+                        const statusOrder: Record<string, number> = { active: 0, completed: 1, reconciled: 2, inactive: 3 }
+                        const sorted = [...allShifts].sort((a, b) => {
+                          const aO = statusOrder[a.status] ?? 99
+                          const bO = statusOrder[b.status] ?? 99
+                          if (aO !== bO) return aO - bO
+                          if (b.date !== a.date) return b.date.localeCompare(a.date)
+                          return a.shift_type.localeCompare(b.shift_type)
+                        })
+                        return sorted.map((shift: any) => (
+                          <option key={shift.shift_id} value={shift.shift_id}>
+                            {shift.date} — {shift.shift_type} Shift ({shift.status.toUpperCase()})
+                          </option>
+                        ))
+                      })()}
+                    </select>
+                  </div>
+
+                  {selectedShiftId && (() => {
+                    const shift = allShifts.find(s => s.shift_id === selectedShiftId)
+                    if (!shift) return null
+                    return (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { openEditModal(shift); setShowManageDropdown(false) }}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium"
+                        >
+                          Edit Shift
+                        </button>
+                        {shift.status === 'active' && (
+                          <button
+                            onClick={() => { handleDeactivateShift(shift.shift_id); setSelectedShiftId('') }}
+                            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md text-sm font-medium"
+                          >
+                            Deactivate
+                          </button>
+                        )}
+                        {currentUser?.role === 'owner' && shift.status === 'inactive' && (
+                          <button
+                            onClick={() => { handleDeleteShift(shift.shift_id); setSelectedShiftId('') }}
+                            className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-md text-sm font-medium"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+
+                {/* Selected shift summary */}
+                {selectedShiftId && (() => {
+                  const shift = allShifts.find(s => s.shift_id === selectedShiftId)
+                  if (!shift) return null
+                  return (
+                    <div className={`mt-3 p-3 rounded-lg border ${
+                      shift.status === 'active' ? 'bg-green-50 border-green-200'
+                      : shift.status === 'completed' ? 'bg-blue-50 border-blue-200'
+                      : shift.status === 'reconciled' ? 'bg-purple-50 border-purple-200'
+                      : shift.status === 'inactive' ? 'bg-red-50 border-red-200'
+                      : 'bg-gray-50 border-gray-200'
+                    }`}>
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="font-semibold text-gray-900 text-sm">{shift.date} — {shift.shift_type === 'Day' ? 'Day Shift' : 'Night Shift'}</span>
+                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${getShiftStatusColor(shift.status)}`}>
+                          {shift.status.toUpperCase()}
+                        </span>
+                      </div>
+                      {shift.assignments && shift.assignments.length > 0 ? (
+                        <div className="space-y-1">
+                          {shift.assignments.map((a: any) => (
+                            <div key={a.attendant_id} className="text-sm">
+                              <span className="font-medium text-gray-800">{a.attendant_name}</span>
+                              {a.nozzle_ids && a.nozzle_ids.length > 0 && (
+                                <span className="text-gray-500 ml-2">
+                                  — {a.nozzle_ids.map((nid: string) => {
+                                    const nozzle = nozzles.find(n => n.nozzle_id === nid)
+                                    return nozzle ? getNozzleDisplayName(nozzle) : nid
+                                  }).join(', ')}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : shift.attendants && shift.attendants.length > 0 ? (
+                        <p className="text-sm text-gray-600">Attendants: {shift.attendants.join(', ')}</p>
+                      ) : (
+                        <p className="text-sm text-gray-500">No attendant assignments</p>
+                      )}
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
 
             {/* Attendant Assignments */}
             {activeShift.assignments && activeShift.assignments.length > 0 ? (
@@ -1121,116 +1236,6 @@ export default function Shifts() {
               </div>
             </form>
           </div>
-        </div>
-      )}
-
-      {/* Manage Existing Shift Section */}
-      {canManageShifts && (
-        <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Manage Existing Shift</h2>
-
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[250px]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Select a shift</label>
-              <select
-                value={selectedShiftId}
-                onChange={(e) => setSelectedShiftId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">-- Select Shift --</option>
-                {(() => {
-                  const statusOrder: Record<string, number> = { active: 0, completed: 1, reconciled: 2, inactive: 3 }
-                  const sorted = [...allShifts].sort((a, b) => {
-                    const aO = statusOrder[a.status] ?? 99
-                    const bO = statusOrder[b.status] ?? 99
-                    if (aO !== bO) return aO - bO
-                    if (b.date !== a.date) return b.date.localeCompare(a.date)
-                    return a.shift_type.localeCompare(b.shift_type)
-                  })
-                  return sorted.map((shift: any) => (
-                    <option key={shift.shift_id} value={shift.shift_id}>
-                      {shift.date} — {shift.shift_type} Shift ({shift.status.toUpperCase()})
-                    </option>
-                  ))
-                })()}
-              </select>
-            </div>
-
-            {/* Action buttons — shown when a shift is selected */}
-            {selectedShiftId && (() => {
-              const shift = allShifts.find(s => s.shift_id === selectedShiftId)
-              if (!shift) return null
-              return (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => openEditModal(shift)}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium"
-                  >
-                    Edit Shift
-                  </button>
-                  {shift.status === 'active' && (
-                    <button
-                      onClick={() => { handleDeactivateShift(shift.shift_id); setSelectedShiftId('') }}
-                      className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md text-sm font-medium"
-                    >
-                      Deactivate
-                    </button>
-                  )}
-                  {currentUser?.role === 'owner' && shift.status === 'inactive' && (
-                    <button
-                      onClick={() => { handleDeleteShift(shift.shift_id); setSelectedShiftId('') }}
-                      className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-md text-sm font-medium"
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              )
-            })()}
-          </div>
-
-          {/* Selected shift summary card */}
-          {selectedShiftId && (() => {
-            const shift = allShifts.find(s => s.shift_id === selectedShiftId)
-            if (!shift) return null
-            return (
-              <div className={`mt-4 p-4 rounded-lg border-2 ${
-                shift.status === 'active' ? 'bg-green-50 border-green-200'
-                : shift.status === 'completed' ? 'bg-blue-50 border-blue-200'
-                : shift.status === 'reconciled' ? 'bg-purple-50 border-purple-200'
-                : shift.status === 'inactive' ? 'bg-red-50 border-red-200'
-                : 'bg-gray-50 border-gray-200'
-              }`}>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="font-semibold text-gray-900">{shift.date} — {shift.shift_type === 'Day' ? 'Day Shift' : 'Night Shift'}</span>
-                  <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${getShiftStatusColor(shift.status)}`}>
-                    {shift.status.toUpperCase()}
-                  </span>
-                </div>
-                {shift.assignments && shift.assignments.length > 0 ? (
-                  <div className="space-y-2">
-                    {shift.assignments.map((a: any) => (
-                      <div key={a.attendant_id} className="text-sm">
-                        <span className="font-medium text-gray-800">{a.attendant_name}</span>
-                        {a.nozzle_ids && a.nozzle_ids.length > 0 && (
-                          <span className="text-gray-500 ml-2">
-                            — {a.nozzle_ids.map((nid: string) => {
-                              const nozzle = nozzles.find(n => n.nozzle_id === nid)
-                              return nozzle ? getNozzleDisplayName(nozzle) : nid
-                            }).join(', ')}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : shift.attendants && shift.attendants.length > 0 ? (
-                  <p className="text-sm text-gray-600">Attendants: {shift.attendants.join(', ')}</p>
-                ) : (
-                  <p className="text-sm text-gray-500">No attendant assignments</p>
-                )}
-              </div>
-            )
-          })()}
         </div>
       )}
 
