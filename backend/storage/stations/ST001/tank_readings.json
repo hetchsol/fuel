@@ -14888,5 +14888,395 @@
     "recorded_by": "O001",
     "created_at": "2026-02-02T15:54:19.424008",
     "notes": "Imported from Excel"
+  },
+  "TR-TANK-DIESEL-2026-02-13-test6del": {
+    "reading_id": "TR-TANK-DIESEL-2026-02-13-test6del",
+    "tank_id": "TANK-DIESEL",
+    "fuel_type": "Diesel",
+    "date": "2026-02-13",
+    "shift_type": "Day",
+    "opening_dip_cm": 111.0,
+    "closing_dip_cm": 186.0,
+    "after_delivery_dip_cm": null,
+    "opening_volume": 18000.0,
+    "closing_volume": 30000.0,
+    "before_offload_volume": null,
+    "after_offload_volume": null,
+    "nozzle_readings": [
+      {
+        "nozzle_id": "1A",
+        "attendant": "Chileshe",
+        "electronic_opening": 196118.192,
+        "electronic_closing": 200318.192,
+        "electronic_movement": 4200.0,
+        "mechanical_opening": 266549.0,
+        "mechanical_closing": 270749.0,
+        "mechanical_movement": 4200.0
+      },
+      {
+        "nozzle_id": "1B",
+        "attendant": "Chileshe",
+        "electronic_opening": 200922.218,
+        "electronic_closing": 204722.218,
+        "electronic_movement": 3800.0,
+        "mechanical_opening": 269807.0,
+        "mechanical_closing": 273607.0,
+        "mechanical_movement": 3800.0
+      },
+      {
+        "nozzle_id": "2A",
+        "attendant": "Shaka",
+        "electronic_opening": 425927.016,
+        "electronic_closing": 430027.016,
+        "electronic_movement": 4100.0,
+        "mechanical_opening": 426173.0,
+        "mechanical_closing": 430273.0,
+        "mechanical_movement": 4100.0
+      },
+      {
+        "nozzle_id": "2B",
+        "attendant": "Shaka",
+        "electronic_opening": 607124.769,
+        "electronic_closing": 611024.769,
+        "electronic_movement": 3900.0,
+        "mechanical_opening": 607431.0,
+        "mechanical_closing": 611331.0,
+        "mechanical_movement": 3900.0
+      }
+    ],
+    "tank_volume_movement": 16000.0,
+    "total_electronic_dispensed": 16000.0,
+    "total_mechanical_dispensed": 16000.0,
+    "electronic_vs_tank_variance": 0.0,
+    "mechanical_vs_tank_variance": 0.0,
+    "electronic_vs_tank_percent": 0.0,
+    "mechanical_vs_tank_percent": 0.0,
+    "price_per_liter": 28.5,
+    "expected_amount_electronic": 456000.0,
+    "expected_amount_mechanical": 456000.0,
+    "actual_cash_banked": 450000.0,
+    "cash_difference": -6000.0,
+    "cumulative_volume_sold": null,
+    "loss_percent": 0.0,
+    "customer_allocations": null,
+    "allocation_balance_check": null,
+    "total_customer_revenue": null,
+    "pump_averages": null,
+    "deliveries": [
+      {
+        "delivery_id": null,
+        "volume_delivered": 5000,
+        "delivery_time": "07:30",
+        "supplier": "Puma Energy",
+        "invoice_number": "INV-2026-0201",
+        "before_volume": 17000,
+        "after_volume": 22000
+      },
+      {
+        "delivery_id": null,
+        "volume_delivered": 4000,
+        "delivery_time": "09:00",
+        "supplier": "TotalEnergies",
+        "invoice_number": "INV-2026-0202",
+        "before_volume": 20500,
+        "after_volume": 24500
+      },
+      {
+        "delivery_id": null,
+        "volume_delivered": 6000,
+        "delivery_time": "10:30",
+        "supplier": "Engen",
+        "invoice_number": "INV-2026-0203",
+        "before_volume": 22000,
+        "after_volume": 28000
+      },
+      {
+        "delivery_id": null,
+        "volume_delivered": 3500,
+        "delivery_time": "12:00",
+        "supplier": "Puma Energy",
+        "invoice_number": "INV-2026-0204",
+        "before_volume": 25500,
+        "after_volume": 29000
+      },
+      {
+        "delivery_id": null,
+        "volume_delivered": 5500,
+        "delivery_time": "14:00",
+        "supplier": "TotalEnergies",
+        "invoice_number": "INV-2026-0205",
+        "before_volume": 26000,
+        "after_volume": 31500
+      },
+      {
+        "delivery_id": null,
+        "volume_delivered": 4000,
+        "delivery_time": "16:00",
+        "supplier": "Engen",
+        "invoice_number": "INV-2026-0206",
+        "before_volume": 28500,
+        "after_volume": 32500
+      }
+    ],
+    "total_delivery_volume": 28000.0,
+    "delivery_count": 6,
+    "delivery_timeline": {
+      "has_deliveries": true,
+      "number_of_deliveries": 6,
+      "total_delivered": 28000,
+      "total_sales": 16000,
+      "formula_sales": 16000,
+      "inter_delivery_sales": [
+        {
+          "period": "Opening to Delivery 1",
+          "sales_volume": 1000,
+          "start_level": 18000,
+          "end_level": 17000,
+          "start_time": "Opening",
+          "end_time": "07:30"
+        },
+        {
+          "period": "Delivery 1 to Delivery 2",
+          "sales_volume": 1500,
+          "start_level": 22000,
+          "end_level": 20500,
+          "start_time": "07:30",
+          "end_time": "09:00"
+        },
+        {
+          "period": "Delivery 2 to Delivery 3",
+          "sales_volume": 2500,
+          "start_level": 24500,
+          "end_level": 22000,
+          "start_time": "09:00",
+          "end_time": "10:30"
+        },
+        {
+          "period": "Delivery 3 to Delivery 4",
+          "sales_volume": 2500,
+          "start_level": 28000,
+          "end_level": 25500,
+          "start_time": "10:30",
+          "end_time": "12:00"
+        },
+        {
+          "period": "Delivery 4 to Delivery 5",
+          "sales_volume": 3000,
+          "start_level": 29000,
+          "end_level": 26000,
+          "start_time": "12:00",
+          "end_time": "14:00"
+        },
+        {
+          "period": "Delivery 5 to Delivery 6",
+          "sales_volume": 3000,
+          "start_level": 31500,
+          "end_level": 28500,
+          "start_time": "14:00",
+          "end_time": "16:00"
+        },
+        {
+          "period": "Delivery 6 to Closing",
+          "sales_volume": 2500,
+          "start_level": 32500,
+          "end_level": 30000,
+          "start_time": "16:00",
+          "end_time": "Closing"
+        }
+      ],
+      "timeline": [
+        {
+          "sequence": 1,
+          "event_type": "SHIFT_START",
+          "time": "Opening",
+          "tank_level": 18000,
+          "change": 0,
+          "description": "Shift opening volume: 18,000 L"
+        },
+        {
+          "sequence": 2,
+          "event_type": "SALES",
+          "time": "Before 07:30",
+          "tank_level": 17000,
+          "change": -1000,
+          "description": "Sales before delivery #1: 1,000 L",
+          "sales_volume": 1000,
+          "period": "Opening until delivery #1"
+        },
+        {
+          "sequence": 3,
+          "event_type": "DELIVERY",
+          "time": "07:30",
+          "tank_level": 22000,
+          "change": 5000,
+          "description": "Delivery #1 from Puma Energy: +5,000 L",
+          "delivery_number": 1,
+          "supplier": "Puma Energy",
+          "before_volume": 17000,
+          "after_volume": 22000
+        },
+        {
+          "sequence": 4,
+          "event_type": "SALES",
+          "time": "Before 09:00",
+          "tank_level": 20500,
+          "change": -1500,
+          "description": "Sales before delivery #2: 1,500 L",
+          "sales_volume": 1500,
+          "period": "After delivery #1 until delivery #2"
+        },
+        {
+          "sequence": 5,
+          "event_type": "DELIVERY",
+          "time": "09:00",
+          "tank_level": 24500,
+          "change": 4000,
+          "description": "Delivery #2 from TotalEnergies: +4,000 L",
+          "delivery_number": 2,
+          "supplier": "TotalEnergies",
+          "before_volume": 20500,
+          "after_volume": 24500
+        },
+        {
+          "sequence": 6,
+          "event_type": "SALES",
+          "time": "Before 10:30",
+          "tank_level": 22000,
+          "change": -2500,
+          "description": "Sales before delivery #3: 2,500 L",
+          "sales_volume": 2500,
+          "period": "After delivery #2 until delivery #3"
+        },
+        {
+          "sequence": 7,
+          "event_type": "DELIVERY",
+          "time": "10:30",
+          "tank_level": 28000,
+          "change": 6000,
+          "description": "Delivery #3 from Engen: +6,000 L",
+          "delivery_number": 3,
+          "supplier": "Engen",
+          "before_volume": 22000,
+          "after_volume": 28000
+        },
+        {
+          "sequence": 8,
+          "event_type": "SALES",
+          "time": "Before 12:00",
+          "tank_level": 25500,
+          "change": -2500,
+          "description": "Sales before delivery #4: 2,500 L",
+          "sales_volume": 2500,
+          "period": "After delivery #3 until delivery #4"
+        },
+        {
+          "sequence": 9,
+          "event_type": "DELIVERY",
+          "time": "12:00",
+          "tank_level": 29000,
+          "change": 3500,
+          "description": "Delivery #4 from Puma Energy: +3,500 L",
+          "delivery_number": 4,
+          "supplier": "Puma Energy",
+          "before_volume": 25500,
+          "after_volume": 29000
+        },
+        {
+          "sequence": 10,
+          "event_type": "SALES",
+          "time": "Before 14:00",
+          "tank_level": 26000,
+          "change": -3000,
+          "description": "Sales before delivery #5: 3,000 L",
+          "sales_volume": 3000,
+          "period": "After delivery #4 until delivery #5"
+        },
+        {
+          "sequence": 11,
+          "event_type": "DELIVERY",
+          "time": "14:00",
+          "tank_level": 31500,
+          "change": 5500,
+          "description": "Delivery #5 from TotalEnergies: +5,500 L",
+          "delivery_number": 5,
+          "supplier": "TotalEnergies",
+          "before_volume": 26000,
+          "after_volume": 31500
+        },
+        {
+          "sequence": 12,
+          "event_type": "SALES",
+          "time": "Before 16:00",
+          "tank_level": 28500,
+          "change": -3000,
+          "description": "Sales before delivery #6: 3,000 L",
+          "sales_volume": 3000,
+          "period": "After delivery #5 until delivery #6"
+        },
+        {
+          "sequence": 13,
+          "event_type": "DELIVERY",
+          "time": "16:00",
+          "tank_level": 32500,
+          "change": 4000,
+          "description": "Delivery #6 from Engen: +4,000 L",
+          "delivery_number": 6,
+          "supplier": "Engen",
+          "before_volume": 28500,
+          "after_volume": 32500
+        },
+        {
+          "sequence": 14,
+          "event_type": "SALES",
+          "time": "After last delivery",
+          "tank_level": 30000,
+          "change": -2500,
+          "description": "Sales after last delivery: 2,500 L",
+          "sales_volume": 2500,
+          "period": "After delivery #6 until closing"
+        },
+        {
+          "sequence": 15,
+          "event_type": "SHIFT_END",
+          "time": "Closing",
+          "tank_level": 30000,
+          "change": 0,
+          "description": "Shift closing volume: 30,000 L"
+        }
+      ],
+      "validation": {
+        "is_valid": true,
+        "errors": [],
+        "warnings": [],
+        "sales_match": true
+      },
+      "summary": {
+        "opening": 18000,
+        "closing": 30000,
+        "net_change": 12000,
+        "deliveries": 28000,
+        "sales": 16000,
+        "periods_with_sales": 7
+      }
+    },
+    "reconciliation": {
+      "tank_volume_movement": 16000.0,
+      "total_electronic_dispensed": 16000.0,
+      "total_mechanical_dispensed": 16000.0,
+      "tank_vs_electronic": 0.0,
+      "tank_vs_mechanical": 0.0,
+      "status": "PASS"
+    },
+    "delivery_occurred": true,
+    "delivery_volume": 28000.0,
+    "delivery_time": "07:30",
+    "supplier": "Puma Energy",
+    "invoice_number": "INV-2026-0201",
+    "validation_status": "PASS",
+    "validation_messages": [],
+    "has_discrepancy": false,
+    "recorded_by": "supervisor1",
+    "created_at": "2026-02-13T08:00:00",
+    "notes": "Test reading with 6 deliveries for multi-delivery timeline verification"
   }
 }
