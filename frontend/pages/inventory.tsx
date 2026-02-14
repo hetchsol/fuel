@@ -1,29 +1,17 @@
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
 export default function Inventory() {
-  const [activeTab, setActiveTab] = useState<'tanks' | 'deliveries' | 'lpg' | 'lubricants'>('tanks')
+  const [activeTab, setActiveTab] = useState<'tanks' | 'lpg' | 'lubricants'>('tanks')
 
   // LPG State
   const [lpgAccessories, setLpgAccessories] = useState<any[]>([])
   const [lubricants, setLubricants] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  // Delivery form state
-  const [deliveryForm, setDeliveryForm] = useState({
-    tank_id: 'TANK-DIESEL-1',
-    fuel_type: 'Diesel',
-    before_dip_cm: '',
-    after_dip_cm: '',
-    invoiced_volume: '',
-    supplier: '',
-    driver_name: '',
-    shift_type: 'Day'
-  })
-  const [deliveryResult, setDeliveryResult] = useState<any>(null)
 
   useEffect(() => {
     fetchLPGAccessories()
@@ -94,16 +82,6 @@ export default function Inventory() {
             }`}
           >
             ⛽ Fuel Tanks
-          </button>
-          <button
-            onClick={() => setActiveTab('deliveries')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'deliveries'
-                ? 'border-action-primary text-action-primary'
-                : 'border-transparent text-content-secondary hover:text-content-secondary hover:border-surface-border'
-            }`}
-          >
-            🚚 Fuel Deliveries
           </button>
           <button
             onClick={() => setActiveTab('lpg')}
@@ -197,260 +175,19 @@ export default function Inventory() {
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Deliveries Tab */}
-      {activeTab === 'deliveries' && (
-        <div>
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-content-primary mb-2">Fuel Deliveries</h2>
-            <p className="text-sm text-content-secondary">Track fuel deliveries and tank refills</p>
-          </div>
-
-          {/* Record Delivery Form */}
-          <div className="bg-surface-card rounded-lg shadow-lg p-6 mb-6">
-            <h3 className="text-lg font-bold text-content-primary mb-4">🚚 Record New Delivery</h3>
-
-            <form className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    Tank
-                  </label>
-                  <select
-                    value={deliveryForm.tank_id}
-                    onChange={(e) => {
-                      const fuelType = e.target.value.includes('DIESEL') ? 'Diesel' : 'Petrol'
-                      setDeliveryForm({ ...deliveryForm, tank_id: e.target.value, fuel_type: fuelType })
-                    }}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                  >
-                    <option value="TANK-DIESEL-1">Diesel Tank 1</option>
-                    <option value="TANK-PETROL-1">Petrol Tank 1</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    Shift Type
-                  </label>
-                  <select
-                    value={deliveryForm.shift_type}
-                    onChange={(e) => setDeliveryForm({ ...deliveryForm, shift_type: e.target.value })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                  >
-                    <option value="Day">Day Shift</option>
-                    <option value="Night">Night Shift</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    Supplier
-                  </label>
-                  <input
-                    type="text"
-                    value={deliveryForm.supplier}
-                    onChange={(e) => setDeliveryForm({ ...deliveryForm, supplier: e.target.value })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    placeholder="e.g., Total Zambia"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-status-pending-light rounded-lg p-4 border-2 border-status-warning">
-                  <label className="block text-sm font-bold text-status-warning mb-2">
-                    Before Delivery Dip (cm)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={deliveryForm.before_dip_cm}
-                    onChange={(e) => setDeliveryForm({ ...deliveryForm, before_dip_cm: e.target.value })}
-                    className="w-full px-3 py-2 border border-status-warning rounded-md focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 text-lg font-semibold"
-                    placeholder="e.g., 45.2"
-                  />
-                  <p className="text-xs text-status-warning mt-2">Record BEFORE truck offloads</p>
-                </div>
-
-                <div className="bg-fuel-petrol-light rounded-lg p-4 border-2 border-fuel-petrol-border">
-                  <label className="block text-sm font-bold text-fuel-petrol mb-2">
-                    After Delivery Dip (cm)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={deliveryForm.after_dip_cm}
-                    onChange={(e) => setDeliveryForm({ ...deliveryForm, after_dip_cm: e.target.value })}
-                    className="w-full px-3 py-2 border border-fuel-petrol-border rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 text-lg font-semibold"
-                    placeholder="e.g., 185.6"
-                  />
-                  <p className="text-xs text-status-success mt-2">Record AFTER truck offloads</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    Invoiced Volume (Liters)
-                  </label>
-                  <input
-                    type="number"
-                    step="1"
-                    value={deliveryForm.invoiced_volume}
-                    onChange={(e) => setDeliveryForm({ ...deliveryForm, invoiced_volume: e.target.value })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    placeholder="e.g., 30000"
-                  />
-                  <p className="text-xs text-content-secondary mt-1">Volume on delivery invoice</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    Driver Name
-                  </label>
-                  <input
-                    type="text"
-                    value={deliveryForm.driver_name}
-                    onChange={(e) => setDeliveryForm({ ...deliveryForm, driver_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    placeholder="e.g., John M."
-                  />
-                </div>
-              </div>
-
-              {/* Calculated Delivery Volume Preview */}
-              {deliveryForm.before_dip_cm && deliveryForm.after_dip_cm && (
-                <div className="bg-action-primary-light border-2 border-action-primary rounded-lg p-4">
-                  <h4 className="text-sm font-bold text-action-primary mb-2">Calculated Delivery (from dip difference)</h4>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-xs text-action-primary">Before Dip</p>
-                      <p className="text-lg font-bold text-action-primary">{deliveryForm.before_dip_cm} cm</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-action-primary">After Dip</p>
-                      <p className="text-lg font-bold text-action-primary">{deliveryForm.after_dip_cm} cm</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-action-primary">Dip Increase</p>
-                      <p className="text-lg font-bold text-action-primary">
-                        {(parseFloat(deliveryForm.after_dip_cm) - parseFloat(deliveryForm.before_dip_cm)).toFixed(1)} cm
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-action-primary mt-2">
-                    System will calculate actual volume from dip table and compare to invoiced volume
-                  </p>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setDeliveryResult({
-                    success: true,
-                    message: 'Delivery recorded successfully',
-                    calculated_volume: (parseFloat(deliveryForm.after_dip_cm) - parseFloat(deliveryForm.before_dip_cm)) * 175,
-                    invoiced_volume: parseFloat(deliveryForm.invoiced_volume),
-                    variance: ((parseFloat(deliveryForm.after_dip_cm) - parseFloat(deliveryForm.before_dip_cm)) * 175) - parseFloat(deliveryForm.invoiced_volume)
-                  })
-                }}
-                disabled={!deliveryForm.before_dip_cm || !deliveryForm.after_dip_cm || !deliveryForm.invoiced_volume}
-                className="w-full px-4 py-3 bg-action-primary text-white font-semibold rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Calculate & Record Delivery
-              </button>
-
-              {/* Delivery Result */}
-              {deliveryResult && (
-                <div className={`p-4 rounded-lg border-2 ${
-                  Math.abs(deliveryResult.variance) < 100 ? 'bg-status-success-light border-status-success' : 'bg-status-pending-light border-yellow-400'
-                }`}>
-                  <h4 className="font-bold mb-2">Delivery Verification Result</h4>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p className="text-content-secondary">Calculated (Dips)</p>
-                      <p className="font-bold text-content-primary">{deliveryResult.calculated_volume.toFixed(0)} L</p>
-                    </div>
-                    <div>
-                      <p className="text-content-secondary">Invoiced</p>
-                      <p className="font-bold text-content-primary">{deliveryResult.invoiced_volume.toFixed(0)} L</p>
-                    </div>
-                    <div>
-                      <p className="text-content-secondary">Variance</p>
-                      <p className={`font-bold ${Math.abs(deliveryResult.variance) < 100 ? 'text-status-success' : 'text-status-warning'}`}>
-                        {deliveryResult.variance > 0 ? '+' : ''}{deliveryResult.variance.toFixed(0)} L
-                      </p>
-                    </div>
-                  </div>
-                  {Math.abs(deliveryResult.variance) < 100 ? (
-                    <p className="text-xs text-status-success mt-2">✅ Delivery verified - variance within acceptable limits</p>
-                  ) : (
-                    <p className="text-xs text-status-warning mt-2">⚠️ Variance exceeds 100L - verify dip readings and invoice</p>
-                  )}
-                </div>
-              )}
-            </form>
-          </div>
-
-          {/* Recent Deliveries */}
-          <div className="bg-surface-card rounded-lg shadow-lg p-6 mb-6">
-            <h3 className="text-lg font-bold text-content-primary mb-4">Recent Deliveries</h3>
-
-            <div className="space-y-4">
-              {/* Sample Delivery Record */}
-              <div className="border-l-4 border-action-primary bg-action-primary-light rounded-lg p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h4 className="font-bold text-content-primary">Diesel Delivery</h4>
-                    <p className="text-sm text-content-secondary">Tank 1 - Dec 15, 2025</p>
-                  </div>
-                  <span className="px-3 py-1 bg-action-primary-light text-action-primary rounded-full text-xs font-semibold">
-                    Day Shift
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-xs text-content-secondary">Before Delivery</p>
-                    <p className="text-lg font-bold text-content-primary">5,240 L</p>
-                    <p className="text-xs text-content-secondary">45.2 cm</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-content-secondary">Delivered</p>
-                    <p className="text-lg font-bold text-action-primary">+30,000 L</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-content-secondary">After Delivery</p>
-                    <p className="text-lg font-bold text-content-primary">35,240 L</p>
-                    <p className="text-xs text-content-secondary">185.6 cm</p>
-                  </div>
-                </div>
-                <div className="mt-3 pt-3 border-t border-action-primary">
-                  <p className="text-xs text-content-secondary">Time: 14:30 | Driver: John M. | Supplier: Total Zambia</p>
-                </div>
-              </div>
-
-              {/* Placeholder message */}
-              <div className="text-center py-6 bg-surface-bg rounded-lg border border-surface-border">
-                <p className="text-sm text-content-secondary">Use the form above to record new deliveries</p>
-              </div>
+          {/* Record Delivery Link */}
+          <div className="mt-6 bg-action-primary-light border border-action-primary rounded-lg p-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-action-primary">Need to record a fuel delivery?</h3>
+              <p className="text-xs text-action-primary mt-1">Use the Stock Movement page to record deliveries and track fuel intake</p>
             </div>
-          </div>
-
-          {/* Delivery Instructions */}
-          <div className="bg-action-primary-light border border-action-primary rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-action-primary mb-2">Fuel Delivery Process</h3>
-            <ul className="text-sm text-action-primary space-y-1">
-              <li>• <strong>Step 1:</strong> Record "Before Delivery" tank dip reading</li>
-              <li>• <strong>Step 2:</strong> Receive fuel delivery (verify volume with driver)</li>
-              <li>• <strong>Step 3:</strong> Record "After Delivery" tank dip reading</li>
-              <li>• <strong>Step 4:</strong> System calculates delivered volume from dip difference</li>
-              <li>• <strong>Step 5:</strong> Compare calculated vs invoiced volume (tolerance ±1%)</li>
-              <li>• <strong>Important:</strong> Delivery affects tank movement calculation for that shift</li>
-            </ul>
+            <Link
+              href="/stock-movement"
+              className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover font-medium text-sm whitespace-nowrap"
+            >
+              Record Delivery &rarr;
+            </Link>
           </div>
         </div>
       )}

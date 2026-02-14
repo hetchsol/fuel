@@ -1,7 +1,28 @@
 import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
+import LoadingSpinner from '../components/LoadingSpinner'
 
+interface ValidatedReading {
+  reading_id: string
+  shift_id: string
+  tank_id: string
+  reading_type: string
+  mechanical_reading: number
+  electronic_reading: number
+  dip_reading_cm: number
+  dip_reading_liters: number
+  recorded_by: string
+  timestamp: string
+  validation_status: string
+  discrepancy_mech_elec_percent: number
+  discrepancy_mech_dip_percent: number
+  discrepancy_elec_dip_percent: number
+  max_discrepancy_percent: number
+  validation_message: string
+  notes?: string
+}
 
 interface NozzleReading {
   nozzle_id: string
@@ -60,6 +81,8 @@ interface TankReading {
 
 export default function TankReadingsReport() {
   const { theme } = useTheme()
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState<'readings' | 'validated'>('readings')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [selectedTank, setSelectedTank] = useState('TANK-DIESEL')
@@ -68,10 +91,29 @@ export default function TankReadingsReport() {
   const [error, setError] = useState('')
   const [selectedReading, setSelectedReading] = useState<TankReading | null>(null)
 
+  // Validated readings state (owner-only tab)
+  const [user, setUser] = useState<any>(null)
+  const [validatedReadings, setValidatedReadings] = useState<ValidatedReading[]>([])
+  const [validatedLoading, setValidatedLoading] = useState(false)
+  const [filterStatus, setFilterStatus] = useState<string>('ALL')
+  const [filterShift, setFilterShift] = useState<string>('ALL')
+  const [selectedValidatedReading, setSelectedValidatedReading] = useState<ValidatedReading | null>(null)
+
   // Get fuel type prefix and color based on tank
   const getFuelTypePrefix = (tankId: string) => {
     return tankId === 'TANK-DIESEL' ? 'LSD' : 'UNL'
   }
+
+  // Load user and handle tab query param
+  useEffect(() => {
+    const userData = localStorage.getItem('user')
+    if (userData) {
+      setUser(JSON.parse(userData))
+    }
+    if (router.query.tab === 'validated') {
+      setActiveTab('validated')
+    }
+  }, [router.query.tab])
 
   // Set default date range (last 7 days)
   useEffect(() => {
@@ -82,6 +124,13 @@ export default function TankReadingsReport() {
     setEndDate(today.toISOString().split('T')[0])
     setStartDate(sevenDaysAgo.toISOString().split('T')[0])
   }, [])
+
+  // Load validated readings when tab switches to validated
+  useEffect(() => {
+    if (activeTab === 'validated' && user?.role === 'owner') {
+      loadValidatedReadings()
+    }
+  }, [activeTab, user])
 
   // Load readings when date range or tank changes
   useEffect(() => {
@@ -135,19 +184,92 @@ export default function TankReadingsReport() {
     }
   }
 
+  const loadValidatedReadings = async () => {
+    setValidatedLoading(true)
+    try {
+      const response = await authFetch(`${BASE}/validated-readings`, {
+        headers: getHeaders()
+      })
+      if (response.ok) {
+        const data = await response.json()
+        const sorted = data.sort((a: ValidatedReading, b: ValidatedReading) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )
+        setValidatedReadings(sorted)
+      }
+    } catch (err) {
+      console.error('Error loading validated readings:', err)
+    } finally {
+      setValidatedLoading(false)
+    }
+  }
+
+  const getValidatedStatusIcon = (status: string) => {
+    switch (status) {
+      case 'PASS': return '\u2713'
+      case 'WARNING': return '\u26A0'
+      case 'FAIL': return '\u2717'
+      default: return '?'
+    }
+  }
+
+  const filteredValidatedReadings = validatedReadings.filter(r => {
+    if (filterStatus !== 'ALL' && r.validation_status !== filterStatus) return false
+    if (filterShift !== 'ALL' && r.shift_id !== filterShift) return false
+    return true
+  })
+
+  const uniqueShifts = Array.from(new Set(validatedReadings.map(r => r.shift_id)))
+
+  const validatedStats = {
+    total: validatedReadings.length,
+    pass: validatedReadings.filter(r => r.validation_status === 'PASS').length,
+    warning: validatedReadings.filter(r => r.validation_status === 'WARNING').length,
+    fail: validatedReadings.filter(r => r.validation_status === 'FAIL').length
+  }
+
   return (
     <div className="min-h-screen p-6 transition-colors duration-300" style={{ backgroundColor: theme.background }}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold transition-colors duration-300" style={{ color: theme.textPrimary }}>
-            Tank Readings Report
+            Tank Readings & Monitor
           </h1>
           <p className="mt-2 transition-colors duration-300" style={{ color: theme.textSecondary }}>
-            View and analyze tank readings by date range
+            View tank readings history and validated readings monitor
           </p>
         </div>
 
+        {/* Tab Navigation */}
+        <div className="mb-6 border-b border-surface-border">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('readings')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'readings'
+                  ? 'border-action-primary text-action-primary'
+                  : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
+              }`}
+            >
+              Tank Readings
+            </button>
+            {user?.role === 'owner' && (
+              <button
+                onClick={() => setActiveTab('validated')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'validated'
+                    ? 'border-action-primary text-action-primary'
+                    : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
+                }`}
+              >
+                Validated Readings
+              </button>
+            )}
+          </nav>
+        </div>
+
+        {activeTab === 'readings' && (<>
         {/* Filters */}
         <div className="rounded-lg shadow p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -372,7 +494,7 @@ export default function TankReadingsReport() {
         )}
 
         {/* Reading Details Modal */}
-        {selectedReading && (
+        {activeTab === 'readings' && selectedReading && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setSelectedReading(null)}>
             <div
               className="rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto transition-colors duration-300"
@@ -650,6 +772,235 @@ export default function TankReadingsReport() {
                   >
                     Close
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        </>)}
+
+        {/* Validated Readings Tab (Owner Only) */}
+        {activeTab === 'validated' && user?.role === 'owner' && (
+          <div>
+            {/* Statistics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-action-primary">
+                <div className="text-sm text-content-secondary">Total Readings</div>
+                <div className="text-2xl font-bold">{validatedStats.total}</div>
+              </div>
+              <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-status-success">
+                <div className="text-sm text-content-secondary">Passed</div>
+                <div className="text-2xl font-bold text-status-success">{validatedStats.pass}</div>
+              </div>
+              <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-status-warning">
+                <div className="text-sm text-content-secondary">Warnings</div>
+                <div className="text-2xl font-bold text-status-warning">{validatedStats.warning}</div>
+              </div>
+              <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-status-error">
+                <div className="text-sm text-content-secondary">Failed</div>
+                <div className="text-2xl font-bold text-status-error">{validatedStats.fail}</div>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="bg-surface-card p-4 rounded-lg shadow mb-6">
+              <div className="flex flex-wrap gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Status Filter</label>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="px-3 py-2 border border-surface-border rounded-md"
+                  >
+                    <option value="ALL">All Statuses</option>
+                    <option value="PASS">Pass Only</option>
+                    <option value="WARNING">Warnings Only</option>
+                    <option value="FAIL">Failed Only</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Shift Filter</label>
+                  <select
+                    value={filterShift}
+                    onChange={(e) => setFilterShift(e.target.value)}
+                    className="px-3 py-2 border border-surface-border rounded-md"
+                  >
+                    <option value="ALL">All Shifts</option>
+                    {uniqueShifts.map(shift => (
+                      <option key={shift} value={shift}>{shift}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={loadValidatedReadings}
+                    className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover"
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Validated Readings Table */}
+            <div className="bg-surface-card rounded-lg shadow overflow-hidden">
+              {validatedLoading ? (
+                <LoadingSpinner text="Loading validated readings..." />
+              ) : filteredValidatedReadings.length === 0 ? (
+                <div className="p-8 text-center text-content-secondary">No readings found matching filters.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-surface-border">
+                    <thead className="bg-surface-bg">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Date/Time</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Shift</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Tank</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Mechanical (L)</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Electronic (L)</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Dip (L)</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Max Discrepancy</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-surface-card divide-y divide-surface-border">
+                      {filteredValidatedReadings.map((reading) => (
+                        <tr key={reading.reading_id} className="hover:bg-surface-bg">
+                          <td className="px-4 py-3 text-sm text-content-primary">{new Date(reading.timestamp).toLocaleString()}</td>
+                          <td className="px-4 py-3 text-sm text-content-primary">{reading.shift_id}</td>
+                          <td className="px-4 py-3 text-sm text-content-primary">{reading.tank_id}</td>
+                          <td className="px-4 py-3 text-sm text-content-primary">{reading.reading_type}</td>
+                          <td className="px-4 py-3 text-sm font-mono text-content-primary">{reading.mechanical_reading.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm font-mono text-content-primary">{reading.electronic_reading.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm font-mono text-content-primary">{reading.dip_reading_liters.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm font-mono text-content-primary">
+                            <span className={reading.max_discrepancy_percent > 0.03 ? 'text-status-error font-bold' : ''}>
+                              {reading.max_discrepancy_percent.toFixed(4)}%
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(reading.validation_status)}`}>
+                              {getValidatedStatusIcon(reading.validation_status)} {reading.validation_status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <button
+                              onClick={() => setSelectedValidatedReading(reading)}
+                              className="text-action-primary hover:text-action-primary font-medium"
+                            >
+                              Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Validated Reading Details Modal */}
+        {selectedValidatedReading && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setSelectedValidatedReading(null)}>
+            <div className="bg-surface-card rounded-lg shadow-xl max-w-2xl w-full m-4 max-h-screen overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <h2 className="text-2xl font-bold">Reading Details</h2>
+                  <button onClick={() => setSelectedValidatedReading(null)} className="text-content-secondary hover:text-content-primary text-2xl">&times;</button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Status Banner */}
+                  <div className={`p-4 rounded-lg border-2 ${getStatusColor(selectedValidatedReading.validation_status)}`}>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold mb-2">{getValidatedStatusIcon(selectedValidatedReading.validation_status)} {selectedValidatedReading.validation_status}</div>
+                      <div className="text-sm">{selectedValidatedReading.validation_message}</div>
+                    </div>
+                  </div>
+
+                  {/* Reading Information */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-content-secondary">Reading ID</label>
+                      <div className="text-sm">{selectedValidatedReading.reading_id}</div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-content-secondary">Timestamp</label>
+                      <div className="text-sm">{new Date(selectedValidatedReading.timestamp).toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-content-secondary">Shift ID</label>
+                      <div className="text-sm">{selectedValidatedReading.shift_id}</div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-content-secondary">Tank ID</label>
+                      <div className="text-sm">{selectedValidatedReading.tank_id}</div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-content-secondary">Reading Type</label>
+                      <div className="text-sm">{selectedValidatedReading.reading_type}</div>
+                    </div>
+                  </div>
+
+                  {/* Three Readings Comparison */}
+                  <div className="border-t pt-4">
+                    <h3 className="font-semibold mb-3">Reading Comparison</h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="bg-action-primary-light p-4 rounded-lg border border-action-primary">
+                        <div className="text-sm font-medium text-action-primary mb-1">Mechanical</div>
+                        <div className="text-2xl font-bold text-action-primary">{selectedValidatedReading.mechanical_reading.toFixed(2)}</div>
+                        <div className="text-xs text-action-primary">Liters</div>
+                      </div>
+                      <div className="bg-fuel-petrol-light p-4 rounded-lg border border-fuel-petrol-border">
+                        <div className="text-sm font-medium text-fuel-petrol mb-1">Electronic</div>
+                        <div className="text-2xl font-bold text-fuel-petrol">{selectedValidatedReading.electronic_reading.toFixed(2)}</div>
+                        <div className="text-xs text-status-success">Liters</div>
+                      </div>
+                      <div className="bg-fuel-diesel-light p-4 rounded-lg border border-fuel-diesel-border">
+                        <div className="text-sm font-medium text-fuel-diesel mb-1">Dip Reading</div>
+                        <div className="text-2xl font-bold text-fuel-diesel">{selectedValidatedReading.dip_reading_liters.toFixed(2)}</div>
+                        <div className="text-xs text-fuel-diesel">{selectedValidatedReading.dip_reading_cm.toFixed(1)} cm</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Discrepancy Analysis */}
+                  <div className="border-t pt-4">
+                    <h3 className="font-semibold mb-3">Discrepancy Analysis</h3>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-content-secondary">Mechanical vs Electronic:</span>
+                        <span className="font-mono font-bold">{selectedValidatedReading.discrepancy_mech_elec_percent.toFixed(4)}%</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-content-secondary">Mechanical vs Dip:</span>
+                        <span className="font-mono font-bold">{selectedValidatedReading.discrepancy_mech_dip_percent.toFixed(4)}%</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-content-secondary">Electronic vs Dip:</span>
+                        <span className="font-mono font-bold">{selectedValidatedReading.discrepancy_elec_dip_percent.toFixed(4)}%</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t">
+                        <span className="text-sm font-semibold text-content-secondary">Maximum Discrepancy:</span>
+                        <span className={`font-mono font-bold text-lg ${selectedValidatedReading.max_discrepancy_percent > 0.03 ? 'text-status-error' : 'text-status-success'}`}>
+                          {selectedValidatedReading.max_discrepancy_percent.toFixed(4)}%
+                        </span>
+                      </div>
+                      <div className="text-xs text-content-secondary text-center mt-2">Tolerance: 0.03%</div>
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  {selectedValidatedReading.notes && (
+                    <div className="border-t pt-4">
+                      <h3 className="font-semibold mb-2">Notes</h3>
+                      <div className="text-sm text-content-secondary bg-surface-bg p-3 rounded">{selectedValidatedReading.notes}</div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

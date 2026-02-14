@@ -37,11 +37,35 @@ interface ReportData {
     generated_at?: string;
 }
 
+interface DailySalesData {
+    date: string;
+    diesel: {
+        total_volume: number;
+        total_amount: number;
+        sales_count: number;
+        shifts: string[];
+        sales: any[];
+    };
+    petrol: {
+        total_volume: number;
+        total_amount: number;
+        sales_count: number;
+        shifts: string[];
+        sales: any[];
+    };
+    summary: {
+        total_volume: number;
+        total_revenue: number;
+        total_transactions: number;
+    };
+}
+
 export default function Reports() {
     const router = useRouter();
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [reportData, setReportData] = useState<ReportData | null>(null);
+    const [dailySalesData, setDailySalesData] = useState<DailySalesData | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [selectedFilter, setSelectedFilter] = useState('');
@@ -78,6 +102,7 @@ export default function Reports() {
 
         setLoading(true);
         setError('');
+        setDailySalesData(null);
 
         try {
             const url = `${BASE}/reports/date-range?start_date=${startDate}&end_date=${endDate}`;
@@ -99,6 +124,21 @@ export default function Reports() {
 
             const data = await response.json();
             setReportData(data);
+
+            // When single day selected, also fetch detailed daily breakdown
+            if (startDate === endDate) {
+                try {
+                    const dailyRes = await authFetch(`${BASE}/sales-reports/daily/${startDate}`, {
+                        headers: getHeaders()
+                    });
+                    if (dailyRes.ok) {
+                        const dailyData = await dailyRes.json();
+                        setDailySalesData(dailyData);
+                    }
+                } catch {
+                    // Daily detail is optional, don't block the main report
+                }
+            }
         } catch (err: any) {
             setError(err.message || 'Failed to fetch report');
             console.error('Error fetching report:', err);
@@ -346,6 +386,125 @@ export default function Reports() {
                                             ))}
                                         </tbody>
                                     </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Single-Day Detailed Breakdown */}
+                        {dailySalesData && startDate === endDate && (
+                            <div className="space-y-6">
+                                {/* Diesel Sales */}
+                                <div className="bg-surface-card rounded-2xl shadow-xl overflow-hidden">
+                                    <div className="px-8 py-6 bg-gradient-to-r from-fuel-diesel to-orange-600 border-b">
+                                        <h2 className="text-2xl font-bold text-white flex items-center">
+                                            Diesel Sales Detail
+                                            <span className="ml-3 text-base font-normal text-orange-100">{dailySalesData.diesel.sales_count} transactions</span>
+                                        </h2>
+                                    </div>
+                                    <div className="p-6">
+                                        {dailySalesData.diesel.sales_count > 0 ? (
+                                            <div className="space-y-4">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="bg-surface-bg p-4 rounded-lg">
+                                                        <p className="text-sm text-content-secondary">Total Volume</p>
+                                                        <p className="text-xl font-bold text-content-primary">{dailySalesData.diesel.total_volume.toLocaleString()} L</p>
+                                                    </div>
+                                                    <div className="bg-surface-bg p-4 rounded-lg">
+                                                        <p className="text-sm text-content-secondary">Total Amount</p>
+                                                        <p className="text-xl font-bold text-status-success">{formatCurrency(dailySalesData.diesel.total_amount)}</p>
+                                                    </div>
+                                                </div>
+                                                {dailySalesData.diesel.shifts.length > 0 && (
+                                                    <div>
+                                                        <p className="text-sm font-medium text-content-secondary mb-2">Shifts:</p>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {dailySalesData.diesel.shifts.map((shift, idx) => (
+                                                                <span key={idx} className="px-3 py-1 bg-action-primary-light text-action-primary rounded-full text-sm">{shift}</span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {dailySalesData.diesel.sales.length > 0 && (
+                                                    <div className="border-t pt-4">
+                                                        <p className="text-sm font-medium text-content-secondary mb-3">Transaction Details:</p>
+                                                        <div className="space-y-2">
+                                                            {dailySalesData.diesel.sales.map((sale, idx) => (
+                                                                <div key={idx} className="bg-surface-bg p-3 rounded flex justify-between items-center">
+                                                                    <div>
+                                                                        <p className="text-sm font-medium">{sale.shift_id}</p>
+                                                                        <p className="text-xs text-content-secondary">Vol: {sale.average_volume?.toFixed(2)}L | Disc: {sale.discrepancy_percent?.toFixed(4)}%</p>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <p className="text-sm font-bold text-status-success">{formatCurrency(sale.total_amount)}</p>
+                                                                        <p className="text-xs text-content-secondary">@{formatCurrency(sale.unit_price)}/L</p>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p className="text-content-secondary text-center py-4">No diesel sales for this date</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Petrol Sales */}
+                                <div className="bg-surface-card rounded-2xl shadow-xl overflow-hidden">
+                                    <div className="px-8 py-6 bg-gradient-to-r from-fuel-petrol to-emerald-600 border-b">
+                                        <h2 className="text-2xl font-bold text-white flex items-center">
+                                            Petrol Sales Detail
+                                            <span className="ml-3 text-base font-normal text-green-100">{dailySalesData.petrol.sales_count} transactions</span>
+                                        </h2>
+                                    </div>
+                                    <div className="p-6">
+                                        {dailySalesData.petrol.sales_count > 0 ? (
+                                            <div className="space-y-4">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="bg-surface-bg p-4 rounded-lg">
+                                                        <p className="text-sm text-content-secondary">Total Volume</p>
+                                                        <p className="text-xl font-bold text-content-primary">{dailySalesData.petrol.total_volume.toLocaleString()} L</p>
+                                                    </div>
+                                                    <div className="bg-surface-bg p-4 rounded-lg">
+                                                        <p className="text-sm text-content-secondary">Total Amount</p>
+                                                        <p className="text-xl font-bold text-status-success">{formatCurrency(dailySalesData.petrol.total_amount)}</p>
+                                                    </div>
+                                                </div>
+                                                {dailySalesData.petrol.shifts.length > 0 && (
+                                                    <div>
+                                                        <p className="text-sm font-medium text-content-secondary mb-2">Shifts:</p>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {dailySalesData.petrol.shifts.map((shift, idx) => (
+                                                                <span key={idx} className="px-3 py-1 bg-status-success-light text-status-success rounded-full text-sm">{shift}</span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {dailySalesData.petrol.sales.length > 0 && (
+                                                    <div className="border-t pt-4">
+                                                        <p className="text-sm font-medium text-content-secondary mb-3">Transaction Details:</p>
+                                                        <div className="space-y-2">
+                                                            {dailySalesData.petrol.sales.map((sale, idx) => (
+                                                                <div key={idx} className="bg-surface-bg p-3 rounded flex justify-between items-center">
+                                                                    <div>
+                                                                        <p className="text-sm font-medium">{sale.shift_id}</p>
+                                                                        <p className="text-xs text-content-secondary">Vol: {sale.average_volume?.toFixed(2)}L | Disc: {sale.discrepancy_percent?.toFixed(4)}%</p>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <p className="text-sm font-bold text-status-success">{formatCurrency(sale.total_amount)}</p>
+                                                                        <p className="text-xs text-content-secondary">@{formatCurrency(sale.unit_price)}/L</p>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p className="text-content-secondary text-center py-4">No petrol sales for this date</p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         )}

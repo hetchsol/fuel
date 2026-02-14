@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
+import Link from 'next/link'
 import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
@@ -25,6 +27,7 @@ interface TankReconciliation {
 }
 
 export default function TankAnalysis() {
+  const router = useRouter()
   const [shifts, setShifts] = useState<any[]>([])
   const [selectedShift, setSelectedShift] = useState('')
   const [reconciliation, setReconciliation] = useState<any>(null)
@@ -34,6 +37,16 @@ export default function TankAnalysis() {
   useEffect(() => {
     fetchRecentShifts()
   }, [])
+
+  // Accept shiftId query parameter to pre-select a shift
+  useEffect(() => {
+    if (router.query.shiftId && typeof router.query.shiftId === 'string' && shifts.length > 0) {
+      const shiftId = router.query.shiftId
+      if (shifts.some(s => s.shift_id === shiftId)) {
+        handleShiftSelect(shiftId)
+      }
+    }
+  }, [router.query.shiftId, shifts])
 
   const fetchRecentShifts = async () => {
     try {
@@ -119,6 +132,18 @@ export default function TankAnalysis() {
           ))}
         </select>
       </div>
+
+      {/* Cross-link back to Three-Way Reconciliation */}
+      {reconciliation && reconciliation.shift_date && (
+        <div className="mb-6">
+          <Link
+            href={`/three-way-reconciliation?date=${reconciliation.shift_date}`}
+            className="inline-flex items-center text-sm text-action-primary hover:text-action-primary-hover font-medium"
+          >
+            &larr; Back to Daily Overview ({reconciliation.shift_date})
+          </Link>
+        </div>
+      )}
 
       {/* Loading State */}
       {loading && (

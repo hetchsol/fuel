@@ -67,8 +67,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       roles: ['user', 'supervisor', 'owner'],
       children: [
         { path: '/shifts', label: 'Shifts', roles: ['user', 'supervisor', 'owner'] },
-        { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'owner'] },
         { path: '/enter-readings', label: 'Enter Readings', roles: ['user', 'supervisor', 'owner'] },
+        { path: '/readings', label: 'OCR Reading Entry', roles: ['user', 'supervisor', 'owner'] },
+        { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'owner'] },
+        { path: '/tank-movement', label: 'Tank Readings & Deliveries', roles: ['supervisor', 'owner'] },
         { path: '/stock-movement', label: 'Stock Movement', roles: ['supervisor', 'owner'] },
         { path: '/lpg-daily', label: 'LPG Daily Operations', roles: ['supervisor', 'owner'] },
         { path: '/lubricants-daily', label: 'Lubricants Daily', roles: ['supervisor', 'owner'] },
@@ -76,10 +78,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     },
     {
       label: 'Inventory & Sales',
-      roles: ['user', 'supervisor', 'owner'],
+      roles: ['supervisor', 'owner'],
       children: [
         { path: '/inventory', label: 'Tank Levels', roles: ['supervisor', 'owner'] },
-        { path: '/readings', label: 'Nozzle Readings', roles: ['user', 'supervisor', 'owner'] },
         { path: '/sales', label: 'Sales', roles: ['supervisor', 'owner'] },
         { path: '/accounts', label: 'Credit Accounts', roles: ['supervisor', 'owner'] },
       ]
@@ -89,7 +90,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       roles: ['supervisor', 'owner'],
       children: [
         { path: '/three-way-reconciliation', label: 'Three-Way Reconciliation', roles: ['supervisor', 'owner'] },
-        { path: '/tank-movement', label: 'Tank Movement Analysis', roles: ['supervisor', 'owner'] },
         { path: '/tank-analysis', label: 'Tank Analysis', roles: ['supervisor', 'owner'] },
         { path: '/reconciliation', label: 'Shift Reconciliation', roles: ['supervisor', 'owner'] },
       ]
@@ -98,11 +98,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Reports',
       roles: ['supervisor', 'owner'],
       children: [
-        { path: '/tank-readings-report', label: 'Tank Readings Report', roles: ['supervisor', 'owner'] },
-        { path: '/daily-sales-report', label: 'Daily Sales Report', roles: ['supervisor', 'owner'] },
-        { path: '/reports', label: 'Date Range Reports', roles: ['supervisor', 'owner'] },
+        { path: '/reports', label: 'Sales Reports', roles: ['supervisor', 'owner'] },
+        { path: '/tank-readings-report', label: 'Tank Readings & Monitor', roles: ['supervisor', 'owner'] },
         { path: '/advanced-reports', label: 'Advanced Reports', roles: ['supervisor', 'owner'] },
-        { path: '/readings-monitor', label: 'Readings Monitor', roles: ['owner'] },
       ]
     },
     {
@@ -110,7 +108,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       roles: ['owner'],
       children: [
         { path: '/stations', label: 'Stations', roles: ['owner'] },
-        { path: '/infrastructure', label: 'Infrastructure (Pumps & Nozzles)', roles: ['owner'] },
+        { path: '/infrastructure', label: 'Infrastructure', roles: ['owner'] },
         { path: '/settings', label: 'Settings', roles: ['owner'] },
         { path: '/users', label: 'Users', roles: ['owner'] },
       ]

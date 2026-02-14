@@ -53,6 +53,16 @@ export default function Infrastructure() {
   const [editingTank, setEditingTank] = useState<string | null>(null)
   const [newCapacity, setNewCapacity] = useState<number>(0)
 
+  // Create tank state
+  const [showCreateTank, setShowCreateTank] = useState(false)
+  const [newTank, setNewTank] = useState({
+    tank_id: '',
+    fuel_type: 'Diesel',
+    capacity: 0,
+    initial_level: 0
+  })
+  const [tankLoading, setTankLoading] = useState(false)
+
   useEffect(() => {
     fetchTanks()
     fetchIslands()
@@ -83,6 +93,62 @@ export default function Infrastructure() {
       }
     } catch (err) {
       console.error('Failed to fetch islands:', err)
+    }
+  }
+
+  const createTank = async () => {
+    setTankLoading(true)
+    setMessage(null)
+    try {
+      const res = await fetch(`${BASE}/tanks/create?tank_id=${encodeURIComponent(newTank.tank_id)}&fuel_type=${encodeURIComponent(newTank.fuel_type)}&capacity=${newTank.capacity}&initial_level=${newTank.initial_level}`, {
+        method: 'POST',
+        headers: getHeaders(),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setMessage({ type: 'success', text: data.message })
+        fetchTanks()
+        setShowCreateTank(false)
+        setNewTank({ tank_id: '', fuel_type: 'Diesel', capacity: 0, initial_level: 0 })
+        setTimeout(() => setMessage(null), 5000)
+      } else {
+        const error = await res.json()
+        setMessage({ type: 'error', text: error.detail || 'Failed to create tank' })
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Network error' })
+    } finally {
+      setTankLoading(false)
+    }
+  }
+
+  const deleteTank = async (tankId: string) => {
+    if (!confirm(`Are you sure you want to delete ${tankId}? This action cannot be undone.`)) {
+      return
+    }
+
+    setTankLoading(true)
+    setMessage(null)
+    try {
+      const res = await fetch(`${BASE}/tanks/${tankId}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setMessage({ type: 'success', text: data.message })
+        fetchTanks()
+        setTimeout(() => setMessage(null), 5000)
+      } else {
+        const error = await res.json()
+        setMessage({ type: 'error', text: error.detail || 'Failed to delete tank' })
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Network error' })
+    } finally {
+      setTankLoading(false)
     }
   }
 
@@ -226,10 +292,92 @@ export default function Infrastructure() {
       {/* Tanks Tab */}
       {activeTab === 'tanks' && (
         <div>
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-content-primary mb-2">Fuel Tank Capacity Management</h2>
-            <p className="text-sm text-content-secondary">Configure tank capacities for your fuel storage</p>
+          <div className="mb-6 flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold text-content-primary mb-2">Fuel Tank Capacity Management</h2>
+              <p className="text-sm text-content-secondary">Configure tank capacities for your fuel storage</p>
+            </div>
+            <button
+              onClick={() => setShowCreateTank(true)}
+              className="px-4 py-2 bg-status-success text-white rounded-md hover:bg-status-success/90 font-medium"
+            >
+              + Create New Tank
+            </button>
           </div>
+
+          {/* Create Tank Form */}
+          {showCreateTank && (
+            <div className="mb-6 p-4 bg-action-primary-light border border-action-primary rounded-md">
+              <h3 className="font-semibold text-content-primary mb-4">Create New Tank</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Tank ID</label>
+                  <input
+                    type="text"
+                    value={newTank.tank_id}
+                    onChange={(e) => setNewTank({...newTank, tank_id: e.target.value})}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
+                    placeholder="e.g., TANK-DIESEL, TANK-PETROL-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Fuel Type</label>
+                  <select
+                    value={newTank.fuel_type}
+                    onChange={(e) => setNewTank({...newTank, fuel_type: e.target.value})}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
+                  >
+                    <option value="Diesel">Diesel</option>
+                    <option value="Petrol">Petrol</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Tank Capacity (Liters)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newTank.capacity}
+                    onChange={(e) => setNewTank({...newTank, capacity: parseFloat(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
+                    placeholder="e.g., 20000"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Initial Fuel Level (Liters)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newTank.initial_level}
+                    onChange={(e) => setNewTank({...newTank, initial_level: parseFloat(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
+                    placeholder="e.g., 0"
+                    min="0"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={createTank}
+                  disabled={tankLoading || !newTank.tank_id || newTank.capacity <= 0}
+                  className="px-4 py-2 bg-status-success text-white rounded-md hover:bg-status-success/90 disabled:bg-content-secondary disabled:cursor-not-allowed"
+                >
+                  {tankLoading ? 'Creating...' : 'Create Tank'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreateTank(false)
+                    setNewTank({ tank_id: '', fuel_type: 'Diesel', capacity: 0, initial_level: 0 })
+                  }}
+                  className="px-4 py-2 bg-surface-border text-content-secondary rounded-md hover:bg-surface-border"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {tanks.map(tank => (
@@ -333,6 +481,17 @@ export default function Infrastructure() {
                     <p className="text-sm text-status-error font-semibold">Low fuel level - Schedule delivery soon!</p>
                   </div>
                 )}
+
+                {/* Delete Tank */}
+                <div className="mt-4 pt-4 border-t border-surface-border">
+                  <button
+                    onClick={() => deleteTank(tank.tank_id)}
+                    disabled={tankLoading}
+                    className="px-3 py-1 bg-status-error-light text-status-error rounded-md hover:bg-status-error-light text-sm font-semibold disabled:opacity-50"
+                  >
+                    Delete Tank
+                  </button>
+                </div>
               </div>
             ))}
           </div>

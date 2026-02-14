@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
+import Link from 'next/link'
 import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
@@ -48,10 +50,19 @@ interface ReconciliationData {
 }
 
 export default function ThreeWayReconciliation() {
+  const router = useRouter()
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [dailySummary, setDailySummary] = useState<any>(null)
   const [selectedReading, setSelectedReading] = useState<ReconciliationData | null>(null)
+  const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // Accept date query parameter
+  useEffect(() => {
+    if (router.query.date && typeof router.query.date === 'string') {
+      setSelectedDate(router.query.date)
+    }
+  }, [router.query.date])
 
   useEffect(() => {
     fetchDailySummary()
@@ -78,6 +89,7 @@ export default function ThreeWayReconciliation() {
 
   const viewDetails = (reading: any) => {
     setSelectedReading(reading.reconciliation)
+    setSelectedShiftId(reading.shift_id || null)
   }
 
   const getStatusColor = (status: string) => {
@@ -495,6 +507,18 @@ export default function ThreeWayReconciliation() {
                     </ul>
                   </div>
                 </div>
+
+                {/* Cross-link to Tank Analysis */}
+                {selectedShiftId && (
+                  <div className="mt-6 pt-4 border-t border-surface-border">
+                    <Link
+                      href={`/tank-analysis?shiftId=${selectedShiftId}`}
+                      className="inline-flex items-center px-4 py-2 bg-action-primary text-white rounded-lg hover:bg-action-primary-hover font-medium text-sm"
+                    >
+                      View Full Tank Analysis &rarr;
+                    </Link>
+                  </div>
+                )}
               </div>
             </div>
           </div>
