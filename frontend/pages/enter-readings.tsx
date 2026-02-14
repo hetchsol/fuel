@@ -392,12 +392,12 @@ export default function EnterReadings() {
       </div>
 
       {error && (
-        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: '#fef2f2', color: '#dc2626', borderColor: '#fecaca', borderWidth: 1 }}>
+        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)', borderColor: 'var(--color-status-error)', borderWidth: 1 }}>
           {error}
         </div>
       )}
       {success && (
-        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0', borderWidth: 1 }}>
+        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)', borderColor: 'var(--color-status-success)', borderWidth: 1 }}>
           {success}
         </div>
       )}
@@ -503,14 +503,14 @@ export default function EnterReadings() {
       {/* Returned Banner */}
       {reviewStatus === 'returned' && returnNote && (
         <div className="rounded-lg p-4 mb-4"
-          style={{ backgroundColor: '#fef2f2', borderColor: '#fecaca', borderWidth: 2 }}>
-          <div className="font-semibold text-sm mb-1" style={{ color: '#dc2626' }}>
+          style={{ backgroundColor: 'var(--color-status-error-light)', borderColor: 'var(--color-status-error)', borderWidth: 2 }}>
+          <div className="font-semibold text-sm mb-1" style={{ color: 'var(--color-status-error)' }}>
             Readings Returned by Supervisor
           </div>
-          <p className="text-sm" style={{ color: '#991b1b' }}>
+          <p className="text-sm" style={{ color: 'var(--color-status-error)' }}>
             {returnNote}
           </p>
-          <p className="text-xs mt-2" style={{ color: '#b91c1c' }}>
+          <p className="text-xs mt-2" style={{ color: 'var(--color-status-error)' }}>
             Please re-enter your closing readings and re-submit.
           </p>
         </div>
@@ -562,8 +562,8 @@ export default function EnterReadings() {
                         onChange={e => setClosingElectronic(prev => ({ ...prev, [n.nozzle_id]: e.target.value }))}
                         placeholder="Electronic"
                         className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
-                        style={{ ...inputStyle, borderColor: elecErr ? '#ef4444' : theme.border }} />
-                      {elecErr && <div className="text-xs" style={{ color: '#ef4444' }}>Must be &ge; opening</div>}
+                        style={{ ...inputStyle, borderColor: elecErr ? 'var(--color-status-error)' : theme.border }} />
+                      {elecErr && <div className="text-xs" style={{ color: 'var(--color-status-error)' }}>Must be &ge; opening</div>}
                     </td>
                     <td className="px-2 py-2">
                       <input type="number" step="0.001"
@@ -571,8 +571,8 @@ export default function EnterReadings() {
                         onChange={e => setClosingMechanical(prev => ({ ...prev, [n.nozzle_id]: e.target.value }))}
                         placeholder="Mechanical"
                         className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
-                        style={{ ...inputStyle, borderColor: mechErr ? '#ef4444' : theme.border }} />
-                      {mechErr && <div className="text-xs" style={{ color: '#ef4444' }}>Must be &ge; opening</div>}
+                        style={{ ...inputStyle, borderColor: mechErr ? 'var(--color-status-error)' : theme.border }} />
+                      {mechErr && <div className="text-xs" style={{ color: 'var(--color-status-error)' }}>Must be &ge; opening</div>}
                     </td>
                     <td className="px-2 py-2 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
                       {comp.valid ? comp.elecDisp.toLocaleString(undefined, { minimumFractionDigits: 3 }) : '-'}
@@ -581,7 +581,7 @@ export default function EnterReadings() {
                       {comp.valid ? comp.mechDisp.toLocaleString(undefined, { minimumFractionDigits: 3 }) : '-'}
                     </td>
                     <td className="px-2 py-2 text-right font-mono" style={{
-                      color: comp.valid ? (comp.disc <= meterThreshold ? '#16a34a' : comp.disc <= 1 ? '#a16207' : '#dc2626') : theme.textSecondary
+                      color: comp.valid ? (comp.disc <= meterThreshold ? 'var(--color-status-success)' : comp.disc <= 1 ? 'var(--color-status-warning)' : 'var(--color-status-error)') : theme.textSecondary
                     }}>
                       {comp.valid ? comp.disc.toFixed(2) + '%' : '-'}
                     </td>
@@ -594,11 +594,11 @@ export default function EnterReadings() {
                         className="w-40 px-2 py-1 rounded border text-xs"
                         style={{
                           ...inputStyle,
-                          borderColor: noteRequired && !noteValue.trim() ? '#ef4444' : theme.border,
+                          borderColor: noteRequired && !noteValue.trim() ? 'var(--color-status-error)' : theme.border,
                           borderWidth: noteRequired ? 2 : 1,
                         }} />
                       {noteRequired && !noteValue.trim() && (
-                        <div className="text-xs mt-0.5" style={{ color: '#ef4444' }}>
+                        <div className="text-xs mt-0.5" style={{ color: 'var(--color-status-error)' }}>
                           Note required ({comp.disc.toFixed(2)}% &gt; {meterThreshold}%)
                         </div>
                       )}
@@ -624,7 +624,7 @@ export default function EnterReadings() {
           </table>
           <div className="p-4 flex justify-end gap-3 items-center">
             {!allNotesProvided && (
-              <span className="text-xs" style={{ color: '#dc2626' }}>
+              <span className="text-xs" style={{ color: 'var(--color-status-error)' }}>
                 Please provide notes for all nozzles with discrepancy above {meterThreshold}%
               </span>
             )}
@@ -642,7 +642,7 @@ export default function EnterReadings() {
       {/* Phase 5: Summary */}
       {closingSubmitted && summary && (
         <div className="rounded-lg shadow p-4 mb-6"
-          style={{ backgroundColor: theme.cardBg, borderColor: '#86efac', borderWidth: 2 }}>
+          style={{ backgroundColor: theme.cardBg, borderColor: 'var(--color-status-success)', borderWidth: 2 }}>
           <h2 className="text-lg font-bold mb-4" style={{ color: theme.textPrimary }}>
             Readings Summary
           </h2>
@@ -670,7 +670,7 @@ export default function EnterReadings() {
                     {ns.average_dispensed.toLocaleString(undefined, { minimumFractionDigits: 3 })}
                   </td>
                   <td className="px-3 py-2 text-right font-mono" style={{
-                    color: ns.discrepancy_percent <= 0.5 ? '#16a34a' : ns.discrepancy_percent <= 1 ? '#a16207' : '#dc2626'
+                    color: ns.discrepancy_percent <= 0.5 ? 'var(--color-status-success)' : ns.discrepancy_percent <= 1 ? 'var(--color-status-warning)' : 'var(--color-status-error)'
                   }}>
                     {ns.discrepancy_percent.toFixed(2)}%
                   </td>
@@ -703,7 +703,7 @@ export default function EnterReadings() {
               <div>
                 <div className="text-xs" style={{ color: theme.textSecondary }}>Overall Discrepancy</div>
                 <div className="font-mono font-bold" style={{
-                  color: summary.totals.discrepancy_percent <= 0.5 ? '#16a34a' : summary.totals.discrepancy_percent <= 1 ? '#a16207' : '#dc2626'
+                  color: summary.totals.discrepancy_percent <= 0.5 ? 'var(--color-status-success)' : summary.totals.discrepancy_percent <= 1 ? 'var(--color-status-warning)' : 'var(--color-status-error)'
                 }}>
                   {summary.totals.discrepancy_percent.toFixed(2)}%
                 </div>
@@ -730,8 +730,8 @@ function StatusBadge({ label, done, theme }: { label: string; done: boolean; the
   return (
     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
       style={{
-        backgroundColor: done ? '#dcfce7' : '#fef3c7',
-        color: done ? '#16a34a' : '#a16207',
+        backgroundColor: done ? 'var(--color-status-success-light)' : 'var(--color-status-warning-light)',
+        color: done ? 'var(--color-status-success)' : 'var(--color-status-warning)',
       }}>
       {done ? '\u2713' : '\u2022'} {label} {done ? 'Submitted' : 'Pending'}
     </span>
@@ -742,8 +742,8 @@ function FuelBadge({ fuelType }: { fuelType: string }) {
   return (
     <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
       style={{
-        backgroundColor: fuelType === 'Petrol' ? '#dbeafe' : '#fef9c3',
-        color: fuelType === 'Petrol' ? '#1d4ed8' : '#a16207',
+        backgroundColor: fuelType === 'Petrol' ? 'var(--color-action-primary-light)' : 'var(--color-status-pending-light)',
+        color: fuelType === 'Petrol' ? 'var(--color-action-primary)' : 'var(--color-status-warning)',
       }}>
       {fuelType}
     </span>
@@ -752,9 +752,9 @@ function FuelBadge({ fuelType }: { fuelType: string }) {
 
 function VerdictBadge({ verdict }: { verdict: string }) {
   const colors: Record<string, { bg: string; fg: string }> = {
-    PASS: { bg: '#dcfce7', fg: '#16a34a' },
-    WARNING: { bg: '#fef3c7', fg: '#a16207' },
-    FAIL: { bg: '#fef2f2', fg: '#dc2626' },
+    PASS: { bg: 'var(--color-status-success-light)', fg: 'var(--color-status-success)' },
+    WARNING: { bg: 'var(--color-status-warning-light)', fg: 'var(--color-status-warning)' },
+    FAIL: { bg: 'var(--color-status-error-light)', fg: 'var(--color-status-error)' },
   }
   const c = colors[verdict] || colors.FAIL
   return (
@@ -767,9 +767,9 @@ function VerdictBadge({ verdict }: { verdict: string }) {
 
 function ReviewStatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; fg: string }> = {
-    submitted: { bg: '#fef3c7', fg: '#a16207' },
-    approved: { bg: '#dcfce7', fg: '#16a34a' },
-    returned: { bg: '#fef2f2', fg: '#dc2626' },
+    submitted: { bg: 'var(--color-status-warning-light)', fg: 'var(--color-status-warning)' },
+    approved: { bg: 'var(--color-status-success-light)', fg: 'var(--color-status-success)' },
+    returned: { bg: 'var(--color-status-error-light)', fg: 'var(--color-status-error)' },
   }
   const c = colors[status] || colors.submitted
   return (
@@ -924,19 +924,19 @@ function SupervisorSection({
       </div>
 
       {reconError && (
-        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: '#fef2f2', color: '#dc2626', borderColor: '#fecaca', borderWidth: 1 }}>
+        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)', borderColor: 'var(--color-status-error)', borderWidth: 1 }}>
           {reconError}
         </div>
       )}
 
       {reviewMsg && (
-        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0', borderWidth: 1 }}>
+        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)', borderColor: 'var(--color-status-success)', borderWidth: 1 }}>
           {reviewMsg}
         </div>
       )}
 
       {reviewErr && (
-        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: '#fef2f2', color: '#dc2626', borderColor: '#fecaca', borderWidth: 1 }}>
+        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)', borderColor: 'var(--color-status-error)', borderWidth: 1 }}>
           {reviewErr}
         </div>
       )}
@@ -951,7 +951,7 @@ function SupervisorSection({
             <div key={att.attendant_id} className="rounded-lg shadow mb-4 overflow-hidden"
               style={{
                 backgroundColor: theme.cardBg,
-                borderColor: att.review_status === 'approved' ? '#86efac' : att.review_status === 'returned' ? '#fecaca' : theme.border,
+                borderColor: att.review_status === 'approved' ? 'var(--color-status-success)' : att.review_status === 'returned' ? 'var(--color-status-error)' : theme.border,
                 borderWidth: 2,
               }}>
               {/* Header */}
@@ -962,7 +962,7 @@ function SupervisorSection({
                   <ReviewStatusBadge status={att.review_status} />
                   {att.has_discrepancy && (
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
-                      style={{ backgroundColor: '#fef3c7', color: '#a16207' }}>
+                      style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
                       Has Discrepancy
                     </span>
                   )}
@@ -994,7 +994,7 @@ function SupervisorSection({
                         {nd.mechanical_dispensed.toLocaleString(undefined, { minimumFractionDigits: 3 })}
                       </td>
                       <td className="px-3 py-2 text-right font-mono font-medium" style={{
-                        color: nd.exceeds_threshold ? '#dc2626' : '#16a34a',
+                        color: nd.exceeds_threshold ? 'var(--color-status-error)' : 'var(--color-status-success)',
                       }}>
                         {nd.discrepancy_percent.toFixed(2)}%
                         {nd.exceeds_threshold && ' !'}
@@ -1036,14 +1036,14 @@ function SupervisorSection({
                       onClick={() => handleReview(att.attendant_id, 'approve')}
                       disabled={reviewLoading === att.attendant_id}
                       className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
-                      style={{ backgroundColor: '#16a34a' }}>
+                      style={{ backgroundColor: 'var(--color-status-success)' }}>
                       {reviewLoading === att.attendant_id ? '...' : 'Approve'}
                     </button>
                     <button
                       onClick={() => handleReview(att.attendant_id, 'return')}
                       disabled={reviewLoading === att.attendant_id || !(reviewNotes[att.attendant_id] || '').trim()}
                       className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{ backgroundColor: !(reviewNotes[att.attendant_id] || '').trim() ? '#9ca3af' : '#dc2626' }}>
+                      style={{ backgroundColor: !(reviewNotes[att.attendant_id] || '').trim() ? '#9ca3af' : 'var(--color-status-error)' }}>
                       {reviewLoading === att.attendant_id ? '...' : 'Return'}
                     </button>
                   </div>
@@ -1083,8 +1083,8 @@ function SupervisorSection({
                       <td className="px-3 py-2">
                         <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
                           style={{
-                            backgroundColor: att.status === 'complete' ? '#dcfce7' : att.status === 'opening_only' ? '#fef3c7' : '#fee2e2',
-                            color: att.status === 'complete' ? '#16a34a' : att.status === 'opening_only' ? '#a16207' : '#dc2626',
+                            backgroundColor: att.status === 'complete' ? 'var(--color-status-success-light)' : att.status === 'opening_only' ? 'var(--color-status-warning-light)' : 'var(--color-status-error-light)',
+                            color: att.status === 'complete' ? 'var(--color-status-success)' : att.status === 'opening_only' ? 'var(--color-status-warning)' : 'var(--color-status-error)',
                           }}>
                           {att.status}
                         </span>
@@ -1115,15 +1115,15 @@ function SupervisorSection({
               Fuel Totals (Average Dispensed)
             </h3>
             <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-lg p-3" style={{ backgroundColor: '#fef9c3' }}>
-                <div className="text-xs font-medium" style={{ color: '#a16207' }}>Diesel</div>
-                <div className="text-lg font-bold font-mono" style={{ color: '#a16207' }}>
+              <div className="rounded-lg p-3" style={{ backgroundColor: 'var(--color-status-pending-light)' }}>
+                <div className="text-xs font-medium" style={{ color: 'var(--color-status-warning)' }}>Diesel</div>
+                <div className="text-lg font-bold font-mono" style={{ color: 'var(--color-status-warning)' }}>
                   {shiftRecon.fuel_totals.diesel.toLocaleString(undefined, { minimumFractionDigits: 3 })} L
                 </div>
               </div>
-              <div className="rounded-lg p-3" style={{ backgroundColor: '#dbeafe' }}>
-                <div className="text-xs font-medium" style={{ color: '#1d4ed8' }}>Petrol</div>
-                <div className="text-lg font-bold font-mono" style={{ color: '#1d4ed8' }}>
+              <div className="rounded-lg p-3" style={{ backgroundColor: 'var(--color-action-primary-light)' }}>
+                <div className="text-xs font-medium" style={{ color: 'var(--color-action-primary)' }}>Petrol</div>
+                <div className="text-lg font-bold font-mono" style={{ color: 'var(--color-action-primary)' }}>
                   {shiftRecon.fuel_totals.petrol.toLocaleString(undefined, { minimumFractionDigits: 3 })} L
                 </div>
               </div>
@@ -1155,14 +1155,14 @@ function SupervisorSection({
                       <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>
                         {(r.delivery_count ?? 0) > 0 ? (
                           <span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold"
-                            style={{ backgroundColor: '#dbeafe', color: '#1d4ed8' }}>
+                            style={{ backgroundColor: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
                             {r.delivery_count}
                           </span>
                         ) : (
                           <span style={{ color: theme.textSecondary }}>0</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono" style={{ color: (r.total_delivery_volume ?? 0) > 0 ? '#1d4ed8' : theme.textSecondary }}>
+                      <td className="px-3 py-2 text-right font-mono" style={{ color: (r.total_delivery_volume ?? 0) > 0 ? 'var(--color-action-primary)' : theme.textSecondary }}>
                         {(r.total_delivery_volume ?? 0).toLocaleString(undefined, { minimumFractionDigits: 3 })}
                       </td>
                       <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
@@ -1184,7 +1184,7 @@ function SupervisorSection({
               </table>
               {/* Warning when daily tank reading not submitted */}
               {shiftRecon.reconciliation.some(r => r.data_source === 'dip_only') && (
-                <div className="p-3 text-sm" style={{ backgroundColor: '#fef3c7', color: '#a16207', borderTopColor: theme.border, borderTopWidth: 1 }}>
+                <div className="p-3 text-sm" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)', borderTopColor: theme.border, borderTopWidth: 1 }}>
                   Note: Daily tank reading not yet submitted for one or more tanks — delivery data unavailable, using simple dip calculation.
                 </div>
               )}

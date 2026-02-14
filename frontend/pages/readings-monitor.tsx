@@ -72,10 +72,10 @@ export default function ReadingsMonitor() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'PASS': return 'bg-green-100 text-green-800 border-green-300'
-      case 'WARNING': return 'bg-yellow-100 text-yellow-800 border-yellow-300'
-      case 'FAIL': return 'bg-red-100 text-red-800 border-red-300'
-      default: return 'bg-gray-100 text-gray-800 border-gray-300'
+      case 'PASS': return 'bg-status-success-light text-status-success border-status-success'
+      case 'WARNING': return 'bg-status-pending-light text-status-warning border-status-warning'
+      case 'FAIL': return 'bg-status-error-light text-status-error border-status-error'
+      default: return 'bg-surface-bg text-content-primary border-surface-border'
     }
   }
 
@@ -110,42 +110,42 @@ export default function ReadingsMonitor() {
     <div className="max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Readings Monitor</h1>
-        <p className="text-gray-600 mt-2">
+        <p className="text-content-secondary mt-2">
           View all validated readings from supervisors. System checks mechanical, electronic, and dip readings match within 0.03% tolerance.
         </p>
       </div>
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
-          <div className="text-sm text-gray-600">Total Readings</div>
+        <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-action-primary">
+          <div className="text-sm text-content-secondary">Total Readings</div>
           <div className="text-2xl font-bold">{stats.total}</div>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
-          <div className="text-sm text-gray-600">Passed</div>
-          <div className="text-2xl font-bold text-green-600">{stats.pass}</div>
+        <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-status-success">
+          <div className="text-sm text-content-secondary">Passed</div>
+          <div className="text-2xl font-bold text-status-success">{stats.pass}</div>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow border-l-4 border-yellow-500">
-          <div className="text-sm text-gray-600">Warnings</div>
-          <div className="text-2xl font-bold text-yellow-600">{stats.warning}</div>
+        <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-status-warning">
+          <div className="text-sm text-content-secondary">Warnings</div>
+          <div className="text-2xl font-bold text-status-warning">{stats.warning}</div>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow border-l-4 border-red-500">
-          <div className="text-sm text-gray-600">Failed</div>
-          <div className="text-2xl font-bold text-red-600">{stats.fail}</div>
+        <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-status-error">
+          <div className="text-sm text-content-secondary">Failed</div>
+          <div className="text-2xl font-bold text-status-error">{stats.fail}</div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
+      <div className="bg-surface-card p-4 rounded-lg shadow mb-6">
         <div className="flex flex-wrap gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-content-secondary mb-1">
               Status Filter
             </label>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md"
+              className="px-3 py-2 border border-surface-border rounded-md"
             >
               <option value="ALL">All Statuses</option>
               <option value="PASS">Pass Only</option>
@@ -155,13 +155,13 @@ export default function ReadingsMonitor() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-content-secondary mb-1">
               Shift Filter
             </label>
             <select
               value={filterShift}
               onChange={(e) => setFilterShift(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md"
+              className="px-3 py-2 border border-surface-border rounded-md"
             >
               <option value="ALL">All Shifts</option>
               {uniqueShifts.map(shift => (
@@ -173,7 +173,7 @@ export default function ReadingsMonitor() {
           <div className="flex items-end">
             <button
               onClick={loadReadings}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover"
             >
               Refresh
             </button>
@@ -182,48 +182,48 @@ export default function ReadingsMonitor() {
       </div>
 
       {/* Readings Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-surface-card rounded-lg shadow overflow-hidden">
         {loading ? (
           <LoadingSpinner text="Loading readings..." />
         ) : filteredReadings.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">No readings found matching filters.</div>
+          <div className="p-8 text-center text-content-secondary">No readings found matching filters.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-surface-border">
+              <thead className="bg-surface-bg">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date/Time</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Shift</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tank</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mechanical (L)</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Electronic (L)</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dip (L)</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Max Discrepancy</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Date/Time</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Shift</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Tank</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Mechanical (L)</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Electronic (L)</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Dip (L)</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Max Discrepancy</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-surface-card divide-y divide-surface-border">
                 {filteredReadings.map((reading) => (
-                  <tr key={reading.reading_id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900">
+                  <tr key={reading.reading_id} className="hover:bg-surface-bg">
+                    <td className="px-4 py-3 text-sm text-content-primary">
                       {new Date(reading.timestamp).toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{reading.shift_id}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{reading.tank_id}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{reading.reading_type}</td>
-                    <td className="px-4 py-3 text-sm font-mono text-gray-900">
+                    <td className="px-4 py-3 text-sm text-content-primary">{reading.shift_id}</td>
+                    <td className="px-4 py-3 text-sm text-content-primary">{reading.tank_id}</td>
+                    <td className="px-4 py-3 text-sm text-content-primary">{reading.reading_type}</td>
+                    <td className="px-4 py-3 text-sm font-mono text-content-primary">
                       {reading.mechanical_reading.toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-sm font-mono text-gray-900">
+                    <td className="px-4 py-3 text-sm font-mono text-content-primary">
                       {reading.electronic_reading.toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-sm font-mono text-gray-900">
+                    <td className="px-4 py-3 text-sm font-mono text-content-primary">
                       {reading.dip_reading_liters.toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-sm font-mono text-gray-900">
-                      <span className={reading.max_discrepancy_percent > 0.03 ? 'text-red-600 font-bold' : ''}>
+                    <td className="px-4 py-3 text-sm font-mono text-content-primary">
+                      <span className={reading.max_discrepancy_percent > 0.03 ? 'text-status-error font-bold' : ''}>
                         {reading.max_discrepancy_percent.toFixed(4)}%
                       </span>
                     </td>
@@ -235,7 +235,7 @@ export default function ReadingsMonitor() {
                     <td className="px-4 py-3 text-sm">
                       <button
                         onClick={() => setSelectedReading(reading)}
-                        className="text-blue-600 hover:text-blue-800 font-medium"
+                        className="text-action-primary hover:text-action-primary font-medium"
                       >
                         Details
                       </button>
@@ -251,13 +251,13 @@ export default function ReadingsMonitor() {
       {/* Details Modal */}
       {selectedReading && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setSelectedReading(null)}>
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full m-4 max-h-screen overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-surface-card rounded-lg shadow-xl max-w-2xl w-full m-4 max-h-screen overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
                 <h2 className="text-2xl font-bold">Reading Details</h2>
                 <button
                   onClick={() => setSelectedReading(null)}
-                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                  className="text-content-secondary hover:text-content-primary text-2xl"
                 >
                   ×
                 </button>
@@ -277,23 +277,23 @@ export default function ReadingsMonitor() {
                 {/* Reading Information */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Reading ID</label>
+                    <label className="text-sm font-medium text-content-secondary">Reading ID</label>
                     <div className="text-sm">{selectedReading.reading_id}</div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Timestamp</label>
+                    <label className="text-sm font-medium text-content-secondary">Timestamp</label>
                     <div className="text-sm">{new Date(selectedReading.timestamp).toLocaleString()}</div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Shift ID</label>
+                    <label className="text-sm font-medium text-content-secondary">Shift ID</label>
                     <div className="text-sm">{selectedReading.shift_id}</div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Tank ID</label>
+                    <label className="text-sm font-medium text-content-secondary">Tank ID</label>
                     <div className="text-sm">{selectedReading.tank_id}</div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Reading Type</label>
+                    <label className="text-sm font-medium text-content-secondary">Reading Type</label>
                     <div className="text-sm">{selectedReading.reading_type}</div>
                   </div>
                 </div>
@@ -302,20 +302,20 @@ export default function ReadingsMonitor() {
                 <div className="border-t pt-4">
                   <h3 className="font-semibold mb-3">Reading Comparison</h3>
                   <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                      <div className="text-sm font-medium text-blue-700 mb-1">Mechanical</div>
-                      <div className="text-2xl font-bold text-blue-900">{selectedReading.mechanical_reading.toFixed(2)}</div>
-                      <div className="text-xs text-blue-600">Liters</div>
+                    <div className="bg-action-primary-light p-4 rounded-lg border border-action-primary">
+                      <div className="text-sm font-medium text-action-primary mb-1">Mechanical</div>
+                      <div className="text-2xl font-bold text-action-primary">{selectedReading.mechanical_reading.toFixed(2)}</div>
+                      <div className="text-xs text-action-primary">Liters</div>
                     </div>
-                    <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                      <div className="text-sm font-medium text-green-700 mb-1">Electronic</div>
-                      <div className="text-2xl font-bold text-green-900">{selectedReading.electronic_reading.toFixed(2)}</div>
-                      <div className="text-xs text-green-600">Liters</div>
+                    <div className="bg-fuel-petrol-light p-4 rounded-lg border border-fuel-petrol-border">
+                      <div className="text-sm font-medium text-fuel-petrol mb-1">Electronic</div>
+                      <div className="text-2xl font-bold text-fuel-petrol">{selectedReading.electronic_reading.toFixed(2)}</div>
+                      <div className="text-xs text-status-success">Liters</div>
                     </div>
-                    <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                      <div className="text-sm font-medium text-purple-700 mb-1">Dip Reading</div>
-                      <div className="text-2xl font-bold text-purple-900">{selectedReading.dip_reading_liters.toFixed(2)}</div>
-                      <div className="text-xs text-purple-600">{selectedReading.dip_reading_cm.toFixed(1)} cm</div>
+                    <div className="bg-fuel-diesel-light p-4 rounded-lg border border-fuel-diesel-border">
+                      <div className="text-sm font-medium text-fuel-diesel mb-1">Dip Reading</div>
+                      <div className="text-2xl font-bold text-fuel-diesel">{selectedReading.dip_reading_liters.toFixed(2)}</div>
+                      <div className="text-xs text-fuel-diesel">{selectedReading.dip_reading_cm.toFixed(1)} cm</div>
                     </div>
                   </div>
                 </div>
@@ -325,24 +325,24 @@ export default function ReadingsMonitor() {
                   <h3 className="font-semibold mb-3">Discrepancy Analysis</h3>
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Mechanical vs Electronic:</span>
+                      <span className="text-sm text-content-secondary">Mechanical vs Electronic:</span>
                       <span className="font-mono font-bold">{selectedReading.discrepancy_mech_elec_percent.toFixed(4)}%</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Mechanical vs Dip:</span>
+                      <span className="text-sm text-content-secondary">Mechanical vs Dip:</span>
                       <span className="font-mono font-bold">{selectedReading.discrepancy_mech_dip_percent.toFixed(4)}%</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Electronic vs Dip:</span>
+                      <span className="text-sm text-content-secondary">Electronic vs Dip:</span>
                       <span className="font-mono font-bold">{selectedReading.discrepancy_elec_dip_percent.toFixed(4)}%</span>
                     </div>
                     <div className="flex justify-between items-center pt-2 border-t">
-                      <span className="text-sm font-semibold text-gray-700">Maximum Discrepancy:</span>
-                      <span className={`font-mono font-bold text-lg ${selectedReading.max_discrepancy_percent > 0.03 ? 'text-red-600' : 'text-green-600'}`}>
+                      <span className="text-sm font-semibold text-content-secondary">Maximum Discrepancy:</span>
+                      <span className={`font-mono font-bold text-lg ${selectedReading.max_discrepancy_percent > 0.03 ? 'text-status-error' : 'text-status-success'}`}>
                         {selectedReading.max_discrepancy_percent.toFixed(4)}%
                       </span>
                     </div>
-                    <div className="text-xs text-gray-500 text-center mt-2">
+                    <div className="text-xs text-content-secondary text-center mt-2">
                       Tolerance: 0.03%
                     </div>
                   </div>
@@ -352,7 +352,7 @@ export default function ReadingsMonitor() {
                 {selectedReading.notes && (
                   <div className="border-t pt-4">
                     <h3 className="font-semibold mb-2">Notes</h3>
-                    <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded">
+                    <div className="text-sm text-content-secondary bg-surface-bg p-3 rounded">
                       {selectedReading.notes}
                     </div>
                   </div>

@@ -67,19 +67,19 @@ export default function Home() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-2 text-sm text-gray-600">Overview of daily operations and alerts</p>
+        <h1 className="text-3xl font-bold text-content-primary">Dashboard</h1>
+        <p className="mt-2 text-sm text-content-secondary">Overview of daily operations and alerts</p>
       </div>
 
       <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-content-secondary mb-2">
           Select Date
         </label>
         <input
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="mt-1 block w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          className="mt-1 block w-full sm:w-auto px-3 py-2 border border-surface-border rounded-md shadow-sm focus:outline-none focus:ring-action-primary focus:border-action-primary"
         />
       </div>
 
@@ -108,10 +108,10 @@ export default function Home() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Daily Summary</h2>
+        <div className="bg-surface-card rounded-lg shadow p-6">
+          <h2 className="text-xl font-semibold text-content-primary mb-4">Daily Summary</h2>
           {dailyError && (
-            <div className="text-red-600 text-sm">Failed to load daily summary</div>
+            <div className="text-status-error text-sm">Failed to load daily summary</div>
           )}
           {!dailyError && !daily && (
             <LoadingSpinner text="Loading..." />
@@ -119,29 +119,29 @@ export default function Home() {
           {daily && (
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-gray-600">Date</p>
+                <p className="text-sm text-content-secondary">Date</p>
                 <p className="text-lg font-medium">{daily.date || 'N/A'}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Volume Records</p>
+                <p className="text-sm text-content-secondary">Volume Records</p>
                 <p className="text-lg font-medium">{daily.volumes?.length || 0}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Cash Variance Records</p>
+                <p className="text-sm text-content-secondary">Cash Variance Records</p>
                 <p className="text-lg font-medium">{daily.cash_variance?.length || 0}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Flags</p>
+                <p className="text-sm text-content-secondary">Flags</p>
                 <p className="text-lg font-medium">{daily.flags?.length || 0}</p>
               </div>
             </div>
           )}
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Discrepancies</h2>
+        <div className="bg-surface-card rounded-lg shadow p-6">
+          <h2 className="text-xl font-semibold text-content-primary mb-4">Recent Discrepancies</h2>
           {flagsError && (
-            <div className="text-red-600 text-sm">Failed to load discrepancies</div>
+            <div className="text-status-error text-sm">Failed to load discrepancies</div>
           )}
           {!flagsError && !flags && (
             <LoadingSpinner text="Loading..." />
@@ -149,13 +149,13 @@ export default function Home() {
           {flags && (
             <div>
               {flags.length === 0 ? (
-                <div className="text-gray-500 text-sm">No discrepancies found</div>
+                <div className="text-content-secondary text-sm">No discrepancies found</div>
               ) : (
                 <ul className="space-y-2">
                   {flags.map((flag: any, idx: number) => (
-                    <li key={idx} className="p-3 bg-red-50 border border-red-200 rounded">
-                      <p className="text-sm font-medium text-red-900">{flag.description}</p>
-                      <p className="text-xs text-red-600 mt-1">{flag.timestamp}</p>
+                    <li key={idx} className="p-3 bg-status-error-light border border-status-error rounded">
+                      <p className="text-sm font-medium text-status-error">{flag.description}</p>
+                      <p className="text-xs text-status-error mt-1">{flag.timestamp}</p>
                     </li>
                   ))}
                 </ul>
@@ -166,20 +166,20 @@ export default function Home() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <div className="bg-blue-50 rounded-lg p-6 border border-blue-100">
-          <h3 className="text-sm font-medium text-blue-900 mb-2">Total Nozzles</h3>
-          <p className="text-3xl font-bold text-blue-700">-</p>
-          <p className="text-xs text-blue-600 mt-1">Active monitoring</p>
+        <div className="bg-action-primary-light rounded-lg p-6 border border-action-primary">
+          <h3 className="text-sm font-medium text-action-primary mb-2">Total Nozzles</h3>
+          <p className="text-3xl font-bold text-action-primary">-</p>
+          <p className="text-xs text-action-primary mt-1">Active monitoring</p>
         </div>
-        <div className="bg-green-50 rounded-lg p-6 border border-green-100">
-          <h3 className="text-sm font-medium text-green-900 mb-2">Today's Sales</h3>
-          <p className="text-3xl font-bold text-green-700">-</p>
-          <p className="text-xs text-green-600 mt-1">Total transactions</p>
+        <div className="bg-status-success-light rounded-lg p-6 border border-status-success">
+          <h3 className="text-sm font-medium text-status-success mb-2">Today's Sales</h3>
+          <p className="text-3xl font-bold text-status-success">-</p>
+          <p className="text-xs text-status-success mt-1">Total transactions</p>
         </div>
-        <div className="bg-yellow-50 rounded-lg p-6 border border-yellow-100">
-          <h3 className="text-sm font-medium text-yellow-900 mb-2">Alerts</h3>
-          <p className="text-3xl font-bold text-yellow-700">{flags?.length || 0}</p>
-          <p className="text-xs text-yellow-600 mt-1">Requires attention</p>
+        <div className="bg-status-pending-light rounded-lg p-6 border border-status-warning">
+          <h3 className="text-sm font-medium text-status-warning mb-2">Alerts</h3>
+          <p className="text-3xl font-bold text-status-warning">{flags?.length || 0}</p>
+          <p className="text-xs text-status-warning mt-1">Requires attention</p>
         </div>
       </div>
     </div>

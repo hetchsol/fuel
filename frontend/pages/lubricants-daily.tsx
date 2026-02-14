@@ -304,7 +304,7 @@ export default function LubricantsDaily() {
               onClick={() => setTransferMode(!transferMode)}
               className="px-4 py-2 rounded text-sm font-medium"
               style={{
-                backgroundColor: transferMode ? '#dc2626' : theme.primary,
+                backgroundColor: transferMode ? 'var(--color-status-error)' : theme.primary,
                 color: '#fff',
               }}>
               {transferMode ? 'Cancel Transfer' : 'Transfer to Island 3'}
@@ -385,7 +385,7 @@ export default function LubricantsDaily() {
                           className="w-14 px-1 py-1 rounded border text-xs text-right" style={inputStyle} />
                       </td>
                       <td className="px-3 py-1 text-right text-xs font-medium" style={{
-                        color: row.balance < 0 ? '#ef4444' : theme.textPrimary
+                        color: row.balance < 0 ? 'var(--color-status-error)' : theme.textPrimary
                       }}>
                         {row.balance}
                       </td>
@@ -414,12 +414,12 @@ export default function LubricantsDaily() {
 
       {/* Messages */}
       {error && (
-        <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+        <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)', border: '1px solid var(--color-status-error)' }}>
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>
+        <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)', border: '1px solid var(--color-status-success)' }}>
           {success}
         </div>
       )}
@@ -431,7 +431,7 @@ export default function LubricantsDaily() {
             onClick={handleTransfer}
             disabled={loading}
             className="flex-1 py-3 rounded-lg font-semibold text-white text-sm disabled:opacity-50"
-            style={{ backgroundColor: '#f59e0b' }}>
+            style={{ backgroundColor: 'var(--color-status-warning)' }}>
             {loading ? 'Transferring...' : `Confirm Transfer to Island 3 (${Object.values(transferItems).filter(v => v > 0).length} items)`}
           </button>
         ) : (

@@ -159,43 +159,43 @@ export default function Accounts() {
   }
 
   const getUtilizationColor = (utilization: number) => {
-    if (utilization >= 90) return 'bg-red-500'
-    if (utilization >= 75) return 'bg-orange-500'
-    if (utilization >= 50) return 'bg-yellow-500'
-    return 'bg-green-500'
+    if (utilization >= 90) return 'bg-status-error-light0'
+    if (utilization >= 75) return 'bg-category-c'
+    if (utilization >= 50) return 'bg-status-warning'
+    return 'bg-status-success'
   }
 
   const getAccountTypeColor = (accountType: string) => {
     const colors: any = {
-      'Corporate': 'bg-blue-100 text-blue-800 border-blue-300',
-      'Institution': 'bg-purple-100 text-purple-800 border-purple-300',
-      'Individual': 'bg-green-100 text-green-800 border-green-300',
-      'POS': 'bg-orange-100 text-orange-800 border-orange-300'
+      'Corporate': 'bg-action-primary-light text-action-primary border-action-primary',
+      'Institution': 'bg-category-a-light text-category-a border-category-a-border',
+      'Individual': 'bg-category-b-light text-category-b border-category-b-border',
+      'POS': 'bg-category-c-light text-category-c border-category-c-border'
     }
-    return colors[accountType] || 'bg-gray-100 text-gray-800 border-gray-300'
+    return colors[accountType] || 'bg-surface-bg text-content-primary border-surface-border'
   }
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Account Holders & Credit Sales</h1>
-        <p className="mt-2 text-sm text-gray-600">Manage institutional and corporate credit accounts</p>
+        <h1 className="text-3xl font-bold text-content-primary">Account Holders & Credit Sales</h1>
+        <p className="mt-2 text-sm text-content-secondary">Manage institutional and corporate credit accounts</p>
       </div>
 
       {/* Record Credit Sale Form */}
-      <div className="mb-8 bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">📝 Record Credit Sale</h2>
+      <div className="mb-8 bg-surface-card rounded-lg shadow-lg p-6">
+        <h2 className="text-xl font-bold text-content-primary mb-4">📝 Record Credit Sale</h2>
 
         <form onSubmit={handleSubmitSale} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Account Holder
               </label>
               <select
                 value={saleForm.account_id}
                 onChange={(e) => setSaleForm({ ...saleForm, account_id: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 required
               >
                 <option value="">Select Account</option>
@@ -208,13 +208,13 @@ export default function Accounts() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Fuel Type
               </label>
               <select
                 value={saleForm.fuel_type}
                 onChange={(e) => handleFuelTypeChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
               >
                 <option value="Petrol">Petrol</option>
                 <option value="Diesel">Diesel</option>
@@ -224,13 +224,13 @@ export default function Accounts() {
             {/* Pricing Tier for Diesel */}
             {saleForm.fuel_type === 'Diesel' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Customer Pricing Tier
                 </label>
                 <select
                   value={saleForm.pricing_tier}
                   onChange={(e) => handlePricingTierChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 >
                   {dieselPricingTiers.map(tier => (
                     <option key={tier.id} value={tier.id}>
@@ -244,7 +244,7 @@ export default function Accounts() {
 
             {/* Price per Liter Display */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Price per Liter
               </label>
               <input
@@ -258,18 +258,18 @@ export default function Accounts() {
                     setSaleForm({ ...saleForm, price_per_liter: e.target.value, pricing_tier: 'custom', amount: calculatedAmount })
                   }
                 }}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-semibold text-lg ${
-                  saleForm.pricing_tier === 'custom' ? 'bg-yellow-50' : 'bg-gray-50'
+                className={`w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary font-semibold text-lg ${
+                  saleForm.pricing_tier === 'custom' ? 'bg-status-pending-light' : 'bg-surface-bg'
                 }`}
                 placeholder="26.98"
               />
               {saleForm.pricing_tier === 'custom' && (
-                <p className="text-xs text-yellow-700 mt-1">⚠️ Custom price - differs from standard tiers</p>
+                <p className="text-xs text-status-warning mt-1">⚠️ Custom price - differs from standard tiers</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Volume (Liters)
               </label>
               <input
@@ -277,49 +277,49 @@ export default function Accounts() {
                 step="0.01"
                 value={saleForm.volume}
                 onChange={(e) => handleVolumeChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 placeholder="e.g., 500.00"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Total Amount (Auto-calculated)
               </label>
               <input
                 type="text"
                 value={saleForm.amount}
                 readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 font-bold text-lg cursor-not-allowed"
+                className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg font-bold text-lg cursor-not-allowed"
                 placeholder="Auto-calculated"
               />
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Notes (Optional)
               </label>
               <input
                 type="text"
                 value={saleForm.notes}
                 onChange={(e) => setSaleForm({ ...saleForm, notes: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 placeholder="e.g., Vehicle registration, driver name, etc."
               />
             </div>
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm text-red-800">{error}</p>
+            <div className="p-3 bg-status-error-light border border-status-error rounded-md">
+              <p className="text-sm text-status-error">{error}</p>
             </div>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-3 bg-action-primary text-white font-semibold rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Recording...' : 'Record Credit Sale'}
           </button>
@@ -328,7 +328,7 @@ export default function Accounts() {
 
       {/* Account Holders List */}
       <div className="mb-8">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">💳 Account Holders</h2>
+        <h2 className="text-xl font-bold text-content-primary mb-4">💳 Account Holders</h2>
 
         {loading && accounts.length === 0 ? (
           <LoadingSpinner text="Loading accounts..." />
@@ -339,12 +339,12 @@ export default function Accounts() {
               return (
                 <div
                   key={account.account_id}
-                  className="bg-white rounded-lg shadow-lg p-5 border-2 border-gray-200 hover:border-blue-300 transition-colors"
+                  className="bg-surface-card rounded-lg shadow-lg p-5 border-2 border-surface-border hover:border-action-primary transition-colors"
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
-                      <h3 className="font-bold text-gray-900 text-lg">{account.account_name}</h3>
-                      <p className="text-xs text-gray-500 mt-1">ID: {account.account_id}</p>
+                      <h3 className="font-bold text-content-primary text-lg">{account.account_name}</h3>
+                      <p className="text-xs text-content-secondary mt-1">ID: {account.account_id}</p>
                     </div>
                     <span className={`px-2 py-1 text-xs font-semibold rounded border ${getAccountTypeColor(account.account_type)}`}>
                       {account.account_type}
@@ -353,27 +353,27 @@ export default function Accounts() {
 
                   {/* Current Balance */}
                   <div className="mb-3">
-                    <p className="text-xs text-gray-600 mb-1">Current Balance</p>
-                    <p className="text-2xl font-bold text-gray-900">
+                    <p className="text-xs text-content-secondary mb-1">Current Balance</p>
+                    <p className="text-2xl font-bold text-content-primary">
                       {formatCurrency(account.current_balance)}
                     </p>
                   </div>
 
                   {/* Credit Limit */}
                   <div className="mb-3">
-                    <p className="text-xs text-gray-600 mb-1">Credit Limit</p>
-                    <p className="text-lg font-semibold text-gray-700">
+                    <p className="text-xs text-content-secondary mb-1">Credit Limit</p>
+                    <p className="text-lg font-semibold text-content-secondary">
                       {formatCurrency(account.credit_limit)}
                     </p>
                   </div>
 
                   {/* Credit Utilization Bar */}
                   <div className="mb-3">
-                    <div className="flex justify-between text-xs text-gray-600 mb-1">
+                    <div className="flex justify-between text-xs text-content-secondary mb-1">
                       <span>Credit Utilization</span>
                       <span className="font-semibold">{utilization.toFixed(1)}%</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                    <div className="w-full bg-surface-border rounded-full h-3 overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all ${getUtilizationColor(utilization)}`}
                         style={{ width: `${Math.min(utilization, 100)}%` }}
@@ -382,21 +382,21 @@ export default function Accounts() {
                   </div>
 
                   {/* Available Credit */}
-                  <div className="pt-3 border-t border-gray-200">
-                    <p className="text-xs text-gray-600">Available Credit</p>
-                    <p className="text-lg font-bold text-green-700">
+                  <div className="pt-3 border-t border-surface-border">
+                    <p className="text-xs text-content-secondary">Available Credit</p>
+                    <p className="text-lg font-bold text-status-success">
                       {formatCurrency(account.credit_limit - account.current_balance)}
                     </p>
                   </div>
 
                   {/* Contact Info */}
                   {account.contact_person && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <p className="text-xs text-gray-500">
+                    <div className="mt-3 pt-3 border-t border-surface-border">
+                      <p className="text-xs text-content-secondary">
                         Contact: {account.contact_person}
                       </p>
                       {account.phone && (
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-content-secondary">
                           Phone: {account.phone}
                         </p>
                       )}
@@ -410,9 +410,9 @@ export default function Accounts() {
       </div>
 
       {/* Info Panel */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-blue-900 mb-2">Credit Account Management</h3>
-        <ul className="text-sm text-blue-700 space-y-1">
+      <div className="bg-action-primary-light border border-action-primary rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-action-primary mb-2">Credit Account Management</h3>
+        <ul className="text-sm text-action-primary space-y-1">
           <li>• <strong>14 Pre-configured Accounts</strong> from Luanshya Station (POS, Police, ZACODE, etc.)</li>
           <li>• <strong>Credit Limit Enforcement</strong> - System prevents sales exceeding credit limits</li>
           <li>• <strong>Real-time Balance Tracking</strong> - Balances update automatically with each credit sale</li>

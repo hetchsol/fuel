@@ -262,19 +262,19 @@ export default function Settings() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Owner Settings</h1>
-        <p className="mt-2 text-sm text-gray-600">Configure system information, infrastructure, and fuel pricing</p>
+        <h1 className="text-3xl font-bold text-content-primary">Owner Settings</h1>
+        <p className="mt-2 text-sm text-content-secondary">Configure system information, infrastructure, and fuel pricing</p>
       </div>
 
       {/* Tab Navigation */}
-      <div className="mb-6 border-b border-gray-200">
+      <div className="mb-6 border-b border-surface-border">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('system')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'system'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-action-primary text-action-primary'
+                : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
             }`}
           >
             🏢 System Information
@@ -283,8 +283,8 @@ export default function Settings() {
             onClick={() => setActiveTab('infrastructure')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'infrastructure'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-action-primary text-action-primary'
+                : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
             }`}
           >
             ⛽ Infrastructure
@@ -293,8 +293,8 @@ export default function Settings() {
             onClick={() => setActiveTab('fuel')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'fuel'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-action-primary text-action-primary'
+                : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
             }`}
           >
             💰 Fuel Settings
@@ -303,8 +303,8 @@ export default function Settings() {
             onClick={() => setActiveTab('validation')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'validation'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-action-primary text-action-primary'
+                : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
             }`}
           >
             ✓ Validation Thresholds
@@ -314,110 +314,110 @@ export default function Settings() {
 
       {/* System Information Tab */}
       {activeTab === 'system' && (
-        <div className="max-w-2xl bg-white rounded-lg shadow p-6 mb-6">
+        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6 mb-6">
         <form onSubmit={handleSystemUpdate} className="space-y-6">
           <div className="border-b pb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">🏢 System Information</h2>
+            <h2 className="text-xl font-semibold text-content-primary mb-4">🏢 System Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Business Name
                 </label>
                 <input
                   type="text"
                   value={systemSettings.business_name}
                   onChange={(e) => setSystemSettings({ ...systemSettings, business_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   License Key
                 </label>
                 <input
                   type="text"
                   value={systemSettings.license_key}
                   onChange={(e) => setSystemSettings({ ...systemSettings, license_key: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Contact Email
                 </label>
                 <input
                   type="email"
                   value={systemSettings.contact_email}
                   onChange={(e) => setSystemSettings({ ...systemSettings, contact_email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Contact Phone
                 </label>
                 <input
                   type="tel"
                   value={systemSettings.contact_phone}
                   onChange={(e) => setSystemSettings({ ...systemSettings, contact_phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Station Location
                 </label>
                 <input
                   type="text"
                   value={systemSettings.station_location}
                   onChange={(e) => setSystemSettings({ ...systemSettings, station_location: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   License Expiry Date
                 </label>
                 <input
                   type="date"
                   value={systemSettings.license_expiry_date}
                   onChange={(e) => setSystemSettings({ ...systemSettings, license_expiry_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Software Version
                 </label>
                 <input
                   type="text"
                   value={systemSettings.software_version}
                   disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg cursor-not-allowed"
                 />
-                <p className="text-xs text-gray-500 mt-1">Read-only</p>
+                <p className="text-xs text-content-secondary mt-1">Read-only</p>
               </div>
             </div>
           </div>
 
           {/* Messages */}
           {systemMessage && (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-              <p className="text-sm text-green-700">✓ {systemMessage}</p>
+            <div className="p-4 bg-status-success-light border border-status-success rounded-md">
+              <p className="text-sm text-status-success">✓ {systemMessage}</p>
             </div>
           )}
 
           {systemError && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm text-red-700">✗ {systemError}</p>
+            <div className="p-4 bg-status-error-light border border-status-error rounded-md">
+              <p className="text-sm text-status-error">✗ {systemError}</p>
             </div>
           )}
 
@@ -425,7 +425,7 @@ export default function Settings() {
           <button
             type="submit"
             disabled={systemLoading}
-            className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {systemLoading ? 'Saving...' : 'Save System Information'}
           </button>
@@ -435,15 +435,15 @@ export default function Settings() {
 
       {/* Infrastructure Tab */}
       {activeTab === 'infrastructure' && (
-        <div className="max-w-2xl bg-white rounded-lg shadow p-6 mb-6">
+        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6 mb-6">
         <div className="mb-6 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-1">⛽ Tank Management</h2>
-            <p className="text-sm text-gray-600">Create and manage fuel storage tanks</p>
+            <h2 className="text-xl font-semibold text-content-primary mb-1">⛽ Tank Management</h2>
+            <p className="text-sm text-content-secondary">Create and manage fuel storage tanks</p>
           </div>
           <button
             onClick={() => setShowCreateTank(true)}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium"
+            className="px-4 py-2 bg-status-success text-white rounded-md hover:bg-status-success/90 font-medium"
           >
             + Create New Tank
           </button>
@@ -453,8 +453,8 @@ export default function Settings() {
         {tankMessage && (
           <div className={`mb-4 p-4 rounded-md border ${
             tankMessage.type === 'success'
-              ? 'bg-green-50 border-green-200 text-green-800'
-              : 'bg-red-50 border-red-200 text-red-800'
+              ? 'bg-status-success-light border-status-success text-status-success'
+              : 'bg-status-error-light border-status-error text-status-error'
           }`}>
             <p className="font-semibold">{tankMessage.text}</p>
             <button
@@ -468,31 +468,31 @@ export default function Settings() {
 
         {/* Create Tank Form */}
         {showCreateTank && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-            <h3 className="font-semibold text-gray-900 mb-4">Create New Tank</h3>
+          <div className="mb-6 p-4 bg-action-primary-light border border-action-primary rounded-md">
+            <h3 className="font-semibold text-content-primary mb-4">Create New Tank</h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Tank ID
                 </label>
                 <input
                   type="text"
                   value={newTank.tank_id}
                   onChange={(e) => setNewTank({...newTank, tank_id: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
                   placeholder="e.g., TANK-DIESEL, TANK-PETROL-2"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Fuel Type
                 </label>
                 <select
                   value={newTank.fuel_type}
                   onChange={(e) => setNewTank({...newTank, fuel_type: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
                 >
                   <option value="Diesel">Diesel</option>
                   <option value="Petrol">Petrol</option>
@@ -500,7 +500,7 @@ export default function Settings() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Tank Capacity (Liters)
                 </label>
                 <input
@@ -508,14 +508,14 @@ export default function Settings() {
                   step="0.01"
                   value={newTank.capacity}
                   onChange={(e) => setNewTank({...newTank, capacity: parseFloat(e.target.value) || 0})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
                   placeholder="e.g., 20000"
                   min="0"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Initial Fuel Level (Liters)
                 </label>
                 <input
@@ -523,7 +523,7 @@ export default function Settings() {
                   step="0.01"
                   value={newTank.initial_level}
                   onChange={(e) => setNewTank({...newTank, initial_level: parseFloat(e.target.value) || 0})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
                   placeholder="e.g., 0"
                   min="0"
                 />
@@ -534,7 +534,7 @@ export default function Settings() {
               <button
                 onClick={createTank}
                 disabled={tankLoading || !newTank.tank_id || newTank.capacity <= 0}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-status-success text-white rounded-md hover:bg-status-success/90 disabled:bg-content-secondary disabled:cursor-not-allowed"
               >
                 {tankLoading ? 'Creating...' : 'Create Tank'}
               </button>
@@ -548,7 +548,7 @@ export default function Settings() {
                     initial_level: 0
                   })
                 }}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                className="px-4 py-2 bg-surface-border text-content-secondary rounded-md hover:bg-surface-border"
               >
                 Cancel
               </button>
@@ -559,39 +559,39 @@ export default function Settings() {
         {/* Tanks List */}
         <div className="space-y-3">
           {tanks.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-4">No tanks created yet. Click "Create New Tank" to add one.</p>
+            <p className="text-sm text-content-secondary text-center py-4">No tanks created yet. Click "Create New Tank" to add one.</p>
           ) : (
             tanks.map(tank => (
               <div
                 key={tank.tank_id}
                 className={`p-4 rounded-md border-2 ${
-                  tank.fuel_type === 'Diesel' ? 'bg-purple-50 border-purple-300' : 'bg-green-50 border-green-300'
+                  tank.fuel_type === 'Diesel' ? 'bg-fuel-diesel-light border-fuel-diesel-border' : 'bg-fuel-petrol-light border-fuel-petrol-border'
                 }`}
               >
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-bold text-gray-900">{tank.tank_id}</h3>
+                      <h3 className="font-bold text-content-primary">{tank.tank_id}</h3>
                       <span className={`px-2 py-1 rounded text-xs font-semibold ${
                         tank.fuel_type === 'Diesel'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-green-100 text-green-800'
+                          ? 'bg-fuel-diesel-light text-fuel-diesel'
+                          : 'bg-fuel-petrol-light text-fuel-petrol'
                       }`}>
                         {tank.fuel_type}
                       </span>
-                      <span className="px-2 py-1 rounded bg-blue-100 text-blue-800 text-xs font-semibold">
+                      <span className="px-2 py-1 rounded bg-action-primary-light text-action-primary text-xs font-semibold">
                         {tank.percentage.toFixed(1)}% Full
                       </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <p className="text-gray-600">Current Level:</p>
-                        <p className="font-semibold text-gray-900">{tank.current_level.toLocaleString()} L</p>
+                        <p className="text-content-secondary">Current Level:</p>
+                        <p className="font-semibold text-content-primary">{tank.current_level.toLocaleString()} L</p>
                       </div>
                       <div>
-                        <p className="text-gray-600">Capacity:</p>
-                        <p className="font-semibold text-gray-900">{tank.capacity.toLocaleString()} L</p>
+                        <p className="text-content-secondary">Capacity:</p>
+                        <p className="font-semibold text-content-primary">{tank.capacity.toLocaleString()} L</p>
                       </div>
                     </div>
                   </div>
@@ -599,7 +599,7 @@ export default function Settings() {
                   <button
                     onClick={() => deleteTank(tank.tank_id, tank.tank_id)}
                     disabled={tankLoading}
-                    className="ml-4 px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 text-sm font-semibold disabled:opacity-50"
+                    className="ml-4 px-3 py-1 bg-status-error-light text-status-error rounded-md hover:bg-status-error-light text-sm font-semibold disabled:opacity-50"
                   >
                     Delete
                   </button>
@@ -610,8 +610,8 @@ export default function Settings() {
         </div>
 
         {/* Info */}
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-          <p className="text-xs text-blue-700">
+        <div className="mt-4 p-3 bg-action-primary-light border border-action-primary rounded-md">
+          <p className="text-xs text-action-primary">
             <strong>Note:</strong> Tanks can be assigned to pump stations in the Infrastructure page. You cannot delete a tank that is currently in use by a pump station.
           </p>
         </div>
@@ -620,14 +620,14 @@ export default function Settings() {
 
       {/* Fuel Settings Tab */}
       {activeTab === 'fuel' && (
-        <div className="max-w-2xl bg-white rounded-lg shadow p-6">
+        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Fuel Pricing Section */}
           <div className="border-b pb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">💰 Fuel Pricing</h2>
+            <h2 className="text-xl font-semibold text-content-primary mb-4">💰 Fuel Pricing</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Diesel Price per Liter
                 </label>
                 <div className="relative">
@@ -636,15 +636,15 @@ export default function Settings() {
                     step="0.01"
                     value={settings.diesel_price_per_liter}
                     onChange={(e) => setSettings({ ...settings, diesel_price_per_liter: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                     required
                   />
-                  <span className="absolute right-3 top-2 text-gray-500">ZMW</span>
+                  <span className="absolute right-3 top-2 text-content-secondary">ZMW</span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Petrol Price per Liter
                 </label>
                 <div className="relative">
@@ -653,10 +653,10 @@ export default function Settings() {
                     step="0.01"
                     value={settings.petrol_price_per_liter}
                     onChange={(e) => setSettings({ ...settings, petrol_price_per_liter: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                     required
                   />
-                  <span className="absolute right-3 top-2 text-gray-500">ZMW</span>
+                  <span className="absolute right-3 top-2 text-content-secondary">ZMW</span>
                 </div>
               </div>
             </div>
@@ -664,10 +664,10 @@ export default function Settings() {
 
           {/* Allowable Losses Section */}
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">📊 Allowable Losses During Offloading</h2>
+            <h2 className="text-xl font-semibold text-content-primary mb-4">📊 Allowable Losses During Offloading</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Diesel Allowable Loss (%)
                 </label>
                 <input
@@ -677,14 +677,14 @@ export default function Settings() {
                   max="5"
                   value={settings.diesel_allowable_loss_percent}
                   onChange={(e) => setSettings({ ...settings, diesel_allowable_loss_percent: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">Default: 0.3% loss during delivery</p>
+                <p className="text-xs text-content-secondary mt-1">Default: 0.3% loss during delivery</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Petrol Allowable Loss (%)
                 </label>
                 <input
@@ -694,24 +694,24 @@ export default function Settings() {
                   max="5"
                   value={settings.petrol_allowable_loss_percent}
                   onChange={(e) => setSettings({ ...settings, petrol_allowable_loss_percent: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">Default: 0.5% loss during delivery</p>
+                <p className="text-xs text-content-secondary mt-1">Default: 0.5% loss during delivery</p>
               </div>
             </div>
           </div>
 
           {/* Messages */}
           {message && (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-              <p className="text-sm text-green-700">✓ {message}</p>
+            <div className="p-4 bg-status-success-light border border-status-success rounded-md">
+              <p className="text-sm text-status-success">✓ {message}</p>
             </div>
           )}
 
           {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm text-red-700">✗ {error}</p>
+            <div className="p-4 bg-status-error-light border border-status-error rounded-md">
+              <p className="text-sm text-status-error">✗ {error}</p>
             </div>
           )}
 
@@ -719,16 +719,16 @@ export default function Settings() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Saving...' : 'Save Settings'}
           </button>
         </form>
 
         {/* Info Card */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-blue-900 mb-2">ℹ️ About Allowable Losses</h3>
-          <ul className="text-sm text-blue-700 space-y-1">
+        <div className="mt-6 bg-action-primary-light border border-action-primary rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-action-primary mb-2">ℹ️ About Allowable Losses</h3>
+          <ul className="text-sm text-action-primary space-y-1">
             <li>• Allowable losses account for evaporation and spillage during fuel delivery</li>
             <li>• Typical industry standards: Diesel 0.2-0.4%, Petrol 0.3-0.6%</li>
             <li>• Losses exceeding these thresholds will be flagged in delivery reports</li>
@@ -740,12 +740,12 @@ export default function Settings() {
 
       {/* Validation Thresholds Tab */}
       {activeTab === 'validation' && (
-        <div className="max-w-2xl bg-white rounded-lg shadow p-6">
+        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
           <div className="space-y-6">
             {/* Header */}
             <div className="border-b pb-4">
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">✓ Validation Thresholds</h2>
-              <p className="text-sm text-gray-600">
+              <h2 className="text-xl font-semibold text-content-primary mb-2">✓ Validation Thresholds</h2>
+              <p className="text-sm text-content-secondary">
                 Configure variance thresholds for tank vs nozzle reading validation. These settings determine when readings are marked as PASS, WARNING, or FAIL.
               </p>
             </div>
@@ -754,7 +754,7 @@ export default function Settings() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     PASS Threshold (%)
                   </label>
                   <input
@@ -764,16 +764,16 @@ export default function Settings() {
                     max="10"
                     value={validationThresholds.pass_threshold}
                     onChange={(e) => setValidationThresholds({ ...validationThresholds, pass_threshold: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                    className="w-full px-3 py-2 border border-status-success rounded-md focus:outline-none focus:ring-status-success focus:border-status-success"
                     required
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-content-secondary mt-1">
                     Variance ≤ this % = PASS (Green status)
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     WARNING Threshold (%)
                   </label>
                   <input
@@ -783,17 +783,17 @@ export default function Settings() {
                     max="10"
                     value={validationThresholds.warning_threshold}
                     onChange={(e) => setValidationThresholds({ ...validationThresholds, warning_threshold: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-yellow-300 rounded-md focus:outline-none focus:ring-yellow-500 focus:border-yellow-500"
+                    className="w-full px-3 py-2 border border-status-warning rounded-md focus:outline-none focus:ring-status-warning focus:border-status-warning"
                     required
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-content-secondary mt-1">
                     Variance ≤ this % = WARNING (Yellow status)
                   </p>
                 </div>
               </div>
 
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Meter Discrepancy Threshold (%)
                 </label>
                 <input
@@ -803,18 +803,18 @@ export default function Settings() {
                   max="10"
                   value={validationThresholds.meter_discrepancy_threshold}
                   onChange={(e) => setValidationThresholds({ ...validationThresholds, meter_discrepancy_threshold: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-orange-300 rounded-md focus:outline-none focus:ring-orange-500 focus:border-orange-500"
+                  className="w-full px-3 py-2 border border-category-c-border rounded-md focus:outline-none focus:ring-category-c focus:border-category-c"
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-content-secondary mt-1">
                   When electronic vs mechanical dispensed discrepancy exceeds this threshold, attendants must provide a note explaining the difference.
                 </p>
               </div>
 
               {/* Current Data Analysis */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
-                <h3 className="text-sm font-semibold text-blue-900 mb-2">📊 Based on December 2025 Data:</h3>
-                <ul className="text-sm text-blue-700 space-y-1">
+              <div className="bg-action-primary-light border border-action-primary rounded-lg p-4 mt-4">
+                <h3 className="text-sm font-semibold text-action-primary mb-2">📊 Based on December 2025 Data:</h3>
+                <ul className="text-sm text-action-primary space-y-1">
                   <li>• Diesel average variance: 0.59%</li>
                   <li>• Petrol average variance: 0.72%</li>
                   <li>• Recommended PASS: 2.0%</li>
@@ -823,19 +823,19 @@ export default function Settings() {
               </div>
 
               {/* Status Legend */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-gray-900 mb-2">📋 How It Works:</h3>
-                <ul className="text-sm text-gray-700 space-y-2">
+              <div className="bg-surface-bg border border-surface-border rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-content-primary mb-2">📋 How It Works:</h3>
+                <ul className="text-sm text-content-secondary space-y-2">
                   <li className="flex items-start">
-                    <span className="text-green-600 font-bold mr-2">✓ PASS:</span>
+                    <span className="text-status-success font-bold mr-2">✓ PASS:</span>
                     <span>Variance is within acceptable range (≤ PASS threshold)</span>
                   </li>
                   <li className="flex items-start">
-                    <span className="text-yellow-600 font-bold mr-2">⚠ WARNING:</span>
+                    <span className="text-status-warning font-bold mr-2">⚠ WARNING:</span>
                     <span>Variance exceeds PASS but is ≤ WARNING threshold - requires attention</span>
                   </li>
                   <li className="flex items-start">
-                    <span className="text-red-600 font-bold mr-2">✗ FAIL:</span>
+                    <span className="text-status-error font-bold mr-2">✗ FAIL:</span>
                     <span>Variance exceeds WARNING threshold - significant discrepancy detected</span>
                   </li>
                 </ul>
@@ -844,14 +844,14 @@ export default function Settings() {
 
             {/* Messages */}
             {thresholdsMessage && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                <p className="text-sm text-green-700">✓ {thresholdsMessage}</p>
+              <div className="p-4 bg-status-success-light border border-status-success rounded-md">
+                <p className="text-sm text-status-success">✓ {thresholdsMessage}</p>
               </div>
             )}
 
             {thresholdsError && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-sm text-red-700">✗ {thresholdsError}</p>
+              <div className="p-4 bg-status-error-light border border-status-error rounded-md">
+                <p className="text-sm text-status-error">✗ {thresholdsError}</p>
               </div>
             )}
 
@@ -859,7 +859,7 @@ export default function Settings() {
             <button
               onClick={updateValidationThresholds}
               disabled={thresholdsLoading}
-              className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {thresholdsLoading ? 'Saving...' : 'Save Validation Thresholds'}
             </button>

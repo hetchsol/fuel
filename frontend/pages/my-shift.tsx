@@ -414,12 +414,12 @@ export default function MyShift() {
       </div>
 
       {error && (
-        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: '#fef2f2', color: '#dc2626', borderColor: '#fecaca', borderWidth: 1 }}>
+        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)', borderColor: 'var(--color-status-error)', borderWidth: 1 }}>
           {error}
         </div>
       )}
       {success && (
-        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0', borderWidth: 1 }}>
+        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)', borderColor: 'var(--color-status-success)', borderWidth: 1 }}>
           {success}
         </div>
       )}
@@ -445,7 +445,7 @@ export default function MyShift() {
           </div>
           <div>
             <div className="text-xs" style={{ color: theme.textSecondary }}>Status</div>
-            <div className="font-medium text-sm" style={{ color: '#16a34a' }}>{shiftInfo?.status}</div>
+            <div className="font-medium text-sm" style={{ color: 'var(--color-status-success)' }}>{shiftInfo?.status}</div>
           </div>
           <div>
             <div className="text-xs" style={{ color: theme.textSecondary }}>Attendant</div>
@@ -497,8 +497,8 @@ export default function MyShift() {
                   <td className="px-3 py-2" style={{ color: theme.textSecondary }}>
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
                       style={{
-                        backgroundColor: row.fuel_type === 'Petrol' ? '#dbeafe' : '#fef9c3',
-                        color: row.fuel_type === 'Petrol' ? '#1d4ed8' : '#a16207',
+                        backgroundColor: row.fuel_type === 'Petrol' ? 'var(--color-action-primary-light)' : 'var(--color-status-pending-light)',
+                        color: row.fuel_type === 'Petrol' ? 'var(--color-action-primary)' : 'var(--color-status-warning)',
                       }}>
                       {row.fuel_type}
                     </span>
@@ -524,11 +524,11 @@ export default function MyShift() {
                       className="w-36 px-2 py-1 rounded border text-sm text-right font-mono"
                       style={{
                         ...inputStyle,
-                        borderColor: hasError ? '#ef4444' : theme.border,
+                        borderColor: hasError ? 'var(--color-status-error)' : theme.border,
                       }}
                     />
                     {hasError && (
-                      <div className="text-xs mt-0.5" style={{ color: '#ef4444' }}>
+                      <div className="text-xs mt-0.5" style={{ color: 'var(--color-status-error)' }}>
                         Must be &ge; opening
                       </div>
                     )}
@@ -621,16 +621,16 @@ export default function MyShift() {
                       value={row.sold_refill} onChange={e => updateLpgRow(idx, 'sold_refill', e.target.value)}
                       placeholder="0"
                       className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
-                      style={{ ...inputStyle, borderColor: splitError ? '#ef4444' : theme.border }} />
+                      style={{ ...inputStyle, borderColor: splitError ? 'var(--color-status-error)' : theme.border }} />
                   </td>
                   <td className="px-2 py-1">
                     <input type="number" min={0} step={1}
                       value={row.sold_with_cylinder} onChange={e => updateLpgRow(idx, 'sold_with_cylinder', e.target.value)}
                       placeholder="0"
                       className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
-                      style={{ ...inputStyle, borderColor: splitError ? '#ef4444' : theme.border }} />
+                      style={{ ...inputStyle, borderColor: splitError ? 'var(--color-status-error)' : theme.border }} />
                     {splitError && (
-                      <div className="text-xs mt-0.5 whitespace-nowrap" style={{ color: '#ef4444' }}>
+                      <div className="text-xs mt-0.5 whitespace-nowrap" style={{ color: 'var(--color-status-error)' }}>
                         Must sum to {comp.totalSold}
                       </div>
                     )}
@@ -842,7 +842,7 @@ export default function MyShift() {
             </div>
             <div className="flex justify-between text-sm">
               <span style={{ color: theme.textSecondary }}>- Credit Sales</span>
-              <span className="font-mono" style={{ color: '#dc2626' }}>
+              <span className="font-mono" style={{ color: 'var(--color-status-error)' }}>
                 -{fmtZMW(creditVal)}
               </span>
             </div>
@@ -878,16 +878,16 @@ export default function MyShift() {
             {actualCash !== '' && (
               <div className="rounded-lg p-4 text-center"
                 style={{
-                  backgroundColor: difference >= 0 ? '#f0fdf4' : '#fef2f2',
+                  backgroundColor: difference >= 0 ? 'var(--color-status-success-light)' : 'var(--color-status-error-light)',
                   borderWidth: 2,
-                  borderColor: difference >= 0 ? '#86efac' : '#fca5a5',
+                  borderColor: difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)',
                 }}>
                 <div className="text-xs uppercase tracking-wide mb-1"
-                  style={{ color: difference >= 0 ? '#16a34a' : '#dc2626' }}>
+                  style={{ color: difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
                   {difference >= 0 ? 'Surplus' : 'Shortage'}
                 </div>
                 <div className="text-2xl font-bold font-mono"
-                  style={{ color: difference >= 0 ? '#16a34a' : '#dc2626' }}>
+                  style={{ color: difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
                   {difference >= 0 ? '+' : ''}{fmtZMW(difference)} ZMW
                 </div>
               </div>
@@ -923,7 +923,7 @@ export default function MyShift() {
       {/* 8. Result Display */}
       {handoverResult && (
         <div className="rounded-lg shadow p-6 mb-6"
-          style={{ backgroundColor: theme.cardBg, borderColor: '#86efac', borderWidth: 2 }}>
+          style={{ backgroundColor: theme.cardBg, borderColor: 'var(--color-status-success)', borderWidth: 2 }}>
           <h2 className="text-lg font-bold mb-4" style={{ color: theme.textPrimary }}>
             Handover Summary
           </h2>
@@ -942,7 +942,7 @@ export default function MyShift() {
             </div>
             <div>
               <span className="text-xs" style={{ color: theme.textSecondary }}>Status</span>
-              <div className="font-medium" style={{ color: '#16a34a' }}>{handoverResult.status}</div>
+              <div className="font-medium" style={{ color: 'var(--color-status-success)' }}>{handoverResult.status}</div>
             </div>
           </div>
 
@@ -996,16 +996,16 @@ export default function MyShift() {
 
           <div className="mt-4 rounded-lg p-4 text-center"
             style={{
-              backgroundColor: handoverResult.difference >= 0 ? '#f0fdf4' : '#fef2f2',
+              backgroundColor: handoverResult.difference >= 0 ? 'var(--color-status-success-light)' : 'var(--color-status-error-light)',
               borderWidth: 2,
-              borderColor: handoverResult.difference >= 0 ? '#86efac' : '#fca5a5',
+              borderColor: handoverResult.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)',
             }}>
             <div className="text-xs uppercase tracking-wide mb-1"
-              style={{ color: handoverResult.difference >= 0 ? '#16a34a' : '#dc2626' }}>
+              style={{ color: handoverResult.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
               {handoverResult.difference >= 0 ? 'Surplus' : 'Shortage'}
             </div>
             <div className="text-3xl font-bold font-mono"
-              style={{ color: handoverResult.difference >= 0 ? '#16a34a' : '#dc2626' }}>
+              style={{ color: handoverResult.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
               {handoverResult.difference >= 0 ? '+' : ''}{fmtZMW(handoverResult.difference)} ZMW
             </div>
           </div>
@@ -1033,7 +1033,7 @@ function SummaryCell({ label, value, theme, bold, primary, negative }: {
       <div className="text-xs" style={{ color: theme.textSecondary }}>{label}</div>
       <div
         className={`font-mono ${bold ? 'font-bold' : 'font-medium'}`}
-        style={{ color: negative ? '#dc2626' : primary ? theme.primary : theme.textPrimary }}>
+        style={{ color: negative ? 'var(--color-status-error)' : primary ? theme.primary : theme.textPrimary }}>
         {negative ? '-' : ''}{value.toLocaleString(undefined, { minimumFractionDigits: 2 })} ZMW
       </div>
     </div>
@@ -1076,14 +1076,14 @@ function PastHandoversTable({ handovers, theme }: { handovers: HandoverResult[],
                 {h.actual_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </td>
               <td className="px-3 py-2 text-right font-mono font-bold"
-                style={{ color: h.difference >= 0 ? '#16a34a' : '#dc2626' }}>
+                style={{ color: h.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
                 {h.difference >= 0 ? '+' : ''}{h.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </td>
               <td className="px-3 py-2">
                 <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
                   style={{
-                    backgroundColor: h.status === 'submitted' ? '#dbeafe' : '#fef9c3',
-                    color: h.status === 'submitted' ? '#1d4ed8' : '#a16207',
+                    backgroundColor: h.status === 'submitted' ? 'var(--color-action-primary-light)' : 'var(--color-status-pending-light)',
+                    color: h.status === 'submitted' ? 'var(--color-action-primary)' : 'var(--color-status-warning)',
                   }}>
                   {h.status}
                 </span>

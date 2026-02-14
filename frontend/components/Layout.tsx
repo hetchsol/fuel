@@ -3,17 +3,17 @@ import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import { authFetch, BASE } from '../lib/api'
+import Footer from './Footer'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const { theme } = useTheme()
+  const { theme, isDark, toggleDark } = useTheme()
   const [stations, setStations] = useState<any[]>([])
   const [activeStationId, setActiveStationId] = useState<string>('ST001')
 
   useEffect(() => {
-    // Check if user is logged in
     const userData = localStorage.getItem('user')
     if (userData) {
       const parsed = JSON.parse(userData)
@@ -25,7 +25,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     setLoading(false)
   }, [router.pathname])
 
-  // Load stations for owners
   useEffect(() => {
     if (user && user.role === 'owner') {
       authFetch(`${BASE}/stations/`)
@@ -38,7 +37,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const handleStationChange = (stationId: string) => {
     setActiveStationId(stationId)
     localStorage.setItem('stationId', stationId)
-    // Reload the current page to refresh data for the new station
     router.reload()
   }
 
@@ -61,8 +59,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     )
   }
 
-  // Define navigation items with role requirements and nested structure
-  // Organized by workflow: what users do daily, what they monitor, what they analyze
   const allNavItems = [
     { path: '/', label: 'Dashboard', roles: ['user', 'supervisor', 'owner'] },
     { path: '/my-shift', label: 'My Shift', roles: ['user', 'supervisor', 'owner'] },
@@ -121,12 +117,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     },
   ]
 
-  // Filter navigation items based on user role
   const navItems = user
     ? allNavItems.filter(item => {
         if (item.roles.includes(user.role)) {
           if (item.children) {
-            // Filter children based on role
             item.children = item.children.filter(child => child.roles.includes(user.role))
             return item.children.length > 0
           }
@@ -136,20 +130,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       })
     : []
 
-  // Don't show navigation on login page
   if (router.pathname === '/login' || loading) {
     return <>{children}</>
   }
 
   return (
-    <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: theme.background }}>
-      <nav className="shadow-sm transition-colors duration-300" style={{ backgroundColor: theme.cardBg, borderBottomColor: theme.border, borderBottomWidth: '1px' }}>
+    <div className="flex flex-col min-h-screen bg-surface-bg">
+      <nav className="bg-header-bg shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Top row: App name and user info */}
-          <div className="flex justify-between items-center h-16 transition-colors duration-300" style={{ borderBottomColor: theme.border, borderBottomWidth: '1px' }}>
-            <h1 className="text-xl font-bold transition-colors duration-300" style={{ color: theme.textPrimary }}>⛽ Fuel Management</h1>
+          {/* Top row */}
+          <div className="flex justify-between items-center h-16 border-b border-white/20">
+            <h1 className="text-xl font-bold text-header-text">Fuel Management</h1>
 
-            {/* User Info */}
             {user && (
               <div className="flex items-center space-x-4">
                 {/* Station Selector for owners */}
@@ -157,8 +149,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <select
                     value={activeStationId}
                     onChange={(e) => handleStationChange(e.target.value)}
-                    className="px-3 py-1.5 text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}
+                    className="px-3 py-1.5 text-sm rounded-md border bg-surface-card text-content-primary border-surface-border focus:outline-none focus:ring-2 focus:ring-white/40"
                   >
                     {stations.map((s: any) => (
                       <option key={s.station_id} value={s.station_id}>
@@ -167,17 +158,27 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     ))}
                   </select>
                 )}
+
+                {/* Dark mode toggle */}
+                <button
+                  onClick={toggleDark}
+                  className="p-2 rounded-md text-header-text hover:bg-white/10 transition-colors"
+                  title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                >
+                  {isDark ? '☀️' : '🌙'}
+                </button>
+
                 <div className="text-right hidden sm:block">
-                  <p className="text-sm font-medium transition-colors duration-300" style={{ color: theme.textPrimary }}>{user.full_name}</p>
-                  <p className="text-xs transition-colors duration-300" style={{ color: theme.textSecondary }}>
-                    {user.role === 'user' && '👤 User'}
-                    {user.role === 'supervisor' && '👔 Supervisor'}
-                    {user.role === 'owner' && '👑 Owner'}
+                  <p className="text-sm font-medium text-header-text">{user.full_name}</p>
+                  <p className="text-xs text-header-text/70">
+                    {user.role === 'user' && 'User'}
+                    {user.role === 'supervisor' && 'Supervisor'}
+                    {user.role === 'owner' && 'Owner'}
                   </p>
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="px-4 py-2 bg-status-error text-white text-sm rounded-md hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-white/40"
                 >
                   Logout
                 </button>
@@ -185,29 +186,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             )}
           </div>
 
-          {/* Bottom row: Navigation menu */}
+          {/* Desktop nav */}
           <div className="hidden sm:flex sm:space-x-8 h-12">
             {navItems.map((item: any) => (
               item.children ? (
                 <div key={item.label} className="relative group">
                   <button
-                    className="inline-flex items-center px-1 border-b-2 text-sm font-medium h-12 transition-colors duration-300"
-                    style={{
-                      borderColor: 'transparent',
-                      color: theme.textSecondary
-                    }}
+                    className="inline-flex items-center px-1 border-b-2 border-transparent text-sm font-medium h-12 text-header-text/70 hover:text-header-text transition-colors"
                   >
                     {item.label} ▾
                   </button>
-                  <div className="absolute left-0 mt-0 w-48 shadow-lg rounded-md hidden group-hover:block z-50 transition-colors duration-300" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: '1px' }}>
+                  <div className="absolute left-0 mt-0 w-48 shadow-lg rounded-md hidden group-hover:block z-50 bg-surface-card border border-surface-border">
                     {item.children.map((child: any) => (
                       <Link
                         key={child.path}
                         href={child.path}
-                        className="block px-4 py-2 text-sm transition-colors duration-300"
+                        className="block px-4 py-2 text-sm transition-colors"
                         style={{
-                          backgroundColor: isActive(child.path) ? theme.primaryLight : 'transparent',
-                          color: isActive(child.path) ? theme.primary : theme.textPrimary,
+                          backgroundColor: isActive(child.path) ? 'var(--color-action-primary-light)' : 'transparent',
+                          color: isActive(child.path) ? 'var(--color-action-primary)' : 'var(--color-text-primary)',
                           fontWeight: isActive(child.path) ? '500' : '400'
                         }}
                       >
@@ -220,11 +217,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.path}
                   href={item.path}
-                  className="inline-flex items-center px-1 border-b-2 text-sm font-medium transition-colors duration-300"
-                  style={{
-                    borderColor: isActive(item.path) ? theme.primary : 'transparent',
-                    color: isActive(item.path) ? theme.primary : theme.textSecondary
-                  }}
+                  className={`inline-flex items-center px-1 border-b-2 text-sm font-medium transition-colors ${
+                    isActive(item.path)
+                      ? 'border-white text-header-text'
+                      : 'border-transparent text-header-text/70 hover:text-header-text'
+                  }`}
                 >
                   {item.label}
                 </Link>
@@ -235,15 +232,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* Mobile Navigation */}
-      <div className="sm:hidden transition-colors duration-300" style={{ backgroundColor: theme.cardBg, borderBottomColor: theme.border, borderBottomWidth: '1px' }}>
+      <div className="sm:hidden bg-surface-card border-b border-surface-border">
         <div className="px-2 pt-2 pb-3 space-y-1">
           {navItems.map((item: any) => (
             item.children ? (
               <div key={item.label}>
                 <button
                   onClick={() => toggleMenu(item.label)}
-                  className="w-full flex justify-between items-center px-3 py-2 rounded-md text-base font-medium transition-colors duration-300"
-                  style={{ color: theme.textPrimary }}
+                  className="w-full flex justify-between items-center px-3 py-2 rounded-md text-base font-medium text-content-primary"
                 >
                   <span>{item.label}</span>
                   <span>{openMenus.includes(item.label) ? '▴' : '▾'}</span>
@@ -254,10 +250,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       <Link
                         key={child.path}
                         href={child.path}
-                        className="block px-3 py-2 rounded-md text-sm transition-colors duration-300"
+                        className="block px-3 py-2 rounded-md text-sm transition-colors"
                         style={{
-                          backgroundColor: isActive(child.path) ? theme.primaryLight : 'transparent',
-                          color: isActive(child.path) ? theme.primary : theme.textSecondary,
+                          backgroundColor: isActive(child.path) ? 'var(--color-action-primary-light)' : 'transparent',
+                          color: isActive(child.path) ? 'var(--color-action-primary)' : 'var(--color-text-secondary)',
                           fontWeight: isActive(child.path) ? '500' : '400'
                         }}
                       >
@@ -271,10 +267,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.path}
                 href={item.path}
-                className="block px-3 py-2 rounded-md text-base font-medium transition-colors duration-300"
+                className="block px-3 py-2 rounded-md text-base font-medium transition-colors"
                 style={{
-                  backgroundColor: isActive(item.path) ? theme.primaryLight : 'transparent',
-                  color: isActive(item.path) ? theme.primary : theme.textPrimary
+                  backgroundColor: isActive(item.path) ? 'var(--color-action-primary-light)' : 'transparent',
+                  color: isActive(item.path) ? 'var(--color-action-primary)' : 'var(--color-text-primary)'
                 }}
               >
                 {item.label}
@@ -282,21 +278,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             )
           ))}
           {user && (
-            <div className="px-3 py-2 mt-2 pt-2 transition-colors duration-300" style={{ borderTopColor: theme.border, borderTopWidth: '1px' }}>
-              <p className="text-sm font-medium transition-colors duration-300" style={{ color: theme.textPrimary }}>{user.full_name}</p>
-              <p className="text-xs transition-colors duration-300" style={{ color: theme.textSecondary }}>
-                {user.role === 'user' && '👤 User'}
-                {user.role === 'supervisor' && '👔 Supervisor'}
-                {user.role === 'owner' && '👑 Owner'}
+            <div className="px-3 py-2 mt-2 pt-2 border-t border-surface-border">
+              <p className="text-sm font-medium text-content-primary">{user.full_name}</p>
+              <p className="text-xs text-content-secondary">
+                {user.role === 'user' && 'User'}
+                {user.role === 'supervisor' && 'Supervisor'}
+                {user.role === 'owner' && 'Owner'}
               </p>
             </div>
           )}
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         {children}
       </main>
+
+      <Footer />
     </div>
   )
 }

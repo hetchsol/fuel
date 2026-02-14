@@ -1,6 +1,5 @@
 import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
-import { useTheme } from '../contexts/ThemeContext'
 
 
 interface SaleResult {
@@ -22,7 +21,6 @@ interface SaleResult {
 }
 
 export default function Sales() {
-  const { setFuelType } = useTheme()
   const [shiftType, setShiftType] = useState<'DAY' | 'NIGHT'>('DAY')
   const [formData, setFormData] = useState({
     shiftId: '',
@@ -143,26 +141,26 @@ export default function Sales() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Calculate Daily Sale</h1>
-        <p className="mt-2 text-sm text-gray-600">
+        <h1 className="text-3xl font-bold text-content-primary">Calculate Daily Sale</h1>
+        <p className="mt-2 text-sm text-content-secondary">
           Enter opening and closing readings to calculate daily fuel sales
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-lg shadow p-6">
+        <div className="lg:col-span-2 bg-surface-card rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">Reading Details</h2>
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Shift Type, Shift ID and Fuel Type */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Shift Type
                 </label>
                 <select
                   value={shiftType}
                   onChange={(e) => setShiftType(e.target.value as 'DAY' | 'NIGHT')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   required
                 >
                   <option value="DAY">Day Shift</option>
@@ -171,20 +169,20 @@ export default function Sales() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Shift ID (Auto-generated)
                 </label>
                 <input
                   type="text"
                   value={formData.shiftId}
                   readOnly
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700 cursor-not-allowed"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-secondary cursor-not-allowed"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Fuel Type
                 </label>
                 <select
@@ -192,14 +190,8 @@ export default function Sales() {
                   onChange={(e) => {
                     const value = e.target.value
                     setFormData({ ...formData, fuelType: value })
-                    // Update theme based on fuel selection
-                    if (value.toLowerCase() === 'diesel') {
-                      setFuelType('diesel')
-                    } else if (value.toLowerCase() === 'petrol') {
-                      setFuelType('petrol')
-                    }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   required
                 >
                   <option value="Diesel">Diesel</option>
@@ -210,10 +202,10 @@ export default function Sales() {
 
             {/* Mechanical Readings */}
             <div className="border-t pt-4">
-              <h3 className="text-md font-semibold text-gray-700 mb-3">Mechanical Readings</h3>
+              <h3 className="text-md font-semibold text-content-secondary mb-3">Mechanical Readings</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Opening Reading (Liters)
                   </label>
                   <input
@@ -221,14 +213,14 @@ export default function Sales() {
                     step="0.01"
                     value={formData.mechanicalOpening}
                     onChange={(e) => setFormData({ ...formData, mechanicalOpening: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                     placeholder="e.g., 10000.00"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Closing Reading (Liters)
                   </label>
                   <input
@@ -236,7 +228,7 @@ export default function Sales() {
                     step="0.01"
                     value={formData.mechanicalClosing}
                     onChange={(e) => setFormData({ ...formData, mechanicalClosing: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                     placeholder="e.g., 12345.50"
                     required
                   />
@@ -246,10 +238,10 @@ export default function Sales() {
 
             {/* Electronic Readings */}
             <div className="border-t pt-4">
-              <h3 className="text-md font-semibold text-gray-700 mb-3">Electronic Readings</h3>
+              <h3 className="text-md font-semibold text-content-secondary mb-3">Electronic Readings</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Opening Reading (Liters)
                   </label>
                   <input
@@ -257,14 +249,14 @@ export default function Sales() {
                     step="0.01"
                     value={formData.electronicOpening}
                     onChange={(e) => setFormData({ ...formData, electronicOpening: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                     placeholder="e.g., 10000.00"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Closing Reading (Liters)
                   </label>
                   <input
@@ -272,7 +264,7 @@ export default function Sales() {
                     step="0.01"
                     value={formData.electronicClosing}
                     onChange={(e) => setFormData({ ...formData, electronicClosing: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                     placeholder="e.g., 12345.00"
                     required
                   />
@@ -282,26 +274,26 @@ export default function Sales() {
 
             {/* Volume Preview */}
             {volumes && (
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-                <h4 className="text-sm font-semibold text-blue-900 mb-2">Calculated Volumes</h4>
+              <div className="p-4 bg-action-primary-light border border-action-primary rounded-md">
+                <h4 className="text-sm font-semibold text-action-primary mb-2">Calculated Volumes</h4>
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
-                    <p className="text-blue-700">Mechanical</p>
-                    <p className="font-bold text-blue-900">{volumes.mechanical} L</p>
+                    <p className="text-action-primary">Mechanical</p>
+                    <p className="font-bold text-action-primary">{volumes.mechanical} L</p>
                   </div>
                   <div>
-                    <p className="text-blue-700">Electronic</p>
-                    <p className="font-bold text-blue-900">{volumes.electronic} L</p>
+                    <p className="text-action-primary">Electronic</p>
+                    <p className="font-bold text-action-primary">{volumes.electronic} L</p>
                   </div>
                   <div>
-                    <p className="text-blue-700">Discrepancy</p>
-                    <p className={`font-bold ${parseFloat(volumes.discrepancy) > 0.03 ? 'text-red-600' : 'text-green-600'}`}>
+                    <p className="text-action-primary">Discrepancy</p>
+                    <p className={`font-bold ${parseFloat(volumes.discrepancy) > 0.03 ? 'text-status-error' : 'text-status-success'}`}>
                       {volumes.discrepancy}%
                     </p>
                   </div>
                 </div>
                 {parseFloat(volumes.discrepancy) > 0.03 && (
-                  <p className="text-xs text-red-600 mt-2">
+                  <p className="text-xs text-status-error mt-2">
                     ⚠ Warning: Discrepancy exceeds 0.03% limit
                   </p>
                 )}
@@ -311,49 +303,49 @@ export default function Sales() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Calculating...' : 'Calculate Sale'}
             </button>
           </form>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-surface-card rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">Result</h2>
 
           {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm font-medium text-red-900">Error</p>
-              <p className="text-sm text-red-700 mt-2">{error}</p>
+            <div className="p-4 bg-status-error-light border border-status-error rounded-md">
+              <p className="text-sm font-medium text-status-error">Error</p>
+              <p className="text-sm text-status-error mt-2">{error}</p>
             </div>
           )}
 
           {result && (
             <div className="space-y-4">
-              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                <p className="text-sm font-medium text-green-900">✓ Sale Calculated</p>
-                <p className="text-sm text-green-700 mt-1">ID: {result.sale_id}</p>
+              <div className="p-4 bg-status-success-light border border-status-success rounded-md">
+                <p className="text-sm font-medium text-status-success">✓ Sale Calculated</p>
+                <p className="text-sm text-status-success mt-1">ID: {result.sale_id}</p>
               </div>
 
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs text-gray-500">Fuel Type</p>
+                  <p className="text-xs text-content-secondary">Fuel Type</p>
                   <p className="text-sm font-semibold">{result.fuel_type}</p>
                 </div>
 
                 <div className="border-t pt-3">
-                  <p className="text-xs text-gray-500 mb-2">Volumes</p>
+                  <p className="text-xs text-content-secondary mb-2">Volumes</p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Mechanical:</span>
+                      <span className="text-content-secondary">Mechanical:</span>
                       <span className="font-mono">{result.mechanical_volume.toFixed(2)} L</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Electronic:</span>
+                      <span className="text-content-secondary">Electronic:</span>
                       <span className="font-mono">{result.electronic_volume.toFixed(2)} L</span>
                     </div>
                     <div className="flex justify-between font-semibold">
-                      <span className="text-gray-700">Average:</span>
+                      <span className="text-content-secondary">Average:</span>
                       <span className="font-mono">{result.average_volume.toFixed(2)} L</span>
                     </div>
                   </div>
@@ -361,26 +353,26 @@ export default function Sales() {
 
                 <div className="border-t pt-3">
                   <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-600">Unit Price:</span>
+                    <span className="text-content-secondary">Unit Price:</span>
                     <span className="font-mono">K{result.unit_price.toFixed(2)}/L</span>
                   </div>
-                  <div className="flex justify-between text-lg font-bold text-green-700">
+                  <div className="flex justify-between text-lg font-bold text-status-success">
                     <span>Total Amount:</span>
                     <span className="font-mono">K{result.total_amount.toFixed(2)}</span>
                   </div>
                 </div>
 
                 <div className="border-t pt-3">
-                  <p className="text-xs text-gray-500 mb-1">Validation</p>
+                  <p className="text-xs text-content-secondary mb-1">Validation</p>
                   <div className="flex items-center space-x-2">
                     <span className={`px-2 py-1 rounded text-xs font-bold ${
                       result.validation_status === 'PASS'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
+                        ? 'bg-status-success-light text-status-success'
+                        : 'bg-status-error-light text-status-error'
                     }`}>
                       {result.validation_status}
                     </span>
-                    <span className="text-xs text-gray-600">
+                    <span className="text-xs text-content-secondary">
                       {result.discrepancy_percent.toFixed(4)}% discrepancy
                     </span>
                   </div>
@@ -390,14 +382,14 @@ export default function Sales() {
           )}
 
           {!result && !error && (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-content-secondary">
               Fill in the form to calculate sale
             </div>
           )}
 
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">How It Works</h3>
-            <div className="text-xs text-gray-600 space-y-2">
+          <div className="mt-6 pt-6 border-t border-surface-border">
+            <h3 className="text-sm font-semibold text-content-primary mb-3">How It Works</h3>
+            <div className="text-xs text-content-secondary space-y-2">
               <p>1. Enter opening & closing readings</p>
               <p>2. System compares mechanical vs electronic</p>
               <p>3. Validates within 0.03% tolerance</p>

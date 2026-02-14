@@ -124,71 +124,71 @@ export default function UsersManagement() {
 
   const getRoleBadge = (role: string) => {
     const colors = {
-      owner: 'bg-purple-100 text-purple-800',
-      supervisor: 'bg-blue-100 text-blue-800',
-      user: 'bg-green-100 text-green-800'
+      owner: 'bg-category-a-light text-category-a',
+      supervisor: 'bg-action-primary-light text-action-primary',
+      user: 'bg-status-success-light text-status-success'
     }
-    return colors[role as keyof typeof colors] || 'bg-gray-100 text-gray-800'
+    return colors[role as keyof typeof colors] || 'bg-surface-bg text-content-primary'
   }
 
   return (
     <div>
       <div className="mb-8 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-          <p className="mt-2 text-sm text-gray-600">Manage system users and staff members</p>
+          <h1 className="text-3xl font-bold text-content-primary">User Management</h1>
+          <p className="mt-2 text-sm text-content-secondary">Manage system users and staff members</p>
         </div>
         <button
           onClick={handleCreate}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary"
         >
           + Add User
         </button>
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-red-800">{error}</p>
+        <div className="mb-4 p-4 bg-status-error-light border border-status-error rounded-md">
+          <p className="text-status-error">{error}</p>
         </div>
       )}
 
       {loading ? (
         <div className="text-center py-8">Loading...</div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-surface-card rounded-lg shadow overflow-hidden">
+          <table className="min-w-full divide-y divide-surface-border">
+            <thead className="bg-surface-bg">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                   User ID
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                   Username
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                   Full Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                   Station
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-content-secondary uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-surface-card divide-y divide-surface-border">
               {users.map((user) => (
-                <tr key={user.user_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <tr key={user.user_id} className="hover:bg-surface-bg">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-content-primary">
                     {user.user_id}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-content-primary">
                     {user.username}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-content-primary">
                     {user.full_name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -196,20 +196,20 @@ export default function UsersManagement() {
                       {user.role}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-content-secondary">
                     {user.station_id || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
                       onClick={() => handleEdit(user)}
-                      className="text-blue-600 hover:text-blue-900 mr-4"
+                      className="text-action-primary hover:text-action-primary mr-4"
                     >
                       Edit
                     </button>
                     {user.role !== 'owner' && (
                       <button
                         onClick={() => handleDelete(user.username)}
-                        className="text-red-600 hover:text-red-900"
+                        className="text-status-error hover:text-status-error"
                       >
                         Delete
                       </button>
@@ -225,7 +225,7 @@ export default function UsersManagement() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="bg-surface-card rounded-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-bold mb-4">
               {editingUser ? 'Edit User' : 'Create New User'}
             </h2>
@@ -233,7 +233,7 @@ export default function UsersManagement() {
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Username
                   </label>
                   <input
@@ -242,12 +242,12 @@ export default function UsersManagement() {
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                     disabled={!!editingUser}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary disabled:bg-surface-bg"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Full Name
                   </label>
                   <input
@@ -255,12 +255,12 @@ export default function UsersManagement() {
                     value={formData.full_name}
                     onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Password {editingUser && '(leave blank to keep current)'}
                   </label>
                   <input
@@ -268,18 +268,18 @@ export default function UsersManagement() {
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     required={!editingUser}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">
                     Role
                   </label>
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   >
                     <option value="user">User (Staff)</option>
                     <option value="supervisor">Supervisor</option>
@@ -289,14 +289,14 @@ export default function UsersManagement() {
 
                 {formData.role !== 'owner' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-content-secondary mb-1">
                       Station ID
                     </label>
                     <input
                       type="text"
                       value={formData.station_id}
                       onChange={(e) => setFormData({ ...formData, station_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                     />
                   </div>
                 )}
@@ -306,13 +306,13 @@ export default function UsersManagement() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                  className="px-4 py-2 bg-surface-bg text-content-secondary rounded-md hover:bg-surface-bg focus:outline-none focus:ring-2 focus:ring-gray-400"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary"
                 >
                   {editingUser ? 'Update' : 'Create'}
                 </button>
@@ -323,12 +323,12 @@ export default function UsersManagement() {
       )}
 
       {/* Staff List Info */}
-      <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-blue-900 mb-2">Staff Members</h3>
-        <p className="text-sm text-blue-700 mb-2">
+      <div className="mt-6 bg-action-primary-light border border-action-primary rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-action-primary mb-2">Staff Members</h3>
+        <p className="text-sm text-action-primary mb-2">
           Registered staff members: <strong>{users.filter(u => u.role === 'user').map(u => u.full_name).join(', ')}</strong>
         </p>
-        <p className="text-sm text-blue-600">
+        <p className="text-sm text-action-primary">
           These staff members are available for selection when assigning shifts and recording readings.
         </p>
       </div>

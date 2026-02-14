@@ -29,53 +29,51 @@ const TankCard = ({
   })
   const [savedDips, setSavedDips] = useState<any>(null)
 
-  // Color theme based on fuel type
   const colors = fuelType === 'Diesel'
     ? {
-        gradient: 'from-purple-50 to-purple-100',
-        border: 'border-purple-200',
-        title: 'text-purple-900',
-        badge: 'text-purple-600 bg-purple-200',
-        text: 'text-purple-700',
-        boldText: 'text-purple-900',
-        lightText: 'text-purple-600',
-        mediumText: 'text-purple-800',
-        button: 'bg-purple-600 hover:bg-purple-700',
-        progressBg: 'bg-purple-200',
-        divider: 'border-purple-200',
-        sectionBg: 'bg-purple-50',
-        sectionBorder: 'border-purple-200',
-        inputBorder: 'border-purple-300',
-        focusRing: 'focus:ring-purple-500 focus:border-purple-500',
-        lightestText: 'text-purple-500',
-        sectionDivider: 'border-purple-300',
-        badgeBg: 'bg-purple-200 text-purple-800'
+        gradient: 'bg-fuel-diesel-light',
+        border: 'border-fuel-diesel-border',
+        title: 'text-fuel-diesel',
+        badge: 'text-fuel-diesel bg-fuel-diesel-light',
+        text: 'text-fuel-diesel',
+        boldText: 'text-fuel-diesel',
+        lightText: 'text-fuel-diesel/70',
+        mediumText: 'text-fuel-diesel',
+        button: 'bg-fuel-diesel hover:opacity-90',
+        progressBg: 'bg-fuel-diesel-border',
+        divider: 'border-fuel-diesel-border',
+        sectionBg: 'bg-fuel-diesel-light',
+        sectionBorder: 'border-fuel-diesel-border',
+        inputBorder: 'border-fuel-diesel-border',
+        focusRing: 'focus:ring-fuel-diesel focus:border-fuel-diesel',
+        lightestText: 'text-fuel-diesel/60',
+        sectionDivider: 'border-fuel-diesel-border',
+        badgeBg: 'bg-fuel-diesel-light text-fuel-diesel'
       }
     : {
-        gradient: 'from-green-50 to-green-100',
-        border: 'border-green-200',
-        title: 'text-green-900',
-        badge: 'text-green-600 bg-green-200',
-        text: 'text-green-700',
-        boldText: 'text-green-900',
-        lightText: 'text-green-600',
-        mediumText: 'text-green-800',
-        button: 'bg-green-600 hover:bg-green-700',
-        progressBg: 'bg-green-200',
-        divider: 'border-green-200',
-        sectionBg: 'bg-green-50',
-        sectionBorder: 'border-green-200',
-        inputBorder: 'border-green-300',
-        focusRing: 'focus:ring-green-500 focus:border-green-500',
-        lightestText: 'text-green-500',
-        sectionDivider: 'border-green-300',
-        badgeBg: 'bg-green-200 text-green-800'
+        gradient: 'bg-fuel-petrol-light',
+        border: 'border-fuel-petrol-border',
+        title: 'text-fuel-petrol',
+        badge: 'text-fuel-petrol bg-fuel-petrol-light',
+        text: 'text-fuel-petrol',
+        boldText: 'text-fuel-petrol',
+        lightText: 'text-fuel-petrol/70',
+        mediumText: 'text-fuel-petrol',
+        button: 'bg-fuel-petrol hover:opacity-90',
+        progressBg: 'bg-fuel-petrol-border',
+        divider: 'border-fuel-petrol-border',
+        sectionBg: 'bg-fuel-petrol-light',
+        sectionBorder: 'border-fuel-petrol-border',
+        inputBorder: 'border-fuel-petrol-border',
+        focusRing: 'focus:ring-fuel-petrol focus:border-fuel-petrol',
+        lightestText: 'text-fuel-petrol/60',
+        sectionDivider: 'border-fuel-petrol-border',
+        badgeBg: 'bg-fuel-petrol-light text-fuel-petrol'
       }
 
   const tankId = `TANK-${fuelType.toUpperCase()}`
   const icon = fuelType === 'Diesel' ? '🛢️' : '⛽'
 
-  // Fetch saved dip readings when component mounts
   useEffect(() => {
     if (tank && canEditDipReadings) {
       fetchDipReadings()
@@ -99,21 +97,19 @@ const TankCard = ({
 
   const handleSave = async () => {
     await onSaveDipReadings(tankId, fuelType, dipReadings)
-    // Refresh saved dips after save
     await fetchDipReadings()
-    // Clear input fields
     setDipReadings({ openingDip: '', closingDip: '' })
   }
 
   return (
-    <div className={`bg-gradient-to-br ${colors.gradient} rounded-lg shadow-lg p-6 border-2 ${colors.border}`}>
+    <div className={`${colors.gradient} rounded-lg shadow-lg p-6 border-2 ${colors.border}`}>
       <div className="flex items-center justify-between mb-4">
         <h2 className={`text-xl font-bold ${colors.title}`}>{icon} {fuelType} Tank</h2>
         <span className={`text-xs ${colors.badge} px-2 py-1 rounded`}>Real-time</span>
       </div>
 
       {tanksError && (
-        <div className="text-red-600 text-sm">Failed to load tank data</div>
+        <div className="text-status-error text-sm">Failed to load tank data</div>
       )}
       {!tanksError && !tank && (
         <LoadingSpinner text="Loading tank data..." />
@@ -129,12 +125,11 @@ const TankCard = ({
               </span>
             </div>
 
-            {/* Progress Bar */}
             <div className={`w-full ${colors.progressBg} rounded-full h-4 overflow-hidden`}>
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
-                  tank.percentage > 50 ? 'bg-green-500' :
-                  tank.percentage > 25 ? 'bg-yellow-500' : 'bg-red-500'
+                  tank.percentage > 50 ? 'bg-status-success' :
+                  tank.percentage > 25 ? 'bg-status-warning' : 'bg-status-error'
                 }`}
                 style={{ width: `${tank.percentage}%` }}
               />
@@ -156,17 +151,15 @@ const TankCard = ({
             </p>
           </div>
 
-          {/* Dip Readings Section - Only for Supervisor and Owner */}
           {canEditDipReadings && (
             <div className={`mt-4 pt-4 border-t ${colors.sectionDivider}`}>
               <div className="flex items-center justify-between mb-3">
-                <h3 className={`text-sm font-semibold ${colors.boldText}`}>📏 Shift Dip Readings (cm)</h3>
+                <h3 className={`text-sm font-semibold ${colors.boldText}`}>Shift Dip Readings (cm)</h3>
                 <span className={`text-xs ${colors.badgeBg} px-2 py-1 rounded font-semibold`}>
-                  {userRole === 'owner' ? '👑 Owner' : '👔 Supervisor'}
+                  {userRole === 'owner' ? 'Owner' : 'Supervisor'}
                 </span>
               </div>
 
-              {/* Saved Dip Readings Display */}
               {savedDips && (savedDips.opening_dip || savedDips.closing_dip) && (
                 <div className={`mb-3 p-3 ${colors.sectionBg} rounded-lg border ${colors.sectionBorder}`}>
                   <p className={`text-xs font-semibold ${colors.boldText} mb-2`}>Current Readings</p>
@@ -202,7 +195,6 @@ const TankCard = ({
                 </div>
               )}
 
-              {/* Input Fields */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={`block text-xs font-medium ${colors.text} mb-1`}>

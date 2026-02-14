@@ -126,10 +126,10 @@ export default function Reports() {
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8 transform hover:scale-[1.01] transition-transform duration-300">
-                    <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent drop-shadow-lg">
+                    <h1 className="text-4xl font-bold bg-gradient-to-r from-action-primary to-indigo-600 bg-clip-text text-transparent drop-shadow-lg">
                         Sales Reports
                     </h1>
-                    <p className="text-gray-600 mt-2 text-lg">
+                    <p className="text-content-secondary mt-2 text-lg">
                         Generate comprehensive sales reports by date range
                     </p>
                 </div>
@@ -152,8 +152,8 @@ export default function Reports() {
                         disabled={loading || !startDate || !endDate || startDate > endDate}
                         className={`px-8 py-4 rounded-xl font-bold text-lg transition-all duration-300 transform ${
                             loading || !startDate || !endDate || startDate > endDate
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-inner'
-                                : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95'
+                                ? 'bg-surface-border text-content-secondary cursor-not-allowed shadow-inner'
+                                : 'bg-gradient-to-r from-action-primary to-indigo-600 text-white hover:from-action-primary-hover hover:to-indigo-700 shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95'
                         }`}
                     >
                         {loading ? (
@@ -167,7 +167,7 @@ export default function Reports() {
                         ) : 'Generate Report'}
                     </button>
                     {selectedFilter && (
-                        <span className="ml-4 px-4 py-2 bg-white rounded-full text-sm font-medium text-gray-700 shadow-md">
+                        <span className="ml-4 px-4 py-2 bg-surface-card rounded-full text-sm font-medium text-content-secondary shadow-md">
                             📅 {selectedFilter}
                         </span>
                     )}
@@ -175,7 +175,7 @@ export default function Reports() {
 
                 {/* Error Message */}
                 {error && (
-                    <div className="mb-8 p-6 bg-gradient-to-r from-red-50 to-pink-50 border-l-4 border-red-500 text-red-700 rounded-xl shadow-lg transform hover:scale-[1.02] transition-transform">
+                    <div className="mb-8 p-6 bg-gradient-to-r from-status-error-light to-pink-50 border-l-4 border-status-error text-status-error rounded-xl shadow-lg transform hover:scale-[1.02] transition-transform">
                         <div className="flex items-center">
                             <svg className="h-6 w-6 mr-3 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -190,24 +190,24 @@ export default function Reports() {
                     <div className="space-y-6">
                         {/* Summary Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                            <div className="bg-gradient-to-br from-white to-gray-50 p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 border border-gray-100">
-                                <p className="text-sm text-gray-500 mb-2 font-medium uppercase tracking-wide">Date Range</p>
-                                <p className="text-base font-bold text-gray-800 leading-tight">
+                            <div className="bg-gradient-to-br from-surface-card to-surface-bg p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 border border-surface-border">
+                                <p className="text-sm text-content-secondary mb-2 font-medium uppercase tracking-wide">Date Range</p>
+                                <p className="text-base font-bold text-content-primary leading-tight">
                                     {reportData.period.start_date}
                                 </p>
-                                <p className="text-xs text-gray-500 my-1">to</p>
-                                <p className="text-base font-bold text-gray-800">
+                                <p className="text-xs text-content-secondary my-1">to</p>
+                                <p className="text-base font-bold text-content-primary">
                                     {reportData.period.end_date}
                                 </p>
                             </div>
-                            <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300">
+                            <div className="bg-gradient-to-br from-action-primary to-action-primary p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300">
                                 <p className="text-sm text-blue-100 mb-2 font-medium uppercase tracking-wide">Total Transactions</p>
                                 <p className="text-4xl font-bold text-white">
                                     {reportData.summary.total_transactions}
                                 </p>
                                 <p className="text-xs text-blue-200 mt-1">sales recorded</p>
                             </div>
-                            <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300">
+                            <div className="bg-gradient-to-br from-status-success to-emerald-600 p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300">
                                 <p className="text-sm text-green-100 mb-2 font-medium uppercase tracking-wide">Total Revenue</p>
                                 <p className="text-4xl font-bold text-white">
                                     {formatCurrency(reportData.summary.total_revenue)}
@@ -224,8 +224,8 @@ export default function Reports() {
                         </div>
 
                         {/* Product Breakdown Table */}
-                        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden transform hover:scale-[1.01] transition-transform duration-300">
-                            <div className="px-8 py-6 bg-gradient-to-r from-blue-600 to-indigo-600 border-b border-blue-700">
+                        <div className="bg-surface-card rounded-2xl shadow-2xl overflow-hidden transform hover:scale-[1.01] transition-transform duration-300">
+                            <div className="px-8 py-6 bg-gradient-to-r from-action-primary to-indigo-600 border-b border-action-primary-hover">
                                 <h2 className="text-2xl font-bold text-white flex items-center">
                                     <svg className="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -235,46 +235,46 @@ export default function Reports() {
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full">
-                                    <thead className="bg-gray-100">
+                                    <thead className="bg-surface-bg">
                                         <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                                                 Product Type
                                             </th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                                                 Transactions
                                             </th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                                                 Volume
                                             </th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                                                 Revenue
                                             </th>
                                         </tr>
                                     </thead>
-                                    <tbody className="bg-white divide-y divide-gray-100">
+                                    <tbody className="bg-surface-card divide-y divide-surface-border">
                                         {reportData.products.map((product, index) => (
-                                            <tr key={index} className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 transform hover:scale-[1.01]">
-                                                <td className="px-8 py-5 whitespace-nowrap font-bold text-gray-900 text-lg">
+                                            <tr key={index} className="hover:bg-gradient-to-r hover:from-action-primary-light hover:to-indigo-50 transition-all duration-200 transform hover:scale-[1.01]">
+                                                <td className="px-8 py-5 whitespace-nowrap font-bold text-content-primary text-lg">
                                                     <div className="flex items-center">
-                                                        <div className={`w-3 h-3 rounded-full mr-3 ${index === 0 ? 'bg-blue-500' : 'bg-indigo-500'}`}></div>
+                                                        <div className={`w-3 h-3 rounded-full mr-3 ${index === 0 ? 'bg-action-primary' : 'bg-indigo-500'}`}></div>
                                                         {product.product_type}
                                                     </div>
                                                 </td>
                                                 <td className="px-8 py-5 whitespace-nowrap">
-                                                    <span className="px-4 py-2 bg-blue-100 text-blue-700 rounded-full font-semibold">
+                                                    <span className="px-4 py-2 bg-action-primary-light text-action-primary rounded-full font-semibold">
                                                         {product.transactions}
                                                     </span>
                                                 </td>
-                                                <td className="px-8 py-5 whitespace-nowrap text-gray-700 font-medium">
-                                                    {formatNumber(product.volume)} <span className="text-gray-500 text-sm">{product.unit}</span>
+                                                <td className="px-8 py-5 whitespace-nowrap text-content-secondary font-medium">
+                                                    {formatNumber(product.volume)} <span className="text-content-secondary text-sm">{product.unit}</span>
                                                 </td>
-                                                <td className="px-8 py-5 whitespace-nowrap font-bold text-green-600 text-lg">
+                                                <td className="px-8 py-5 whitespace-nowrap font-bold text-status-success text-lg">
                                                     {formatCurrency(product.revenue)}
                                                 </td>
                                             </tr>
                                         ))}
                                         {/* Totals Row */}
-                                        <tr className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-lg">
+                                        <tr className="bg-gradient-to-r from-action-primary to-indigo-600 text-white font-bold text-lg">
                                             <td className="px-8 py-6 whitespace-nowrap">
                                                 <div className="flex items-center">
                                                     <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -301,7 +301,7 @@ export default function Reports() {
 
                         {/* Daily Breakdown */}
                         {reportData.daily_breakdown && reportData.daily_breakdown.length > 0 && (
-                            <div className="bg-white rounded-2xl shadow-2xl overflow-hidden transform hover:scale-[1.01] transition-transform duration-300">
+                            <div className="bg-surface-card rounded-2xl shadow-2xl overflow-hidden transform hover:scale-[1.01] transition-transform duration-300">
                                 <div className="px-8 py-6 bg-gradient-to-r from-indigo-600 to-purple-600 border-b border-indigo-700">
                                     <h2 className="text-2xl font-bold text-white flex items-center">
                                         <svg className="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -312,23 +312,23 @@ export default function Reports() {
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="w-full">
-                                        <thead className="bg-gray-100">
+                                        <thead className="bg-surface-bg">
                                             <tr>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                                                     Date
                                                 </th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                                                     Transactions
                                                 </th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                                                     Revenue
                                                 </th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white divide-y divide-gray-100">
+                                        <tbody className="bg-surface-card divide-y divide-surface-border">
                                             {reportData.daily_breakdown.map((day, index) => (
                                                 <tr key={index} className="hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 transform hover:scale-[1.01]">
-                                                    <td className="px-8 py-5 whitespace-nowrap font-bold text-gray-900 text-lg">
+                                                    <td className="px-8 py-5 whitespace-nowrap font-bold text-content-primary text-lg">
                                                         <div className="flex items-center">
                                                             <div className="w-2 h-2 bg-indigo-500 rounded-full mr-3"></div>
                                                             {day.date}
@@ -339,7 +339,7 @@ export default function Reports() {
                                                             {day.transactions}
                                                         </span>
                                                     </td>
-                                                    <td className="px-8 py-5 whitespace-nowrap text-green-600 font-bold text-lg">
+                                                    <td className="px-8 py-5 whitespace-nowrap text-status-success font-bold text-lg">
                                                         {formatCurrency(day.revenue)}
                                                     </td>
                                                 </tr>
@@ -352,18 +352,18 @@ export default function Reports() {
 
                         {/* Report Metadata */}
                         {reportData.generated_by && (
-                            <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-2xl shadow-lg border border-gray-200">
-                                <div className="flex items-center text-sm text-gray-700">
-                                    <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <div className="bg-gradient-to-r from-surface-bg to-action-primary-light p-6 rounded-2xl shadow-lg border border-surface-border">
+                                <div className="flex items-center text-sm text-content-secondary">
+                                    <svg className="w-5 h-5 mr-2 text-action-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                     <p className="font-medium">
-                                        Report generated by: <span className="text-blue-600 font-bold">{reportData.generated_by.username}</span> ({reportData.generated_by.role})
+                                        Report generated by: <span className="text-action-primary font-bold">{reportData.generated_by.username}</span> ({reportData.generated_by.role})
                                     </p>
                                 </div>
                                 {reportData.generated_at && (
-                                    <div className="flex items-center mt-2 text-sm text-gray-600">
-                                        <svg className="w-5 h-5 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <div className="flex items-center mt-2 text-sm text-content-secondary">
+                                        <svg className="w-5 h-5 mr-2 text-content-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                         <p>
@@ -378,13 +378,13 @@ export default function Reports() {
 
                 {/* Empty State */}
                 {!reportData && !loading && !error && (
-                    <div className="bg-gradient-to-br from-white to-blue-50 rounded-2xl shadow-2xl p-16 text-center transform hover:scale-[1.02] transition-transform duration-300">
+                    <div className="bg-gradient-to-br from-surface-card to-action-primary-light rounded-2xl shadow-2xl p-16 text-center transform hover:scale-[1.02] transition-transform duration-300">
                         <div className="relative">
                             <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="w-32 h-32 bg-blue-100 rounded-full animate-pulse"></div>
+                                <div className="w-32 h-32 bg-action-primary-light rounded-full animate-pulse"></div>
                             </div>
                             <svg
-                                className="relative mx-auto h-24 w-24 text-blue-500 mb-6 animate-bounce"
+                                className="relative mx-auto h-24 w-24 text-action-primary mb-6 animate-bounce"
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
@@ -397,8 +397,8 @@ export default function Reports() {
                                 />
                             </svg>
                         </div>
-                        <h3 className="text-2xl font-bold text-gray-800 mb-3">Ready to Generate Reports</h3>
-                        <p className="text-lg text-gray-600 max-w-md mx-auto">
+                        <h3 className="text-2xl font-bold text-content-primary mb-3">Ready to Generate Reports</h3>
+                        <p className="text-lg text-content-secondary max-w-md mx-auto">
                             Select a date range above and click "Generate Report" to view comprehensive sales analytics
                         </p>
                     </div>

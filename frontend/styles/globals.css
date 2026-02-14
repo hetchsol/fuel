@@ -1,3 +1,126 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Light Mode (default) ────────────────────────────────────── */
+:root {
+  /* Surface */
+  --color-bg: #F5F5F5;
+  --color-bg-card: #FFFFFF;
+  --color-border: #E0E0E0;
+
+  /* Content */
+  --color-text-primary: #1C1C1C;
+  --color-text-secondary: #616161;
+
+  /* Action – Primary (Steel Blue) */
+  --color-action-primary: #1976D2;
+  --color-action-primary-hover: #1565C0;
+  --color-action-primary-light: #E3F2FD;
+
+  /* Action – Secondary (Teal) */
+  --color-action-secondary: #00897B;
+  --color-action-secondary-hover: #00796B;
+  --color-action-secondary-light: #E0F2F1;
+
+  /* Fuel – Diesel (Deep Purple) */
+  --color-fuel-diesel: #6A1B9A;
+  --color-fuel-diesel-light: #F3E5F5;
+  --color-fuel-diesel-border: #CE93D8;
+
+  /* Fuel – Petrol (Emerald Green) */
+  --color-fuel-petrol: #2E7D32;
+  --color-fuel-petrol-light: #E8F5E9;
+  --color-fuel-petrol-border: #A5D6A7;
+
+  /* Status */
+  --color-status-success: #00897B;
+  --color-status-success-light: #E0F2F1;
+  --color-status-pending: #FBC02D;
+  --color-status-pending-light: #FFF9C4;
+  --color-status-warning: #FFB300;
+  --color-status-warning-light: #FFF8E1;
+  --color-status-error: #D32F2F;
+  --color-status-error-light: #FFEBEE;
+
+  /* Header / Footer */
+  --color-header-bg: #1976D2;
+  --color-header-text: #FFFFFF;
+  --color-footer-bg: #212121;
+  --color-footer-text: #FFFFFF;
+
+  /* Category (non-fuel entity badges) */
+  --color-category-a: #7B1FA2;
+  --color-category-a-light: #F3E5F5;
+  --color-category-a-border: #CE93D8;
+
+  --color-category-b: #2E7D32;
+  --color-category-b-light: #E8F5E9;
+  --color-category-b-border: #A5D6A7;
+
+  --color-category-c: #E65100;
+  --color-category-c-light: #FFF3E0;
+  --color-category-c-border: #FFCC80;
+
+  --color-category-d: #283593;
+  --color-category-d-light: #E8EAF6;
+  --color-category-d-border: #9FA8DA;
+}
+
+/* ── Dark Mode ───────────────────────────────────────────────── */
+.dark {
+  /* Surface */
+  --color-bg: #212121;
+  --color-bg-card: #2C2C2C;
+  --color-border: #424242;
+
+  /* Content */
+  --color-text-primary: #FAFAFA;
+  --color-text-secondary: #BDBDBD;
+
+  /* Action – Primary (brighter for contrast) */
+  --color-action-primary: #42A5F5;
+  --color-action-primary-hover: #1E88E5;
+  --color-action-primary-light: #1A2332;
+
+  /* Action – Secondary */
+  --color-action-secondary: #26A69A;
+  --color-action-secondary-hover: #00897B;
+  --color-action-secondary-light: #1A2E2B;
+
+  /* Fuel – main colours stay the same for identification */
+  --color-fuel-diesel-light: #2A1A33;
+  --color-fuel-diesel-border: #8E24AA;
+
+  --color-fuel-petrol-light: #1A2E1A;
+  --color-fuel-petrol-border: #43A047;
+
+  /* Status */
+  --color-status-success: #26A69A;
+  --color-status-success-light: #1A2E2B;
+  --color-status-pending: #FFD54F;
+  --color-status-pending-light: #332E1A;
+  --color-status-warning: #FFC107;
+  --color-status-warning-light: #332E1A;
+  --color-status-error: #EF5350;
+  --color-status-error-light: #331A1A;
+
+  /* Header / Footer */
+  --color-header-bg: #1565C0;
+  --color-header-text: #FFFFFF;
+  --color-footer-bg: #1A1A1A;
+  --color-footer-text: #BDBDBD;
+
+  /* Category */
+  --color-category-a-light: #2A1A33;
+  --color-category-a-border: #8E24AA;
+
+  --color-category-b-light: #1A2E1A;
+  --color-category-b-border: #43A047;
+
+  --color-category-c-light: #331F0F;
+  --color-category-c-border: #EF6C00;
+
+  --color-category-d-light: #1A1D33;
+  --color-category-d-border: #3F51B5;
+}

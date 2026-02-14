@@ -1,6 +1,6 @@
 import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
-import { useTheme } from '../contexts/ThemeContext'
+import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
 
 
 interface NozzleReading {
@@ -59,7 +59,7 @@ interface TankReading {
 }
 
 export default function TankReadingsReport() {
-  const { theme, setFuelType } = useTheme()
+  const { theme } = useTheme()
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [selectedTank, setSelectedTank] = useState('TANK-DIESEL')
@@ -71,14 +71,6 @@ export default function TankReadingsReport() {
   // Get fuel type prefix and color based on tank
   const getFuelTypePrefix = (tankId: string) => {
     return tankId === 'TANK-DIESEL' ? 'LSD' : 'UNL'
-  }
-
-  const getFuelColor = (tankId: string) => {
-    return tankId === 'TANK-DIESEL' ? '#9333EA' : '#10B981' // Purple for diesel, Green for petrol
-  }
-
-  const getFuelLightColor = (tankId: string) => {
-    return tankId === 'TANK-DIESEL' ? '#F3E8FF' : '#D1FAE5' // Light purple for diesel, Light green for petrol
   }
 
   // Set default date range (last 7 days)
@@ -133,13 +125,13 @@ export default function TankReadingsReport() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'PASS':
-        return 'bg-green-100 text-green-800 border-green-300'
+        return 'bg-status-success-light text-status-success border-status-success'
       case 'WARNING':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300'
+        return 'bg-status-pending-light text-status-warning border-status-warning'
       case 'FAIL':
-        return 'bg-red-100 text-red-800 border-red-300'
+        return 'bg-status-error-light text-status-error border-status-error'
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-300'
+        return 'bg-surface-bg text-content-primary border-surface-border'
     }
   }
 
@@ -166,14 +158,7 @@ export default function TankReadingsReport() {
               <select
                 value={selectedTank}
                 onChange={(e) => {
-                  const value = e.target.value
-                  setSelectedTank(value)
-                  // Update theme based on tank selection
-                  if (value === 'TANK-DIESEL') {
-                    setFuelType('diesel')
-                  } else if (value === 'TANK-PETROL') {
-                    setFuelType('petrol')
-                  }
+                  setSelectedTank(e.target.value)
                 }}
                 className="w-full px-3 py-2 border rounded-md focus:ring-2 transition-colors duration-300"
                 style={{
@@ -236,8 +221,8 @@ export default function TankReadingsReport() {
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-            <p className="text-red-700">{error}</p>
+          <div className="bg-status-error-light border border-status-error rounded-md p-4 mb-6">
+            <p className="text-status-error">{error}</p>
           </div>
         )}
 
@@ -263,9 +248,9 @@ export default function TankReadingsReport() {
               </p>
             </div>
 
-            <div className="rounded-lg p-4 shadow bg-white border-2" style={{ borderColor: theme.border }}>
-              <p className="text-sm font-medium mb-1 text-gray-700">Avg Variance</p>
-              <p className="text-3xl font-bold text-gray-900">
+            <div className="rounded-lg p-4 shadow bg-surface-card border-2" style={{ borderColor: theme.border }}>
+              <p className="text-sm font-medium mb-1 text-content-secondary">Avg Variance</p>
+              <p className="text-3xl font-bold text-content-primary">
                 {(readings.reduce((sum, r) => sum + Math.abs(r.electronic_vs_tank_percent), 0) / readings.length).toFixed(2)}%
               </p>
             </div>
@@ -340,9 +325,9 @@ export default function TankReadingsReport() {
                         {reading.electronic_vs_tank_variance.toFixed(3)} L
                       </div>
                       <div className={`text-xs font-medium ${
-                        Math.abs(reading.electronic_vs_tank_percent) > 1 ? 'text-red-600' :
-                        Math.abs(reading.electronic_vs_tank_percent) > 0.5 ? 'text-yellow-600' :
-                        'text-green-600'
+                        Math.abs(reading.electronic_vs_tank_percent) > 1 ? 'text-status-error' :
+                        Math.abs(reading.electronic_vs_tank_percent) > 0.5 ? 'text-status-warning' :
+                        'text-status-success'
                       }`}>
                         ({reading.electronic_vs_tank_percent.toFixed(2)}%)
                       </div>
@@ -354,11 +339,11 @@ export default function TankReadingsReport() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {reading.deliveries && reading.deliveries.length > 0 ? (
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 border border-blue-300">
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-action-primary-light text-action-primary border border-action-primary">
                           {reading.deliveries.length}
                         </span>
                       ) : reading.delivery_timeline?.has_deliveries ? (
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 border border-blue-300">
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-action-primary-light text-action-primary border border-action-primary">
                           {reading.delivery_timeline.number_of_deliveries}
                         </span>
                       ) : (
@@ -406,7 +391,7 @@ export default function TankReadingsReport() {
                   </div>
                   <button
                     onClick={() => setSelectedReading(null)}
-                    className="text-gray-500 hover:text-gray-700 text-2xl"
+                    className="text-content-secondary hover:text-content-primary text-2xl"
                   >
                     ×
                   </button>
@@ -420,8 +405,9 @@ export default function TankReadingsReport() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {selectedReading.nozzle_readings.map((nozzle) => {
                       const fuelPrefix = getFuelTypePrefix(selectedReading.tank_id)
-                      const fuelColor = getFuelColor(selectedReading.tank_id)
-                      const fuelLightColor = getFuelLightColor(selectedReading.tank_id)
+                      const fuelColors = getFuelColorSet(selectedReading.tank_id === 'TANK-DIESEL' ? 'diesel' : 'petrol')
+                      const fuelColor = fuelColors.main
+                      const fuelLightColor = fuelColors.light
 
                       return (
                         <div
@@ -478,16 +464,16 @@ export default function TankReadingsReport() {
 
                 {/* Customer Allocation (Diesel Only) */}
                 {selectedReading.tank_id === 'TANK-DIESEL' && selectedReading.customer_allocations && selectedReading.customer_allocations.length > 0 && (
-                  <div className="rounded-lg p-4 mb-4" style={{ backgroundColor: '#F3E8FF', borderColor: '#9333EA', borderWidth: '2px' }}>
+                  <div className="rounded-lg p-4 mb-4" style={{ backgroundColor: 'var(--color-fuel-diesel-light)', borderColor: 'var(--color-fuel-diesel)', borderWidth: '2px' }}>
                     <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-lg font-semibold" style={{ color: '#9333EA' }}>
+                      <h3 className="text-lg font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>
                         Customer Allocation (Columns AR-BB)
                       </h3>
                       {selectedReading.allocation_balance_check !== null && selectedReading.allocation_balance_check !== undefined && (
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          Math.abs(selectedReading.allocation_balance_check) <= 0.01 ? 'bg-green-100 text-green-800' :
-                          Math.abs(selectedReading.allocation_balance_check) < selectedReading.total_electronic_dispensed * 0.01 ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
+                          Math.abs(selectedReading.allocation_balance_check) <= 0.01 ? 'bg-status-success-light text-status-success' :
+                          Math.abs(selectedReading.allocation_balance_check) < selectedReading.total_electronic_dispensed * 0.01 ? 'bg-status-pending-light text-status-warning' :
+                          'bg-status-error-light text-status-error'
                         }`}>
                           Balance: {selectedReading.allocation_balance_check.toFixed(3)} L
                         </span>
@@ -497,35 +483,35 @@ export default function TankReadingsReport() {
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-sm">
                         <thead>
-                          <tr className="border-b-2" style={{ borderColor: '#9333EA' }}>
-                            <th className="text-left py-2 px-3 font-semibold" style={{ color: '#9333EA' }}>Customer</th>
-                            <th className="text-right py-2 px-3 font-semibold" style={{ color: '#9333EA' }}>Volume (L)</th>
-                            <th className="text-right py-2 px-3 font-semibold" style={{ color: '#9333EA' }}>Price/L</th>
-                            <th className="text-right py-2 px-3 font-semibold" style={{ color: '#9333EA' }}>Amount</th>
+                          <tr className="border-b-2" style={{ borderColor: 'var(--color-fuel-diesel)' }}>
+                            <th className="text-left py-2 px-3 font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>Customer</th>
+                            <th className="text-right py-2 px-3 font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>Volume (L)</th>
+                            <th className="text-right py-2 px-3 font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>Price/L</th>
+                            <th className="text-right py-2 px-3 font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>Amount</th>
                           </tr>
                         </thead>
                         <tbody>
                           {selectedReading.customer_allocations.map((allocation) => (
-                            <tr key={allocation.customer_id} className="border-b" style={{ borderColor: '#E9D5FF' }}>
-                              <td className="py-2 px-3 font-medium" style={{ color: '#6B21A8' }}>
+                            <tr key={allocation.customer_id} className="border-b" style={{ borderColor: 'var(--color-fuel-diesel-light)' }}>
+                              <td className="py-2 px-3 font-medium" style={{ color: 'var(--color-fuel-diesel)' }}>
                                 {allocation.customer_name}
                               </td>
-                              <td className="py-2 px-3 text-right font-semibold" style={{ color: '#7C3AED' }}>
+                              <td className="py-2 px-3 text-right font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>
                                 {allocation.volume.toFixed(3)}
                               </td>
-                              <td className="py-2 px-3 text-right" style={{ color: '#6B21A8' }}>
+                              <td className="py-2 px-3 text-right" style={{ color: 'var(--color-fuel-diesel)' }}>
                                 {formatCurrency(allocation.price_per_liter)}
                               </td>
-                              <td className="py-2 px-3 text-right font-semibold" style={{ color: '#7C3AED' }}>
+                              <td className="py-2 px-3 text-right font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>
                                 {formatCurrency(allocation.amount)}
                               </td>
                             </tr>
                           ))}
-                          <tr className="border-t-2" style={{ borderColor: '#9333EA' }}>
-                            <td colSpan={3} className="py-2 px-3 text-right font-bold" style={{ color: '#9333EA' }}>
+                          <tr className="border-t-2" style={{ borderColor: 'var(--color-fuel-diesel)' }}>
+                            <td colSpan={3} className="py-2 px-3 text-right font-bold" style={{ color: 'var(--color-fuel-diesel)' }}>
                               Total Customer Revenue:
                             </td>
-                            <td className="py-2 px-3 text-right font-bold text-lg" style={{ color: '#9333EA' }}>
+                            <td className="py-2 px-3 text-right font-bold text-lg" style={{ color: 'var(--color-fuel-diesel)' }}>
                               {formatCurrency(selectedReading.total_customer_revenue || 0)}
                             </td>
                           </tr>
@@ -534,8 +520,8 @@ export default function TankReadingsReport() {
                     </div>
 
                     {/* Column AW Check */}
-                    <div className="mt-3 p-2 rounded text-xs" style={{ backgroundColor: '#E9D5FF' }}>
-                      <span style={{ color: '#6B21A8' }}>
+                    <div className="mt-3 p-2 rounded text-xs" style={{ backgroundColor: 'var(--color-fuel-diesel-light)' }}>
+                      <span style={{ color: 'var(--color-fuel-diesel)' }}>
                         <strong>Column AW Check:</strong> Total Electronic ({selectedReading.total_electronic_dispensed.toFixed(3)} L) -
                         Sum of Allocations ({selectedReading.customer_allocations.reduce((sum, a) => sum + a.volume, 0).toFixed(3)} L) =
                         {selectedReading.allocation_balance_check?.toFixed(3) || '0.000'} L
@@ -546,19 +532,19 @@ export default function TankReadingsReport() {
 
                 {/* Deliveries & Timeline */}
                 {(selectedReading.delivery_timeline?.has_deliveries || (selectedReading.deliveries && selectedReading.deliveries.length > 0)) && (
-                  <div className="rounded-lg p-4 mb-4 border-2 border-blue-300 bg-blue-50">
-                    <h3 className="text-lg font-semibold mb-3 text-blue-900">Deliveries & Timeline</h3>
+                  <div className="rounded-lg p-4 mb-4 border-2 border-action-primary bg-action-primary-light">
+                    <h3 className="text-lg font-semibold mb-3 text-action-primary">Deliveries & Timeline</h3>
 
                     {/* Delivery Summary */}
-                    <div className="flex items-center gap-4 mb-4 p-3 rounded-lg bg-blue-100 border border-blue-300">
-                      <span className="text-2xl font-bold text-blue-800">
+                    <div className="flex items-center gap-4 mb-4 p-3 rounded-lg bg-action-primary-light border border-action-primary/30">
+                      <span className="text-2xl font-bold text-action-primary">
                         {selectedReading.delivery_timeline?.number_of_deliveries || selectedReading.deliveries?.length || 0}
                       </span>
-                      <span className="text-sm text-blue-700">
+                      <span className="text-sm text-action-primary">
                         {(selectedReading.delivery_timeline?.number_of_deliveries || selectedReading.deliveries?.length || 0) === 1 ? 'Delivery' : 'Deliveries'}
                       </span>
-                      <span className="mx-2 text-blue-400">|</span>
-                      <span className="text-sm text-blue-700">
+                      <span className="mx-2 text-action-primary">|</span>
+                      <span className="text-sm text-action-primary">
                         Total Delivered: <strong>
                           {(selectedReading.delivery_timeline?.total_delivered ||
                             selectedReading.deliveries?.reduce((s: number, d: any) => s + (d.volume_delivered || 0), 0) || 0
@@ -569,11 +555,11 @@ export default function TankReadingsReport() {
 
                     {/* Delivery List */}
                     {selectedReading.delivery_timeline?.timeline?.filter((e: any) => e.event_type === 'DELIVERY').map((event: any, idx: number) => (
-                      <div key={idx} className="flex items-center gap-3 mb-2 p-2 bg-white rounded border border-blue-200 text-sm">
-                        <span className="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
+                      <div key={idx} className="flex items-center gap-3 mb-2 p-2 bg-surface-card rounded border border-action-primary text-sm">
+                        <span className="w-7 h-7 rounded-full bg-action-primary text-white flex items-center justify-center text-xs font-bold">
                           {event.delivery_number || idx + 1}
                         </span>
-                        <span className="text-blue-800">
+                        <span className="text-action-primary">
                           +{event.change?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}L
                           {event.supplier && <> from <strong>{event.supplier}</strong></>}
                           {event.time && <> at <strong>{event.time}</strong></>}
@@ -583,11 +569,11 @@ export default function TankReadingsReport() {
 
                     {/* Fallback: show deliveries array if no timeline events */}
                     {!selectedReading.delivery_timeline?.timeline && selectedReading.deliveries?.map((d: any, idx: number) => (
-                      <div key={idx} className="flex items-center gap-3 mb-2 p-2 bg-white rounded border border-blue-200 text-sm">
-                        <span className="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
+                      <div key={idx} className="flex items-center gap-3 mb-2 p-2 bg-surface-card rounded border border-action-primary text-sm">
+                        <span className="w-7 h-7 rounded-full bg-action-primary text-white flex items-center justify-center text-xs font-bold">
                           {idx + 1}
                         </span>
-                        <span className="text-blue-800">
+                        <span className="text-action-primary">
                           +{(d.volume_delivered || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}L
                           {d.supplier && <> from <strong>{d.supplier}</strong></>}
                           {d.delivery_time && <> at <strong>{d.delivery_time}</strong></>}
@@ -598,30 +584,30 @@ export default function TankReadingsReport() {
                     {/* Segment Sales Table */}
                     {selectedReading.delivery_timeline?.inter_delivery_sales?.length > 0 && (
                       <div className="mt-4 overflow-x-auto">
-                        <h4 className="text-sm font-semibold text-blue-900 mb-2">Segment Sales Breakdown</h4>
-                        <table className="min-w-full text-sm border border-blue-200">
+                        <h4 className="text-sm font-semibold text-action-primary mb-2">Segment Sales Breakdown</h4>
+                        <table className="min-w-full text-sm border border-action-primary">
                           <thead>
-                            <tr className="bg-blue-100">
-                              <th className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Segment</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Period</th>
-                              <th className="px-3 py-2 text-right text-xs font-medium text-blue-800 uppercase">Start Level</th>
-                              <th className="px-3 py-2 text-right text-xs font-medium text-blue-800 uppercase">End Level</th>
-                              <th className="px-3 py-2 text-right text-xs font-medium text-blue-800 uppercase">Sales (L)</th>
+                            <tr className="bg-action-primary-light">
+                              <th className="px-3 py-2 text-left text-xs font-medium text-action-primary uppercase">Segment</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-action-primary uppercase">Period</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-action-primary uppercase">Start Level</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-action-primary uppercase">End Level</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-action-primary uppercase">Sales (L)</th>
                             </tr>
                           </thead>
                           <tbody>
                             {selectedReading.delivery_timeline.inter_delivery_sales.map((seg: any, idx: number) => (
-                              <tr key={idx} className="border-t border-blue-200">
-                                <td className="px-3 py-2 font-medium text-blue-900">{idx + 1}</td>
-                                <td className="px-3 py-2 text-blue-700">{seg.period}</td>
-                                <td className="px-3 py-2 text-right font-mono text-blue-800">{seg.start_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
-                                <td className="px-3 py-2 text-right font-mono text-blue-800">{seg.end_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
-                                <td className="px-3 py-2 text-right font-mono font-semibold text-blue-900">{seg.sales_volume?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <tr key={idx} className="border-t border-action-primary">
+                                <td className="px-3 py-2 font-medium text-action-primary">{idx + 1}</td>
+                                <td className="px-3 py-2 text-action-primary">{seg.period}</td>
+                                <td className="px-3 py-2 text-right font-mono text-action-primary">{seg.start_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                                <td className="px-3 py-2 text-right font-mono text-action-primary">{seg.end_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                                <td className="px-3 py-2 text-right font-mono font-semibold text-action-primary">{seg.sales_volume?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                               </tr>
                             ))}
-                            <tr className="border-t-2 border-blue-400 bg-blue-100">
-                              <td colSpan={4} className="px-3 py-2 text-right font-bold text-blue-900">Total</td>
-                              <td className="px-3 py-2 text-right font-mono font-bold text-blue-900">
+                            <tr className="border-t-2 border-action-primary bg-action-primary-light">
+                              <td colSpan={4} className="px-3 py-2 text-right font-bold text-action-primary">Total</td>
+                              <td className="px-3 py-2 text-right font-mono font-bold text-action-primary">
                                 {selectedReading.delivery_timeline.total_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </td>
                             </tr>
@@ -632,21 +618,21 @@ export default function TankReadingsReport() {
 
                     {/* Cross-check */}
                     {selectedReading.delivery_timeline?.formula_sales !== undefined && (
-                      <div className="mt-3 p-2 rounded bg-white border border-blue-200 text-xs text-blue-700">
+                      <div className="mt-3 p-2 rounded bg-surface-card border border-action-primary text-xs text-action-primary">
                         <strong>Cross-check:</strong> Formula sales = {selectedReading.delivery_timeline.formula_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L
                         {' | '}Segment sum = {selectedReading.delivery_timeline.total_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L
                         {Math.abs((selectedReading.delivery_timeline.formula_sales || 0) - (selectedReading.delivery_timeline.total_sales || 0)) < 1
-                          ? <span className="ml-2 text-green-700 font-semibold">Match</span>
-                          : <span className="ml-2 text-red-700 font-semibold">Mismatch</span>
+                          ? <span className="ml-2 text-status-success font-semibold">Match</span>
+                          : <span className="ml-2 text-status-error font-semibold">Mismatch</span>
                         }
                       </div>
                     )}
 
                     {/* Validation */}
                     {selectedReading.delivery_timeline?.validation?.warnings?.length > 0 && (
-                      <div className="mt-3 p-3 rounded bg-yellow-50 border border-yellow-300">
-                        <p className="text-xs font-semibold text-yellow-800 mb-1">Warnings</p>
-                        <ul className="text-xs text-yellow-700 space-y-1">
+                      <div className="mt-3 p-3 rounded bg-status-pending-light border border-status-warning">
+                        <p className="text-xs font-semibold text-status-warning mb-1">Warnings</p>
+                        <ul className="text-xs text-status-warning space-y-1">
                           {selectedReading.delivery_timeline.validation.warnings.map((w: string, i: number) => (
                             <li key={i}>- {w}</li>
                           ))}

@@ -122,7 +122,7 @@ export default function StationsPage() {
           <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Station Management</h1>
           <button
             onClick={() => setShowCreate(!showCreate)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+            className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover text-sm font-medium"
           >
             {showCreate ? 'Cancel' : '+ New Station'}
           </button>
@@ -130,13 +130,13 @@ export default function StationsPage() {
 
         {error && (
           <div className="p-4 rounded-md" style={{ backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: '1px' }}>
-            <p className="text-sm text-red-700">{error}</p>
+            <p className="text-sm text-status-error">{error}</p>
           </div>
         )}
 
         {setupMessage && (
           <div className="p-4 rounded-md" style={{ backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', borderWidth: '1px' }}>
-            <p className="text-sm text-green-700">{setupMessage}</p>
+            <p className="text-sm text-status-success">{setupMessage}</p>
           </div>
         )}
 
@@ -151,7 +151,7 @@ export default function StationsPage() {
                   type="text"
                   value={newStation.name}
                   onChange={e => setNewStation({ ...newStation, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-action-primary"
                   style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}
                   placeholder="e.g. Lusaka Main Station"
                   required
@@ -163,7 +163,7 @@ export default function StationsPage() {
                   type="text"
                   value={newStation.location}
                   onChange={e => setNewStation({ ...newStation, location: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-action-primary"
                   style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}
                   placeholder="e.g. Plot 123, Great East Road"
                 />
@@ -174,7 +174,7 @@ export default function StationsPage() {
                   id="quickSetup"
                   checked={newStation.quickSetup}
                   onChange={e => setNewStation({ ...newStation, quickSetup: e.target.checked })}
-                  className="h-4 w-4 text-blue-600 rounded"
+                  className="h-4 w-4 text-action-primary rounded"
                 />
                 <label htmlFor="quickSetup" className="text-sm" style={{ color: theme.textPrimary }}>
                   Quick Setup (seed 4 islands, 8 nozzles, 2 tanks, accounts)
@@ -184,7 +184,7 @@ export default function StationsPage() {
                 <button
                   type="submit"
                   disabled={creating}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+                  className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover text-sm font-medium disabled:opacity-50"
                 >
                   {creating ? 'Creating...' : 'Create Station'}
                 </button>
@@ -226,7 +226,7 @@ export default function StationsPage() {
                           type="text"
                           value={editForm.name}
                           onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                          className="w-full px-2 py-1.5 text-sm rounded border focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-2 py-1.5 text-sm rounded border focus:outline-none focus:ring-2 focus:ring-action-primary"
                           style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}
                         />
                       </div>
@@ -236,14 +236,14 @@ export default function StationsPage() {
                           type="text"
                           value={editForm.location}
                           onChange={e => setEditForm({ ...editForm, location: e.target.value })}
-                          className="w-full px-2 py-1.5 text-sm rounded border focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-2 py-1.5 text-sm rounded border focus:outline-none focus:ring-2 focus:ring-action-primary"
                           style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}
                         />
                       </div>
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleRename(station.station_id)}
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                          className="px-3 py-1.5 bg-action-primary text-white rounded text-sm hover:bg-action-primary-hover"
                         >
                           Save
                         </button>
@@ -265,14 +265,14 @@ export default function StationsPage() {
                         </div>
                         <div className="flex items-center space-x-2">
                           {isActive && (
-                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">Active</span>
+                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-status-success-light text-status-success">Active</span>
                           )}
                           <button
                             onClick={() => {
                               setEditingStation(station.station_id)
                               setEditForm({ name: station.name, location: station.location || '' })
                             }}
-                            className="px-2 py-1 text-xs rounded hover:bg-gray-100"
+                            className="px-2 py-1 text-xs rounded hover:bg-surface-bg"
                             style={{ color: theme.textSecondary }}
                             title="Rename station"
                           >
@@ -291,7 +291,7 @@ export default function StationsPage() {
                       {!isActive && (
                         <button
                           onClick={() => switchStation(station.station_id)}
-                          className="w-full px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                          className="w-full px-3 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover text-sm font-medium"
                         >
                           Switch to this Station
                         </button>

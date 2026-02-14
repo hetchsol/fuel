@@ -1,7 +1,7 @@
 import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import { useTheme } from '../contexts/ThemeContext'
+import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
 
 
 interface NozzleReading {
@@ -20,7 +20,7 @@ export default function DailyTankReading() {
   const [user, setUser] = useState<any>(null)
   const [selectedTank, setSelectedTank] = useState('TANK-DIESEL')
   const [activeSection, setActiveSection] = useState(1)
-  const { theme, setFuelType } = useTheme()
+  const { theme } = useTheme()
 
   // Get fuel type prefix and color based on selected tank
   const getFuelTypePrefix = () => {
@@ -28,11 +28,11 @@ export default function DailyTankReading() {
   }
 
   const getFuelColor = () => {
-    return selectedTank === 'TANK-DIESEL' ? '#9333EA' : '#10B981' // Purple for diesel, Green for petrol
+    return getFuelColorSet(selectedTank === 'TANK-DIESEL' ? 'diesel' : 'petrol').main
   }
 
   const getFuelLightColor = () => {
-    return selectedTank === 'TANK-DIESEL' ? '#F3E8FF' : '#D1FAE5' // Light purple for diesel, Light green for petrol
+    return getFuelColorSet(selectedTank === 'TANK-DIESEL' ? 'diesel' : 'petrol').light
   }
 
   // Available attendants list
@@ -915,14 +915,7 @@ export default function DailyTankReading() {
               <select
                 value={selectedTank}
                 onChange={(e) => {
-                  const value = e.target.value
-                  setSelectedTank(value)
-                  // Update theme based on tank selection
-                  if (value === 'TANK-DIESEL') {
-                    setFuelType('diesel')
-                  } else if (value === 'TANK-PETROL') {
-                    setFuelType('petrol')
-                  }
+                  setSelectedTank(e.target.value)
                 }}
                 className="w-full px-4 py-2 border-2 rounded-md focus:ring-2 font-bold transition-colors duration-300"
                 style={{
@@ -972,18 +965,18 @@ export default function DailyTankReading() {
 
         {/* Success/Error Messages */}
         {success && (
-          <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-6">
-            <p className="text-green-700">{success}</p>
+          <div className="bg-status-success-light border border-status-success rounded-md p-4 mb-6">
+            <p className="text-status-success">{success}</p>
           </div>
         )}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-            <p className="text-red-700">{error}</p>
+          <div className="bg-status-error-light border border-status-error rounded-md p-4 mb-6">
+            <p className="text-status-error">{error}</p>
           </div>
         )}
 
         {/* Progress Indicator */}
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
+        <div className="bg-surface-card rounded-lg shadow p-4 mb-6">
           <div className="flex justify-between">
             {[
               { num: 1, label: 'Tank Dips' },
@@ -996,8 +989,8 @@ export default function DailyTankReading() {
                 onClick={() => setActiveSection(step.num)}
                 className="flex-1 py-2 text-center border-b-2 transition"
                 style={{
-                  borderColor: activeSection === step.num ? theme.primary : '#D1D5DB',
-                  color: activeSection === step.num ? theme.primary : '#6B7280',
+                  borderColor: activeSection === step.num ? theme.primary : 'var(--color-surface-border)',
+                  color: activeSection === step.num ? theme.primary : 'var(--color-content-secondary)',
                   fontWeight: activeSection === step.num ? '600' : '400'
                 }}
               >
@@ -1019,7 +1012,7 @@ export default function DailyTankReading() {
                     type="button"
                     onClick={fetchPreviousShiftData}
                     className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                    style={{ backgroundColor: '#EFF6FF', color: '#2563EB', border: '1px solid #3B82F6' }}
+                    style={{ backgroundColor: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)', border: '1px solid var(--color-action-primary)' }}
                   >
                     ↻ Load Previous Shift
                   </button>
@@ -1029,20 +1022,20 @@ export default function DailyTankReading() {
 
               {/* Auto-populated indicator */}
               {fetchingPrevious && (
-                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: '#EFF6FF', borderColor: '#3B82F6', borderWidth: '1px' }}>
-                  <svg className="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: 'var(--color-action-primary-light)', borderColor: 'var(--color-action-primary)', borderWidth: '1px' }}>
+                  <svg className="animate-spin h-5 w-5 text-action-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span className="text-blue-700 text-sm font-medium">Loading previous shift data...</span>
+                  <span className="text-action-primary text-sm font-medium">Loading previous shift data...</span>
                 </div>
               )}
 
               {autoPopulated?.active && !fetchingPrevious && (
-                <div className="mb-4 p-3 rounded-lg flex items-center justify-between" style={{ backgroundColor: '#ECFDF5', borderColor: '#10B981', borderWidth: '1px' }}>
+                <div className="mb-4 p-3 rounded-lg flex items-center justify-between" style={{ backgroundColor: 'var(--color-status-success-light)', borderColor: 'var(--color-status-success)', borderWidth: '1px' }}>
                   <div className="flex items-center gap-2">
-                    <span className="text-green-600 text-lg">✓</span>
-                    <span className="text-green-700 text-sm font-medium">
+                    <span className="text-status-success text-lg">✓</span>
+                    <span className="text-status-success text-sm font-medium">
                       Opening values auto-populated from {autoPopulated.sourceShift} shift ({autoPopulated.sourceDate})
                     </span>
                   </div>
@@ -1061,7 +1054,7 @@ export default function DailyTankReading() {
                         }))
                       }))
                     }}
-                    className="text-green-600 hover:text-green-800 text-sm underline"
+                    className="text-status-success hover:text-status-success text-sm underline"
                   >
                     Clear & enter manually
                   </button>
@@ -1071,7 +1064,7 @@ export default function DailyTankReading() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="rounded-lg p-4" style={{ backgroundColor: theme.primaryLight, borderColor: theme.primary, borderWidth: '1px' }}>
                   <label className="block text-sm font-medium mb-2" style={{ color: theme.primary }}>
-                    Opening Dip (cm) <span className="text-red-500">*</span>
+                    Opening Dip (cm) <span className="text-status-error">*</span>
                     <span className="text-xs ml-2 opacity-75">Excel Column: AF</span>
                   </label>
                   <input
@@ -1089,7 +1082,7 @@ export default function DailyTankReading() {
 
                 <div className="rounded-lg p-4" style={{ backgroundColor: theme.secondaryLight, borderColor: theme.secondary, borderWidth: '1px' }}>
                   <label className="block text-sm font-medium mb-2" style={{ color: theme.secondary }}>
-                    Closing Dip (cm) <span className="text-red-500">*</span>
+                    Closing Dip (cm) <span className="text-status-error">*</span>
                     <span className="text-xs ml-2 opacity-75">Excel Column: AH</span>
                   </label>
                   <input
@@ -1237,7 +1230,7 @@ export default function DailyTankReading() {
                     onClick={fetchFromEnterReadings}
                     disabled={pullingFromER}
                     className="px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                    style={{ backgroundColor: '#EFF6FF', color: '#2563EB', border: '1px solid #3B82F6' }}
+                    style={{ backgroundColor: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)', border: '1px solid var(--color-action-primary)' }}
                   >
                     {pullingFromER ? 'Pulling...' : 'Pull from Enter Readings'}
                   </button>
@@ -1246,12 +1239,12 @@ export default function DailyTankReading() {
 
               {/* Error pulling from enter readings */}
               {erPullError && (
-                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: '1px' }}>
-                  <span className="text-red-600 text-sm font-medium">{erPullError}</span>
+                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: 'var(--color-status-error-light)', borderColor: 'var(--color-status-error)', borderWidth: '1px' }}>
+                  <span className="text-status-error text-sm font-medium">{erPullError}</span>
                   <button
                     type="button"
                     onClick={() => setErPullError('')}
-                    className="ml-auto text-red-400 hover:text-red-600 text-xs underline"
+                    className="ml-auto text-status-error/70 hover:text-status-error text-xs underline"
                   >
                     Dismiss
                   </button>
@@ -1260,17 +1253,17 @@ export default function DailyTankReading() {
 
               {/* Pulled from enter readings indicator */}
               {erPulled && (
-                <div className="mb-4 p-3 rounded-lg flex items-center justify-between" style={{ backgroundColor: '#EFF6FF', borderColor: '#3B82F6', borderWidth: '1px' }}>
+                <div className="mb-4 p-3 rounded-lg flex items-center justify-between" style={{ backgroundColor: 'var(--color-action-primary-light)', borderColor: 'var(--color-action-primary)', borderWidth: '1px' }}>
                   <div className="flex items-center gap-2">
-                    <span className="text-blue-600 text-lg">&#x21BB;</span>
-                    <span className="text-blue-700 text-sm font-medium">
+                    <span className="text-action-primary text-lg">&#x21BB;</span>
+                    <span className="text-action-primary text-sm font-medium">
                       Nozzle readings pulled from attendant submissions (Enter Readings)
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setErPulled(false)}
-                    className="text-blue-600 hover:text-blue-800 text-sm underline"
+                    className="text-action-primary hover:text-action-primary text-sm underline"
                   >
                     Pull again
                   </button>
@@ -1279,9 +1272,9 @@ export default function DailyTankReading() {
 
               {/* Auto-populated indicator for nozzle readings */}
               {autoPopulated?.active && (
-                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: '#ECFDF5', borderColor: '#10B981', borderWidth: '1px' }}>
-                  <span className="text-green-600 text-lg">✓</span>
-                  <span className="text-green-700 text-sm font-medium">
+                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: 'var(--color-status-success-light)', borderColor: 'var(--color-status-success)', borderWidth: '1px' }}>
+                  <span className="text-status-success text-lg">✓</span>
+                  <span className="text-status-success text-sm font-medium">
                     Opening meter readings auto-populated from {autoPopulated.sourceShift} shift ({autoPopulated.sourceDate})
                   </span>
                 </div>
@@ -1325,7 +1318,7 @@ export default function DailyTankReading() {
                         {/* Attendant */}
                         <div className="md:col-span-3">
                           <label className="block text-sm font-bold mb-1" style={{ color: fuelColor }}>
-                            Attendant Name <span className="text-red-500">*</span>
+                            Attendant Name <span className="text-status-error">*</span>
                           </label>
                           <select
                             value={nozzle.attendant}
@@ -1483,7 +1476,7 @@ export default function DailyTankReading() {
                 <button
                   type="button"
                   onClick={() => setActiveSection(1)}
-                  className="px-6 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                  className="px-6 py-2 bg-surface-border text-content-secondary rounded-md hover:bg-surface-border"
                 >
                   ← Back: Tank Dips
                 </button>
@@ -1580,9 +1573,9 @@ export default function DailyTankReading() {
                         {/* Variance Analysis */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className={`rounded-lg p-4 border-2 ${
-                            Math.abs(metrics.electronicVariancePercent) > 1 ? 'bg-red-50 border-red-300' :
-                            Math.abs(metrics.electronicVariancePercent) > 0.5 ? 'bg-yellow-50 border-yellow-300' :
-                            'bg-green-50 border-green-300'
+                            Math.abs(metrics.electronicVariancePercent) > 1 ? 'bg-status-error-light border-status-error' :
+                            Math.abs(metrics.electronicVariancePercent) > 0.5 ? 'bg-status-pending-light border-status-warning' :
+                            'bg-status-success-light border-status-success'
                           }`}>
                             <p className="text-xs font-medium mb-1 opacity-75">Column AP: Electronic vs Tank Variance</p>
                             <p className="text-2xl font-bold">
@@ -1594,9 +1587,9 @@ export default function DailyTankReading() {
                           </div>
 
                           <div className={`rounded-lg p-4 border-2 ${
-                            Math.abs(metrics.mechanicalVariancePercent) > 1 ? 'bg-red-50 border-red-300' :
-                            Math.abs(metrics.mechanicalVariancePercent) > 0.5 ? 'bg-yellow-50 border-yellow-300' :
-                            'bg-green-50 border-green-300'
+                            Math.abs(metrics.mechanicalVariancePercent) > 1 ? 'bg-status-error-light border-status-error' :
+                            Math.abs(metrics.mechanicalVariancePercent) > 0.5 ? 'bg-status-pending-light border-status-warning' :
+                            'bg-status-success-light border-status-success'
                           }`}>
                             <p className="text-xs font-medium mb-1 opacity-75">Column AQ: Mechanical vs Tank Variance</p>
                             <p className="text-2xl font-bold">
@@ -1621,9 +1614,9 @@ export default function DailyTankReading() {
                           </div>
 
                           <div className={`rounded-lg p-4 border-2 ${
-                            Math.abs(metrics.lossPercent) > 2 ? 'bg-red-50 border-red-300' :
-                            Math.abs(metrics.lossPercent) > 1 ? 'bg-yellow-50 border-yellow-300' :
-                            'bg-green-50 border-green-300'
+                            Math.abs(metrics.lossPercent) > 2 ? 'bg-status-error-light border-status-error' :
+                            Math.abs(metrics.lossPercent) > 1 ? 'bg-status-pending-light border-status-warning' :
+                            'bg-status-success-light border-status-success'
                           }`}>
                             <p className="text-xs font-medium mb-1 opacity-75">Column AU: Cash Difference</p>
                             <p className="text-xl font-bold">
@@ -1635,9 +1628,9 @@ export default function DailyTankReading() {
                           </div>
 
                           <div className={`rounded-lg p-4 border-2 ${
-                            Math.abs(metrics.lossPercent) > 2 ? 'bg-red-50 border-red-300' :
-                            Math.abs(metrics.lossPercent) > 1 ? 'bg-yellow-50 border-yellow-300' :
-                            'bg-green-50 border-green-300'
+                            Math.abs(metrics.lossPercent) > 2 ? 'bg-status-error-light border-status-error' :
+                            Math.abs(metrics.lossPercent) > 1 ? 'bg-status-pending-light border-status-warning' :
+                            'bg-status-success-light border-status-success'
                           }`}>
                             <p className="text-xs font-medium mb-1 opacity-75">Column AV: Loss/Gain %</p>
                             <p className="text-xl font-bold">
@@ -1652,9 +1645,9 @@ export default function DailyTankReading() {
                         {/* Validation Status */}
                         <div className="flex items-center justify-center pt-4">
                           <div className={`px-8 py-3 rounded-full text-lg font-bold transition-colors duration-300 ${
-                            metrics.validationStatus === 'PASS' ? 'bg-green-100 border-2 border-green-500 text-green-800' :
-                            metrics.validationStatus === 'WARNING' ? 'bg-yellow-100 border-2 border-yellow-500 text-yellow-800' :
-                            'bg-red-100 border-2 border-red-500 text-red-800'
+                            metrics.validationStatus === 'PASS' ? 'bg-status-success-light border-2 border-status-success text-status-success' :
+                            metrics.validationStatus === 'WARNING' ? 'bg-status-pending-light border-2 border-status-warning text-status-warning' :
+                            'bg-status-error-light border-2 border-status-error text-status-error'
                           }`}>
                             Column AW: {metrics.validationStatus}
                           </div>
@@ -1699,27 +1692,27 @@ export default function DailyTankReading() {
 
                 {/* Auto-Link Suggestion Box */}
                 {availableDeliveries.length > 0 && (
-                  <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 mb-4">
+                  <div className="bg-status-warning-light border-2 border-status-warning rounded-lg p-4 mb-4">
                     <div className="flex items-start gap-3">
                       <div className="text-2xl">💡</div>
                       <div className="flex-1">
-                        <h4 className="font-semibold text-yellow-900 mb-2">
+                        <h4 className="font-semibold text-status-warning-dark mb-2">
                           {availableDeliveries.length} Standalone Delivery(s) Available
                         </h4>
-                        <p className="text-sm text-yellow-800 mb-3">
+                        <p className="text-sm text-status-warning-dark mb-3">
                           These deliveries were recorded separately and match this tank/date/shift. Link them to this reading:
                         </p>
                         <div className="space-y-2">
                           {availableDeliveries.map((delivery) => (
                             <div
                               key={delivery.delivery_id}
-                              className="bg-white rounded-lg p-3 border border-yellow-300 flex items-center justify-between"
+                              className="bg-surface-card rounded-lg p-3 border border-status-warning flex items-center justify-between"
                             >
                               <div className="flex-1">
-                                <p className="font-medium text-gray-900">
+                                <p className="font-medium text-content-primary">
                                   {delivery.supplier} - {delivery.time}
                                 </p>
-                                <p className="text-sm text-gray-600">
+                                <p className="text-sm text-content-secondary">
                                   Volume: {delivery.actual_volume_delivered.toFixed(2)}L
                                   {delivery.invoice_number && ` • Invoice: ${delivery.invoice_number}`}
                                 </p>
@@ -1727,7 +1720,7 @@ export default function DailyTankReading() {
                               <button
                                 type="button"
                                 onClick={() => linkStandaloneDelivery(delivery.delivery_id)}
-                                className="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition text-sm"
+                                className="px-3 py-1 bg-status-warning text-white rounded-md hover:bg-status-warning/90 transition text-sm"
                               >
                                 Link
                               </button>
@@ -1744,8 +1737,8 @@ export default function DailyTankReading() {
                   <div className="space-y-4">
                     {/* Chronological order note */}
                     {deliveries.length > 1 && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                        <p className="text-sm text-blue-800">
+                      <div className="bg-action-primary-light border border-action-primary/30 rounded-lg p-3">
+                        <p className="text-sm text-action-primary">
                           📋 <strong>Deliveries are displayed in chronological order</strong> based on delivery time.
                           This helps track the tank state throughout the shift.
                         </p>
@@ -1767,7 +1760,7 @@ export default function DailyTankReading() {
                       >
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-lg">
+                            <div className="w-10 h-10 rounded-full bg-action-primary text-white flex items-center justify-center font-bold text-lg">
                               {index + 1}
                             </div>
                             <div>
@@ -1783,7 +1776,7 @@ export default function DailyTankReading() {
                           <button
                             type="button"
                             onClick={() => removeDelivery(delivery.id)}
-                            className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition text-sm"
+                            className="px-3 py-1 bg-status-error text-white rounded-md hover:bg-status-error/90 transition text-sm"
                           >
                             Remove
                           </button>
@@ -1791,23 +1784,23 @@ export default function DailyTankReading() {
 
                         {/* Current Tank Reading Display */}
                         {delivery.before_volume && (
-                          <div className="mb-4 rounded-lg p-4 border-2 border-green-400 bg-green-50">
+                          <div className="mb-4 rounded-lg p-4 border-2 border-status-success bg-status-success-light">
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="text-xs font-medium text-green-800 mb-1">
+                                <p className="text-xs font-medium text-status-success mb-1">
                                   📊 Current Tank Reading (Before This Delivery)
                                 </p>
-                                <p className="text-xs text-green-700">
+                                <p className="text-xs text-status-success">
                                   {index === 0
                                     ? 'Based on shift opening volume'
                                     : `Based on previous delivery's after-volume`}
                                 </p>
                               </div>
                               <div className="text-right">
-                                <p className="text-3xl font-bold text-green-600">
+                                <p className="text-3xl font-bold text-status-success">
                                   {parseFloat(delivery.before_volume).toFixed(0)}
                                 </p>
-                                <p className="text-xs text-green-700">Liters</p>
+                                <p className="text-xs text-status-success">Liters</p>
                               </div>
                             </div>
                           </div>
@@ -1817,7 +1810,7 @@ export default function DailyTankReading() {
                           {/* Row 1: Time and Fuel Type */}
                           <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
-                              Delivery Time <span className="text-red-500">*</span>
+                              Delivery Time <span className="text-status-error">*</span>
                               <span className="text-xs ml-2 opacity-75">(Auto-filled)</span>
                             </label>
                             <input
@@ -1836,7 +1829,7 @@ export default function DailyTankReading() {
 
                           <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
-                              Fuel Type <span className="text-red-500">*</span>
+                              Fuel Type <span className="text-status-error">*</span>
                             </label>
                             <select
                               value={delivery.fuel_type || ''}
@@ -1845,20 +1838,20 @@ export default function DailyTankReading() {
                               style={{
                                 borderColor: theme.accent,
                                 backgroundColor: theme.cardBg,
-                                color: delivery.fuel_type === 'Diesel' ? '#9333EA' : '#10B981'
+                                color: delivery.fuel_type === 'Diesel' ? 'var(--color-fuel-diesel)' : 'var(--color-fuel-petrol)'
                               }}
                               required
                             >
                               <option value="">Select Fuel Type</option>
-                              <option value="Diesel" style={{ color: '#9333EA' }}>🟣 Diesel (LSD)</option>
-                              <option value="Petrol" style={{ color: '#10B981' }}>🟢 Petrol (UNL)</option>
+                              <option value="Diesel" style={{ color: 'var(--color-fuel-diesel)' }}>🟣 Diesel (LSD)</option>
+                              <option value="Petrol" style={{ color: 'var(--color-fuel-petrol)' }}>🟢 Petrol (UNL)</option>
                             </select>
                           </div>
 
                           {/* Row 2: Supplier and Invoice */}
                           <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
-                              Supplier <span className="text-red-500">*</span>
+                              Supplier <span className="text-status-error">*</span>
                             </label>
                             <input
                               type="text"
@@ -1896,7 +1889,7 @@ export default function DailyTankReading() {
 
                           <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
-                              Volume Delivered (Liters) <span className="text-red-500">*</span>
+                              Volume Delivered (Liters) <span className="text-status-error">*</span>
                               <span className="text-xs ml-2 opacity-75">From delivery note/invoice</span>
                             </label>
                             <input
@@ -1917,8 +1910,8 @@ export default function DailyTankReading() {
 
                           {/* Row 3: Optional Verification Fields */}
                           <div className="md:col-span-2">
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                              <p className="text-xs text-blue-800">
+                            <div className="bg-action-primary-light border border-action-primary/30 rounded-lg p-3 mb-3">
+                              <p className="text-xs text-action-primary">
                                 <strong>💡 Optional Verification:</strong> Enter tank dip readings before/after this delivery to verify the volume.
                                 These fields auto-calculate each other based on the delivery volume above.
                               </p>
@@ -1978,12 +1971,12 @@ export default function DailyTankReading() {
                       const warnings = validateDeliverySequence()
                       if (warnings.length > 0) {
                         return (
-                          <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
+                          <div className="bg-status-warning-light border-2 border-status-warning rounded-lg p-4">
                             <div className="flex items-start gap-3">
                               <div className="text-2xl">⚠️</div>
                               <div className="flex-1">
-                                <h4 className="font-semibold text-yellow-900 mb-2">Delivery Sequence Warnings</h4>
-                                <ul className="text-sm text-yellow-800 space-y-1">
+                                <h4 className="font-semibold text-status-warning-dark mb-2">Delivery Sequence Warnings</h4>
+                                <ul className="text-sm text-status-warning-dark space-y-1">
                                   {warnings.map((warning, i) => (
                                     <li key={i}>• {warning}</li>
                                   ))}
@@ -2017,12 +2010,12 @@ export default function DailyTankReading() {
                                 {/* Timeline line */}
                                 <div className="flex flex-col items-center">
                                   <div className={`w-4 h-4 rounded-full ${
-                                    isOpening ? 'bg-green-500' :
-                                    isClosing ? 'bg-red-500' :
-                                    'bg-blue-500'
+                                    isOpening ? 'bg-status-success' :
+                                    isClosing ? 'bg-status-error' :
+                                    'bg-action-primary'
                                   }`} />
                                   {index < calculateTimeline().length - 1 && (
-                                    <div className="w-0.5 h-12 bg-gray-300" />
+                                    <div className="w-0.5 h-12 bg-surface-border" />
                                   )}
                                 </div>
 
@@ -2034,9 +2027,9 @@ export default function DailyTankReading() {
                                     </span>
                                     {event.volume !== null && (
                                       <span className={`text-xl font-bold ${
-                                        isOpening ? 'text-green-600' :
-                                        isClosing ? 'text-red-600' :
-                                        'text-blue-600'
+                                        isOpening ? 'text-status-success' :
+                                        isClosing ? 'text-status-error' :
+                                        'text-action-primary'
                                       }`}>
                                         {event.volume.toFixed(0)} L
                                       </span>
@@ -2046,8 +2039,8 @@ export default function DailyTankReading() {
                                     {event.description}
                                   </p>
                                   {isDelivery && event.deliveredVolume && (
-                                    <div className="mt-2 inline-block px-3 py-1 rounded-full bg-blue-100 border border-blue-300">
-                                      <span className="text-xs font-medium text-blue-800">
+                                    <div className="mt-2 inline-block px-3 py-1 rounded-full bg-action-primary-light border border-action-primary/30">
+                                      <span className="text-xs font-medium text-action-primary">
                                         +{event.deliveredVolume.toFixed(0)}L delivered
                                       </span>
                                     </div>
@@ -2063,15 +2056,15 @@ export default function DailyTankReading() {
                           <div className="grid grid-cols-3 gap-4 text-center">
                             <div>
                               <p className="text-xs opacity-75 mb-1" style={{ color: theme.textSecondary }}>Opening</p>
-                              <p className="text-lg font-bold text-green-600">{parseFloat(formData.opening_volume).toFixed(0)}L</p>
+                              <p className="text-lg font-bold text-status-success">{parseFloat(formData.opening_volume).toFixed(0)}L</p>
                             </div>
                             <div>
                               <p className="text-xs opacity-75 mb-1" style={{ color: theme.textSecondary }}>Total Delivered</p>
-                              <p className="text-lg font-bold text-blue-600">+{getTotalDelivered().toFixed(0)}L</p>
+                              <p className="text-lg font-bold text-action-primary">+{getTotalDelivered().toFixed(0)}L</p>
                             </div>
                             <div>
                               <p className="text-xs opacity-75 mb-1" style={{ color: theme.textSecondary }}>Closing</p>
-                              <p className="text-lg font-bold text-red-600">{parseFloat(formData.closing_volume).toFixed(0)}L</p>
+                              <p className="text-lg font-bold text-status-error">{parseFloat(formData.closing_volume).toFixed(0)}L</p>
                             </div>
                           </div>
                           <div className="text-center mt-4">
@@ -2122,7 +2115,7 @@ export default function DailyTankReading() {
                           </p>
                         </div>
                         <div className="text-right">
-                          <div className="bg-white rounded-lg p-4 shadow-inner" style={{ borderColor: theme.accent, borderWidth: '2px' }}>
+                          <div className="bg-surface-card rounded-lg p-4 shadow-inner" style={{ borderColor: theme.accent, borderWidth: '2px' }}>
                             <p className="text-xs font-medium mb-1" style={{ color: theme.accent }}>BREAKDOWN</p>
                             <div className="space-y-1 text-left">
                               {deliveries.map((d, i) => (
@@ -2206,23 +2199,23 @@ export default function DailyTankReading() {
               {/* Customer Allocation Section (DIESEL ONLY - Columns AR-BB) */}
               {selectedTank === 'TANK-DIESEL' && customers.length > 0 && (
                 <div className="rounded-lg p-6 mb-6 transition-colors duration-300" style={{
-                  backgroundColor: '#F3E8FF',
-                  borderColor: '#9333EA',
+                  backgroundColor: 'var(--color-fuel-diesel-light)',
+                  borderColor: 'var(--color-fuel-diesel)',
                   borderWidth: '2px'
                 }}>
-                  <h3 className="text-lg font-semibold mb-2" style={{ color: '#9333EA' }}>
+                  <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-fuel-diesel)' }}>
                     👥 Customer Allocation (Excel Columns AR-BB)
                   </h3>
-                  <p className="text-sm mb-4 opacity-75" style={{ color: '#9333EA' }}>
+                  <p className="text-sm mb-4 opacity-75" style={{ color: 'var(--color-fuel-diesel)' }}>
                     Allocate diesel volume to different customer types. Total must match Total Electronic Dispensed.
                   </p>
 
                   {/* Balance Check Display */}
                   {allocationBalance && (
                     <div className={`rounded-lg p-4 mb-4 border-2 ${
-                      allocationBalance.valid ? 'bg-green-50 border-green-500' :
-                      Math.abs(allocationBalance.percentageDiff) < 1 ? 'bg-yellow-50 border-yellow-500' :
-                      'bg-red-50 border-red-500'
+                      allocationBalance.valid ? 'bg-status-success-light border-status-success' :
+                      Math.abs(allocationBalance.percentageDiff) < 1 ? 'bg-status-warning-light border-status-warning' :
+                      'bg-status-error-light border-status-error'
                     }`}>
                       <div className="flex items-center justify-between">
                         <div>
@@ -2257,11 +2250,11 @@ export default function DailyTankReading() {
                       return (
                         <div key={allocation.customer_id} className="rounded-lg p-4 border-2 transition-all duration-300" style={{
                           backgroundColor: theme.cardBg,
-                          borderColor: volume > 0 ? '#9333EA' : theme.border
+                          borderColor: volume > 0 ? 'var(--color-fuel-diesel)' : theme.border
                         }}>
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div>
-                              <label className="block text-sm font-bold mb-1" style={{ color: '#9333EA' }}>
+                              <label className="block text-sm font-bold mb-1" style={{ color: 'var(--color-fuel-diesel)' }}>
                                 {allocation.customer_name}
                               </label>
                               <p className="text-xs opacity-75" style={{ color: theme.textSecondary }}>
@@ -2270,7 +2263,7 @@ export default function DailyTankReading() {
                             </div>
 
                             <div>
-                              <label className="block text-xs font-medium mb-1" style={{ color: '#9333EA' }}>
+                              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-fuel-diesel)' }}>
                                 Volume (L)
                               </label>
                               <input
@@ -2280,7 +2273,7 @@ export default function DailyTankReading() {
                                 onChange={(e) => updateCustomerAllocation(index, 'volume', e.target.value)}
                                 className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
                                 style={{
-                                  borderColor: '#9333EA',
+                                  borderColor: 'var(--color-fuel-diesel)',
                                   backgroundColor: theme.cardBg,
                                   color: theme.textPrimary
                                 }}
@@ -2289,7 +2282,7 @@ export default function DailyTankReading() {
                             </div>
 
                             <div>
-                              <label className="block text-xs font-medium mb-1" style={{ color: '#9333EA' }}>
+                              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-fuel-diesel)' }}>
                                 Price/L (ZMW)
                               </label>
                               <input
@@ -2299,7 +2292,7 @@ export default function DailyTankReading() {
                                 onChange={(e) => updateCustomerAllocation(index, 'price_per_liter', e.target.value)}
                                 className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
                                 style={{
-                                  borderColor: '#9333EA',
+                                  borderColor: 'var(--color-fuel-diesel)',
                                   backgroundColor: theme.cardBg,
                                   color: theme.textPrimary
                                 }}
@@ -2308,13 +2301,13 @@ export default function DailyTankReading() {
                             </div>
 
                             <div>
-                              <label className="block text-xs font-medium mb-1" style={{ color: '#9333EA' }}>
+                              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-fuel-diesel)' }}>
                                 Amount (ZMW)
                               </label>
                               <div className="w-full px-3 py-2 border-2 rounded-md font-bold text-lg" style={{
-                                borderColor: '#9333EA',
-                                backgroundColor: '#F3E8FF',
-                                color: '#9333EA'
+                                borderColor: 'var(--color-fuel-diesel)',
+                                backgroundColor: 'var(--color-fuel-diesel-light)',
+                                color: 'var(--color-fuel-diesel)'
                               }}>
                                 {amount.toFixed(2)}
                               </div>
@@ -2327,14 +2320,14 @@ export default function DailyTankReading() {
 
                   {/* Total Customer Revenue */}
                   <div className="mt-4 rounded-lg p-4 border-2" style={{
-                    backgroundColor: '#F3E8FF',
-                    borderColor: '#9333EA'
+                    backgroundColor: 'var(--color-fuel-diesel-light)',
+                    borderColor: 'var(--color-fuel-diesel)'
                   }}>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium" style={{ color: '#9333EA' }}>
+                      <span className="text-sm font-medium" style={{ color: 'var(--color-fuel-diesel)' }}>
                         Total Customer Revenue
                       </span>
-                      <span className="text-2xl font-bold" style={{ color: '#9333EA' }}>
+                      <span className="text-2xl font-bold" style={{ color: 'var(--color-fuel-diesel)' }}>
                         ZMW {customerAllocations.reduce((sum, alloc) => sum + ((parseFloat(alloc.volume) || 0) * (parseFloat(alloc.price_per_liter) || 0)), 0).toFixed(2)}
                       </span>
                     </div>
@@ -2452,7 +2445,7 @@ export default function DailyTankReading() {
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:ring-2 focus:ring-action-primary"
                   rows={3}
                   placeholder="Any additional notes or observations..."
                 />
@@ -2462,7 +2455,7 @@ export default function DailyTankReading() {
                 <button
                   type="button"
                   onClick={() => setActiveSection(2)}
-                  className="px-6 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                  className="px-6 py-2 bg-surface-border text-content-secondary rounded-md hover:bg-surface-border"
                 >
                   ← Back: Nozzle Readings
                 </button>
@@ -2480,7 +2473,7 @@ export default function DailyTankReading() {
 
           {/* Section 4: Review & Submit */}
           {activeSection === 4 && (
-            <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <div className="bg-surface-card rounded-lg shadow p-6 mb-6">
               <h2 className="text-xl font-semibold mb-4">📋 Review & Submit</h2>
 
               {!calculatedValues ? (
@@ -2511,7 +2504,7 @@ export default function DailyTankReading() {
                     <button
                       type="button"
                       onClick={() => setActiveSection(3)}
-                      className="px-6 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                      className="px-6 py-2 bg-surface-border text-content-secondary rounded-md hover:bg-surface-border"
                     >
                       ← Back to Edit
                     </button>
@@ -2527,26 +2520,26 @@ export default function DailyTankReading() {
                 </>
               ) : (
                 <div className="space-y-6">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-green-900 text-lg mb-2">✓ Reading Submitted Successfully!</h3>
-                    <p className="text-sm text-green-700">All Excel calculations completed automatically</p>
+                  <div className="bg-status-success-light border border-status-success/30 rounded-lg p-4">
+                    <h3 className="font-semibold text-status-success text-lg mb-2">✓ Reading Submitted Successfully!</h3>
+                    <p className="text-sm text-status-success">All Excel calculations completed automatically</p>
                   </div>
 
                   {/* Tank Movement Results */}
-                  <div className="bg-white border border-gray-200 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-3">Tank Movement (Column AM)</h4>
-                    <div className="text-3xl font-bold text-blue-600">
+                  <div className="bg-surface-card border border-surface-border rounded-lg p-4">
+                    <h4 className="font-semibold text-content-primary mb-3">Tank Movement (Column AM)</h4>
+                    <div className="text-3xl font-bold text-action-primary">
                       {calculatedValues.tank_volume_movement.toFixed(2)} L
                     </div>
-                    <p className="text-sm text-gray-600 mt-1">Fuel dispensed from tank</p>
+                    <p className="text-sm text-content-secondary mt-1">Fuel dispensed from tank</p>
                   </div>
 
                   {/* Variance Analysis */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className={`border rounded-lg p-4 ${
-                      Math.abs(calculatedValues.electronic_vs_tank_percent) > 1 ? 'bg-red-50 border-red-200' :
-                      Math.abs(calculatedValues.electronic_vs_tank_percent) > 0.5 ? 'bg-yellow-50 border-yellow-200' :
-                      'bg-green-50 border-green-200'
+                      Math.abs(calculatedValues.electronic_vs_tank_percent) > 1 ? 'bg-status-error-light border-status-error/30' :
+                      Math.abs(calculatedValues.electronic_vs_tank_percent) > 0.5 ? 'bg-status-warning-light border-status-warning/30' :
+                      'bg-status-success-light border-status-success/30'
                     }`}>
                       <h4 className="font-semibold mb-2">Electronic vs Tank (Column AP)</h4>
                       <p className="text-2xl font-bold">{calculatedValues.electronic_vs_tank_variance.toFixed(2)} L</p>
@@ -2554,9 +2547,9 @@ export default function DailyTankReading() {
                     </div>
 
                     <div className={`border rounded-lg p-4 ${
-                      Math.abs(calculatedValues.mechanical_vs_tank_percent) > 1 ? 'bg-red-50 border-red-200' :
-                      Math.abs(calculatedValues.mechanical_vs_tank_percent) > 0.5 ? 'bg-yellow-50 border-yellow-200' :
-                      'bg-green-50 border-green-200'
+                      Math.abs(calculatedValues.mechanical_vs_tank_percent) > 1 ? 'bg-status-error-light border-status-error/30' :
+                      Math.abs(calculatedValues.mechanical_vs_tank_percent) > 0.5 ? 'bg-status-warning-light border-status-warning/30' :
+                      'bg-status-success-light border-status-success/30'
                     }`}>
                       <h4 className="font-semibold mb-2">Mechanical vs Tank (Column AQ)</h4>
                       <p className="text-2xl font-bold">{calculatedValues.mechanical_vs_tank_variance.toFixed(2)} L</p>
@@ -2566,23 +2559,23 @@ export default function DailyTankReading() {
 
                   {/* Financial Summary */}
                   {calculatedValues.expected_amount_electronic && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <h4 className="font-semibold text-blue-900 mb-3">Financial Summary (Columns AR-AU)</h4>
+                    <div className="bg-action-primary-light border border-action-primary/30 rounded-lg p-4">
+                      <h4 className="font-semibold text-action-primary mb-3">Financial Summary (Columns AR-AU)</h4>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
-                          <p className="text-sm text-blue-700">Expected (Electronic)</p>
+                          <p className="text-sm text-action-primary">Expected (Electronic)</p>
                           <p className="text-lg font-bold">ZMW {calculatedValues.expected_amount_electronic.toFixed(2)}</p>
                         </div>
                         <div>
-                          <p className="text-sm text-blue-700">Actual Banked</p>
+                          <p className="text-sm text-action-primary">Actual Banked</p>
                           <p className="text-lg font-bold">ZMW {calculatedValues.actual_cash_banked?.toFixed(2) || '0.00'}</p>
                         </div>
                         <div>
-                          <p className="text-sm text-blue-700">Cash Difference</p>
+                          <p className="text-sm text-action-primary">Cash Difference</p>
                           <p className="text-lg font-bold">{calculatedValues.cash_difference?.toFixed(2) || '0.00'}</p>
                         </div>
                         <div>
-                          <p className="text-sm text-blue-700">Loss %</p>
+                          <p className="text-sm text-action-primary">Loss %</p>
                           <p className="text-lg font-bold">{calculatedValues.loss_percent.toFixed(2)}%</p>
                         </div>
                       </div>
@@ -2592,9 +2585,9 @@ export default function DailyTankReading() {
                   {/* Status Badge */}
                   <div className="flex items-center justify-center">
                     <span className={`px-6 py-3 rounded-full text-lg font-semibold ${
-                      calculatedValues.validation_status === 'PASS' ? 'bg-green-100 text-green-800' :
-                      calculatedValues.validation_status === 'WARNING' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
+                      calculatedValues.validation_status === 'PASS' ? 'bg-status-success-light text-status-success' :
+                      calculatedValues.validation_status === 'WARNING' ? 'bg-status-warning-light text-status-warning-dark' :
+                      'bg-status-error-light text-status-error'
                     }`}>
                       {calculatedValues.validation_status}
                     </span>
@@ -2602,30 +2595,30 @@ export default function DailyTankReading() {
 
                   {/* Delivery Timeline Section */}
                   {calculatedValues.delivery_timeline?.has_deliveries && (
-                    <div className="border-2 border-blue-300 rounded-lg p-4 bg-blue-50">
-                      <h4 className="font-semibold text-blue-900 mb-3 text-lg">Deliveries & Timeline</h4>
+                    <div className="border-2 border-action-primary/30 rounded-lg p-4 bg-action-primary-light">
+                      <h4 className="font-semibold text-action-primary mb-3 text-lg">Deliveries & Timeline</h4>
 
                       {/* Delivery Summary */}
-                      <div className="flex items-center gap-4 mb-4 p-3 rounded-lg bg-blue-100 border border-blue-300">
-                        <span className="text-2xl font-bold text-blue-800">
+                      <div className="flex items-center gap-4 mb-4 p-3 rounded-lg bg-action-primary-light border border-action-primary/30">
+                        <span className="text-2xl font-bold text-action-primary">
                           {calculatedValues.delivery_timeline.number_of_deliveries}
                         </span>
-                        <span className="text-sm text-blue-700">
+                        <span className="text-sm text-action-primary">
                           {calculatedValues.delivery_timeline.number_of_deliveries === 1 ? 'Delivery' : 'Deliveries'}
                         </span>
-                        <span className="mx-2 text-blue-400">|</span>
-                        <span className="text-sm text-blue-700">
+                        <span className="mx-2 text-action-primary/50">|</span>
+                        <span className="text-sm text-action-primary">
                           Total Delivered: <strong>{calculatedValues.delivery_timeline.total_delivered?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} L</strong>
                         </span>
                       </div>
 
                       {/* Delivery List */}
                       {calculatedValues.delivery_timeline.timeline?.filter((e: any) => e.event_type === 'DELIVERY').map((event: any, idx: number) => (
-                        <div key={idx} className="flex items-center gap-3 mb-2 p-2 bg-white rounded border border-blue-200 text-sm">
-                          <span className="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
+                        <div key={idx} className="flex items-center gap-3 mb-2 p-2 bg-surface-card rounded border border-action-primary/30 text-sm">
+                          <span className="w-7 h-7 rounded-full bg-action-primary text-white flex items-center justify-center text-xs font-bold">
                             {event.delivery_number || idx + 1}
                           </span>
-                          <span className="text-blue-800">
+                          <span className="text-action-primary">
                             +{event.change?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}L
                             {event.supplier && <> from <strong>{event.supplier}</strong></>}
                             {event.time && <> at <strong>{event.time}</strong></>}
@@ -2636,30 +2629,30 @@ export default function DailyTankReading() {
                       {/* Segment Sales Table */}
                       {calculatedValues.delivery_timeline.inter_delivery_sales?.length > 0 && (
                         <div className="mt-4 overflow-x-auto">
-                          <h5 className="text-sm font-semibold text-blue-900 mb-2">Segment Sales Breakdown</h5>
-                          <table className="min-w-full text-sm border border-blue-200">
+                          <h5 className="text-sm font-semibold text-action-primary mb-2">Segment Sales Breakdown</h5>
+                          <table className="min-w-full text-sm border border-action-primary/30">
                             <thead>
-                              <tr className="bg-blue-100">
-                                <th className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Segment</th>
-                                <th className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Period</th>
-                                <th className="px-3 py-2 text-right text-xs font-medium text-blue-800 uppercase">Start Level</th>
-                                <th className="px-3 py-2 text-right text-xs font-medium text-blue-800 uppercase">End Level</th>
-                                <th className="px-3 py-2 text-right text-xs font-medium text-blue-800 uppercase">Sales (L)</th>
+                              <tr className="bg-action-primary-light">
+                                <th className="px-3 py-2 text-left text-xs font-medium text-action-primary uppercase">Segment</th>
+                                <th className="px-3 py-2 text-left text-xs font-medium text-action-primary uppercase">Period</th>
+                                <th className="px-3 py-2 text-right text-xs font-medium text-action-primary uppercase">Start Level</th>
+                                <th className="px-3 py-2 text-right text-xs font-medium text-action-primary uppercase">End Level</th>
+                                <th className="px-3 py-2 text-right text-xs font-medium text-action-primary uppercase">Sales (L)</th>
                               </tr>
                             </thead>
                             <tbody>
                               {calculatedValues.delivery_timeline.inter_delivery_sales.map((seg: any, idx: number) => (
-                                <tr key={idx} className="border-t border-blue-200">
-                                  <td className="px-3 py-2 font-medium text-blue-900">{idx + 1}</td>
-                                  <td className="px-3 py-2 text-blue-700">{seg.period}</td>
-                                  <td className="px-3 py-2 text-right font-mono text-blue-800">{seg.start_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
-                                  <td className="px-3 py-2 text-right font-mono text-blue-800">{seg.end_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
-                                  <td className="px-3 py-2 text-right font-mono font-semibold text-blue-900">{seg.sales_volume?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                <tr key={idx} className="border-t border-action-primary/30">
+                                  <td className="px-3 py-2 font-medium text-action-primary">{idx + 1}</td>
+                                  <td className="px-3 py-2 text-action-primary">{seg.period}</td>
+                                  <td className="px-3 py-2 text-right font-mono text-action-primary">{seg.start_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                                  <td className="px-3 py-2 text-right font-mono text-action-primary">{seg.end_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                                  <td className="px-3 py-2 text-right font-mono font-semibold text-action-primary">{seg.sales_volume?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                 </tr>
                               ))}
-                              <tr className="border-t-2 border-blue-400 bg-blue-100">
-                                <td colSpan={4} className="px-3 py-2 text-right font-bold text-blue-900">Total</td>
-                                <td className="px-3 py-2 text-right font-mono font-bold text-blue-900">
+                              <tr className="border-t-2 border-action-primary/50 bg-action-primary-light">
+                                <td colSpan={4} className="px-3 py-2 text-right font-bold text-action-primary">Total</td>
+                                <td className="px-3 py-2 text-right font-mono font-bold text-action-primary">
                                   {calculatedValues.delivery_timeline.total_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </td>
                               </tr>
@@ -2670,12 +2663,12 @@ export default function DailyTankReading() {
 
                       {/* Cross-check line */}
                       {calculatedValues.delivery_timeline.formula_sales !== undefined && (
-                        <div className="mt-3 p-2 rounded bg-white border border-blue-200 text-xs text-blue-700">
+                        <div className="mt-3 p-2 rounded bg-surface-card border border-action-primary/30 text-xs text-action-primary">
                           <strong>Cross-check:</strong> Formula sales = {calculatedValues.delivery_timeline.formula_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L
                           {' | '}Segment sum = {calculatedValues.delivery_timeline.total_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L
                           {Math.abs((calculatedValues.delivery_timeline.formula_sales || 0) - (calculatedValues.delivery_timeline.total_sales || 0)) < 1
-                            ? <span className="ml-2 text-green-700 font-semibold">Match</span>
-                            : <span className="ml-2 text-red-700 font-semibold">Mismatch</span>
+                            ? <span className="ml-2 text-status-success font-semibold">Match</span>
+                            : <span className="ml-2 text-status-error font-semibold">Mismatch</span>
                           }
                         </div>
                       )}
@@ -2684,9 +2677,9 @@ export default function DailyTankReading() {
                       {calculatedValues.delivery_timeline.validation && (
                         <>
                           {calculatedValues.delivery_timeline.validation.warnings?.length > 0 && (
-                            <div className="mt-3 p-3 rounded bg-yellow-50 border border-yellow-300">
-                              <p className="text-xs font-semibold text-yellow-800 mb-1">Warnings</p>
-                              <ul className="text-xs text-yellow-700 space-y-1">
+                            <div className="mt-3 p-3 rounded bg-status-warning-light border border-status-warning/30">
+                              <p className="text-xs font-semibold text-status-warning-dark mb-1">Warnings</p>
+                              <ul className="text-xs text-status-warning-dark space-y-1">
                                 {calculatedValues.delivery_timeline.validation.warnings.map((w: string, i: number) => (
                                   <li key={i}>- {w}</li>
                                 ))}
@@ -2694,9 +2687,9 @@ export default function DailyTankReading() {
                             </div>
                           )}
                           {calculatedValues.delivery_timeline.validation.errors?.length > 0 && (
-                            <div className="mt-3 p-3 rounded bg-red-50 border border-red-300">
-                              <p className="text-xs font-semibold text-red-800 mb-1">Errors</p>
-                              <ul className="text-xs text-red-700 space-y-1">
+                            <div className="mt-3 p-3 rounded bg-status-error-light border border-status-error/30">
+                              <p className="text-xs font-semibold text-status-error mb-1">Errors</p>
+                              <ul className="text-xs text-status-error space-y-1">
                                 {calculatedValues.delivery_timeline.validation.errors.map((e: string, i: number) => (
                                   <li key={i}>- {e}</li>
                                 ))}
@@ -2712,7 +2705,7 @@ export default function DailyTankReading() {
                     <button
                       type="button"
                       onClick={() => window.location.reload()}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      className="px-6 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover"
                     >
                       Submit Another Reading
                     </button>

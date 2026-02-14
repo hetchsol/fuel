@@ -20,7 +20,7 @@ export default function LoadingSpinner({ text = 'Loading...', fullPage = false }
           />
         ))}
       </div>
-      <p className="mt-6 text-sm font-medium text-gray-500">{text}</p>
+      <p className="mt-6 text-sm font-medium text-content-secondary">{text}</p>
 
       <style jsx>{`
         .spinner-lines {
@@ -37,7 +37,7 @@ export default function LoadingSpinner({ text = 'Loading...', fullPage = false }
           height: 14px;
           margin-left: -1.5px;
           border-radius: 2px;
-          background: #6b7280;
+          background: var(--color-text-secondary);
           transform-origin: center 24px;
           animation: spinner-fade 1s linear infinite;
         }

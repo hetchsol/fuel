@@ -355,7 +355,7 @@ export default function LPGDaily() {
               </div>
               {pricingMsg && (
                 <div className="text-sm" style={{
-                  color: pricingMsg.includes('success') ? '#16a34a' : '#dc2626'
+                  color: pricingMsg.includes('success') ? 'var(--color-status-success)' : 'var(--color-status-error)'
                 }}>{pricingMsg}</div>
               )}
               <button onClick={savePricing} disabled={pricingSaving}
@@ -439,7 +439,7 @@ export default function LPGDaily() {
                       className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
                   </td>
                   <td className="px-3 py-2 text-right font-medium" style={{
-                    color: row.balance < 0 ? '#ef4444' : theme.textPrimary
+                    color: row.balance < 0 ? 'var(--color-status-error)' : theme.textPrimary
                   }}>
                     {row.balance}
                   </td>
@@ -500,7 +500,7 @@ export default function LPGDaily() {
           <div className="px-3 py-2 rounded text-sm font-semibold"
             style={{
               backgroundColor: theme.background,
-              color: popDifference !== null && popDifference !== 0 ? '#ef4444' : theme.textPrimary,
+              color: popDifference !== null && popDifference !== 0 ? 'var(--color-status-error)' : theme.textPrimary,
             }}>
             {popDifference !== null ? popDifference : '-'}
           </div>
@@ -552,7 +552,7 @@ export default function LPGDaily() {
                     className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
                 </td>
                 <td className="px-3 py-2 text-right font-medium" style={{
-                  color: row.balance < 0 ? '#ef4444' : theme.textPrimary
+                  color: row.balance < 0 ? 'var(--color-status-error)' : theme.textPrimary
                 }}>
                   {row.balance}
                 </td>
@@ -567,12 +567,12 @@ export default function LPGDaily() {
 
       {/* Submit */}
       {error && (
-        <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+        <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)', border: '1px solid var(--color-status-error)' }}>
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>
+        <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)', border: '1px solid var(--color-status-success)' }}>
           {success}
         </div>
       )}
@@ -610,7 +610,7 @@ export default function LPGDaily() {
                     ZMW{(e.grand_total_value || 0).toLocaleString()}
                   </td>
                   <td className="px-4 py-2" style={{
-                    color: e.population_difference && e.population_difference !== 0 ? '#ef4444' : theme.textSecondary
+                    color: e.population_difference && e.population_difference !== 0 ? 'var(--color-status-error)' : theme.textSecondary
                   }}>
                     {e.population_difference ?? '-'}
                   </td>

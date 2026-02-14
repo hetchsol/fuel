@@ -1,7 +1,6 @@
 import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import { useTheme } from '../contexts/ThemeContext'
 
 
 interface ValidatedReading {
@@ -33,7 +32,6 @@ interface Shift {
 
 export default function ValidatedReadingsPage() {
   const router = useRouter()
-  const { setFuelType } = useTheme()
   const [user, setUser] = useState<any>(null)
   const [readings, setReadings] = useState<ValidatedReading[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
@@ -162,32 +160,32 @@ export default function ValidatedReadingsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'PASS': return 'text-green-700 bg-green-100'
-      case 'WARNING': return 'text-yellow-700 bg-yellow-100'
-      case 'FAIL': return 'text-red-700 bg-red-100'
-      default: return 'text-gray-700 bg-gray-100'
+      case 'PASS': return 'text-status-success bg-status-success-light'
+      case 'WARNING': return 'text-status-warning bg-status-pending-light'
+      case 'FAIL': return 'text-status-error bg-status-error-light'
+      default: return 'text-content-secondary bg-surface-bg'
     }
   }
 
   return (
     <div className="max-w-7xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Validated Readings</h1>
-      <p className="text-gray-600 mb-8">
+      <p className="text-content-secondary mb-8">
         Record mechanical, electronic, and dip readings. System validates all three readings match within 0.03% tolerance.
       </p>
 
       {/* Form Section */}
-      <div className="bg-white p-6 rounded-lg shadow mb-8">
+      <div className="bg-surface-card p-6 rounded-lg shadow mb-8">
         <h2 className="text-xl font-semibold mb-4">Record New Reading</h2>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+          <div className="mb-4 p-3 bg-status-error-light border border-status-error text-status-error rounded">
             {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+          <div className="mb-4 p-3 bg-status-success-light border border-status-success text-status-success rounded">
             {success}
           </div>
         )}
@@ -196,13 +194,13 @@ export default function ValidatedReadingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Shift Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Shift
               </label>
               <select
                 value={formData.shift_id}
                 onChange={(e) => setFormData({ ...formData, shift_id: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                className="w-full px-3 py-2 border border-surface-border rounded-md"
                 required
               >
                 <option value="">Select Shift</option>
@@ -216,7 +214,7 @@ export default function ValidatedReadingsPage() {
 
             {/* Tank Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Tank
               </label>
               <select
@@ -224,14 +222,8 @@ export default function ValidatedReadingsPage() {
                 onChange={(e) => {
                   const value = e.target.value
                   setFormData({ ...formData, tank_id: value })
-                  // Update theme based on tank selection
-                  if (value === 'TANK-DIESEL') {
-                    setFuelType('diesel')
-                  } else if (value === 'TANK-PETROL') {
-                    setFuelType('petrol')
-                  }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                className="w-full px-3 py-2 border border-surface-border rounded-md"
                 required
               >
                 <option value="TANK-DIESEL">Diesel Tank</option>
@@ -241,13 +233,13 @@ export default function ValidatedReadingsPage() {
 
             {/* Reading Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Reading Type
               </label>
               <select
                 value={formData.reading_type}
                 onChange={(e) => setFormData({ ...formData, reading_type: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                className="w-full px-3 py-2 border border-surface-border rounded-md"
                 required
               >
                 <option value="Opening">Opening</option>
@@ -257,7 +249,7 @@ export default function ValidatedReadingsPage() {
 
             {/* Mechanical Reading */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Mechanical Reading (Liters)
               </label>
               <input
@@ -265,14 +257,14 @@ export default function ValidatedReadingsPage() {
                 step="0.01"
                 value={formData.mechanical_reading}
                 onChange={(e) => setFormData({ ...formData, mechanical_reading: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                className="w-full px-3 py-2 border border-surface-border rounded-md"
                 required
               />
             </div>
 
             {/* Electronic Reading */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Electronic Reading (Liters)
               </label>
               <input
@@ -280,14 +272,14 @@ export default function ValidatedReadingsPage() {
                 step="0.01"
                 value={formData.electronic_reading}
                 onChange={(e) => setFormData({ ...formData, electronic_reading: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                className="w-full px-3 py-2 border border-surface-border rounded-md"
                 required
               />
             </div>
 
             {/* Dip Reading */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Tank Dip Reading (cm)
               </label>
               <input
@@ -295,20 +287,20 @@ export default function ValidatedReadingsPage() {
                 step="0.1"
                 value={formData.dip_reading_cm}
                 onChange={(e) => setFormData({ ...formData, dip_reading_cm: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                className="w-full px-3 py-2 border border-surface-border rounded-md"
                 required
               />
             </div>
 
             {/* Notes */}
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Notes (Optional)
               </label>
               <textarea
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                className="w-full px-3 py-2 border border-surface-border rounded-md"
                 rows={2}
               />
             </div>
@@ -317,7 +309,7 @@ export default function ValidatedReadingsPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+            className="w-full bg-action-primary text-white py-2 px-4 rounded-md hover:bg-action-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Submitting...' : 'Submit Reading'}
           </button>
@@ -325,38 +317,38 @@ export default function ValidatedReadingsPage() {
       </div>
 
       {/* Readings List */}
-      <div className="bg-white p-6 rounded-lg shadow">
+      <div className="bg-surface-card p-6 rounded-lg shadow">
         <h2 className="text-xl font-semibold mb-4">Recent Validated Readings</h2>
 
         {readings.length === 0 ? (
-          <p className="text-gray-500">No validated readings recorded yet.</p>
+          <p className="text-content-secondary">No validated readings recorded yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-surface-border">
+              <thead className="bg-surface-bg">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tank</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mechanical</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Electronic</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dip (L)</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Max Disc.</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Timestamp</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Tank</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Mechanical</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Electronic</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Dip (L)</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Max Disc.</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Status</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-surface-card divide-y divide-surface-border">
                 {readings.map((reading) => (
-                  <tr key={reading.reading_id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900">
+                  <tr key={reading.reading_id} className="hover:bg-surface-bg">
+                    <td className="px-4 py-3 text-sm text-content-primary">
                       {new Date(reading.timestamp).toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{reading.tank_id}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{reading.reading_type}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{reading.mechanical_reading.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{reading.electronic_reading.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{reading.dip_reading_liters.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{reading.max_discrepancy_percent.toFixed(4)}%</td>
+                    <td className="px-4 py-3 text-sm text-content-primary">{reading.tank_id}</td>
+                    <td className="px-4 py-3 text-sm text-content-primary">{reading.reading_type}</td>
+                    <td className="px-4 py-3 text-sm text-content-primary">{reading.mechanical_reading.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-sm text-content-primary">{reading.electronic_reading.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-sm text-content-primary">{reading.dip_reading_liters.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-sm text-content-primary">{reading.max_discrepancy_percent.toFixed(4)}%</td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(reading.validation_status)}`}>
                         {reading.validation_status}

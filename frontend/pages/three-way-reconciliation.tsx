@@ -82,11 +82,11 @@ export default function ThreeWayReconciliation() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'BALANCED': return 'bg-green-100 text-green-800 border-green-300'
-      case 'VARIANCE_MINOR': return 'bg-yellow-100 text-yellow-800 border-yellow-300'
-      case 'VARIANCE_INVESTIGATION': return 'bg-orange-100 text-orange-800 border-orange-300'
-      case 'DISCREPANCY_CRITICAL': return 'bg-red-100 text-red-800 border-red-300'
-      default: return 'bg-gray-100 text-gray-800 border-gray-300'
+      case 'BALANCED': return 'bg-status-success-light text-status-success border-status-success'
+      case 'VARIANCE_MINOR': return 'bg-status-pending-light text-status-warning border-status-warning'
+      case 'VARIANCE_INVESTIGATION': return 'bg-category-c-light text-category-c border-category-c-border'
+      case 'DISCREPANCY_CRITICAL': return 'bg-status-error-light text-status-error border-status-error'
+      default: return 'bg-surface-bg text-content-primary border-surface-border'
     }
   }
 
@@ -102,89 +102,89 @@ export default function ThreeWayReconciliation() {
 
   const getVarianceStatusColor = (status: string) => {
     switch (status) {
-      case 'WITHIN_TOLERANCE': return 'text-green-600'
-      case 'REQUIRES_INVESTIGATION': return 'text-orange-600'
-      case 'CRITICAL': return 'text-red-600'
-      default: return 'text-gray-600'
+      case 'WITHIN_TOLERANCE': return 'text-status-success'
+      case 'REQUIRES_INVESTIGATION': return 'text-category-c'
+      case 'CRITICAL': return 'text-status-error'
+      default: return 'text-content-secondary'
     }
   }
 
   const getOutlierColor = (source: string | null) => {
     switch (source) {
-      case 'PHYSICAL': return 'bg-blue-100 text-blue-800 border border-blue-300'
-      case 'OPERATIONAL': return 'bg-purple-100 text-purple-800 border border-purple-300'
-      case 'FINANCIAL': return 'bg-red-100 text-red-800 border border-red-300'
-      case 'MULTIPLE': return 'bg-gray-100 text-gray-800 border border-gray-300'
-      default: return 'bg-green-100 text-green-800 border border-green-300'
+      case 'PHYSICAL': return 'bg-action-primary-light text-action-primary border border-blue-300'
+      case 'OPERATIONAL': return 'bg-category-a-light text-category-a border border-category-a-border'
+      case 'FINANCIAL': return 'bg-status-error-light text-status-error border border-red-300'
+      case 'MULTIPLE': return 'bg-surface-bg text-content-primary border border-surface-border'
+      default: return 'bg-green-100 text-status-success border border-green-300'
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-surface-bg p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Three-Way Reconciliation</h1>
-          <p className="text-gray-600">Tank Movement = Nozzle Sales = Cash in Hand</p>
+          <h1 className="text-3xl font-bold text-content-primary mb-2">Three-Way Reconciliation</h1>
+          <p className="text-content-secondary">Tank Movement = Nozzle Sales = Cash in Hand</p>
         </div>
 
         {/* Date Selector */}
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div className="bg-surface-card rounded-lg shadow p-4 mb-6">
+          <label className="block text-sm font-medium text-content-secondary mb-2">
             Select Date
           </label>
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="border border-gray-300 rounded px-3 py-2"
+            className="border border-surface-border rounded px-3 py-2"
           />
         </div>
 
         {loading ? (
           <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-            <p className="mt-2 text-gray-600">Loading...</p>
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-content-primary"></div>
+            <p className="mt-2 text-content-secondary">Loading...</p>
           </div>
         ) : dailySummary ? (
           <>
             {/* Daily Summary Card */}
-            <div className="bg-white rounded-lg shadow mb-6">
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+            <div className="bg-surface-card rounded-lg shadow mb-6">
+              <div className="bg-gradient-to-r from-blue-600 to-action-primary-hover px-6 py-4">
                 <h2 className="text-xl font-bold text-white">Daily Summary - {dailySummary.date}</h2>
               </div>
 
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 mb-1">Total Shifts</div>
-                    <div className="text-2xl font-bold text-gray-900">{dailySummary.total_shifts}</div>
+                  <div className="bg-surface-bg rounded-lg p-4">
+                    <div className="text-sm text-content-secondary mb-1">Total Shifts</div>
+                    <div className="text-2xl font-bold text-content-primary">{dailySummary.total_shifts}</div>
                   </div>
 
-                  <div className="bg-green-50 rounded-lg p-4">
-                    <div className="text-sm text-green-600 mb-1">✓ Balanced</div>
-                    <div className="text-2xl font-bold text-green-700">{dailySummary.balanced_shifts}</div>
+                  <div className="bg-status-success-light rounded-lg p-4">
+                    <div className="text-sm text-status-success mb-1">✓ Balanced</div>
+                    <div className="text-2xl font-bold text-status-success">{dailySummary.balanced_shifts}</div>
                   </div>
 
-                  <div className="bg-orange-50 rounded-lg p-4">
-                    <div className="text-sm text-orange-600 mb-1">⚠ Variances</div>
-                    <div className="text-2xl font-bold text-orange-700">{dailySummary.variance_shifts}</div>
+                  <div className="bg-category-c-light rounded-lg p-4">
+                    <div className="text-sm text-category-c mb-1">⚠ Variances</div>
+                    <div className="text-2xl font-bold text-category-c">{dailySummary.variance_shifts}</div>
                   </div>
 
-                  <div className="bg-red-50 rounded-lg p-4">
-                    <div className="text-sm text-red-600 mb-1">🚨 Critical</div>
-                    <div className="text-2xl font-bold text-red-700">{dailySummary.critical_shifts}</div>
+                  <div className="bg-status-error-light rounded-lg p-4">
+                    <div className="text-sm text-status-error mb-1">🚨 Critical</div>
+                    <div className="text-2xl font-bold text-status-error">{dailySummary.critical_shifts}</div>
                   </div>
                 </div>
 
                 {/* Overall Status */}
                 <div className="flex items-center gap-3 mb-6">
-                  <span className="text-sm font-medium text-gray-700">Overall Status:</span>
+                  <span className="text-sm font-medium text-content-secondary">Overall Status:</span>
                   <span className={`px-4 py-2 rounded-full font-semibold ${
-                    dailySummary.overall_status === 'EXCELLENT' ? 'bg-green-100 text-green-800' :
-                    dailySummary.overall_status === 'GOOD' ? 'bg-blue-100 text-blue-800' :
+                    dailySummary.overall_status === 'EXCELLENT' ? 'bg-green-100 text-status-success' :
+                    dailySummary.overall_status === 'GOOD' ? 'bg-action-primary-light text-action-primary' :
                     dailySummary.overall_status === 'NEEDS_ATTENTION' ? 'bg-orange-100 text-orange-800' :
-                    'bg-red-100 text-red-800'
+                    'bg-status-error-light text-status-error'
                   }`}>
                     {dailySummary.overall_status}
                   </span>
@@ -192,11 +192,11 @@ export default function ThreeWayReconciliation() {
 
                 {/* Shifts Requiring Investigation */}
                 {dailySummary.shifts_requiring_investigation && dailySummary.shifts_requiring_investigation.length > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-                    <h3 className="font-semibold text-red-900 mb-3">⚠ Shifts Requiring Investigation</h3>
+                  <div className="bg-status-error-light border border-status-error rounded-lg p-4 mb-6">
+                    <h3 className="font-semibold text-status-error mb-3">⚠ Shifts Requiring Investigation</h3>
                     <div className="space-y-2">
                       {dailySummary.shifts_requiring_investigation.map((shift: any, idx: number) => (
-                        <div key={idx} className="bg-white rounded p-3 flex items-center justify-between">
+                        <div key={idx} className="bg-surface-card rounded p-3 flex items-center justify-between">
                           <div>
                             <span className="font-medium">{shift.tank_id}</span>
                             <span className="mx-2">-</span>
@@ -222,29 +222,29 @@ export default function ThreeWayReconciliation() {
             </div>
 
             {/* All Shifts List */}
-            <div className="bg-white rounded-lg shadow">
-              <div className="bg-gray-50 px-6 py-4 border-b">
-                <h2 className="text-lg font-semibold text-gray-900">All Shifts</h2>
+            <div className="bg-surface-card rounded-lg shadow">
+              <div className="bg-surface-bg px-6 py-4 border-b">
+                <h2 className="text-lg font-semibold text-content-primary">All Shifts</h2>
               </div>
 
               <div className="divide-y">
                 {dailySummary.all_shifts && dailySummary.all_shifts.map((shift: any, idx: number) => (
-                  <div key={idx} className="p-6 hover:bg-gray-50 transition-colors">
+                  <div key={idx} className="p-6 hover:bg-surface-bg transition-colors">
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">{shift.tank_id}</h3>
-                          <span className="text-gray-500">•</span>
-                          <span className="text-gray-700">{shift.shift_type}</span>
+                          <h3 className="text-lg font-semibold text-content-primary">{shift.tank_id}</h3>
+                          <span className="text-content-secondary">•</span>
+                          <span className="text-content-secondary">{shift.shift_type}</span>
                           <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(shift.reconciliation.status)}`}>
                             {getStatusIcon(shift.reconciliation.status)} {shift.reconciliation.status}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-600">Reading ID: {shift.reading_id}</p>
+                        <p className="text-sm text-content-secondary">Reading ID: {shift.reading_id}</p>
                       </div>
                       <button
                         onClick={() => viewDetails(shift)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        className="px-4 py-2 bg-action-primary text-white rounded-lg hover:bg-action-primary-hover"
                       >
                         View Details
                       </button>
@@ -252,32 +252,32 @@ export default function ThreeWayReconciliation() {
 
                     {/* Three Sources Mini View */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-blue-50 rounded p-3">
-                        <div className="text-xs text-blue-600 font-medium mb-1">PHYSICAL (Tank)</div>
-                        <div className="text-lg font-bold text-blue-900">
+                      <div className="bg-action-primary-light rounded p-3">
+                        <div className="text-xs text-action-primary font-medium mb-1">PHYSICAL (Tank)</div>
+                        <div className="text-lg font-bold text-action-primary">
                           {shift.reconciliation.sources.physical.tank_movement_liters?.toLocaleString()} L
                         </div>
-                        <div className="text-xs text-blue-700">
+                        <div className="text-xs text-action-primary">
                           {shift.reconciliation.sources.physical.expected_cash?.toLocaleString()} cash
                         </div>
                       </div>
 
-                      <div className="bg-purple-50 rounded p-3">
-                        <div className="text-xs text-purple-600 font-medium mb-1">OPERATIONAL (Nozzle)</div>
-                        <div className="text-lg font-bold text-purple-900">
+                      <div className="bg-category-a-light rounded p-3">
+                        <div className="text-xs text-category-a font-medium mb-1">OPERATIONAL (Nozzle)</div>
+                        <div className="text-lg font-bold text-category-a">
                           {shift.reconciliation.sources.operational.nozzle_sales_liters?.toLocaleString()} L
                         </div>
-                        <div className="text-xs text-purple-700">
+                        <div className="text-xs text-category-a">
                           {shift.reconciliation.sources.operational.expected_cash?.toLocaleString()} cash
                         </div>
                       </div>
 
-                      <div className="bg-green-50 rounded p-3">
-                        <div className="text-xs text-green-600 font-medium mb-1">FINANCIAL (Cash)</div>
-                        <div className="text-lg font-bold text-green-900">
+                      <div className="bg-status-success-light rounded p-3">
+                        <div className="text-xs text-status-success font-medium mb-1">FINANCIAL (Cash)</div>
+                        <div className="text-lg font-bold text-status-success">
                           {shift.reconciliation.sources.financial.equivalent_liters?.toLocaleString()} L
                         </div>
-                        <div className="text-xs text-green-700">
+                        <div className="text-xs text-status-success">
                           {shift.reconciliation.sources.financial.actual_cash?.toLocaleString()} cash
                         </div>
                       </div>
@@ -288,18 +288,18 @@ export default function ThreeWayReconciliation() {
             </div>
           </>
         ) : (
-          <div className="bg-white rounded-lg shadow p-12 text-center">
-            <p className="text-gray-600 text-lg">No data for {selectedDate}</p>
+          <div className="bg-surface-card rounded-lg shadow p-12 text-center">
+            <p className="text-content-secondary text-lg">No data for {selectedDate}</p>
           </div>
         )}
 
         {/* Details Modal */}
         {selectedReading && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setSelectedReading(null)}>
-            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-900">Details</h2>
-                <button onClick={() => setSelectedReading(null)} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+            <div className="bg-surface-card rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="sticky top-0 bg-surface-card border-b px-6 py-4 flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-content-primary">Details</h2>
+                <button onClick={() => setSelectedReading(null)} className="text-content-secondary hover:text-content-secondary text-2xl">×</button>
               </div>
 
               <div className="p-6">
@@ -318,18 +318,18 @@ export default function ThreeWayReconciliation() {
                   <h3 className="text-lg font-semibold mb-4">Three Sources</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Physical */}
-                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                      <div className="text-sm font-semibold text-blue-600 mb-3">PHYSICAL</div>
+                    <div className="bg-action-primary-light rounded-lg p-4 border border-action-primary">
+                      <div className="text-sm font-semibold text-action-primary mb-3">PHYSICAL</div>
                       <div className="space-y-2">
                         <div>
-                          <div className="text-xs text-blue-600">Tank Movement</div>
-                          <div className="text-2xl font-bold text-blue-900">
+                          <div className="text-xs text-action-primary">Tank Movement</div>
+                          <div className="text-2xl font-bold text-action-primary">
                             {selectedReading.sources.physical.tank_movement_liters?.toLocaleString()} L
                           </div>
                         </div>
                         <div>
-                          <div className="text-xs text-blue-600">Expected Cash</div>
-                          <div className="text-lg font-semibold text-blue-800">
+                          <div className="text-xs text-action-primary">Expected Cash</div>
+                          <div className="text-lg font-semibold text-action-primary">
                             {selectedReading.sources.physical.expected_cash?.toLocaleString()}
                           </div>
                         </div>
@@ -337,18 +337,18 @@ export default function ThreeWayReconciliation() {
                     </div>
 
                     {/* Operational */}
-                    <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                      <div className="text-sm font-semibold text-purple-600 mb-3">OPERATIONAL</div>
+                    <div className="bg-category-a-light rounded-lg p-4 border border-category-a-border">
+                      <div className="text-sm font-semibold text-category-a mb-3">OPERATIONAL</div>
                       <div className="space-y-2">
                         <div>
-                          <div className="text-xs text-purple-600">Nozzle Sales</div>
-                          <div className="text-2xl font-bold text-purple-900">
+                          <div className="text-xs text-category-a">Nozzle Sales</div>
+                          <div className="text-2xl font-bold text-category-a">
                             {selectedReading.sources.operational.nozzle_sales_liters?.toLocaleString()} L
                           </div>
                         </div>
                         <div>
-                          <div className="text-xs text-purple-600">Expected Cash</div>
-                          <div className="text-lg font-semibold text-purple-800">
+                          <div className="text-xs text-category-a">Expected Cash</div>
+                          <div className="text-lg font-semibold text-category-a">
                             {selectedReading.sources.operational.expected_cash?.toLocaleString()}
                           </div>
                         </div>
@@ -356,18 +356,18 @@ export default function ThreeWayReconciliation() {
                     </div>
 
                     {/* Financial */}
-                    <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                      <div className="text-sm font-semibold text-green-600 mb-3">FINANCIAL</div>
+                    <div className="bg-status-success-light rounded-lg p-4 border border-status-success">
+                      <div className="text-sm font-semibold text-status-success mb-3">FINANCIAL</div>
                       <div className="space-y-2">
                         <div>
-                          <div className="text-xs text-green-600">Cash Equivalent</div>
-                          <div className="text-2xl font-bold text-green-900">
+                          <div className="text-xs text-status-success">Cash Equivalent</div>
+                          <div className="text-2xl font-bold text-status-success">
                             {selectedReading.sources.financial.equivalent_liters?.toLocaleString()} L
                           </div>
                         </div>
                         <div>
-                          <div className="text-xs text-green-600">Actual Cash</div>
-                          <div className="text-lg font-semibold text-green-800">
+                          <div className="text-xs text-status-success">Actual Cash</div>
+                          <div className="text-lg font-semibold text-status-success">
                             {selectedReading.sources.financial.actual_cash?.toLocaleString()}
                           </div>
                         </div>
@@ -380,7 +380,7 @@ export default function ThreeWayReconciliation() {
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold mb-4">Variances</h3>
                   <div className="space-y-3">
-                    <div className="bg-gray-50 rounded-lg p-4 border">
+                    <div className="bg-surface-bg rounded-lg p-4 border">
                       <div className="flex items-center justify-between mb-2">
                         <div className="font-medium">Tank vs Nozzle</div>
                         <span className={`px-3 py-1 rounded text-sm font-medium ${getVarianceStatusColor(selectedReading.variances.tank_vs_nozzle.status)}`}>
@@ -389,22 +389,22 @@ export default function ThreeWayReconciliation() {
                       </div>
                       <div className="grid grid-cols-3 gap-4 text-sm">
                         <div>
-                          <div className="text-gray-600">Liters</div>
+                          <div className="text-content-secondary">Liters</div>
                           <div className="font-semibold">{selectedReading.variances.tank_vs_nozzle.variance_liters.toLocaleString()}</div>
                         </div>
                         <div>
-                          <div className="text-gray-600">Cash</div>
+                          <div className="text-content-secondary">Cash</div>
                           <div className="font-semibold">{selectedReading.variances.tank_vs_nozzle.variance_cash.toLocaleString()}</div>
                         </div>
                         <div>
-                          <div className="text-gray-600">Percent</div>
+                          <div className="text-content-secondary">Percent</div>
                           <div className="font-semibold">{selectedReading.variances.tank_vs_nozzle.variance_percent.toFixed(2)}%</div>
                         </div>
                       </div>
                     </div>
 
                     {selectedReading.variances.tank_vs_cash && (
-                      <div className="bg-gray-50 rounded-lg p-4 border">
+                      <div className="bg-surface-bg rounded-lg p-4 border">
                         <div className="flex items-center justify-between mb-2">
                           <div className="font-medium">Tank vs Cash</div>
                           <span className={`px-3 py-1 rounded text-sm font-medium ${getVarianceStatusColor(selectedReading.variances.tank_vs_cash.status)}`}>
@@ -413,15 +413,15 @@ export default function ThreeWayReconciliation() {
                         </div>
                         <div className="grid grid-cols-3 gap-4 text-sm">
                           <div>
-                            <div className="text-gray-600">Liters</div>
+                            <div className="text-content-secondary">Liters</div>
                             <div className="font-semibold">{selectedReading.variances.tank_vs_cash.variance_liters.toLocaleString()}</div>
                           </div>
                           <div>
-                            <div className="text-gray-600">Cash</div>
+                            <div className="text-content-secondary">Cash</div>
                             <div className="font-semibold">{selectedReading.variances.tank_vs_cash.variance_cash.toLocaleString()}</div>
                           </div>
                           <div>
-                            <div className="text-gray-600">Percent</div>
+                            <div className="text-content-secondary">Percent</div>
                             <div className="font-semibold">{selectedReading.variances.tank_vs_cash.variance_percent.toFixed(2)}%</div>
                           </div>
                         </div>
@@ -429,7 +429,7 @@ export default function ThreeWayReconciliation() {
                     )}
 
                     {selectedReading.variances.nozzle_vs_cash && (
-                      <div className="bg-gray-50 rounded-lg p-4 border">
+                      <div className="bg-surface-bg rounded-lg p-4 border">
                         <div className="flex items-center justify-between mb-2">
                           <div className="font-medium">Nozzle vs Cash</div>
                           <span className={`px-3 py-1 rounded text-sm font-medium ${getVarianceStatusColor(selectedReading.variances.nozzle_vs_cash.status)}`}>
@@ -438,15 +438,15 @@ export default function ThreeWayReconciliation() {
                         </div>
                         <div className="grid grid-cols-3 gap-4 text-sm">
                           <div>
-                            <div className="text-gray-600">Liters</div>
+                            <div className="text-content-secondary">Liters</div>
                             <div className="font-semibold">{selectedReading.variances.nozzle_vs_cash.variance_liters.toLocaleString()}</div>
                           </div>
                           <div>
-                            <div className="text-gray-600">Cash</div>
+                            <div className="text-content-secondary">Cash</div>
                             <div className="font-semibold">{selectedReading.variances.nozzle_vs_cash.variance_cash.toLocaleString()}</div>
                           </div>
                           <div>
-                            <div className="text-gray-600">Percent</div>
+                            <div className="text-content-secondary">Percent</div>
                             <div className="font-semibold">{selectedReading.variances.nozzle_vs_cash.variance_percent.toFixed(2)}%</div>
                           </div>
                         </div>
@@ -458,7 +458,7 @@ export default function ThreeWayReconciliation() {
                 {/* Root Cause */}
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold mb-4">Root Cause</h3>
-                  <div className="bg-gray-50 rounded-lg p-4 border">
+                  <div className="bg-surface-bg rounded-lg p-4 border">
                     <div className="flex items-center gap-3 mb-3">
                       <span className="text-sm font-medium">Outlier:</span>
                       <span className={`px-4 py-2 rounded-full font-semibold ${getOutlierColor(selectedReading.root_cause_analysis.outlier_source)}`}>
@@ -484,7 +484,7 @@ export default function ThreeWayReconciliation() {
                 {/* Recommendations */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Recommendations</h3>
-                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <div className="bg-action-primary-light rounded-lg p-4 border border-action-primary">
                     <ul className="space-y-2">
                       {selectedReading.recommendations.map((rec, idx) => (
                         <li key={idx} className="text-sm flex items-start">

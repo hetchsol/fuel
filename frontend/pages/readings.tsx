@@ -155,11 +155,11 @@ export default function Readings() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Submit Dual Meter Reading</h1>
-        <p className="mt-2 text-sm text-gray-600">Record Electronic and Mechanical nozzle readings with dual verification</p>
-        <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <p className="text-sm text-blue-900 font-medium">Dual Reading System:</p>
-          <ul className="text-xs text-blue-700 mt-1 space-y-1">
+        <h1 className="text-3xl font-bold text-content-primary">Submit Dual Meter Reading</h1>
+        <p className="mt-2 text-sm text-content-secondary">Record Electronic and Mechanical nozzle readings with dual verification</p>
+        <div className="mt-3 bg-action-primary-light border border-action-primary rounded-lg p-3">
+          <p className="text-sm text-action-primary font-medium">Dual Reading System:</p>
+          <ul className="text-xs text-action-primary mt-1 space-y-1">
             <li>• <strong>Electronic Reading</strong> - Primary precise reading (3 decimal places) - Manually entered</li>
             <li>• <strong>Mechanical Reading</strong> - Backup reading (whole numbers) - Extracted from meter photo via OCR</li>
           </ul>
@@ -167,31 +167,31 @@ export default function Readings() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-surface-card rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">Reading Form</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Nozzle ID
               </label>
               <input
                 type="text"
                 value={formData.nozzleId}
                 onChange={(e) => setFormData({ ...formData, nozzleId: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 placeholder="e.g., N001"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Reading Type
               </label>
               <select
                 value={formData.kind}
                 onChange={(e) => setFormData({ ...formData, kind: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
               >
                 <option>Opening</option>
                 <option>Closing</option>
@@ -200,8 +200,8 @@ export default function Readings() {
               </select>
             </div>
 
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="border-2 border-dashed border-surface-border rounded-lg p-4 bg-surface-bg">
+              <label className="block text-sm font-medium text-content-secondary mb-2">
                 📷 Upload Nozzle Image (Auto-extracts number)
               </label>
               <div className="space-y-3">
@@ -209,16 +209,16 @@ export default function Readings() {
                   type="file"
                   accept="image/*"
                   onChange={handleFileChange}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  className="block w-full text-sm text-content-secondary file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-action-primary-light file:text-action-primary hover:file:bg-action-primary-light"
                 />
                 {uploading && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded">
-                    <p className="text-sm text-blue-700">🔍 Uploading and extracting numbers...</p>
+                  <div className="p-3 bg-action-primary-light border border-action-primary rounded">
+                    <p className="text-sm text-action-primary">🔍 Uploading and extracting numbers...</p>
                   </div>
                 )}
                 {uploadedImageUrl && (
                   <div className="mt-2 space-y-3">
-                    <p className="text-sm text-green-600 font-medium">✓ Image uploaded and OCR completed</p>
+                    <p className="text-sm text-status-success font-medium">✓ Image uploaded and OCR completed</p>
                     <img src={uploadedImageUrl} alt="Uploaded nozzle reading" className="max-w-full h-auto rounded border" />
                   </div>
                 )}
@@ -238,12 +238,12 @@ export default function Readings() {
                 placeholder="Upload meter photo to extract"
               />
               {ocrPreview?.success && (
-                <p className="text-xs text-green-700 mt-1 font-medium">
+                <p className="text-xs text-status-success mt-1 font-medium">
                   ✓ Confidence: {((ocrPreview.confidence || 0) * 100).toFixed(0)}% | Method: Real OCR
                 </p>
               )}
               {ocrPreview && !ocrPreview.success && (
-                <p className="text-xs text-yellow-700 mt-1">
+                <p className="text-xs text-status-warning mt-1">
                   ⚠️ {ocrPreview.message || 'OCR extraction failed'}
                 </p>
               )}
@@ -253,8 +253,8 @@ export default function Readings() {
             </div>
 
             {/* Electronic Reading (Primary) */}
-            <div className="bg-green-50 border-2 border-green-200 rounded-lg p-3">
-              <label className="block text-sm font-bold text-green-900 mb-1">
+            <div className="bg-fuel-petrol-light border-2 border-fuel-petrol-border rounded-lg p-3">
+              <label className="block text-sm font-bold text-fuel-petrol mb-1">
                 ⚡ Electronic Reading (Primary - Precise to 3 decimals)
               </label>
               <input
@@ -269,7 +269,7 @@ export default function Readings() {
                 placeholder="e.g., 12345.678"
                 required
               />
-              <p className="text-xs text-green-600 mt-2">
+              <p className="text-xs text-status-success mt-2">
                 Manually enter the ELECTRONIC reading from the digital display (3 decimal places)
               </p>
             </div>
@@ -280,23 +280,23 @@ export default function Readings() {
                 type="button"
                 onClick={handleValidate}
                 disabled={!ocrPreview?.success || !formData.manualValue}
-                className="w-full px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 🔍 Validate Electronic vs Mechanical Reading
               </button>
 
                 {/* Validation Result */}
                 {validationStatus === 'match' && (
-                  <div className="mt-3 p-4 bg-green-50 border-2 border-green-500 rounded-md">
+                  <div className="mt-3 p-4 bg-status-success-light border-2 border-status-success rounded-md">
                     <div className="flex items-center">
                       <span className="text-2xl mr-3">✅</span>
                       <div>
-                        <p className="text-sm font-bold text-green-900">Dual Readings Match!</p>
-                        <p className="text-xs text-green-700 mt-1">
+                        <p className="text-sm font-bold text-status-success">Dual Readings Match!</p>
+                        <p className="text-xs text-status-success mt-1">
                           Mechanical: {ocrPreview.ocr_value.toFixed(0)} | Electronic: {parseFloat(formData.manualValue).toFixed(3)} |
                           Discrepancy: {calculateDiscrepancy()?.toFixed(3)}L
                         </p>
-                        <p className="text-xs text-green-600 mt-1">
+                        <p className="text-xs text-status-success mt-1">
                           ✓ Dual readings verified. You can now proceed to submit.
                         </p>
                       </div>
@@ -324,7 +324,7 @@ export default function Readings() {
               </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 OCR Confidence Minimum (0-1)
               </label>
               <input
@@ -334,10 +334,10 @@ export default function Readings() {
                 max="1"
                 value={formData.ocrConfMin}
                 onChange={(e) => setFormData({ ...formData, ocrConfMin: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 required
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-content-secondary mt-1">
                 Minimum confidence level for OCR validation (default: 0.85)
               </p>
             </div>
@@ -345,43 +345,43 @@ export default function Readings() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Submitting...' : 'Submit Reading'}
             </button>
           </form>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-surface-card rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">Validation Result</h2>
 
           {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm font-medium text-red-900">Error</p>
-              <p className="text-sm text-red-700 mt-1">{error}</p>
+            <div className="p-4 bg-status-error-light border border-status-error rounded-md">
+              <p className="text-sm font-medium text-status-error">Error</p>
+              <p className="text-sm text-status-error mt-1">{error}</p>
             </div>
           )}
 
           {result && (
             <div className="space-y-4">
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm font-medium text-blue-900">Reading ID</p>
-                <p className="text-sm text-blue-700 mt-1">{result.reading_id}</p>
+              <div className="p-4 bg-action-primary-light border border-action-primary rounded-md">
+                <p className="text-sm font-medium text-action-primary">Reading ID</p>
+                <p className="text-sm text-action-primary mt-1">{result.reading_id}</p>
               </div>
 
               <div className={`p-4 border rounded-md ${
-                result.status === 'ok' ? 'bg-green-50 border-green-200' :
-                result.status === 'warn' ? 'bg-yellow-50 border-yellow-200' :
-                'bg-red-50 border-red-200'
+                result.status === 'ok' ? 'bg-status-success-light border-status-success' :
+                result.status === 'warn' ? 'bg-status-pending-light border-status-warning' :
+                'bg-status-error-light border-status-error'
               }`}>
                 <p className="text-sm font-medium">Status</p>
                 <p className="text-lg font-bold mt-1 capitalize">{result.status}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-                  <p className="text-xs font-medium text-green-900">⚡ Electronic Reading</p>
-                  <p className="text-lg font-bold text-green-700 mt-1">{parseFloat(formData.manualValue).toFixed(3)}</p>
+                <div className="p-3 bg-fuel-petrol-light border border-fuel-petrol-border rounded-md">
+                  <p className="text-xs font-medium text-fuel-petrol">⚡ Electronic Reading</p>
+                  <p className="text-lg font-bold text-fuel-petrol mt-1">{parseFloat(formData.manualValue).toFixed(3)}</p>
                 </div>
                 <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-md">
                   <p className="text-xs font-medium text-indigo-900">🔧 Mechanical Reading</p>
@@ -389,9 +389,9 @@ export default function Readings() {
                 </div>
               </div>
 
-              <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
-                <p className="text-sm font-medium text-gray-900">Discrepancy</p>
-                <p className="text-lg font-bold text-gray-700 mt-1">{result.discrepancy?.toFixed(3) || '0.000'} liters</p>
+              <div className="p-4 bg-surface-bg border border-surface-border rounded-md">
+                <p className="text-sm font-medium text-content-primary">Discrepancy</p>
+                <p className="text-lg font-bold text-content-secondary mt-1">{result.discrepancy?.toFixed(3) || '0.000'} liters</p>
               </div>
 
               <div className="p-3 bg-cyan-50 border border-cyan-200 rounded-md">
@@ -420,16 +420,16 @@ export default function Readings() {
           )}
 
           {!result && !error && (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-content-secondary">
               Submit a reading to see validation results
             </div>
           )}
         </div>
       </div>
 
-      <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-blue-900 mb-2">How the Dual Reading System Works</h3>
-        <ul className="text-sm text-blue-700 space-y-1">
+      <div className="mt-8 bg-action-primary-light border border-action-primary rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-action-primary mb-2">How the Dual Reading System Works</h3>
+        <ul className="text-sm text-action-primary space-y-1">
           <li>• <strong>Step 1:</strong> Take a photo of the MECHANICAL meter (backup meter with whole numbers)</li>
           <li>• <strong>Step 2:</strong> Upload the image - System extracts the mechanical reading using Tesseract OCR</li>
           <li>• <strong>Step 3:</strong> MECHANICAL Reading is displayed in the indigo field (whole numbers)</li>
@@ -439,9 +439,9 @@ export default function Readings() {
           <li>• <strong>Step 7:</strong> Submit Dual Reading - Both values are recorded for shift reconciliation</li>
           <li>• <strong>Result:</strong> Returns status (VALID/warn/error) with full discrepancy details between both meters</li>
         </ul>
-        <div className="mt-3 p-3 bg-yellow-50 border border-yellow-300 rounded">
-          <p className="text-xs text-yellow-900 font-semibold mb-1">⚠️ Important - Dual Reading System:</p>
-          <p className="text-xs text-yellow-800">
+        <div className="mt-3 p-3 bg-status-pending-light border border-status-warning rounded">
+          <p className="text-xs text-status-warning font-semibold mb-1">⚠️ Important - Dual Reading System:</p>
+          <p className="text-xs text-status-warning">
             <strong>Electronic Reading</strong> (Primary) = Precise digital display with 3 decimals<br/>
             <strong>Mechanical Reading</strong> (Backup) = Physical meter with whole numbers only<br/>
             Discrepancies between the two are normal and tracked for shift reconciliation and loss prevention.

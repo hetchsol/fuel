@@ -345,11 +345,11 @@ export default function Shifts() {
   }
 
   const getShiftStatusColor = (status: string) => {
-    if (status === 'active') return 'bg-green-100 text-green-800 border-green-300'
-    if (status === 'completed') return 'bg-blue-100 text-blue-800 border-blue-300'
-    if (status === 'reconciled') return 'bg-purple-100 text-purple-800 border-purple-300'
-    if (status === 'inactive') return 'bg-red-100 text-red-800 border-red-300'
-    return 'bg-gray-100 text-gray-800 border-gray-300'
+    if (status === 'active') return 'bg-status-success-light text-status-success border-status-success'
+    if (status === 'completed') return 'bg-action-primary-light text-action-primary border-action-primary'
+    if (status === 'reconciled') return 'bg-category-a-light text-category-a border-category-a-border'
+    if (status === 'inactive') return 'bg-status-error-light text-status-error border-status-error'
+    return 'bg-surface-bg text-content-primary border-surface-border'
   }
 
   // Derive the current user's assignment from the active shift
@@ -643,20 +643,20 @@ export default function Shifts() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Shift Management</h1>
-        <p className="mt-2 text-sm text-gray-600">Day/Night shift operations and dual meter readings</p>
+        <h1 className="text-3xl font-bold text-content-primary">Shift Management</h1>
+        <p className="mt-2 text-sm text-content-secondary">Day/Night shift operations and dual meter readings</p>
       </div>
 
       {/* Current Active Shift Card */}
       <div className="mb-6">
         {activeShift ? (
-          <div className="bg-gradient-to-br from-green-50 to-blue-50 rounded-lg shadow-lg p-6 border-2 border-green-300">
+          <div className="bg-status-success-light rounded-lg shadow-lg p-6 border-2 border-status-success">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">
+                <h2 className="text-2xl font-bold text-content-primary">
                   {getShiftTypeDisplay(activeShift.shift_type)}
                 </h2>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-content-secondary mt-1">
                   {activeShift.date} | Shift ID: {activeShift.shift_id}
                 </p>
               </div>
@@ -668,20 +668,20 @@ export default function Shifts() {
                   <>
                     <button
                       onClick={openShiftModal}
-                      className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+                      className="px-3 py-1 text-sm bg-action-primary hover:bg-action-primary-hover text-white rounded-md"
                     >
                       Manage Shift
                     </button>
                     <button
                       onClick={() => setShowManageDropdown(!showManageDropdown)}
-                      className="px-3 py-1 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-md"
+                      className="px-3 py-1 text-sm bg-category-d hover:bg-category-d/90 text-white rounded-md"
                     >
                       Manage Existing Shift
                     </button>
                     {activeShift.status === 'active' && (
                       <button
                         onClick={() => handleDeactivateShift(activeShift.shift_id)}
-                        className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded-md"
+                        className="px-3 py-1 text-sm bg-status-error hover:bg-status-error/90 text-white rounded-md"
                       >
                         Deactivate
                       </button>
@@ -693,15 +693,15 @@ export default function Shifts() {
 
             {/* Manage Existing Shift Dropdown */}
             {showManageDropdown && canManageShifts && (
-              <div className="mb-4 p-4 bg-white rounded-lg border border-indigo-200">
-                <h3 className="font-semibold text-gray-900 mb-3">Manage Existing Shift</h3>
+              <div className="mb-4 p-4 bg-surface-card rounded-lg border border-category-d-border">
+                <h3 className="font-semibold text-content-primary mb-3">Manage Existing Shift</h3>
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="flex-1 min-w-[250px]">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Select a shift</label>
+                    <label className="block text-sm font-medium text-content-secondary mb-1">Select a shift</label>
                     <select
                       value={selectedShiftId}
                       onChange={(e) => setSelectedShiftId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-category-d focus:border-category-d"
                     >
                       <option value="">-- Select Shift --</option>
                       {(() => {
@@ -729,14 +729,14 @@ export default function Shifts() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => { openEditModal(shift); setShowManageDropdown(false) }}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium"
+                          className="px-4 py-2 bg-action-primary hover:bg-action-primary-hover text-white rounded-md text-sm font-medium"
                         >
                           Edit Shift
                         </button>
                         {shift.status === 'active' && (
                           <button
                             onClick={() => { handleDeactivateShift(shift.shift_id); setSelectedShiftId('') }}
-                            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md text-sm font-medium"
+                            className="px-4 py-2 bg-status-error hover:bg-status-error/90 text-white rounded-md text-sm font-medium"
                           >
                             Deactivate
                           </button>
@@ -744,7 +744,7 @@ export default function Shifts() {
                         {currentUser?.role === 'owner' && shift.status === 'inactive' && (
                           <button
                             onClick={() => { handleDeleteShift(shift.shift_id); setSelectedShiftId('') }}
-                            className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-md text-sm font-medium"
+                            className="px-4 py-2 bg-status-error hover:bg-status-error/90 text-white rounded-md text-sm font-medium"
                           >
                             Delete
                           </button>
@@ -760,14 +760,14 @@ export default function Shifts() {
                   if (!shift) return null
                   return (
                     <div className={`mt-3 p-3 rounded-lg border ${
-                      shift.status === 'active' ? 'bg-green-50 border-green-200'
-                      : shift.status === 'completed' ? 'bg-blue-50 border-blue-200'
-                      : shift.status === 'reconciled' ? 'bg-purple-50 border-purple-200'
-                      : shift.status === 'inactive' ? 'bg-red-50 border-red-200'
-                      : 'bg-gray-50 border-gray-200'
+                      shift.status === 'active' ? 'bg-status-success-light border-status-success'
+                      : shift.status === 'completed' ? 'bg-action-primary-light border-action-primary'
+                      : shift.status === 'reconciled' ? 'bg-category-a-light border-category-a-border'
+                      : shift.status === 'inactive' ? 'bg-status-error-light border-status-error'
+                      : 'bg-surface-bg border-surface-border'
                     }`}>
                       <div className="flex items-center gap-3 mb-2">
-                        <span className="font-semibold text-gray-900 text-sm">{shift.date} — {shift.shift_type === 'Day' ? 'Day Shift' : 'Night Shift'}</span>
+                        <span className="font-semibold text-content-primary text-sm">{shift.date} — {shift.shift_type === 'Day' ? 'Day Shift' : 'Night Shift'}</span>
                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${getShiftStatusColor(shift.status)}`}>
                           {shift.status.toUpperCase()}
                         </span>
@@ -776,9 +776,9 @@ export default function Shifts() {
                         <div className="space-y-1">
                           {shift.assignments.map((a: any) => (
                             <div key={a.attendant_id} className="text-sm">
-                              <span className="font-medium text-gray-800">{a.attendant_name}</span>
+                              <span className="font-medium text-content-primary">{a.attendant_name}</span>
                               {a.nozzle_ids && a.nozzle_ids.length > 0 && (
-                                <span className="text-gray-500 ml-2">
+                                <span className="text-content-secondary ml-2">
                                   — {a.nozzle_ids.map((nid: string) => {
                                     const nozzle = nozzles.find(n => n.nozzle_id === nid)
                                     return nozzle ? getNozzleDisplayName(nozzle) : nid
@@ -789,9 +789,9 @@ export default function Shifts() {
                           ))}
                         </div>
                       ) : shift.attendants && shift.attendants.length > 0 ? (
-                        <p className="text-sm text-gray-600">Attendants: {shift.attendants.join(', ')}</p>
+                        <p className="text-sm text-content-secondary">Attendants: {shift.attendants.join(', ')}</p>
                       ) : (
-                        <p className="text-sm text-gray-500">No attendant assignments</p>
+                        <p className="text-sm text-content-secondary">No attendant assignments</p>
                       )}
                     </div>
                   )
@@ -802,15 +802,15 @@ export default function Shifts() {
             {/* Attendant Assignments */}
             {activeShift.assignments && activeShift.assignments.length > 0 ? (
               <div className="mt-6">
-                <h3 className="font-semibold mb-3 text-gray-900">Attendant Assignments:</h3>
+                <h3 className="font-semibold mb-3 text-content-primary">Attendant Assignments:</h3>
                 <div className="space-y-4">
                   {activeShift.assignments.map((assignment: any) => (
-                    <div key={assignment.attendant_id} className="p-4 bg-white rounded-lg border border-gray-200">
-                      <p className="font-medium mb-2 text-gray-900">👤 {assignment.attendant_name}</p>
+                    <div key={assignment.attendant_id} className="p-4 bg-surface-card rounded-lg border border-surface-border">
+                      <p className="font-medium mb-2 text-content-primary">👤 {assignment.attendant_name}</p>
 
                       {assignment.island_ids && assignment.island_ids.length > 0 && (
                         <div className="mb-2">
-                          <span className="text-sm text-gray-600">Islands: </span>
+                          <span className="text-sm text-content-secondary">Islands: </span>
                           <span className="text-sm font-medium">
                             {assignment.island_ids.map((id: string) => {
                               const island = islandsData.find(i => i.island_id === id)
@@ -822,7 +822,7 @@ export default function Shifts() {
 
                       {assignment.nozzle_ids && assignment.nozzle_ids.length > 0 && (
                         <div>
-                          <span className="text-sm text-gray-600">Nozzles: </span>
+                          <span className="text-sm text-content-secondary">Nozzles: </span>
                           <div className="flex flex-wrap gap-2 mt-1">
                             {assignment.nozzle_ids.map((nozzleId: string) => {
                               const nozzle = getFilteredNozzles(assignment.island_ids).find((n: any) => n.nozzle_id === nozzleId)
@@ -831,8 +831,8 @@ export default function Shifts() {
                                   key={nozzleId}
                                   className={`px-2 py-1 text-xs rounded ${
                                     nozzle?.fuel_type === 'Petrol'
-                                      ? 'bg-blue-100 text-blue-700'
-                                      : 'bg-orange-100 text-orange-700'
+                                      ? 'bg-action-primary-light text-action-primary'
+                                      : 'bg-category-c-light text-category-c'
                                   }`}
                                 >
                                   {nozzle ? getNozzleDisplayName(nozzle) : nozzleId}
@@ -848,17 +848,17 @@ export default function Shifts() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                <div className="bg-white rounded-lg p-4 border border-gray-200">
-                  <p className="text-xs text-gray-600 font-medium">Attendants on Duty</p>
-                  <p className="text-lg font-semibold text-gray-900 mt-1">
+                <div className="bg-surface-card rounded-lg p-4 border border-surface-border">
+                  <p className="text-xs text-content-secondary font-medium">Attendants on Duty</p>
+                  <p className="text-lg font-semibold text-content-primary mt-1">
                     {activeShift.attendants && activeShift.attendants.length > 0
                       ? activeShift.attendants.join(', ')
                       : 'No attendants assigned'}
                   </p>
                 </div>
-                <div className="bg-white rounded-lg p-4 border border-gray-200">
-                  <p className="text-xs text-gray-600 font-medium">Start Time</p>
-                  <p className="text-lg font-semibold text-gray-900 mt-1">
+                <div className="bg-surface-card rounded-lg p-4 border border-surface-border">
+                  <p className="text-xs text-content-secondary font-medium">Start Time</p>
+                  <p className="text-lg font-semibold text-content-primary mt-1">
                     {activeShift.start_time || 'Not recorded'}
                   </p>
                 </div>
@@ -866,12 +866,12 @@ export default function Shifts() {
             )}
           </div>
         ) : (
-          <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 flex items-center justify-between">
-            <p className="text-yellow-800">No active shift found.</p>
+          <div className="bg-status-pending-light border border-status-warning rounded-lg p-4 flex items-center justify-between">
+            <p className="text-status-warning">No active shift found.</p>
             {canManageShifts && (
               <button
                 onClick={openShiftModal}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium"
+                className="px-4 py-2 bg-action-primary hover:bg-action-primary-hover text-white rounded-md font-medium"
               >
                 Create Shift
               </button>
@@ -882,18 +882,18 @@ export default function Shifts() {
 
       {/* Dual Reading Submission Form */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">📝 Submit Dual Reading</h2>
+        <div className="bg-surface-card rounded-lg shadow-lg p-6">
+          <h2 className="text-xl font-bold text-content-primary mb-4">📝 Submit Dual Reading</h2>
 
           <form onSubmit={handleSubmitReading} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Nozzle
               </label>
               <select
                 value={readingForm.nozzle_id}
                 onChange={(e) => setReadingForm({ ...readingForm, nozzle_id: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 required
               >
                 <option value="">Select Nozzle</option>
@@ -904,28 +904,28 @@ export default function Shifts() {
                 ))}
               </select>
               {userNozzles.length === 0 && activeShift && (
-                <p className="text-xs text-red-600 mt-1">
+                <p className="text-xs text-status-error mt-1">
                   You have no nozzles assigned for this shift. Contact your supervisor.
                 </p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Reading Type
               </label>
               <select
                 value={readingForm.reading_type}
                 onChange={(e) => setReadingForm({ ...readingForm, reading_type: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
               >
                 <option>Opening</option>
                 <option>Closing</option>
               </select>
             </div>
 
-            <div className="bg-green-50 border-2 border-green-200 rounded-lg p-3">
-              <label className="block text-sm font-bold text-green-900 mb-1">
+            <div className="bg-status-success-light border-2 border-status-success rounded-lg p-3">
+              <label className="block text-sm font-bold text-status-success mb-1">
                 ⚡ Electronic Reading (3 decimals)
               </label>
               <input
@@ -933,17 +933,17 @@ export default function Shifts() {
                 step="0.001"
                 value={readingForm.electronic_reading}
                 onChange={(e) => setReadingForm({ ...readingForm, electronic_reading: e.target.value })}
-                className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 text-lg font-semibold"
+                className="w-full px-3 py-2 border border-status-success rounded-md focus:outline-none focus:ring-status-success focus:border-status-success text-lg font-semibold"
                 placeholder="e.g., 12345.678"
                 required
               />
-              <p className="text-xs text-green-600 mt-1">
+              <p className="text-xs text-status-success mt-1">
                 Primary precise reading from digital display
               </p>
             </div>
 
-            <div className="bg-indigo-50 border-2 border-indigo-200 rounded-lg p-3">
-              <label className="block text-sm font-bold text-indigo-900 mb-1">
+            <div className="bg-category-d-light border-2 border-category-d-border rounded-lg p-3">
+              <label className="block text-sm font-bold text-category-d mb-1">
                 🔧 Mechanical Reading (whole numbers)
               </label>
               <input
@@ -951,31 +951,31 @@ export default function Shifts() {
                 step="1"
                 value={readingForm.mechanical_reading}
                 onChange={(e) => setReadingForm({ ...readingForm, mechanical_reading: e.target.value })}
-                className="w-full px-3 py-2 border border-indigo-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-lg font-semibold"
+                className="w-full px-3 py-2 border border-category-d-border rounded-md focus:outline-none focus:ring-category-d focus:border-category-d text-lg font-semibold"
                 placeholder="e.g., 12345"
                 required
               />
-              <p className="text-xs text-indigo-600 mt-1">
+              <p className="text-xs text-category-d mt-1">
                 Backup reading from mechanical meter
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Attendant
               </label>
               {currentUserAssignment ? (
                 <input
                   type="text"
                   value={currentUserAssignment.attendant_name}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-700"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-secondary"
                   readOnly
                 />
               ) : (
                 <select
                   value={readingForm.attendant}
                   onChange={(e) => setReadingForm({ ...readingForm, attendant: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   required
                 >
                   <option value="">Select Attendant</option>
@@ -989,7 +989,7 @@ export default function Shifts() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1">
                 Tank Dip (cm) - Optional
               </label>
               <input
@@ -997,21 +997,21 @@ export default function Shifts() {
                 step="0.1"
                 value={readingForm.tank_dip_cm}
                 onChange={(e) => setReadingForm({ ...readingForm, tank_dip_cm: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 placeholder="e.g., 135.8"
               />
             </div>
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-sm text-red-800">{error}</p>
+              <div className="p-3 bg-status-error-light border border-status-error rounded-md">
+                <p className="text-sm text-status-error">{error}</p>
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading || !activeShift}
-              className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-3 bg-action-primary text-white font-semibold rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Submitting...' : 'Submit Dual Reading'}
             </button>
@@ -1019,8 +1019,8 @@ export default function Shifts() {
         </div>
 
         {/* Nozzle Status Overview */}
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">⛽ Nozzle Status</h2>
+        <div className="bg-surface-card rounded-lg shadow-lg p-6">
+          <h2 className="text-xl font-bold text-content-primary mb-4">⛽ Nozzle Status</h2>
 
           <div className="space-y-3">
             {nozzles.length === 0 ? (
@@ -1031,31 +1031,31 @@ export default function Shifts() {
                   key={nozzle.nozzle_id}
                   className={`p-4 rounded-lg border-2 ${
                     nozzle.fuel_type === 'Petrol'
-                      ? 'bg-blue-50 border-blue-200'
-                      : 'bg-orange-50 border-orange-200'
+                      ? 'bg-action-primary-light border-action-primary'
+                      : 'bg-category-c-light border-category-c-border'
                   }`}
                 >
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="font-bold text-gray-900">{getNozzleDisplayName(nozzle)}</p>
-                      <p className="text-xs text-gray-500">{nozzle.nozzle_id}</p>
-                      <p className="text-xs text-gray-600">{nozzle.fuel_type}</p>
+                      <p className="font-bold text-content-primary">{getNozzleDisplayName(nozzle)}</p>
+                      <p className="text-xs text-content-secondary">{nozzle.nozzle_id}</p>
+                      <p className="text-xs text-content-secondary">{nozzle.fuel_type}</p>
                     </div>
                     <span className={`px-2 py-1 text-xs font-semibold rounded ${
                       nozzle.status === 'Active'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
+                        ? 'bg-status-success-light text-status-success'
+                        : 'bg-surface-bg text-content-primary'
                     }`}>
                       {nozzle.status}
                     </span>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <p className="text-gray-600">Electronic</p>
+                      <p className="text-content-secondary">Electronic</p>
                       <p className="font-semibold">{nozzle.electronic_reading?.toFixed(3) || 'N/A'}</p>
                     </div>
                     <div>
-                      <p className="text-gray-600">Mechanical</p>
+                      <p className="text-content-secondary">Mechanical</p>
                       <p className="font-semibold">{nozzle.mechanical_reading?.toFixed(0) || 'N/A'}</p>
                     </div>
                   </div>
@@ -1068,12 +1068,12 @@ export default function Shifts() {
 
       {/* Tank Dip Readings Section */}
       {activeShift && (currentUser?.role === 'supervisor' || currentUser?.role === 'owner') && (
-        <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
+        <div className="mt-6 bg-surface-card rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">🛢️ Tank Dip Readings</h2>
+            <h2 className="text-xl font-bold text-content-primary">🛢️ Tank Dip Readings</h2>
             <button
               onClick={() => setShowTankDipModal(true)}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium"
+              className="px-4 py-2 bg-status-success text-white rounded-md hover:bg-status-success/90 font-medium"
             >
               + Record Dip Reading
             </button>
@@ -1082,9 +1082,9 @@ export default function Shifts() {
           {/* Existing Tank Dip Readings */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {tankDipReadings.length === 0 ? (
-              <div className="col-span-2 p-6 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                <p className="text-gray-600">No tank dip readings recorded for this shift yet.</p>
-                <p className="text-sm text-gray-500 mt-1">Record opening and closing dip readings for reconciliation.</p>
+              <div className="col-span-2 p-6 bg-surface-bg rounded-lg border border-surface-border text-center">
+                <p className="text-content-secondary">No tank dip readings recorded for this shift yet.</p>
+                <p className="text-sm text-content-secondary mt-1">Record opening and closing dip readings for reconciliation.</p>
               </div>
             ) : (
               tankDipReadings.map((reading: any) => {
@@ -1094,13 +1094,13 @@ export default function Shifts() {
                   <div
                     key={reading.tank_id}
                     className={`p-4 rounded-lg border-2 ${
-                      isDiesel ? 'bg-purple-50 border-purple-300' : 'bg-green-50 border-green-300'
+                      isDiesel ? 'bg-fuel-diesel-light border-fuel-diesel-border' : 'bg-fuel-petrol-light border-fuel-petrol-border'
                     }`}
                   >
                     <div className="flex justify-between items-start mb-3">
-                      <h3 className="font-bold text-gray-900">{reading.tank_id}</h3>
+                      <h3 className="font-bold text-content-primary">{reading.tank_id}</h3>
                       <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                        isDiesel ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
+                        isDiesel ? 'bg-fuel-diesel-light text-fuel-diesel' : 'bg-fuel-petrol-light text-fuel-petrol'
                       }`}>
                         {tank?.fuel_type || 'Unknown'}
                       </span>
@@ -1108,36 +1108,36 @@ export default function Shifts() {
 
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Opening Dip:</span>
+                        <span className="text-content-secondary">Opening Dip:</span>
                         <span className="font-semibold">
                           {reading.opening_dip_cm ? `${reading.opening_dip_cm.toFixed(1)} cm` : 'Not recorded'}
                         </span>
                       </div>
                       {reading.opening_volume_liters && (
-                        <div className="flex justify-between text-xs text-gray-600">
+                        <div className="flex justify-between text-xs text-content-secondary">
                           <span>Opening Volume:</span>
                           <span>{reading.opening_volume_liters.toLocaleString()} L</span>
                         </div>
                       )}
 
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Closing Dip:</span>
+                        <span className="text-content-secondary">Closing Dip:</span>
                         <span className="font-semibold">
                           {reading.closing_dip_cm ? `${reading.closing_dip_cm.toFixed(1)} cm` : 'Not recorded'}
                         </span>
                       </div>
                       {reading.closing_volume_liters && (
-                        <div className="flex justify-between text-xs text-gray-600">
+                        <div className="flex justify-between text-xs text-content-secondary">
                           <span>Closing Volume:</span>
                           <span>{reading.closing_volume_liters.toLocaleString()} L</span>
                         </div>
                       )}
 
                       {reading.opening_volume_liters && reading.closing_volume_liters && (
-                        <div className="mt-2 pt-2 border-t border-gray-300">
+                        <div className="mt-2 pt-2 border-t border-surface-border">
                           <div className="flex justify-between text-sm font-semibold">
-                            <span className="text-blue-700">Tank Movement:</span>
-                            <span className="text-blue-900">
+                            <span className="text-action-primary">Tank Movement:</span>
+                            <span className="text-action-primary">
                               {(reading.opening_volume_liters - reading.closing_volume_liters).toLocaleString()} L
                             </span>
                           </div>
@@ -1155,18 +1155,18 @@ export default function Shifts() {
       {/* Tank Dip Reading Modal */}
       {showTankDipModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Record Tank Dip Reading</h3>
+          <div className="bg-surface-card rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-content-primary mb-4">Record Tank Dip Reading</h3>
 
             <form onSubmit={handleSubmitTankDipReading} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Select Tank
                 </label>
                 <select
                   value={tankDipForm.tank_id}
                   onChange={(e) => setTankDipForm({ ...tankDipForm, tank_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
                   required
                 >
                   <option value="">-- Select Tank --</option>
@@ -1179,7 +1179,7 @@ export default function Shifts() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Opening Dip (cm)
                 </label>
                 <input
@@ -1187,14 +1187,14 @@ export default function Shifts() {
                   step="0.1"
                   value={tankDipForm.opening_dip_cm}
                   onChange={(e) => setTankDipForm({ ...tankDipForm, opening_dip_cm: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
                   placeholder="e.g., 165.5"
                 />
-                <p className="text-xs text-gray-500 mt-1">Dip reading at shift start</p>
+                <p className="text-xs text-content-secondary mt-1">Dip reading at shift start</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-content-secondary mb-1">
                   Closing Dip (cm)
                 </label>
                 <input
@@ -1202,14 +1202,14 @@ export default function Shifts() {
                   step="0.1"
                   value={tankDipForm.closing_dip_cm}
                   onChange={(e) => setTankDipForm({ ...tankDipForm, closing_dip_cm: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
                   placeholder="e.g., 155.4"
                 />
-                <p className="text-xs text-gray-500 mt-1">Dip reading at shift end</p>
+                <p className="text-xs text-content-secondary mt-1">Dip reading at shift end</p>
               </div>
 
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-xs text-blue-700">
+              <div className="p-3 bg-action-primary-light border border-action-primary rounded-md">
+                <p className="text-xs text-action-primary">
                   <strong>Note:</strong> You can record opening dip at shift start and closing dip at shift end.
                   Both readings are needed for reconciliation analysis.
                 </p>
@@ -1219,7 +1219,7 @@ export default function Shifts() {
                 <button
                   type="submit"
                   disabled={loading || !tankDipForm.tank_id}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover disabled:bg-content-secondary disabled:cursor-not-allowed"
                 >
                   {loading ? 'Saving...' : 'Save Reading'}
                 </button>
@@ -1229,7 +1229,7 @@ export default function Shifts() {
                     setShowTankDipModal(false)
                     setTankDipForm({ tank_id: '', opening_dip_cm: '', closing_dip_cm: '' })
                   }}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                  className="px-4 py-2 bg-surface-border text-content-secondary rounded-md hover:bg-surface-border"
                 >
                   Cancel
                 </button>
@@ -1241,12 +1241,12 @@ export default function Shifts() {
 
       {/* Shift History Section */}
       {canManageShifts && (
-        <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
+        <div className="mt-6 bg-surface-card rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Shift History</h2>
+            <h2 className="text-xl font-bold text-content-primary">Shift History</h2>
             <button
               onClick={() => { setShowHistory(!showHistory); if (!showHistory) fetchAllShifts() }}
-              className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md border"
+              className="px-3 py-1 text-sm bg-surface-bg hover:bg-surface-border text-content-secondary rounded-md border"
             >
               {showHistory ? 'Hide' : 'Show'} History
             </button>
@@ -1255,27 +1255,27 @@ export default function Shifts() {
           {showHistory && (
             <div className="space-y-3">
               {allShifts.length === 0 ? (
-                <p className="text-gray-500 text-sm">No shifts found.</p>
+                <p className="text-content-secondary text-sm">No shifts found.</p>
               ) : (
                 allShifts.map((shift: any) => (
                   <div
                     key={shift.shift_id}
                     className={`p-4 rounded-lg border-2 ${
                       shift.status === 'inactive'
-                        ? 'bg-red-50 border-red-200'
+                        ? 'bg-status-error-light border-status-error'
                         : shift.status === 'active'
-                        ? 'bg-green-50 border-green-200'
+                        ? 'bg-status-success-light border-status-success'
                         : shift.status === 'completed'
-                        ? 'bg-blue-50 border-blue-200'
+                        ? 'bg-action-primary-light border-action-primary'
                         : shift.status === 'reconciled'
-                        ? 'bg-purple-50 border-purple-200'
-                        : 'bg-gray-50 border-gray-200'
+                        ? 'bg-category-a-light border-category-a-border'
+                        : 'bg-surface-bg border-surface-border'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="font-semibold text-gray-900">{shift.date}</span>
-                        <span className="ml-2 text-sm text-gray-600">
+                        <span className="font-semibold text-content-primary">{shift.date}</span>
+                        <span className="ml-2 text-sm text-content-secondary">
                           {shift.shift_type === 'Day' ? 'Day Shift' : 'Night Shift'}
                         </span>
                         <span className={`ml-3 px-2 py-0.5 text-xs font-semibold rounded-full border ${getShiftStatusColor(shift.status)}`}>
@@ -1287,7 +1287,7 @@ export default function Shifts() {
                         {canManageShifts && shift.status === 'active' && (
                           <button
                             onClick={() => handleDeactivateShift(shift.shift_id)}
-                            className="px-2 py-1 text-xs bg-red-500 hover:bg-red-600 text-white rounded"
+                            className="px-2 py-1 text-xs bg-status-error hover:bg-status-error/90 text-white rounded"
                           >
                             Deactivate
                           </button>
@@ -1296,7 +1296,7 @@ export default function Shifts() {
                         {currentUser?.role === 'owner' && shift.status === 'inactive' && (
                           <button
                             onClick={() => handleDeleteShift(shift.shift_id)}
-                            className="px-2 py-1 text-xs bg-red-700 hover:bg-red-800 text-white rounded"
+                            className="px-2 py-1 text-xs bg-status-error hover:bg-status-error/90 text-white rounded"
                           >
                             Delete
                           </button>
@@ -1305,11 +1305,11 @@ export default function Shifts() {
                     </div>
                     {/* Attendant names */}
                     {shift.assignments && shift.assignments.length > 0 ? (
-                      <p className="mt-2 text-sm text-gray-600">
+                      <p className="mt-2 text-sm text-content-secondary">
                         Attendants: {shift.assignments.map((a: any) => a.attendant_name).join(', ')}
                       </p>
                     ) : shift.attendants && shift.attendants.length > 0 ? (
-                      <p className="mt-2 text-sm text-gray-600">
+                      <p className="mt-2 text-sm text-content-secondary">
                         Attendants: {shift.attendants.join(', ')}
                       </p>
                     ) : null}
@@ -1322,9 +1322,9 @@ export default function Shifts() {
       )}
 
       {/* Info Panel */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-blue-900 mb-2">Shift Management System</h3>
-        <ul className="text-sm text-blue-700 space-y-1">
+      <div className="bg-action-primary-light border border-action-primary rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-action-primary mb-2">Shift Management System</h3>
+        <ul className="text-sm text-action-primary space-y-1">
           <li>• Day Shift: 6:00 AM - 6:00 PM</li>
           <li>• Night Shift: 6:00 PM - 6:00 AM</li>
           <li>• Each shift requires Opening and Closing readings for all 8 nozzles</li>
@@ -1336,10 +1336,10 @@ export default function Shifts() {
       {/* Shift Management Modal */}
       {showManagementModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-surface-card rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold">{editingShiftId ? 'Edit Shift' : 'Create Shift'}</h2>
-              <button onClick={() => { setShowManagementModal(false); setEditingShiftId(null) }} className="text-gray-500 hover:text-gray-700 text-2xl">
+              <button onClick={() => { setShowManagementModal(false); setEditingShiftId(null) }} className="text-content-secondary hover:text-content-primary text-2xl">
                 ✕
               </button>
             </div>
@@ -1347,11 +1347,11 @@ export default function Shifts() {
             <form onSubmit={handleValidateAndConfirm}>
               {/* Validation Messages */}
               {validationMessages.length > 0 && !showConfirmation && (
-                <div className="mb-4 p-4 rounded-lg border bg-red-50 border-red-200">
-                  <h4 className="font-semibold text-red-800 mb-2">Please fix the following before {editingShiftId ? 'saving' : 'creating'} the shift:</h4>
+                <div className="mb-4 p-4 rounded-lg border bg-status-error-light border-status-error">
+                  <h4 className="font-semibold text-status-error mb-2">Please fix the following before {editingShiftId ? 'saving' : 'creating'} the shift:</h4>
                   <ul className="space-y-1">
                     {validationMessages.filter(m => m.startsWith('ERROR:')).map((msg, i) => (
-                      <li key={i} className="text-sm text-red-700 flex items-start gap-2">
+                      <li key={i} className="text-sm text-status-error flex items-start gap-2">
                         <span className="mt-0.5">&#x2717;</span>
                         <span>{msg.replace('ERROR: ', '')}</span>
                       </li>
@@ -1368,7 +1368,7 @@ export default function Shifts() {
                     type="date"
                     value={shiftForm.date}
                     onChange={(e) => setShiftForm({...shiftForm, date: e.target.value})}
-                    className={`w-full px-3 py-2 border rounded-md ${editingShiftId ? 'bg-gray-100 text-gray-500' : ''}`}
+                    className={`w-full px-3 py-2 border rounded-md ${editingShiftId ? 'bg-surface-bg text-content-secondary' : ''}`}
                     required
                     disabled={!!editingShiftId}
                   />
@@ -1378,7 +1378,7 @@ export default function Shifts() {
                   <select
                     value={shiftForm.shift_type}
                     onChange={(e) => setShiftForm({...shiftForm, shift_type: e.target.value})}
-                    className={`w-full px-3 py-2 border rounded-md ${editingShiftId ? 'bg-gray-100 text-gray-500' : ''}`}
+                    className={`w-full px-3 py-2 border rounded-md ${editingShiftId ? 'bg-surface-bg text-content-secondary' : ''}`}
                     required
                     disabled={!!editingShiftId}
                   >
@@ -1386,7 +1386,7 @@ export default function Shifts() {
                     <option value="Night">Night (6PM - 6AM)</option>
                   </select>
                   {editingShiftId && (
-                    <p className="text-xs text-gray-500 mt-1">Date and shift type cannot be changed</p>
+                    <p className="text-xs text-content-secondary mt-1">Date and shift type cannot be changed</p>
                   )}
                 </div>
               </div>
@@ -1396,7 +1396,7 @@ export default function Shifts() {
                 <label className="block text-sm font-medium mb-2">Select Attendants</label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {availableStaff.map(staff => (
-                    <label key={staff.user_id} className="flex items-center space-x-2 p-2 border rounded hover:bg-gray-50 cursor-pointer">
+                    <label key={staff.user_id} className="flex items-center space-x-2 p-2 border rounded hover:bg-surface-bg cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selectedAttendants.some(a => a.user_id === staff.user_id)}
@@ -1411,7 +1411,7 @@ export default function Shifts() {
 
               {/* Assignment Details for Each Attendant */}
               {selectedAttendants.map(attendant => (
-                <div key={attendant.user_id} className="mb-6 p-4 border rounded-lg bg-gray-50">
+                <div key={attendant.user_id} className="mb-6 p-4 border rounded-lg bg-surface-bg">
                   <h3 className="font-semibold mb-3">👤 {attendant.full_name}</h3>
 
                   {/* Island Selection */}
@@ -1419,7 +1419,7 @@ export default function Shifts() {
                     <label className="block text-sm font-medium mb-2">Assigned Islands</label>
                     <div className="flex flex-wrap gap-2">
                       {islandsData.map(island => (
-                        <label key={island.island_id} className="flex items-center space-x-2 p-2 border rounded hover:bg-blue-50 cursor-pointer">
+                        <label key={island.island_id} className="flex items-center space-x-2 p-2 border rounded hover:bg-action-primary-light cursor-pointer">
                           <input
                             type="checkbox"
                             checked={attendant.island_ids?.includes(island.island_id) || false}
@@ -1439,8 +1439,8 @@ export default function Shifts() {
                       {getFilteredNozzles(attendant.island_ids || []).map(nozzle => (
                         <label
                           key={nozzle.nozzle_id}
-                          className={`flex items-center space-x-2 p-2 border rounded hover:bg-blue-50 cursor-pointer ${
-                            nozzle.fuel_type === 'Petrol' ? 'border-green-300' : 'border-purple-300'
+                          className={`flex items-center space-x-2 p-2 border rounded hover:bg-action-primary-light cursor-pointer ${
+                            nozzle.fuel_type === 'Petrol' ? 'border-fuel-petrol-border' : 'border-fuel-diesel-border'
                           }`}
                         >
                           <input
@@ -1454,7 +1454,7 @@ export default function Shifts() {
                       ))}
                     </div>
                     {(!attendant.island_ids || attendant.island_ids.length === 0) && (
-                      <p className="text-sm text-gray-500 mt-2">Select islands first to see available nozzles</p>
+                      <p className="text-sm text-content-secondary mt-2">Select islands first to see available nozzles</p>
                     )}
                   </div>
                 </div>
@@ -1462,9 +1462,9 @@ export default function Shifts() {
 
               {/* Confirmation Summary */}
               {showConfirmation && (
-                <div className="mt-6 p-4 rounded-lg border-2 border-blue-300 bg-blue-50">
-                  <h4 className="font-bold text-blue-900 mb-3">Confirm Shift Details</h4>
-                  <div className="text-sm text-blue-800 space-y-2 mb-4">
+                <div className="mt-6 p-4 rounded-lg border-2 border-action-primary bg-action-primary-light">
+                  <h4 className="font-bold text-action-primary mb-3">Confirm Shift Details</h4>
+                  <div className="text-sm text-action-primary space-y-2 mb-4">
                     <p><strong>Date:</strong> {shiftForm.date}</p>
                     <p><strong>Type:</strong> {shiftForm.shift_type} Shift</p>
                     <p><strong>Shift ID:</strong> {shiftForm.date}-{shiftForm.shift_type}</p>
@@ -1473,10 +1473,10 @@ export default function Shifts() {
                       {selectedAttendants.map(a => (
                         <div key={a.user_id} className="ml-4 mt-1">
                           <span className="font-medium">{a.full_name}</span>
-                          <span className="text-blue-600">
+                          <span className="text-action-primary">
                             {' '}&#8212; {(a.island_ids || []).length} island(s), {(a.nozzle_ids || []).length} nozzle(s)
                           </span>
-                          <div className="ml-2 text-xs text-blue-700">
+                          <div className="ml-2 text-xs text-action-primary">
                             Nozzles: {(a.nozzle_ids || []).map((nid: string) => {
                               const nozzle = nozzles.find(n => n.nozzle_id === nid)
                               return nozzle ? getNozzleDisplayName(nozzle) : nid
@@ -1489,11 +1489,11 @@ export default function Shifts() {
 
                   {/* Warnings (non-blocking) */}
                   {validationMessages.filter(m => m.startsWith('WARNING:')).length > 0 && (
-                    <div className="mb-4 p-3 rounded bg-yellow-50 border border-yellow-200">
-                      <h5 className="font-semibold text-yellow-800 text-sm mb-1">Warnings:</h5>
+                    <div className="mb-4 p-3 rounded bg-status-pending-light border border-status-warning">
+                      <h5 className="font-semibold text-status-warning text-sm mb-1">Warnings:</h5>
                       <ul className="space-y-1">
                         {validationMessages.filter(m => m.startsWith('WARNING:')).map((msg, i) => (
-                          <li key={i} className="text-sm text-yellow-700 flex items-start gap-2">
+                          <li key={i} className="text-sm text-status-warning flex items-start gap-2">
                             <span className="mt-0.5">&#9888;</span>
                             <span>{msg.replace('WARNING: ', '')}</span>
                           </li>
@@ -1502,7 +1502,7 @@ export default function Shifts() {
                     </div>
                   )}
 
-                  <p className="text-sm text-blue-900 font-medium mb-3">
+                  <p className="text-sm text-action-primary font-medium mb-3">
                     This action cannot be undone. Are you sure you want to proceed?
                   </p>
 
@@ -1510,14 +1510,14 @@ export default function Shifts() {
                     <button
                       type="button"
                       onClick={() => { setShowConfirmation(false); setValidationMessages([]) }}
-                      className="px-4 py-2 border rounded-md hover:bg-gray-50"
+                      className="px-4 py-2 border rounded-md hover:bg-surface-bg"
                     >
                       Go Back
                     </button>
                     <button
                       type="button"
                       onClick={handleCreateShift}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold"
+                      className="px-4 py-2 bg-status-success text-white rounded-md hover:bg-status-success/90 font-semibold"
                     >
                       {editingShiftId ? 'Confirm & Save Changes' : 'Confirm & Create Shift'}
                     </button>
@@ -1531,13 +1531,13 @@ export default function Shifts() {
                   <button
                     type="button"
                     onClick={() => { setShowManagementModal(false); setEditingShiftId(null); setValidationMessages([]) }}
-                    className="px-4 py-2 border rounded-md hover:bg-gray-50"
+                    className="px-4 py-2 border rounded-md hover:bg-surface-bg"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover disabled:opacity-50"
                     disabled={selectedAttendants.length === 0}
                   >
                     {editingShiftId ? 'Review & Save Changes' : 'Review & Create Shift'}

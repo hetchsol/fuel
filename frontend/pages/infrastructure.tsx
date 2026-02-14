@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useTheme } from '../contexts/ThemeContext'
 import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
@@ -44,7 +43,6 @@ interface Island {
 }
 
 export default function Infrastructure() {
-  const { setFuelType } = useTheme()
   const [activeTab, setActiveTab] = useState<'tanks' | 'islands'>('tanks')
   const [tanks, setTanks] = useState<Tank[]>([])
   const [islands, setIslands] = useState<Island[]>([])
@@ -124,8 +122,6 @@ export default function Infrastructure() {
       if (res.ok) {
         const data = await res.json()
         setMessage({ type: 'success', text: `${islandId} configured as ${productType}` })
-        if (productType === 'Diesel') setFuelType('diesel')
-        else setFuelType('petrol')
         fetchIslands()
       } else {
         const error = await res.json()
@@ -167,29 +163,29 @@ export default function Infrastructure() {
   }
 
   const getNozzleColor = (fuelType: string) => {
-    if (fuelType === 'Petrol') return 'bg-green-100 text-green-800 border-green-300'
-    if (fuelType === 'Diesel') return 'bg-purple-100 text-purple-800 border-purple-300'
-    return 'bg-gray-100 text-gray-600 border-gray-300'
+    if (fuelType === 'Petrol') return 'bg-fuel-petrol-light text-fuel-petrol border-fuel-petrol-border'
+    if (fuelType === 'Diesel') return 'bg-fuel-diesel-light text-fuel-diesel border-fuel-diesel-border'
+    return 'bg-surface-bg text-content-secondary border-surface-border'
   }
 
   const getStatusBadge = (status: string) => {
-    if (status === 'active') return 'bg-green-100 text-green-800 border-green-300'
-    return 'bg-gray-100 text-gray-600 border-gray-300'
+    if (status === 'active') return 'bg-status-success-light text-status-success border-status-success'
+    return 'bg-surface-bg text-content-secondary border-surface-border'
   }
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Infrastructure Management</h1>
-        <p className="mt-2 text-sm text-gray-600">Manage tanks, islands, pumps, and nozzles (Owner Only)</p>
+        <h1 className="text-3xl font-bold text-content-primary">Infrastructure Management</h1>
+        <p className="mt-2 text-sm text-content-secondary">Manage tanks, islands, pumps, and nozzles (Owner Only)</p>
       </div>
 
       {/* Message Display */}
       {message && (
         <div className={`mb-6 p-4 rounded-lg border ${
           message.type === 'success'
-            ? 'bg-green-50 border-green-200 text-green-800'
-            : 'bg-red-50 border-red-200 text-red-800'
+            ? 'bg-status-success-light border-status-success text-status-success'
+            : 'bg-status-error-light border-status-error text-status-error'
         }`}>
           <p className="font-semibold">{message.text}</p>
           <button
@@ -202,14 +198,14 @@ export default function Infrastructure() {
       )}
 
       {/* Tab Navigation */}
-      <div className="mb-6 border-b border-gray-200">
+      <div className="mb-6 border-b border-surface-border">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('tanks')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'tanks'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-action-primary text-action-primary'
+                : 'border-transparent text-content-secondary hover:text-content-secondary hover:border-surface-border'
             }`}
           >
             Tank Management
@@ -218,8 +214,8 @@ export default function Infrastructure() {
             onClick={() => setActiveTab('islands')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'islands'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-action-primary text-action-primary'
+                : 'border-transparent text-content-secondary hover:text-content-secondary hover:border-surface-border'
             }`}
           >
             Islands & Pumps
@@ -231,36 +227,36 @@ export default function Infrastructure() {
       {activeTab === 'tanks' && (
         <div>
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Fuel Tank Capacity Management</h2>
-            <p className="text-sm text-gray-600">Configure tank capacities for your fuel storage</p>
+            <h2 className="text-2xl font-bold text-content-primary mb-2">Fuel Tank Capacity Management</h2>
+            <p className="text-sm text-content-secondary">Configure tank capacities for your fuel storage</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {tanks.map(tank => (
               <div
                 key={tank.tank_id}
-                className={`bg-white rounded-lg shadow-lg p-6 border-2 ${
-                  tank.fuel_type === 'Diesel' ? 'border-purple-300' : 'border-green-300'
+                className={`bg-surface-card rounded-lg shadow-lg p-6 border-2 ${
+                  tank.fuel_type === 'Diesel' ? 'border-fuel-diesel-border' : 'border-fuel-petrol-border'
                 }`}
               >
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-2xl font-bold text-gray-900">{tank.fuel_type} Tank</h3>
-                    <p className="text-sm text-gray-500">{tank.tank_id}</p>
+                    <h3 className="text-2xl font-bold text-content-primary">{tank.fuel_type} Tank</h3>
+                    <p className="text-sm text-content-secondary">{tank.tank_id}</p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                     tank.fuel_type === 'Diesel'
-                      ? 'bg-purple-100 text-purple-800'
-                      : 'bg-green-100 text-green-800'
+                      ? 'bg-fuel-diesel-light text-fuel-diesel'
+                      : 'bg-fuel-petrol-light text-fuel-petrol'
                   }`}>
                     {tank.percentage.toFixed(1)}% Full
                   </span>
                 </div>
 
                 {/* Current Level */}
-                <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <p className="text-xs text-gray-600 mb-1">Current Level</p>
-                  <p className="text-3xl font-bold text-blue-700">
+                <div className="mb-4 p-4 bg-action-primary-light rounded-lg border border-action-primary">
+                  <p className="text-xs text-content-secondary mb-1">Current Level</p>
+                  <p className="text-3xl font-bold text-action-primary">
                     {tank.current_level.toLocaleString()} L
                   </p>
                 </div>
@@ -268,14 +264,14 @@ export default function Infrastructure() {
                 {/* Capacity */}
                 <div className="mb-4">
                   <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm font-semibold text-gray-700">Tank Capacity</p>
+                    <p className="text-sm font-semibold text-content-secondary">Tank Capacity</p>
                     {editingTank !== tank.tank_id && (
                       <button
                         onClick={() => {
                           setEditingTank(tank.tank_id)
                           setNewCapacity(tank.capacity)
                         }}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold underline"
+                        className="text-xs text-action-primary hover:text-action-primary font-semibold underline"
                       >
                         Edit Capacity
                       </button>
@@ -288,26 +284,26 @@ export default function Infrastructure() {
                         type="number"
                         value={newCapacity}
                         onChange={(e) => setNewCapacity(Number(e.target.value))}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-surface-border rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary"
                         placeholder="New capacity (liters)"
                         min={tank.current_level}
                       />
                       <button
                         onClick={() => updateTankCapacity(tank.tank_id, newCapacity)}
                         disabled={loading || newCapacity <= 0}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                        className="px-4 py-2 bg-action-primary text-white rounded-lg hover:bg-action-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Save
                       </button>
                       <button
                         onClick={() => setEditingTank(null)}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                        className="px-4 py-2 bg-surface-border text-content-secondary rounded-lg hover:opacity-80"
                       >
                         Cancel
                       </button>
                     </div>
                   ) : (
-                    <p className="text-2xl font-bold text-gray-900">
+                    <p className="text-2xl font-bold text-content-primary">
                       {tank.capacity.toLocaleString()} L
                     </p>
                   )}
@@ -315,7 +311,7 @@ export default function Infrastructure() {
 
                 {/* Progress Bar */}
                 <div className="mb-4">
-                  <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                  <div className="w-full bg-surface-border rounded-full h-4 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all ${
                         tank.percentage > 70 ? 'bg-green-500' :
@@ -327,14 +323,14 @@ export default function Infrastructure() {
                 </div>
 
                 {/* Last Updated */}
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-content-secondary">
                   Last updated: {formatDate(tank.last_updated)}
                 </p>
 
                 {/* Warning */}
                 {tank.percentage < 30 && (
-                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-800 font-semibold">Low fuel level - Schedule delivery soon!</p>
+                  <div className="mt-4 p-3 bg-status-error-light border border-status-error rounded-lg">
+                    <p className="text-sm text-status-error font-semibold">Low fuel level - Schedule delivery soon!</p>
                   </div>
                 )}
               </div>
@@ -342,9 +338,9 @@ export default function Infrastructure() {
           </div>
 
           {/* Info Panel */}
-          <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-blue-900 mb-2">Tank Capacity Guidelines</h3>
-            <ul className="text-sm text-blue-700 space-y-1">
+          <div className="mt-8 bg-action-primary-light border border-action-primary rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-action-primary mb-2">Tank Capacity Guidelines</h3>
+            <ul className="text-sm text-action-primary space-y-1">
               <li>- <strong>Owner Only</strong>: Only station owners can modify tank capacities</li>
               <li>- <strong>Safety Limits</strong>: Capacity cannot be set below current fuel level</li>
               <li>- <strong>Monitoring</strong>: System tracks tank levels in real-time as fuel is dispensed</li>
@@ -358,8 +354,8 @@ export default function Infrastructure() {
       {activeTab === 'islands' && (
         <div>
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Islands & Pump Stations</h2>
-            <p className="text-sm text-gray-600">Configure product type and activate islands for operation</p>
+            <h2 className="text-2xl font-bold text-content-primary mb-2">Islands & Pump Stations</h2>
+            <p className="text-sm text-content-secondary">Configure product type and activate islands for operation</p>
           </div>
 
           {/* 2x2 Grid of Island Cards */}
@@ -367,15 +363,15 @@ export default function Infrastructure() {
             {islands.map(island => (
               <div
                 key={island.island_id}
-                className={`bg-white rounded-lg shadow-lg p-6 border-2 ${
-                  island.status === 'active' ? 'border-green-300' : 'border-gray-300'
+                className={`bg-surface-card rounded-lg shadow-lg p-6 border-2 ${
+                  island.status === 'active' ? 'border-status-success' : 'border-surface-border'
                 }`}
               >
                 {/* Header: Name, ID, Status Badge */}
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900">{island.name}</h3>
-                    <p className="text-sm text-gray-500">{island.island_id}</p>
+                    <h3 className="text-xl font-bold text-content-primary">{island.name}</h3>
+                    <p className="text-sm text-content-secondary">{island.island_id}</p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${getStatusBadge(island.status)}`}>
                     {island.status === 'active' ? 'Active' : 'Inactive'}
@@ -384,7 +380,7 @@ export default function Infrastructure() {
 
                 {/* Product Type Dropdown */}
                 <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Product Type</label>
+                  <label className="block text-sm font-semibold text-content-secondary mb-1">Product Type</label>
                   <select
                     value={island.product_type || ''}
                     onChange={(e) => {
@@ -392,7 +388,7 @@ export default function Infrastructure() {
                         updateProductType(island.island_id, e.target.value)
                       }
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-surface-border rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary"
                   >
                     <option value="">Not configured</option>
                     <option value="Petrol">Petrol (UNL)</option>
@@ -407,8 +403,8 @@ export default function Infrastructure() {
                     disabled={loading}
                     className={`w-full px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
                       island.status === 'active'
-                        ? 'bg-red-100 text-red-700 hover:bg-red-200 border border-red-300'
-                        : 'bg-green-600 text-white hover:bg-green-700'
+                        ? 'bg-status-error-light text-status-error hover:bg-red-200 border border-status-error'
+                        : 'bg-status-success text-white hover:bg-status-success/90'
                     }`}
                   >
                     {island.status === 'active' ? 'Deactivate' : 'Activate'}
@@ -417,18 +413,18 @@ export default function Infrastructure() {
 
                 {/* Pump Station Info (read-only) */}
                 {island.pump_station && (
-                  <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <p className="text-sm font-semibold text-gray-700">{island.pump_station.name}</p>
-                    <p className="text-xs text-gray-500">{island.pump_station.pump_station_id}</p>
+                  <div className="mb-4 p-3 bg-surface-bg rounded-lg border border-surface-border">
+                    <p className="text-sm font-semibold text-content-secondary">{island.pump_station.name}</p>
+                    <p className="text-xs text-content-secondary">{island.pump_station.pump_station_id}</p>
                     {island.pump_station.tank_id && (
                       <div className="mt-1">
-                        <span className="text-xs text-gray-600">Tank: </span>
+                        <span className="text-xs text-content-secondary">Tank: </span>
                         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
                           island.pump_station.tank_id === 'TANK-DIESEL'
-                            ? 'bg-purple-100 text-purple-800'
+                            ? 'bg-fuel-diesel-light text-fuel-diesel'
                             : island.pump_station.tank_id === 'TANK-PETROL'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-600'
+                              ? 'bg-fuel-petrol-light text-fuel-petrol'
+                              : 'bg-surface-bg text-content-secondary'
                         }`}>
                           {island.pump_station.tank_id || 'Not assigned'}
                         </span>
@@ -440,7 +436,7 @@ export default function Infrastructure() {
                 {/* Nozzle Badges (read-only, color-coded) */}
                 {island.pump_station && (
                   <div>
-                    <p className="text-sm font-semibold text-gray-700 mb-2">Nozzles</p>
+                    <p className="text-sm font-semibold text-content-secondary mb-2">Nozzles</p>
                     <div className="flex gap-2">
                       {island.pump_station.nozzles.map(nozzle => (
                         <div
@@ -464,9 +460,9 @@ export default function Infrastructure() {
           </div>
 
           {/* Info Panel */}
-          <div className="mt-8 bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-purple-900 mb-2">Standardized Island Configuration</h3>
-            <ul className="text-sm text-purple-700 space-y-1">
+          <div className="mt-8 bg-action-primary-light border border-action-primary rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-action-primary mb-2">Standardized Island Configuration</h3>
+            <ul className="text-sm text-action-primary space-y-1">
               <li>- <strong>4 Islands</strong>: Each station has 4 standard islands with 1 pump and 2 nozzles each</li>
               <li>- <strong>Product Type</strong>: Configure each island as Petrol or Diesel. This sets the tank mapping and nozzle fuel types automatically.</li>
               <li>- <strong>Activation</strong>: Islands must have a product type configured before they can be activated</li>
