@@ -1,6 +1,6 @@
 """
 Islands, Pump Stations, and Nozzles Management API
-Default setup: 4 islands, 1 pump each, 2 nozzles per pump.
+Default setup: 6 islands, 1 pump each, 2 nozzles per pump.
 Islands are configured (product type) and activated/deactivated by the owner.
 Owners retain full CRUD capabilities.
 """

@@ -228,6 +228,29 @@ export default function Infrastructure() {
     return new Date(dateStr).toLocaleString()
   }
 
+  const assignTank = async (islandId: string, tankId: string) => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${BASE}/islands/${islandId}/pump-station/tank?tank_id=${encodeURIComponent(tankId)}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setMessage({ type: 'success', text: data.message })
+        fetchIslands()
+      } else {
+        const error = await res.json()
+        setMessage({ type: 'error', text: error.detail || 'Failed to assign tank' })
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Network error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const getNozzleColor = (fuelType: string) => {
     if (fuelType === 'Petrol') return 'bg-fuel-petrol-light text-fuel-petrol border-fuel-petrol-border'
     if (fuelType === 'Diesel') return 'bg-fuel-diesel-light text-fuel-diesel border-fuel-diesel-border'
@@ -517,29 +540,29 @@ export default function Infrastructure() {
             <p className="text-sm text-content-secondary">Configure product type and activate islands for operation</p>
           </div>
 
-          {/* 2x2 Grid of Island Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* 3-column Grid of Island Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {islands.map(island => (
               <div
                 key={island.island_id}
-                className={`bg-surface-card rounded-lg shadow-lg p-6 border-2 ${
+                className={`bg-surface-card rounded-lg shadow p-4 border-2 ${
                   island.status === 'active' ? 'border-status-success' : 'border-surface-border'
                 }`}
               >
-                {/* Header: Name, ID, Status Badge */}
-                <div className="flex justify-between items-start mb-4">
+                {/* Header */}
+                <div className="flex justify-between items-center mb-3">
                   <div>
-                    <h3 className="text-xl font-bold text-content-primary">{island.name}</h3>
-                    <p className="text-sm text-content-secondary">{island.island_id}</p>
+                    <h3 className="text-base font-bold text-content-primary">{island.name}</h3>
+                    <p className="text-xs text-content-secondary">{island.island_id}</p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${getStatusBadge(island.status)}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusBadge(island.status)}`}>
                     {island.status === 'active' ? 'Active' : 'Inactive'}
                   </span>
                 </div>
 
-                {/* Product Type Dropdown */}
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-content-secondary mb-1">Product Type</label>
+                {/* Product Type */}
+                <div className="mb-3">
+                  <label className="block text-xs font-semibold text-content-secondary mb-1">Product Type</label>
                   <select
                     value={island.product_type || ''}
                     onChange={(e) => {
@@ -547,7 +570,7 @@ export default function Infrastructure() {
                         updateProductType(island.island_id, e.target.value)
                       }
                     }}
-                    className="w-full px-3 py-2 border border-surface-border rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary"
+                    className="w-full px-2 py-1.5 text-sm border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
                   >
                     <option value="">Not configured</option>
                     <option value="Petrol">Petrol (UNL)</option>
@@ -555,12 +578,35 @@ export default function Infrastructure() {
                   </select>
                 </div>
 
-                {/* Activate / Deactivate Toggle */}
-                <div className="mb-4">
+                {/* Tank Assignment */}
+                {island.pump_station && (
+                  <div className="mb-3">
+                    <label className="block text-xs font-semibold text-content-secondary mb-1">Assigned Tank</label>
+                    <select
+                      value={island.pump_station.tank_id || ''}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          assignTank(island.island_id, e.target.value)
+                        }
+                      }}
+                      className="w-full px-2 py-1.5 text-sm border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
+                    >
+                      <option value="">Not assigned</option>
+                      {tanks.map(tank => (
+                        <option key={tank.tank_id} value={tank.tank_id}>
+                          {tank.tank_id} ({tank.fuel_type})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Activate / Deactivate */}
+                <div className="mb-3">
                   <button
                     onClick={() => toggleIslandStatus(island.island_id, island.status)}
                     disabled={loading}
-                    className={`w-full px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                    className={`w-full px-3 py-1.5 rounded-md font-semibold text-xs transition-colors ${
                       island.status === 'active'
                         ? 'bg-status-error-light text-status-error hover:bg-red-200 border border-status-error'
                         : 'bg-status-success text-white hover:bg-status-success/90'
@@ -570,45 +616,30 @@ export default function Infrastructure() {
                   </button>
                 </div>
 
-                {/* Pump Station Info (read-only) */}
+                {/* Pump Station */}
                 {island.pump_station && (
-                  <div className="mb-4 p-3 bg-surface-bg rounded-lg border border-surface-border">
-                    <p className="text-sm font-semibold text-content-secondary">{island.pump_station.name}</p>
-                    <p className="text-xs text-content-secondary">{island.pump_station.pump_station_id}</p>
-                    {island.pump_station.tank_id && (
-                      <div className="mt-1">
-                        <span className="text-xs text-content-secondary">Tank: </span>
-                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                          island.pump_station.tank_id === 'TANK-DIESEL'
-                            ? 'bg-fuel-diesel-light text-fuel-diesel'
-                            : island.pump_station.tank_id === 'TANK-PETROL'
-                              ? 'bg-fuel-petrol-light text-fuel-petrol'
-                              : 'bg-surface-bg text-content-secondary'
-                        }`}>
-                          {island.pump_station.tank_id || 'Not assigned'}
-                        </span>
-                      </div>
-                    )}
+                  <div className="mb-3 p-2 bg-surface-bg rounded-md border border-surface-border">
+                    <p className="text-xs font-semibold text-content-secondary">{island.pump_station.name}</p>
+                    <p className="text-[10px] text-content-secondary">{island.pump_station.pump_station_id}</p>
                   </div>
                 )}
 
-                {/* Nozzle Badges (read-only, color-coded) */}
+                {/* Nozzle Badges */}
                 {island.pump_station && (
                   <div>
-                    <p className="text-sm font-semibold text-content-secondary mb-2">Nozzles</p>
-                    <div className="flex gap-2">
+                    <p className="text-xs font-semibold text-content-secondary mb-1">Nozzles</p>
+                    <div className="flex gap-1.5">
                       {island.pump_station.nozzles.map(nozzle => (
                         <div
                           key={nozzle.nozzle_id}
-                          className={`flex-1 p-2 rounded-lg border text-center ${getNozzleColor(nozzle.fuel_type)}`}
+                          className={`flex-1 p-1.5 rounded-md border text-center ${getNozzleColor(nozzle.fuel_type)}`}
                         >
-                          <p className="font-bold text-sm">
+                          <p className="font-bold text-xs">
                             {island.fuel_type_abbrev && nozzle.display_label
                               ? `${island.fuel_type_abbrev} ${nozzle.display_label}`
                               : nozzle.nozzle_id}
                           </p>
-                          <p className="text-xs opacity-75">{nozzle.nozzle_id}</p>
-                          <p className="text-xs">{nozzle.fuel_type || 'Unconfigured'}</p>
+                          <p className="text-[10px] opacity-75">{nozzle.nozzle_id}</p>
                         </div>
                       ))}
                     </div>
@@ -622,7 +653,7 @@ export default function Infrastructure() {
           <div className="mt-8 bg-action-primary-light border border-action-primary rounded-lg p-4">
             <h3 className="text-sm font-semibold text-action-primary mb-2">Standardized Island Configuration</h3>
             <ul className="text-sm text-action-primary space-y-1">
-              <li>- <strong>4 Islands</strong>: Each station has 4 standard islands with 1 pump and 2 nozzles each</li>
+              <li>- <strong>6 Islands</strong>: Each station has 6 standard islands with 1 pump and 2 nozzles each</li>
               <li>- <strong>Product Type</strong>: Configure each island as Petrol or Diesel. This sets the tank mapping and nozzle fuel types automatically.</li>
               <li>- <strong>Activation</strong>: Islands must have a product type configured before they can be activated</li>
               <li>- <strong>Active Islands</strong>: Only active islands appear in shift allocation and operations</li>

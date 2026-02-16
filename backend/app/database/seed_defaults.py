@@ -33,14 +33,15 @@ def _seed_islands(storage: dict):
     if existing:
         return
 
-    # Pre-assigned layout matching the spreadsheet:
-    # ISL-001/002 = Diesel (LSD), ISL-003/004 = Petrol (UNL)
-    # Display number 1 for ISL-001/003, 2 for ISL-002/004
+    # Pre-assigned layout: 6 islands, 1 pump each, 2 nozzles per pump.
+    # ISL-001/002/003 = Diesel (LSD), ISL-004/005/006 = Petrol (UNL)
     island_config = [
         (1, "Diesel", "LSD", "TANK-DIESEL", 1),
         (2, "Diesel", "LSD", "TANK-DIESEL", 2),
-        (3, "Petrol", "UNL", "TANK-PETROL", 1),
-        (4, "Petrol", "UNL", "TANK-PETROL", 2),
+        (3, "Diesel", "LSD", "TANK-DIESEL", 3),
+        (4, "Petrol", "UNL", "TANK-PETROL", 1),
+        (5, "Petrol", "UNL", "TANK-PETROL", 2),
+        (6, "Petrol", "UNL", "TANK-PETROL", 3),
     ]
 
     storage['islands'] = {}
@@ -246,8 +247,8 @@ def _migrate_islands_assign_product_types(storage: dict):
     if not islands:
         return
 
-    default_ids = ["ISL-001", "ISL-002", "ISL-003", "ISL-004"]
-    # All 4 default islands must exist
+    default_ids = ["ISL-001", "ISL-002", "ISL-003", "ISL-004", "ISL-005", "ISL-006"]
+    # All 6 default islands must exist
     if not all(isl_id in islands for isl_id in default_ids):
         return
 
@@ -259,8 +260,10 @@ def _migrate_islands_assign_product_types(storage: dict):
     assignments = {
         "ISL-001": ("Diesel", "TANK-DIESEL"),
         "ISL-002": ("Diesel", "TANK-DIESEL"),
-        "ISL-003": ("Petrol", "TANK-PETROL"),
+        "ISL-003": ("Diesel", "TANK-DIESEL"),
         "ISL-004": ("Petrol", "TANK-PETROL"),
+        "ISL-005": ("Petrol", "TANK-PETROL"),
+        "ISL-006": ("Petrol", "TANK-PETROL"),
     }
 
     for isl_id, (product_type, tank_id) in assignments.items():
