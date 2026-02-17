@@ -4,6 +4,19 @@ import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
+interface QueuedDelivery {
+  id: string
+  tank_id: string
+  fuel_type: string
+  expected_volume: number
+  volume_delivered: number
+  supplier: string
+  delivery_note: string
+  status: 'pending' | 'submitted' | 'error'
+  result?: any
+  error?: string
+}
+
 const fetchDeliveries = async () => {
   const res = await fetch(`${BASE}/tanks/deliveries`, {
     headers: getHeaders()
@@ -21,11 +34,11 @@ export default function StockMovement() {
     supplier: '',
     delivery_note: '',
   })
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<any>(null)
   const [error, setError] = useState('')
   const [currentStock, setCurrentStock] = useState<any>(null)
   const [fetchingStock, setFetchingStock] = useState(false)
+  const [deliveryQueue, setDeliveryQueue] = useState<QueuedDelivery[]>([])
+  const [submitting, setSubmitting] = useState(false)
 
   const { data: deliveries, mutate } = useSWR('deliveries', fetchDeliveries, {
     refreshInterval: 10000, // Refresh every 10 seconds
@@ -69,56 +82,88 @@ export default function StockMovement() {
     setFormData({ ...formData, tank_id: tankId, fuel_type: fuelType })
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const addToQueue = (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-    setError('')
-    setResult(null)
-
-    try {
-      const payload = {
-        tank_id: formData.tank_id,
-        fuel_type: formData.fuel_type,
-        expected_volume: parseFloat(formData.expected_volume),
-        volume_delivered: parseFloat(formData.volume_delivered),
-        supplier: formData.supplier || null,
-        delivery_note: formData.delivery_note || null,
-      }
-
-      const res = await fetch(`${BASE}/tanks/delivery`, {
-        method: 'POST',
-        headers: {
-          ...getHeaders(),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
-
-      if (!res.ok) {
-        throw new Error('Failed to receive delivery')
-      }
-
-      const data = await res.json()
-      setResult(data)
-
-      // Reset form
-      setFormData({
-        tank_id: 'TANK-DIESEL',
-        fuel_type: 'Diesel',
-        expected_volume: '',
-        volume_delivered: '',
-        supplier: '',
-        delivery_note: '',
-      })
-
-      // Refresh deliveries list and current stock
-      mutate()
-      fetchCurrentStock()
-    } catch (err: any) {
-      setError(err.message || 'Failed to receive delivery')
-    } finally {
-      setLoading(false)
+    const newDelivery: QueuedDelivery = {
+      id: crypto.randomUUID(),
+      tank_id: formData.tank_id,
+      fuel_type: formData.fuel_type,
+      expected_volume: parseFloat(formData.expected_volume),
+      volume_delivered: parseFloat(formData.volume_delivered),
+      supplier: formData.supplier || '',
+      delivery_note: formData.delivery_note || '',
+      status: 'pending',
     }
+    setDeliveryQueue(prev => [...prev, newDelivery])
+    setError('')
+    // Reset form but keep the same tank selected
+    setFormData({
+      ...formData,
+      expected_volume: '',
+      volume_delivered: '',
+      supplier: '',
+      delivery_note: '',
+    })
+  }
+
+  const removeFromQueue = (id: string) => {
+    setDeliveryQueue(prev => prev.filter(d => d.id !== id))
+  }
+
+  const clearCompleted = () => {
+    setDeliveryQueue(prev => prev.filter(d => d.status === 'pending' || d.status === 'error'))
+  }
+
+  const submitAllDeliveries = async () => {
+    setSubmitting(true)
+    setError('')
+
+    const pending = deliveryQueue.filter(d => d.status === 'pending' || d.status === 'error')
+    for (const delivery of pending) {
+      // Mark as submitting
+      setDeliveryQueue(prev => prev.map(d => d.id === delivery.id ? { ...d, status: 'pending' as const, error: undefined } : d))
+
+      try {
+        const payload = {
+          tank_id: delivery.tank_id,
+          fuel_type: delivery.fuel_type,
+          expected_volume: delivery.expected_volume,
+          volume_delivered: delivery.volume_delivered,
+          supplier: delivery.supplier || null,
+          delivery_note: delivery.delivery_note || null,
+        }
+
+        const res = await fetch(`${BASE}/tanks/delivery`, {
+          method: 'POST',
+          headers: {
+            ...getHeaders(),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        })
+
+        if (!res.ok) {
+          throw new Error('Failed to receive delivery')
+        }
+
+        const data = await res.json()
+        setDeliveryQueue(prev => prev.map(d => d.id === delivery.id ? { ...d, status: 'submitted' as const, result: data } : d))
+      } catch (err: any) {
+        setDeliveryQueue(prev => prev.map(d => d.id === delivery.id ? { ...d, status: 'error' as const, error: err.message || 'Failed' } : d))
+      }
+    }
+
+    // Refresh deliveries list and current stock
+    mutate()
+    fetchCurrentStock()
+    setSubmitting(false)
+  }
+
+  // Cumulative overflow check helper
+  const getTotalQueuedForTank = (tankId: string) => {
+    return deliveryQueue
+      .filter(d => d.tank_id === tankId && d.status === 'pending')
+      .reduce((sum, d) => sum + d.volume_delivered, 0)
   }
 
   return (
@@ -210,7 +255,7 @@ export default function StockMovement() {
         {/* Delivery Form */}
         <div className="bg-surface-card rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">📦 Receive Delivery</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={addToQueue} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-content-secondary mb-1">
                 Select Tank
@@ -292,16 +337,16 @@ export default function StockMovement() {
             {currentStock && formData.volume_delivered && (
               (() => {
                 const deliveryVolume = parseFloat(formData.volume_delivered) || 0
-                const afterDelivery = (currentStock.current_level || 0) + deliveryVolume
-                const percentAfter = (afterDelivery / (currentStock.capacity || 1)) * 100
+                const totalQueued = getTotalQueuedForTank(formData.tank_id)
+                const afterAll = (currentStock.current_level || 0) + totalQueued + deliveryVolume
+                const percentAfter = (afterAll / (currentStock.capacity || 1)) * 100
 
                 if (percentAfter > 100) {
                   return (
                     <div className="p-4 bg-status-error-light border border-status-error rounded-md">
                       <p className="text-sm text-status-error font-semibold">⚠️ OVERFLOW WARNING</p>
                       <p className="text-xs text-status-error mt-1">
-                        This delivery ({deliveryVolume.toLocaleString()} L) will exceed tank capacity by {(afterDelivery - (currentStock.capacity || 0)).toLocaleString()} L.
-                        Delivery will be capped at capacity.
+                        This delivery ({deliveryVolume.toLocaleString()} L) plus {totalQueued > 0 ? `${totalQueued.toLocaleString()} L already queued` : 'current level'} will exceed tank capacity by {(afterAll - (currentStock.capacity || 0)).toLocaleString()} L.
                       </p>
                     </div>
                   )
@@ -309,7 +354,7 @@ export default function StockMovement() {
                   return (
                     <div className="p-3 bg-status-pending-light border border-status-warning rounded-md">
                       <p className="text-xs text-status-warning">
-                        ⚠️ Tank will be {percentAfter.toFixed(1)}% full after delivery.
+                        ⚠️ Tank will be {percentAfter.toFixed(1)}% full after all deliveries{totalQueued > 0 ? ` (including ${totalQueued.toLocaleString()} L queued)` : ''}.
                       </p>
                     </div>
                   )
@@ -320,70 +365,119 @@ export default function StockMovement() {
 
             <button
               type="submit"
-              disabled={loading}
               className="w-full px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Processing...' : 'Receive Delivery'}
+              + Add to Queue
             </button>
           </form>
         </div>
 
-        {/* Delivery Result */}
+        {/* Delivery Queue */}
         <div className="bg-surface-card rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Delivery Result</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Delivery Queue ({deliveryQueue.filter(d => d.status === 'pending').length} pending)</h2>
+            {deliveryQueue.some(d => d.status === 'submitted') && (
+              <button
+                onClick={clearCompleted}
+                className="text-sm text-content-secondary hover:text-content-primary underline"
+              >
+                Clear Completed
+              </button>
+            )}
+          </div>
 
-          {result && (
-            <div className="space-y-4">
-              <div className="p-4 bg-status-success-light border border-status-success rounded-md">
-                <p className="text-sm font-medium text-status-success">✓ {result.message}</p>
-                <p className="text-xs text-status-success mt-1">Delivery ID: {result.delivery_id}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-action-primary-light border border-action-primary rounded-md">
-                  <p className="text-xs text-action-primary">Previous Level</p>
-                  <p className="text-lg font-bold text-action-primary">{result.previous_level?.toLocaleString()} L</p>
-                </div>
-                <div className="p-3 bg-status-success-light border border-status-success rounded-md">
-                  <p className="text-xs text-status-success">New Level</p>
-                  <p className="text-lg font-bold text-status-success">{result.new_level?.toLocaleString()} L</p>
-                </div>
-              </div>
-
-              <div className="p-4 bg-action-primary-light border border-action-primary rounded-md">
-                <p className="text-xs text-action-primary mb-1">Volume Added</p>
-                <p className="text-2xl font-bold text-action-primary">{result.volume_added?.toLocaleString()} L</p>
-                <p className="text-xs text-action-primary mt-1">Tank now {result.percentage?.toFixed(1)}% full</p>
-              </div>
-
-              {result.loss_analysis && (
-                <div className={`p-4 border rounded-md ${
-                  result.loss_analysis.status === 'acceptable'
-                    ? 'bg-status-success-light border-status-success'
-                    : 'bg-category-c-light border-category-c-border'
-                }`}>
-                  <p className="text-sm font-medium mb-2">
-                    {result.loss_analysis.status === 'acceptable' ? '✓' : '⚠️'} Loss Analysis
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <p className="text-content-secondary">Actual Loss</p>
-                      <p className="font-bold">{result.loss_analysis.actual_loss?.toFixed(2)} L ({result.loss_analysis.actual_loss_percent}%)</p>
-                    </div>
-                    <div>
-                      <p className="text-content-secondary">Allowable Loss</p>
-                      <p className="font-bold">{result.loss_analysis.allowable_loss?.toFixed(2)} L ({result.loss_analysis.allowable_loss_percent}%)</p>
-                    </div>
-                  </div>
-                  <p className="text-xs mt-2">{result.loss_analysis.message}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {!result && !error && (
+          {deliveryQueue.length === 0 ? (
             <div className="text-center py-12 text-content-secondary">
-              Submit a delivery to see results
+              Add deliveries to the queue using the form
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {deliveryQueue.map((delivery) => (
+                <div
+                  key={delivery.id}
+                  className={`p-3 rounded-md border ${
+                    delivery.status === 'submitted'
+                      ? 'bg-status-success-light border-status-success'
+                      : delivery.status === 'error'
+                      ? 'bg-status-error-light border-status-error'
+                      : 'bg-surface-bg border-surface-border'
+                  }`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold">
+                          {delivery.tank_id === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'}
+                        </span>
+                        {delivery.status === 'submitted' && <span className="text-status-success text-sm">✓</span>}
+                        {delivery.status === 'error' && <span className="text-status-error text-sm">✗</span>}
+                        {delivery.supplier && (
+                          <span className="text-xs text-content-secondary">| {delivery.supplier}</span>
+                        )}
+                      </div>
+                      <div className="flex gap-4 text-xs text-content-secondary">
+                        <span>Expected: {delivery.expected_volume.toLocaleString()} L</span>
+                        <span>Delivered: {delivery.volume_delivered.toLocaleString()} L</span>
+                      </div>
+                      {delivery.status === 'submitted' && delivery.result && (
+                        <div className="mt-2 text-xs">
+                          <span className="text-status-success">ID: {delivery.result.delivery_id}</span>
+                          {delivery.result.loss_analysis && (
+                            <span className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
+                              delivery.result.loss_analysis.status === 'acceptable'
+                                ? 'bg-status-success-light text-status-success'
+                                : 'bg-category-c-light text-category-c'
+                            }`}>
+                              Loss: {delivery.result.loss_analysis.actual_loss_percent}%
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {delivery.status === 'error' && delivery.error && (
+                        <p className="mt-1 text-xs text-status-error">{delivery.error}</p>
+                      )}
+                    </div>
+                    {delivery.status === 'pending' && (
+                      <button
+                        onClick={() => removeFromQueue(delivery.id)}
+                        className="ml-2 text-content-secondary hover:text-status-error text-sm"
+                        title="Remove from queue"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Running totals per tank */}
+              {(() => {
+                const pendingByTank: Record<string, number> = {}
+                deliveryQueue.filter(d => d.status === 'pending').forEach(d => {
+                  pendingByTank[d.fuel_type] = (pendingByTank[d.fuel_type] || 0) + d.volume_delivered
+                })
+                const entries = Object.entries(pendingByTank)
+                if (entries.length === 0) return null
+                return (
+                  <div className="pt-3 border-t border-surface-border">
+                    <p className="text-xs font-medium text-content-secondary mb-1">Queued Totals:</p>
+                    {entries.map(([fuel, total]) => (
+                      <p key={fuel} className="text-sm font-semibold">{fuel}: {total.toLocaleString()} L</p>
+                    ))}
+                  </div>
+                )
+              })()}
+
+              {/* Submit All button */}
+              {deliveryQueue.some(d => d.status === 'pending' || d.status === 'error') && (
+                <button
+                  onClick={submitAllDeliveries}
+                  disabled={submitting}
+                  className="w-full px-4 py-2 bg-status-success text-white rounded-md hover:bg-status-success/90 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  {submitting ? 'Submitting...' : `Submit All Deliveries (${deliveryQueue.filter(d => d.status === 'pending' || d.status === 'error').length})`}
+                </button>
+              )}
             </div>
           )}
         </div>
