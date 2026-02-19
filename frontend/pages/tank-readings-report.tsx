@@ -77,6 +77,9 @@ interface TankReading {
   notes: string
   deliveries?: any[]
   delivery_timeline?: any
+  delivery_vat_amount?: number | null
+  delivery_net_price?: number | null
+  delivery_vat_per_liter?: number | null
 }
 
 export default function TankReadingsReport() {
@@ -761,6 +764,42 @@ export default function TankReadingsReport() {
                         </ul>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Delivery VAT (Owner Only) */}
+                {user?.role === 'owner' && selectedReading.delivery_vat_amount != null && selectedReading.delivery_vat_amount > 0 && (
+                  <div className="rounded-lg p-4 mb-4 border-2 border-status-warning bg-status-pending-light">
+                    <h3 className="text-lg font-semibold mb-3 text-status-warning">Delivery VAT</h3>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-content-secondary">Net Price / Liter</span>
+                        <p className="font-semibold text-lg text-status-warning">
+                          {formatCurrency(selectedReading.delivery_net_price || 0)}
+                        </p>
+                        <p className="text-xs text-content-secondary mt-1">
+                          (Price - 1.44) / 1.16
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-content-secondary">VAT / Liter</span>
+                        <p className="font-semibold text-lg text-status-warning">
+                          {formatCurrency(selectedReading.delivery_vat_per_liter || 0)}
+                        </p>
+                        <p className="text-xs text-content-secondary mt-1">
+                          Net Price x 0.16
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-content-secondary">Total VAT Amount</span>
+                        <p className="font-semibold text-lg text-status-warning">
+                          {formatCurrency(selectedReading.delivery_vat_amount)}
+                        </p>
+                        <p className="text-xs text-content-secondary mt-1">
+                          Qty x Net Price x 16%
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 )}
 
