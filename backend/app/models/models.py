@@ -68,6 +68,8 @@ class SaleOut(BaseModel):
     validation_message: str
     date: Optional[str] = None
     created_at: Optional[str] = None
+    tank_id: Optional[str] = None
+    tank_level_after: Optional[float] = None
 
 class FuelTankLevel(BaseModel):
     tank_id: str

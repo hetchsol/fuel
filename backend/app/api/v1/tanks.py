@@ -3,10 +3,11 @@ Fuel Tank Inventory API
 """
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from ...models.models import FuelTankLevel, StockDelivery
 from ...config import TANK_CONVERSION_FACTOR, get_allowable_loss_percent
 from .auth import get_station_context
+from .sales import load_sales
 
 router = APIRouter()
 
@@ -175,6 +176,87 @@ def get_delivery_history(limit: int = 50, ctx: dict = Depends(get_station_contex
     dip_readings_data = storage['dip_readings_data']
 
     return sorted(delivery_history, key=lambda x: x["timestamp"], reverse=True)[:limit]
+
+@router.get("/{tank_id}/movements")
+def get_stock_movements(tank_id: str, date: Optional[str] = None, limit: int = 50, ctx: dict = Depends(get_station_context)):
+    """
+    Get unified stock movements (deliveries + sales) for a tank on a given date.
+    Returns chronological list of all movements with summary totals.
+    """
+    storage = ctx["storage"]
+    tank_data = storage['tanks']
+    delivery_history = storage['delivery_history']
+    station_id = ctx["station_id"]
+
+    if tank_id not in tank_data:
+        raise HTTPException(status_code=404, detail="Tank not found")
+
+    tank = tank_data[tank_id]
+    fuel_type = tank["fuel_type"]
+    target_date = date or datetime.now().strftime("%Y-%m-%d")
+
+    movements = []
+
+    # 1. Gather deliveries for this tank on the target date
+    for delivery in delivery_history:
+        if delivery.get("tank_id") != tank_id:
+            continue
+        delivery_ts = delivery.get("timestamp", "")
+        if delivery_ts.startswith(target_date):
+            movements.append({
+                "timestamp": delivery_ts,
+                "type": "DELIVERY",
+                "volume": delivery.get("volume_delivered", 0),
+                "reference_id": delivery.get("delivery_id", ""),
+                "description": f"Delivery from {delivery.get('supplier', 'Unknown')}",
+                "supplier": delivery.get("supplier"),
+            })
+
+    # 2. Gather sales for matching fuel_type on the target date
+    sales = load_sales(station_id)
+    for sale in sales:
+        if sale.get("fuel_type") != fuel_type:
+            continue
+        if sale.get("date") != target_date:
+            continue
+        if sale.get("validation_status") != "PASS":
+            continue
+
+        avg_vol = sale.get("average_volume", 0)
+        mech_vol = sale.get("mechanical_volume", 0)
+        elec_vol = sale.get("electronic_volume", 0)
+        movements.append({
+            "timestamp": sale.get("created_at", ""),
+            "type": "SALE",
+            "volume": -avg_vol,
+            "reference_id": sale.get("sale_id", ""),
+            "description": f"{sale.get('shift_id', '')} sale (electronic: {elec_vol:.0f}L, mechanical: {mech_vol:.0f}L)",
+            "shift_id": sale.get("shift_id"),
+        })
+
+    # Sort chronologically
+    movements.sort(key=lambda m: m["timestamp"])
+
+    # Apply limit
+    movements = movements[:limit]
+
+    # Calculate summary
+    total_delivered = sum(m["volume"] for m in movements if m["type"] == "DELIVERY")
+    total_sold = sum(abs(m["volume"]) for m in movements if m["type"] == "SALE")
+
+    return {
+        "tank_id": tank_id,
+        "fuel_type": fuel_type,
+        "date": target_date,
+        "movements": movements,
+        "summary": {
+            "total_delivered": total_delivered,
+            "total_sold": total_sold,
+            "net_change": total_delivered - total_sold,
+            "movement_count": len(movements),
+        }
+    }
+
 
 @router.post("/dip-reading/{tank_id}")
 def record_dip_reading(tank_id: str, opening_dip: float = None, closing_dip: float = None, user: str = None, ctx: dict = Depends(get_station_context)):

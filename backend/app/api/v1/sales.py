@@ -80,6 +80,26 @@ def record_sale(payload: SaleIn, ctx: dict = Depends(get_station_context)):
         except:
             sale["date"] = datetime.now().strftime("%Y-%m-%d")
 
+        # Auto-deduct from tank level on successful sale
+        if sale["validation_status"] == "PASS":
+            storage = ctx["storage"]
+            tank_data = storage['tanks']
+
+            # Find tank matching this fuel type
+            target_tank = None
+            for tid, tdata in tank_data.items():
+                if tdata["fuel_type"] == payload.fuel_type:
+                    target_tank = tid
+                    break
+
+            if target_tank:
+                tank_data[target_tank]["current_level"] = max(
+                    0, tank_data[target_tank]["current_level"] - sale["average_volume"]
+                )
+                tank_data[target_tank]["last_updated"] = datetime.now().isoformat()
+                sale["tank_id"] = target_tank
+                sale["tank_level_after"] = tank_data[target_tank]["current_level"]
+
         # Load existing sales
         sales = load_sales(station_id)
 

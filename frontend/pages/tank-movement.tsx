@@ -98,6 +98,12 @@ export default function TankMovement() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  // Summary tab state
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const [summaryMovements, setSummaryMovements] = useState<any>(null)
+  const [summarySales, setSummarySales] = useState<any[]>([])
+  const [summaryLoading, setSummaryLoading] = useState(false)
+
   // Calculate preview of tank movement
   const calculateMovementPreview = () => {
     const opening = parseFloat(readingForm.opening_volume)
@@ -114,6 +120,36 @@ export default function TankMovement() {
     if (!before || !after) return 0
     return after - before
   }
+
+  const fetchSummary = async () => {
+    setSummaryLoading(true)
+    try {
+      const [movementsRes, salesRes] = await Promise.all([
+        fetch(`${BASE}/tanks/${selectedTank}/movements?date=${selectedDate}`, { headers: getHeaders() }),
+        fetch(`${BASE}/sales/date/${selectedDate}`, { headers: getHeaders() })
+      ])
+      if (movementsRes.ok) {
+        setSummaryMovements(await movementsRes.json())
+      } else {
+        setSummaryMovements(null)
+      }
+      if (salesRes.ok) {
+        setSummarySales(await salesRes.json())
+      } else {
+        setSummarySales([])
+      }
+    } catch (err) {
+      console.error('Error fetching summary:', err)
+    } finally {
+      setSummaryLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'summary') {
+      fetchSummary()
+    }
+  }, [activeTab, selectedTank, selectedDate])
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -913,11 +949,160 @@ export default function TankMovement() {
             {/* Summary Tab */}
             {activeTab === 'summary' && (
               <div>
-                <h2 className="text-xl font-semibold mb-4">Tank Movement Summary</h2>
-                <p className="text-content-secondary">Summary and analytics features coming soon...</p>
-                <p className="text-sm text-content-secondary mt-2">
-                  This will show variance analysis, trends, and anomaly detection.
-                </p>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-semibold">Tank Movement Summary</h2>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-content-secondary">Date:</label>
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="px-3 py-1.5 border border-surface-border rounded-md text-sm focus:ring-2 focus:ring-action-primary"
+                    />
+                  </div>
+                </div>
+
+                {summaryLoading && (
+                  <div className="text-center py-8 text-content-secondary">Loading summary...</div>
+                )}
+
+                {!summaryLoading && (
+                  <>
+                    {/* Daily Totals */}
+                    {summaryMovements && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-status-success-light rounded-lg p-4 border border-status-success">
+                          <p className="text-xs text-status-success font-medium">Total Delivered</p>
+                          <p className="text-2xl font-bold text-status-success">
+                            {summaryMovements.summary.total_delivered.toLocaleString(undefined, { maximumFractionDigits: 0 })} L
+                          </p>
+                        </div>
+                        <div className="bg-status-error-light rounded-lg p-4 border border-status-error">
+                          <p className="text-xs text-status-error font-medium">Total Sold</p>
+                          <p className="text-2xl font-bold text-status-error">
+                            {summaryMovements.summary.total_sold.toLocaleString(undefined, { maximumFractionDigits: 0 })} L
+                          </p>
+                        </div>
+                        <div className={`rounded-lg p-4 border ${
+                          summaryMovements.summary.net_change >= 0
+                            ? 'bg-status-success-light border-status-success'
+                            : 'bg-status-error-light border-status-error'
+                        }`}>
+                          <p className={`text-xs font-medium ${summaryMovements.summary.net_change >= 0 ? 'text-status-success' : 'text-status-error'}`}>Net Change</p>
+                          <p className={`text-2xl font-bold ${summaryMovements.summary.net_change >= 0 ? 'text-status-success' : 'text-status-error'}`}>
+                            {summaryMovements.summary.net_change >= 0 ? '+' : ''}{summaryMovements.summary.net_change.toLocaleString(undefined, { maximumFractionDigits: 0 })} L
+                          </p>
+                        </div>
+                        <div className="bg-surface-bg rounded-lg p-4 border border-surface-border">
+                          <p className="text-xs text-content-secondary font-medium">Movements</p>
+                          <p className="text-2xl font-bold text-content-primary">{summaryMovements.summary.movement_count}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Reconciliation Status */}
+                    {(() => {
+                      const fuelType = selectedTank === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'
+                      const dayReadings = readings.filter(r => r.date === selectedDate)
+                      const daySales = summarySales.filter((s: any) => s.fuel_type === fuelType)
+                      const totalNozzleSales = daySales.reduce((sum: number, s: any) => sum + (s.average_volume || 0), 0)
+
+                      if (dayReadings.length > 0 && summaryMovements) {
+                        const reading = dayReadings[0]
+                        const tankMovement = reading.tank_volume_movement
+                        const variance = totalNozzleSales > 0 ? Math.abs(totalNozzleSales - tankMovement) : 0
+                        const variancePercent = tankMovement > 0 ? (variance / tankMovement) * 100 : 0
+                        const status = variancePercent <= 0.5 ? 'PASS' : variancePercent <= 1.0 ? 'WARNING' : 'FAIL'
+
+                        return (
+                          <div className={`rounded-lg p-4 mb-6 border ${
+                            status === 'PASS' ? 'bg-status-success-light border-status-success' :
+                            status === 'WARNING' ? 'bg-status-pending-light border-status-warning' :
+                            'bg-status-error-light border-status-error'
+                          }`}>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h3 className="font-semibold text-content-primary">Reconciliation</h3>
+                                <p className="text-sm text-content-secondary mt-1">
+                                  Tank movement: {tankMovement.toLocaleString()} L | Nozzle sales: {totalNozzleSales.toLocaleString(undefined, { maximumFractionDigits: 0 })} L | Variance: {variance.toFixed(1)} L ({variancePercent.toFixed(2)}%)
+                                </p>
+                              </div>
+                              <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(status)}`}>
+                                {status}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="rounded-lg p-4 mb-6 border bg-surface-bg border-surface-border">
+                          <p className="text-sm text-content-secondary">
+                            No tank readings available for {selectedDate} to perform reconciliation.
+                            {totalNozzleSales > 0 && ` (${daySales.length} sales totaling ${totalNozzleSales.toLocaleString(undefined, { maximumFractionDigits: 0 })} L recorded)`}
+                          </p>
+                        </div>
+                      )
+                    })()}
+
+                    {/* Stock Movement Timeline */}
+                    <h3 className="text-lg font-semibold mb-3">Stock Movement Timeline</h3>
+                    {summaryMovements && summaryMovements.movements?.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-surface-border">
+                          <thead className="bg-surface-bg">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Time</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Type</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Volume</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Reference</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Description</th>
+                              <th className="px-4 py-3 text-right text-xs font-medium text-content-secondary uppercase">Running Net</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-surface-card divide-y divide-surface-border">
+                            {summaryMovements.movements.map((m: any, idx: number) => {
+                              const runningNet = summaryMovements.movements
+                                .slice(0, idx + 1)
+                                .reduce((sum: number, mv: any) => sum + mv.volume, 0)
+
+                              return (
+                                <tr key={idx} className="hover:bg-surface-bg">
+                                  <td className="px-4 py-3 text-sm text-content-secondary font-mono">
+                                    {m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : '-'}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm">
+                                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                      m.type === 'DELIVERY'
+                                        ? 'bg-status-success-light text-status-success'
+                                        : 'bg-status-error-light text-status-error'
+                                    }`}>
+                                      {m.type}
+                                    </span>
+                                  </td>
+                                  <td className={`px-4 py-3 text-sm font-semibold ${m.volume >= 0 ? 'text-status-success' : 'text-status-error'}`}>
+                                    {m.volume >= 0 ? '+' : ''}{m.volume.toLocaleString(undefined, { maximumFractionDigits: 1 })} L
+                                  </td>
+                                  <td className="px-4 py-3 text-sm font-mono text-content-secondary">
+                                    {m.reference_id}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-content-secondary">
+                                    {m.description}
+                                  </td>
+                                  <td className={`px-4 py-3 text-sm font-semibold text-right ${runningNet >= 0 ? 'text-status-success' : 'text-status-error'}`}>
+                                    {runningNet >= 0 ? '+' : ''}{runningNet.toLocaleString(undefined, { maximumFractionDigits: 1 })} L
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-center text-content-secondary py-8">No stock movements for {selectedDate}</p>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>

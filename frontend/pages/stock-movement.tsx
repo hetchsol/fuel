@@ -44,6 +44,20 @@ export default function StockMovement() {
     refreshInterval: 10000, // Refresh every 10 seconds
   })
 
+  const today = new Date().toISOString().split('T')[0]
+
+  const { data: todaySales } = useSWR(
+    `sales-today`,
+    () => fetch(`${BASE}/sales/date/${today}`, { headers: getHeaders() }).then(r => r.ok ? r.json() : []),
+    { refreshInterval: 10000 }
+  )
+
+  const { data: movements, mutate: mutateMovements } = useSWR(
+    `movements-${formData.tank_id}-${today}`,
+    () => fetch(`${BASE}/tanks/${formData.tank_id}/movements?date=${today}`, { headers: getHeaders() }).then(r => r.ok ? r.json() : null),
+    { refreshInterval: 10000 }
+  )
+
   // Fetch current tank stock when tank changes
   useEffect(() => {
     fetchCurrentStock()
@@ -153,8 +167,9 @@ export default function StockMovement() {
       }
     }
 
-    // Refresh deliveries list and current stock
+    // Refresh deliveries list, current stock, and movements
     mutate()
+    mutateMovements()
     fetchCurrentStock()
     setSubmitting(false)
   }
@@ -483,55 +498,158 @@ export default function StockMovement() {
         </div>
       </div>
 
-      {/* Delivery History */}
-      <div className="mt-8 bg-surface-card rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold mb-4">📋 Recent Deliveries</h2>
-        {!deliveries && (
-          <div className="text-content-secondary text-sm">Loading...</div>
+      {/* Today's Activity */}
+      {(() => {
+        const fuelType = formData.fuel_type
+        const todayDelivered = movements?.summary?.total_delivered ?? 0
+        const todaySold = movements?.summary?.total_sold ?? 0
+        const netChange = todayDelivered - todaySold
+        const maxBar = Math.max(todayDelivered, todaySold, 1)
+
+        return (
+          <div className="mt-6 bg-surface-card rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold mb-4">Today's Activity — {fuelType}</h2>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="bg-status-success-light rounded-lg p-4 border border-status-success">
+                <p className="text-xs text-status-success font-medium">Deliveries In</p>
+                <p className="text-2xl font-bold text-status-success">{todayDelivered.toLocaleString(undefined, { maximumFractionDigits: 0 })} L</p>
+              </div>
+              <div className="bg-status-error-light rounded-lg p-4 border border-status-error">
+                <p className="text-xs text-status-error font-medium">Sales Out</p>
+                <p className="text-2xl font-bold text-status-error">{todaySold.toLocaleString(undefined, { maximumFractionDigits: 0 })} L</p>
+              </div>
+              <div className={`rounded-lg p-4 border ${netChange >= 0 ? 'bg-status-success-light border-status-success' : 'bg-status-error-light border-status-error'}`}>
+                <p className={`text-xs font-medium ${netChange >= 0 ? 'text-status-success' : 'text-status-error'}`}>Net Change</p>
+                <p className={`text-2xl font-bold ${netChange >= 0 ? 'text-status-success' : 'text-status-error'}`}>
+                  {netChange >= 0 ? '+' : ''}{netChange.toLocaleString(undefined, { maximumFractionDigits: 0 })} L
+                </p>
+              </div>
+            </div>
+            {/* Visual bar */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-content-secondary w-12">In</span>
+                <div className="flex-1 bg-surface-bg rounded-full h-4">
+                  <div className="bg-status-success h-4 rounded-full transition-all" style={{ width: `${(todayDelivered / maxBar) * 100}%` }}></div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-content-secondary w-12">Out</span>
+                <div className="flex-1 bg-surface-bg rounded-full h-4">
+                  <div className="bg-status-error h-4 rounded-full transition-all" style={{ width: `${(todaySold / maxBar) * 100}%` }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Stock Movements Timeline */}
+      <div className="mt-6 bg-surface-card rounded-lg shadow p-6">
+        <h2 className="text-xl font-semibold mb-4">Stock Movements — {today}</h2>
+        {!movements && (
+          <div className="text-content-secondary text-sm">Loading movements...</div>
         )}
-        {deliveries && deliveries.length === 0 && (
-          <div className="text-content-secondary text-sm">No deliveries recorded yet</div>
+        {movements && movements.movements?.length === 0 && (
+          <div className="text-content-secondary text-sm">No movements recorded today</div>
         )}
-        {deliveries && deliveries.length > 0 && (
+        {movements && movements.movements?.length > 0 && (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-surface-border">
               <thead className="bg-surface-bg">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Delivery ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Timestamp</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Fuel Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Delivered</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Loss</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Time</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Volume</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Reference</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Description</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-content-secondary uppercase">Running Net</th>
                 </tr>
               </thead>
               <tbody className="bg-surface-card divide-y divide-surface-border">
-                {deliveries.map((delivery: any, idx: number) => (
-                  <tr key={idx} className="hover:bg-surface-bg">
-                    <td className="px-4 py-3 text-sm font-medium text-content-primary">{delivery.delivery_id}</td>
-                    <td className="px-4 py-3 text-sm text-content-secondary">
-                      {new Date(delivery.timestamp).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-content-secondary">{delivery.fuel_type}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-content-primary">
-                      {delivery.volume_delivered?.toLocaleString()} L
-                    </td>
-                    <td className="px-4 py-3 text-sm text-content-secondary">
-                      {delivery.actual_loss?.toFixed(2)} L ({delivery.actual_loss_percent?.toFixed(2)}%)
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        delivery.loss_status === 'acceptable'
-                          ? 'bg-status-success-light text-status-success'
-                          : 'bg-category-c-light text-category-c'
-                      }`}>
-                        {delivery.loss_status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {movements.movements.map((m: any, idx: number) => {
+                  const runningNet = movements.movements
+                    .slice(0, idx + 1)
+                    .reduce((sum: number, mv: any) => sum + mv.volume, 0)
+
+                  return (
+                    <tr key={idx} className="hover:bg-surface-bg">
+                      <td className="px-4 py-3 text-sm text-content-secondary font-mono">
+                        {m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          m.type === 'DELIVERY'
+                            ? 'bg-status-success-light text-status-success'
+                            : 'bg-status-error-light text-status-error'
+                        }`}>
+                          {m.type}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-3 text-sm font-semibold ${m.volume >= 0 ? 'text-status-success' : 'text-status-error'}`}>
+                        {m.volume >= 0 ? '+' : ''}{m.volume.toLocaleString(undefined, { maximumFractionDigits: 1 })} L
+                      </td>
+                      <td className="px-4 py-3 text-sm font-mono text-content-secondary">
+                        {m.reference_id}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-content-secondary">
+                        {m.description}
+                      </td>
+                      <td className={`px-4 py-3 text-sm font-semibold text-right ${runningNet >= 0 ? 'text-status-success' : 'text-status-error'}`}>
+                        {runningNet >= 0 ? '+' : ''}{runningNet.toLocaleString(undefined, { maximumFractionDigits: 1 })} L
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Fallback: show old deliveries table if movements not available */}
+        {!movements && deliveries && deliveries.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-lg font-semibold mb-3 text-content-secondary">Recent Deliveries (fallback)</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-surface-border">
+                <thead className="bg-surface-bg">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Delivery ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Timestamp</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Fuel Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Delivered</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Loss</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-surface-card divide-y divide-surface-border">
+                  {deliveries.map((delivery: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-surface-bg">
+                      <td className="px-4 py-3 text-sm font-medium text-content-primary">{delivery.delivery_id}</td>
+                      <td className="px-4 py-3 text-sm text-content-secondary">
+                        {new Date(delivery.timestamp).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-content-secondary">{delivery.fuel_type}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-content-primary">
+                        {delivery.volume_delivered?.toLocaleString()} L
+                      </td>
+                      <td className="px-4 py-3 text-sm text-content-secondary">
+                        {delivery.actual_loss?.toFixed(2)} L ({delivery.actual_loss_percent?.toFixed(2)}%)
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          delivery.loss_status === 'acceptable'
+                            ? 'bg-status-success-light text-status-success'
+                            : 'bg-category-c-light text-category-c'
+                        }`}>
+                          {delivery.loss_status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
