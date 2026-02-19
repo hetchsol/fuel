@@ -8,6 +8,7 @@ import os
 from datetime import datetime
 from ...models.models import SaleIn, SaleOut
 from ...services.sales_calculator import calculate_sale
+from ...config import resolve_fuel_price
 from .auth import get_station_context
 from ...database.station_files import get_station_file
 
@@ -50,13 +51,15 @@ def record_sale(payload: SaleIn, ctx: dict = Depends(get_station_context)):
     station_id = ctx["station_id"]
 
     try:
+        price = resolve_fuel_price(payload.fuel_type, ctx["storage"])
         sale = calculate_sale(
             shift_id=payload.shift_id,
             fuel_type=payload.fuel_type,
             mechanical_opening=payload.mechanical_opening,
             mechanical_closing=payload.mechanical_closing,
             electronic_opening=payload.electronic_opening,
-            electronic_closing=payload.electronic_closing
+            electronic_closing=payload.electronic_closing,
+            unit_price=price
         )
 
         # If validation failed, raise HTTP error

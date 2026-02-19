@@ -97,6 +97,14 @@ DEFAULT_PAGE_LIMIT = 100
 MAX_FLAGS_RETURN = 50
 
 # ============================================================================
+# VAT / LEVY CONSTANTS (Zambia)
+# ============================================================================
+
+VAT_RATE = 0.16              # 16% VAT
+FUEL_LEVY_PER_LITER = 1.44   # ZMW levy deduction per liter
+VAT_INCLUSIVE_DIVISOR = 1.16  # 1 + VAT_RATE
+
+# ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
@@ -191,3 +199,36 @@ def convert_volume_to_dip(volume_liters: float) -> float:
         Dip reading in centimeters
     """
     return volume_liters / TANK_CONVERSION_FACTOR
+
+
+def resolve_fuel_price(fuel_type: str, storage: dict = None) -> float:
+    """
+    Resolve the current fuel price from runtime settings, falling back to config constants.
+
+    Priority:
+    1. storage['fuel_settings'] (set via Settings API at runtime)
+    2. Config constants (DIESEL_PRICE_PER_LITER / PETROL_PRICE_PER_LITER)
+
+    Args:
+        fuel_type: "Diesel" or "Petrol"
+        storage: Runtime storage dict (from station context)
+
+    Returns:
+        Price per liter in ZMW
+    """
+    # Try runtime settings first
+    if storage:
+        fuel_settings = storage.get('fuel_settings')
+        if fuel_settings:
+            fuel_type_upper = fuel_type.upper()
+            if "DIESEL" in fuel_type_upper:
+                price = fuel_settings.get('diesel_price_per_liter')
+                if price is not None:
+                    return float(price)
+            elif "PETROL" in fuel_type_upper or "GASOLINE" in fuel_type_upper:
+                price = fuel_settings.get('petrol_price_per_liter')
+                if price is not None:
+                    return float(price)
+
+    # Fall back to config constants
+    return get_fuel_price(fuel_type)

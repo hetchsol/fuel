@@ -17,6 +17,7 @@ Main Formula (Column AM): =IF(AL>0, IF(AK>0, (AK-AL)+(AI-AJ), AI-AL), 0)
 
 from typing import Optional, Dict, List, Tuple
 from ..models.models import NozzleReadingDetail
+from ..config import VAT_RATE, FUEL_LEVY_PER_LITER, VAT_INCLUSIVE_DIVISOR
 
 
 def get_pass_threshold() -> float:
@@ -754,6 +755,53 @@ def calculate_pump_averages(
         }
 
     return pump_averages
+
+
+def calculate_delivery_vat(
+    delivery_volume: float,
+    price_per_liter: float,
+    levy: float = FUEL_LEVY_PER_LITER,
+    vat_rate: float = VAT_RATE,
+    vat_divisor: float = VAT_INCLUSIVE_DIVISOR
+) -> Dict[str, float]:
+    """
+    Calculate VAT on a delivery invoice using the spreadsheet formula.
+
+    Spreadsheet formula:
+        VAT = InvoiceQty * ((Price - levy) / vat_divisor) * vat_rate * DeliveryFlag
+
+    Args:
+        delivery_volume: Litres delivered (InvoiceQty)
+        price_per_liter: Current selling price per liter
+        levy: Fuel levy deduction per liter (default 1.44 ZMW)
+        vat_rate: VAT rate (default 0.16 = 16%)
+        vat_divisor: VAT-inclusive divisor (default 1.16)
+
+    Returns:
+        Dictionary with:
+            - delivery_flag: 1 if delivery occurred, 0 otherwise
+            - net_price_per_liter: (price - levy) / vat_divisor
+            - vat_amount: total VAT on delivery
+            - vat_per_liter: VAT per liter delivered
+    """
+    if delivery_volume <= 0 or price_per_liter <= 0:
+        return {
+            'delivery_flag': 0,
+            'net_price_per_liter': 0.0,
+            'vat_amount': 0.0,
+            'vat_per_liter': 0.0
+        }
+
+    net_price_per_liter = (price_per_liter - levy) / vat_divisor
+    vat_amount = delivery_volume * net_price_per_liter * vat_rate
+    vat_per_liter = net_price_per_liter * vat_rate
+
+    return {
+        'delivery_flag': 1,
+        'net_price_per_liter': round(net_price_per_liter, 4),
+        'vat_amount': round(vat_amount, 2),
+        'vat_per_liter': round(vat_per_liter, 4)
+    }
 
 
 def comprehensive_daily_calculation(

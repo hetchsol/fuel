@@ -12,7 +12,7 @@ from ...models.models import (
     HandoverNozzleReadingInput, HandoverNozzleReadingSummary,
     ShiftStockSnapshot,
 )
-from ...config import get_fuel_price
+from ...config import resolve_fuel_price
 from ...database.storage import get_nozzle
 from .auth import get_current_user, require_supervisor_or_owner, get_station_context
 from ...database.station_files import get_station_file
@@ -104,7 +104,7 @@ async def get_my_shift(ctx: dict = Depends(get_station_context)):
         nozzle = get_nozzle(nozzle_id, storage=storage)
         if nozzle:
             fuel_type = _get_fuel_type(nozzle_id, storage=storage)
-            price = get_fuel_price(fuel_type)
+            price = resolve_fuel_price(fuel_type, storage)
             # Find parent island for fuel_type_abbrev
             fuel_type_abbrev = None
             for isl in islands_data.values():
@@ -374,7 +374,7 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
                 detail=f"Closing reading for {reading.nozzle_id} is less than opening reading"
             )
 
-        price = get_fuel_price(fuel_type)
+        price = resolve_fuel_price(fuel_type, storage)
         revenue = round(volume * price, 2)
         fuel_revenue += revenue
 

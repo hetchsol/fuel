@@ -8,12 +8,6 @@ import uuid
 from typing import Tuple
 
 
-# Fuel pricing (should be loaded from settings/database in production)
-FUEL_PRICES = {
-    "Diesel": 25.50,  # Per liter
-    "Petrol": 27.00   # Per liter
-}
-
 ALLOWABLE_DISCREPANCY_PERCENT = 0.03  # 0.03%
 
 
@@ -72,29 +66,14 @@ def validate_readings(
     return status, message
 
 
-def get_fuel_price(fuel_type: str) -> float:
-    """
-    Get unit price for fuel type
-
-    Args:
-        fuel_type: Type of fuel (Diesel or Petrol)
-
-    Returns:
-        Unit price per liter
-    """
-    if fuel_type not in FUEL_PRICES:
-        raise ValueError(f"Unknown fuel type: {fuel_type}. Must be 'Diesel' or 'Petrol'")
-
-    return FUEL_PRICES[fuel_type]
-
-
 def calculate_sale(
     shift_id: str,
     fuel_type: str,
     mechanical_opening: float,
     mechanical_closing: float,
     electronic_opening: float,
-    electronic_closing: float
+    electronic_closing: float,
+    unit_price: float = 0.0
 ) -> dict:
     """
     Calculate daily sale from opening and closing readings
@@ -120,12 +99,6 @@ def calculate_sale(
 
     # Calculate average volume (use this for sale if validation passes)
     average_volume = (mechanical_volume + electronic_volume) / 2
-
-    # Get fuel price
-    try:
-        unit_price = get_fuel_price(fuel_type)
-    except ValueError as e:
-        raise ValueError(str(e))
 
     # Calculate total amount
     # Only calculate if validation passes, otherwise set to 0

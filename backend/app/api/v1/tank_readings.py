@@ -28,7 +28,8 @@ from ...services.tank_movement import (
     validate_tank_readings,
     validate_multiple_deliveries,
     calculate_variance,
-    detect_anomalies
+    detect_anomalies,
+    calculate_delivery_vat
 )
 from ...services.delivery_timeline import (
     calculate_inter_delivery_sales,
@@ -197,6 +198,47 @@ def find_and_link_deliveries(
     matched_deliveries.sort(key=lambda d: d.delivery_time)
 
     return matched_deliveries
+
+
+def get_previous_reading_cumulatives(
+    tank_readings_db: dict,
+    tank_id: str,
+    current_date: str,
+    current_shift_type: str
+) -> dict:
+    """
+    Find the most recent reading for the same tank before the current date/shift
+    and return its running totals (default 0 if no previous reading).
+
+    Sort order: date desc, Night(1) > Day(0).
+    """
+    shift_order = {"Night": 1, "Day": 0}
+    current_sort_key = (current_date, shift_order.get(current_shift_type, 0))
+
+    candidates = []
+    for r in tank_readings_db.values():
+        if r.get('tank_id') != tank_id:
+            continue
+        r_key = (r['date'], shift_order.get(r.get('shift_type', 'Day'), 0))
+        if r_key < current_sort_key:
+            candidates.append((r_key, r))
+
+    if not candidates:
+        return {
+            'running_total_volume_sold': 0.0,
+            'running_total_variance': 0.0,
+            'running_total_tank_movement': 0.0,
+        }
+
+    # Get the most recent one
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    prev = candidates[0][1]
+
+    return {
+        'running_total_volume_sold': prev.get('running_total_volume_sold', 0.0) or 0.0,
+        'running_total_variance': prev.get('running_total_variance', 0.0) or 0.0,
+        'running_total_tank_movement': prev.get('running_total_tank_movement', 0.0) or 0.0,
+    }
 
 
 @router.post("/readings", response_model=TankVolumeReadingOutput, response_model_exclude_unset=False, response_model_exclude_defaults=False, response_model_exclude_none=False)
@@ -433,6 +475,33 @@ def submit_tank_reading(
         'price_per_liter': calculations.get('price_per_liter', 0)
     })
 
+    # Calculate delivery VAT (Gap 2)
+    delivery_vat_amount = None
+    delivery_net_price = None
+    delivery_vat_per_liter = None
+    if total_delivery_volume > 0 and price > 0:
+        vat_result = calculate_delivery_vat(total_delivery_volume, price)
+        delivery_vat_amount = vat_result['vat_amount']
+        delivery_net_price = vat_result['net_price_per_liter']
+        delivery_vat_per_liter = vat_result['vat_per_liter']
+
+    # Calculate cross-shift cumulative running totals (Gap 3)
+    prev_cumulatives = get_previous_reading_cumulatives(
+        tank_readings_db, reading_input.tank_id,
+        reading_input.date, reading_input.shift_type
+    )
+    per_shift_volume_sold = calculations.get('cumulative_volume_sold', 0.0) or 0.0  # (AN+AO)/2
+    per_shift_variance = calculations.get('electronic_vs_tank_variance', 0.0) or 0.0  # AP
+    per_shift_tank_movement = tank_movement  # AM
+
+    running_total_volume_sold = prev_cumulatives['running_total_volume_sold'] + per_shift_volume_sold
+    running_total_variance = prev_cumulatives['running_total_variance'] + per_shift_variance
+    running_total_tank_movement = prev_cumulatives['running_total_tank_movement'] + per_shift_tank_movement
+    running_loss_percent = (
+        (running_total_variance / running_total_tank_movement * 100)
+        if running_total_tank_movement != 0 else 0.0
+    )
+
     # Generate reading ID
     reading_id = f"TR-{reading_input.tank_id}-{reading_input.date}-{uuid.uuid4().hex[:8]}"
 
@@ -486,6 +555,17 @@ def submit_tank_reading(
         customer_allocations=reading_input.customer_allocations,
         allocation_balance_check=allocation_balance_check,
         total_customer_revenue=total_customer_revenue,
+
+        # Delivery VAT (Gap 2)
+        delivery_vat_amount=delivery_vat_amount,
+        delivery_net_price=delivery_net_price,
+        delivery_vat_per_liter=delivery_vat_per_liter,
+
+        # Cross-shift cumulative running totals (Gap 3)
+        running_total_volume_sold=round(running_total_volume_sold, 2),
+        running_total_variance=round(running_total_variance, 2),
+        running_total_tank_movement=round(running_total_tank_movement, 2),
+        running_loss_percent=round(running_loss_percent, 4),
 
         # Pump averages (Columns AY-BB)
         pump_averages=calculations.get('pump_averages'),

@@ -483,6 +483,17 @@ class TankVolumeReadingOutput(BaseModel):
     supplier: Optional[str] = None
     invoice_number: Optional[str] = None
 
+    # Delivery VAT Calculation (spreadsheet formula)
+    delivery_vat_amount: Optional[float] = None
+    delivery_net_price: Optional[float] = None
+    delivery_vat_per_liter: Optional[float] = None
+
+    # Cross-Shift Cumulative Running Totals
+    running_total_volume_sold: Optional[float] = None
+    running_total_variance: Optional[float] = None
+    running_total_tank_movement: Optional[float] = None
+    running_loss_percent: Optional[float] = None
+
     # Pump Averages (Columns AY-BB) - if applicable
     pump_averages: Optional[dict] = None
 
