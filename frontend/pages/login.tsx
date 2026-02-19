@@ -42,8 +42,9 @@ export default function Login() {
       localStorage.setItem('user', JSON.stringify(data.user))
       localStorage.setItem('stationId', data.user.station_id || 'ST001')
 
-      // Redirect to dashboard
-      router.push('/')
+      // Redirect to original page or dashboard
+      const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/'
+      router.push(redirect)
     } catch (err: any) {
       setError(err.message || 'Login failed')
     } finally {

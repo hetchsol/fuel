@@ -20,7 +20,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       setUser(parsed)
       setActiveStationId(localStorage.getItem('stationId') || parsed.station_id || 'ST001')
     } else if (router.pathname !== '/login') {
-      router.push('/login')
+      router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`)
     }
     setLoading(false)
   }, [router.pathname])
