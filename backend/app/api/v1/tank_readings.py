@@ -83,18 +83,6 @@ def save_tank_deliveries(tank_deliveries_db: dict, station_id: str):
         json.dump(tank_deliveries_db, f, indent=2, default=str)
 
 
-# Tank configuration (should come from database)
-TANK_CONFIG = {
-    "TANK-DIESEL": {
-        "fuel_type": "Diesel",
-        "capacity": 50000  # 50,000 liters
-    },
-    "TANK-PETROL": {
-        "fuel_type": "Petrol",
-        "capacity": 50000  # 50,000 liters
-    }
-}
-
 
 # ===== HELPER FUNCTIONS FOR MULTIPLE DELIVERIES SUPPORT =====
 
@@ -267,14 +255,16 @@ def submit_tank_reading(
     from ...services.tank_movement import comprehensive_daily_calculation
 
     station_id = ctx["station_id"]
+    storage = ctx["storage"]
     tank_readings_db = load_tank_readings(station_id)
     tank_deliveries_db = load_tank_deliveries(station_id)
 
-    # Get tank configuration
-    if reading_input.tank_id not in TANK_CONFIG:
+    # Get tank configuration from runtime storage
+    tanks = storage.get('tanks', {})
+    if reading_input.tank_id not in tanks:
         raise HTTPException(status_code=404, detail=f"Tank {reading_input.tank_id} not found")
 
-    tank_config = TANK_CONFIG[reading_input.tank_id]
+    tank_config = tanks[reading_input.tank_id]
 
     # Validate dip readings
     dip_validation_opening = validate_dip_reading(reading_input.tank_id, reading_input.opening_dip_cm)
@@ -773,13 +763,15 @@ def record_delivery(
     This creates a delivery record and validates the delivery volume.
     """
     station_id = ctx["station_id"]
+    storage = ctx["storage"]
     tank_deliveries_db = load_tank_deliveries(station_id)
 
-    # Get tank configuration
-    if delivery_input.tank_id not in TANK_CONFIG:
+    # Get tank configuration from runtime storage
+    tanks = storage.get('tanks', {})
+    if delivery_input.tank_id not in tanks:
         raise HTTPException(status_code=404, detail=f"Tank {delivery_input.tank_id} not found")
 
-    tank_config = TANK_CONFIG[delivery_input.tank_id]
+    tank_config = tanks[delivery_input.tank_id]
 
     # Validate delivery volumes
     if delivery_input.volume_after <= delivery_input.volume_before:
@@ -934,11 +926,12 @@ def get_tank_movement_summary(
     tank_readings_db = load_tank_readings(ctx["station_id"])
     tank_deliveries_db = load_tank_deliveries(ctx["station_id"])
 
-    # Get tank configuration
-    if tank_id not in TANK_CONFIG:
+    # Get tank configuration from runtime storage
+    tanks = ctx["storage"].get('tanks', {})
+    if tank_id not in tanks:
         raise HTTPException(status_code=404, detail=f"Tank {tank_id} not found")
 
-    tank_config = TANK_CONFIG[tank_id]
+    tank_config = tanks[tank_id]
 
     # Get readings for date range
     readings = [
