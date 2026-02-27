@@ -42,6 +42,10 @@ export default function Login() {
       localStorage.setItem('user', JSON.stringify(data.user))
       localStorage.setItem('stationId', data.user.station_id || 'ST001')
 
+      // Set cookies for server-side middleware route protection
+      document.cookie = `accessToken=${data.access_token}; path=/; SameSite=Lax`
+      document.cookie = `user=${encodeURIComponent(JSON.stringify(data.user))}; path=/; SameSite=Lax`
+
       // Redirect to original page or dashboard
       const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/'
       router.push(redirect)
