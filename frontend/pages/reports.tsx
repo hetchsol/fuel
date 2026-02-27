@@ -1,4 +1,4 @@
-import { authFetch, BASE, getHeaders } from '../lib/api'
+import { authFetch, BASE, getHeaders, downloadExport } from '../lib/api'
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import DateRangePicker from '../components/DateRangePicker';
@@ -210,6 +210,22 @@ export default function Reports() {
                         <span className="ml-4 px-4 py-2 bg-surface-card rounded-full text-sm font-medium text-content-secondary shadow-md">
                             📅 {selectedFilter}
                         </span>
+                    )}
+                    {reportData && startDate && endDate && (
+                        <>
+                            <button
+                                onClick={() => downloadExport(`/exports/sales?format=csv&start_date=${startDate}&end_date=${endDate}`, 'sales.csv')}
+                                className="ml-4 px-4 py-2 border border-action-primary text-action-primary font-medium rounded-lg hover:opacity-80 transition"
+                            >
+                                CSV
+                            </button>
+                            <button
+                                onClick={() => downloadExport(`/exports/sales?format=excel&start_date=${startDate}&end_date=${endDate}`, 'sales.xlsx')}
+                                className="ml-2 px-4 py-2 border border-action-primary text-action-primary font-medium rounded-lg hover:opacity-80 transition"
+                            >
+                                Excel
+                            </button>
+                        </>
                     )}
                 </div>
 

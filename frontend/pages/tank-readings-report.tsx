@@ -1,4 +1,4 @@
-import { authFetch, BASE, getHeaders } from '../lib/api'
+import { authFetch, BASE, getHeaders, downloadExport } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
@@ -331,15 +331,35 @@ export default function TankReadingsReport() {
               />
             </div>
 
-            <div className="flex items-end">
+            <div className="flex items-end gap-2">
               <button
                 onClick={loadReadings}
                 disabled={loading}
-                className="w-full px-4 py-2 text-white rounded-md hover:opacity-90 disabled:opacity-50 transition"
+                className="flex-1 px-4 py-2 text-white rounded-md hover:opacity-90 disabled:opacity-50 transition"
                 style={{ backgroundColor: theme.primary }}
               >
                 {loading ? 'Loading...' : 'Load Report'}
               </button>
+              {readings.length > 0 && (
+                <>
+                  <button
+                    onClick={() => downloadExport(`/exports/tank-readings?format=csv&tank_id=${selectedTank}&start_date=${startDate}&end_date=${endDate}`, 'tank_readings.csv')}
+                    className="px-3 py-2 text-sm border rounded-md hover:opacity-80 transition"
+                    style={{ borderColor: theme.primary, color: theme.primary }}
+                    title="Download CSV"
+                  >
+                    CSV
+                  </button>
+                  <button
+                    onClick={() => downloadExport(`/exports/tank-readings?format=excel&tank_id=${selectedTank}&start_date=${startDate}&end_date=${endDate}`, 'tank_readings.xlsx')}
+                    className="px-3 py-2 text-sm border rounded-md hover:opacity-80 transition"
+                    style={{ borderColor: theme.primary, color: theme.primary }}
+                    title="Download Excel"
+                  >
+                    Excel
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

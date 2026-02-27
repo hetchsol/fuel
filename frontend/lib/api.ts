@@ -35,6 +35,23 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
   return response;
 }
 
+export async function downloadExport(path: string, filename: string) {
+  const res = await fetch(`${BASE}${path}`, { headers: getHeaders() });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Download failed' }));
+    throw new Error(err.detail || 'Download failed');
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function getDaily(date?: string) {
   const qs = date ? `?date=${date}` : '';
   const res = await fetch(`${BASE}/reports/daily${qs}`, { headers: getHeaders() });

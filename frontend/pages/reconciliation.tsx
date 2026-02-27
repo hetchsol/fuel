@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getHeaders } from '../lib/api'
+import { getHeaders, downloadExport } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -66,6 +66,22 @@ export default function Reconciliation() {
           >
             {loading ? 'Loading...' : 'Load Reconciliation'}
           </button>
+          {reconciliations.length > 0 && (
+            <>
+              <button
+                onClick={() => downloadExport(`/exports/reconciliation?format=csv&start_date=${selectedDate}&end_date=${selectedDate}`, 'reconciliation.csv')}
+                className="px-4 py-2 border border-action-primary text-action-primary font-medium rounded-md hover:opacity-80"
+              >
+                CSV
+              </button>
+              <button
+                onClick={() => downloadExport(`/exports/reconciliation?format=excel&start_date=${selectedDate}&end_date=${selectedDate}`, 'reconciliation.xlsx')}
+                className="px-4 py-2 border border-action-primary text-action-primary font-medium rounded-md hover:opacity-80"
+              >
+                Excel
+              </button>
+            </>
+          )}
         </div>
       </div>
 
