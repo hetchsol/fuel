@@ -4,3 +4,4 @@ pydantic==2.9.0
 python-multipart==0.0.9
 Pillow==11.1.0
 pytesseract==0.3.13
+openpyxl==3.1.5
