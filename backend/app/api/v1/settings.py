@@ -2,7 +2,7 @@
 Owner Settings API - Fuel pricing and allowable losses
 Station-aware: all data lives in ctx["storage"]
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from ...models.models import FuelSettings, SystemSettings, ValidationThresholds
 from .auth import get_station_context
 
@@ -80,6 +80,9 @@ def update_validation_thresholds(thresholds: ValidationThresholds, ctx: dict = D
     - WARNING: pass_threshold < variance <= warning_threshold
     - FAIL: variance > warning_threshold
     """
+    if thresholds.pass_threshold >= thresholds.warning_threshold:
+        raise HTTPException(status_code=422, detail="pass_threshold must be less than warning_threshold")
+
     storage = ctx["storage"]
     storage['validation_thresholds']["pass_threshold"] = thresholds.pass_threshold
     storage['validation_thresholds']["warning_threshold"] = thresholds.warning_threshold

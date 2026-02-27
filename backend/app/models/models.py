@@ -45,10 +45,10 @@ class ReadingOut(BaseModel):
 class SaleIn(BaseModel):
     shift_id: str
     fuel_type: str  # Diesel or Petrol
-    mechanical_opening: float
-    mechanical_closing: float
-    electronic_opening: float
-    electronic_closing: float
+    mechanical_opening: float = Field(..., ge=0)
+    mechanical_closing: float = Field(..., ge=0)
+    electronic_opening: float = Field(..., ge=0)
+    electronic_closing: float = Field(..., ge=0)
 
 class SaleOut(BaseModel):
     sale_id: str
@@ -80,16 +80,16 @@ class FuelTankLevel(BaseModel):
     percentage: float  # Percentage full
 
 class FuelSettings(BaseModel):
-    diesel_price_per_liter: float
-    petrol_price_per_liter: float
-    diesel_allowable_loss_percent: float  # e.g., 0.3%
-    petrol_allowable_loss_percent: float  # e.g., 0.5%
+    diesel_price_per_liter: float = Field(..., gt=0, le=1000)
+    petrol_price_per_liter: float = Field(..., gt=0, le=1000)
+    diesel_allowable_loss_percent: float = Field(..., ge=0, le=5.0)  # e.g., 0.3%
+    petrol_allowable_loss_percent: float = Field(..., ge=0, le=5.0)  # e.g., 0.5%
 
 class ValidationThresholds(BaseModel):
-    pass_threshold: float = 0.5  # Variance <= this % = PASS
-    warning_threshold: float = 1.0  # Variance <= this % = WARNING
+    pass_threshold: float = Field(default=0.5, ge=0, le=10.0)  # Variance <= this % = PASS
+    warning_threshold: float = Field(default=1.0, ge=0, le=20.0)  # Variance <= this % = WARNING
     # Variance > warning_threshold = FAIL
-    meter_discrepancy_threshold: float = 0.5  # Electronic vs mechanical discrepancy % requiring note
+    meter_discrepancy_threshold: float = Field(default=0.5, ge=0, le=10.0)  # Electronic vs mechanical discrepancy % requiring note
 
 class SystemSettings(BaseModel):
     business_name: str
@@ -267,9 +267,9 @@ class CustomerAllocation(BaseModel):
     """Volume allocation to a specific customer (Diesel only)"""
     customer_id: str
     customer_name: str  # Denormalized for convenience
-    volume: float  # Liters allocated to this customer
-    price_per_liter: float  # Price for this customer (can differ from default)
-    amount: float  # Calculated: volume * price_per_liter
+    volume: float = Field(..., ge=0)  # Liters allocated to this customer
+    price_per_liter: float = Field(..., gt=0, le=1000)  # Price for this customer (can differ from default)
+    amount: float = Field(..., ge=0)  # Calculated: volume * price_per_liter
 
 class CreditSale(BaseModel):
     sale_id: str
@@ -701,8 +701,8 @@ class LubricantDailyEntryOutput(BaseModel):
 class HandoverNozzleReadingInput(BaseModel):
     """Nozzle reading submitted by attendant during shift handover"""
     nozzle_id: str
-    opening_reading: float      # auto-populated from last known reading
-    closing_reading: float      # entered by attendant
+    opening_reading: float = Field(..., ge=0)      # auto-populated from last known reading
+    closing_reading: float = Field(..., ge=0)      # entered by attendant
 
 class HandoverNozzleReadingSummary(BaseModel):
     """Computed nozzle reading summary for handover output"""
@@ -749,11 +749,11 @@ class HandoverInput(BaseModel):
     """Input for submitting a shift handover"""
     shift_id: str
     nozzle_readings: List[HandoverNozzleReadingInput]
-    lpg_sales: float = 0        # total ZMW from LPG cylinders sold this shift
-    lubricant_sales: float = 0  # total ZMW from lubricants sold
-    accessory_sales: float = 0  # total ZMW from accessories sold
-    credit_sales: float = 0     # total credit sales (not collected as cash)
-    actual_cash: float          # cash being handed in
+    lpg_sales: float = Field(default=0, ge=0)        # total ZMW from LPG cylinders sold this shift
+    lubricant_sales: float = Field(default=0, ge=0)  # total ZMW from lubricants sold
+    accessory_sales: float = Field(default=0, ge=0)  # total ZMW from accessories sold
+    credit_sales: float = Field(default=0, ge=0)     # total credit sales (not collected as cash)
+    actual_cash: float = Field(..., ge=0)          # cash being handed in
     notes: Optional[str] = None
     stock_snapshot: Optional[ShiftStockSnapshot] = None
 

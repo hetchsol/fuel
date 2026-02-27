@@ -287,7 +287,7 @@ def get_user_info(token: str):
         "station_id": user_data.get("station_id")
     }
 
-@router.get("/users")
+@router.get("/users", dependencies=[Depends(require_owner)])
 def list_users():
     """
     List all users (Owner only)
@@ -303,7 +303,7 @@ def list_users():
         for user in users_db.values()
     ]
 
-@router.post("/users")
+@router.post("/users", dependencies=[Depends(require_owner)])
 def create_user(user_data: dict):
     """
     Create a new user (Owner only)
@@ -351,7 +351,7 @@ def create_user(user_data: dict):
         }
     }
 
-@router.put("/users/{username}")
+@router.put("/users/{username}", dependencies=[Depends(require_owner)])
 def update_user(username: str, user_data: dict):
     """
     Update an existing user (Owner only)
@@ -382,7 +382,7 @@ def update_user(username: str, user_data: dict):
         }
     }
 
-@router.delete("/users/{username}")
+@router.delete("/users/{username}", dependencies=[Depends(require_owner)])
 def delete_user(username: str):
     """
     Delete a user (Owner only, cannot delete owner)
@@ -406,7 +406,7 @@ def delete_user(username: str):
 
     return {"message": f"User {username} deleted successfully"}
 
-@router.get("/staff")
+@router.get("/staff", dependencies=[Depends(get_current_user)])
 def list_staff():
     """
     Get list of staff members for shift assignment (all roles except staff can see this)
