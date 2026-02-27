@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
  */
 
 // Routes that require owner role
-const OWNER_ROUTES = ['/settings', '/users', '/stations', '/infrastructure']
+const OWNER_ROUTES = ['/settings', '/users', '/stations', '/infrastructure', '/audit']
 
 // Routes that require supervisor or owner role
 const SUPERVISOR_ROUTES = [
@@ -28,6 +28,7 @@ const SUPERVISOR_ROUTES = [
   '/reports',
   '/tank-readings-report',
   '/advanced-reports',
+  '/alerts',
 ]
 
 // Routes accessible to any authenticated user (all other non-public routes)

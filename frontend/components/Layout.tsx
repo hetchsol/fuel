@@ -103,6 +103,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/reports', label: 'Sales Reports', roles: ['supervisor', 'owner'] },
         { path: '/tank-readings-report', label: 'Tank Readings & Monitor', roles: ['supervisor', 'owner'] },
         { path: '/advanced-reports', label: 'Advanced Reports', roles: ['supervisor', 'owner'] },
+        { path: '/alerts', label: 'Anomaly Alerts', roles: ['supervisor', 'owner'] },
       ]
     },
     {
@@ -113,6 +114,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/infrastructure', label: 'Infrastructure', roles: ['owner'] },
         { path: '/settings', label: 'Settings', roles: ['owner'] },
         { path: '/users', label: 'Users', roles: ['owner'] },
+        { path: '/audit', label: 'Audit Log', roles: ['owner'] },
       ]
     },
   ]
