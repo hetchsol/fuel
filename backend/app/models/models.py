@@ -166,10 +166,13 @@ class Shift(BaseModel):
     assignments: List[AttendantAssignment] = []  # Detailed assignments
     start_time: Optional[str] = None
     end_time: Optional[str] = None
-    status: str = "active"  # active, completed, reconciled
+    status: str = "active"  # active, completed, reconciled, auto-closed
     created_by: Optional[str] = None  # User ID who created the shift
     created_at: Optional[str] = None  # Timestamp
     tank_dip_readings: List[TankDipReading] = []  # Tank dip readings for this shift
+    auto_closed: Optional[bool] = None
+    auto_close_reason: Optional[str] = None
+    auto_closed_at: Optional[str] = None
 
     class Config:
         # Ensure all fields are included in dict/JSON output

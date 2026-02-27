@@ -9,6 +9,7 @@ import app.database.stations_registry as stations_registry
 from app.database.station_files import migrate_existing_data
 from app.database.storage import get_station_storage
 from app.database.seed_defaults import seed_station_defaults
+from app.services.shift_auto_close import check_and_close_stale_shifts
 import app.database.storage as storage_module
 
 ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
@@ -38,6 +39,7 @@ def startup():
     for station_id in list(stations_registry.STATIONS.keys()):
         storage = get_station_storage(station_id)
         seed_station_defaults(storage)
+        check_and_close_stale_shifts(storage, station_id)
 
     # Backward compat: global STORAGE points to ST001
     st001 = get_station_storage("ST001")

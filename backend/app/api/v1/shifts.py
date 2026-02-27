@@ -12,11 +12,27 @@ from ...services.relationship_validation import validate_create, validate_delete
 from ...services.shift_validation import validate_shift_assignments
 from .auth import get_current_user, require_supervisor_or_owner, require_owner, get_station_context
 from ...services.audit_service import log_audit_event
+from ...services.shift_auto_close import check_and_close_stale_shifts
 
 router = APIRouter()
 
 # Sample attendants from the spreadsheet
 attendants_list = ["Violet", "Shaka", "Trevor", "Chileshe", "Matthew", "Mubanga", "Isabel", "Prosper"]
+
+
+@router.post("/check-stale", dependencies=[Depends(require_supervisor_or_owner)])
+def check_stale_shifts(ctx: dict = Depends(get_station_context)):
+    """
+    On-demand check for stale shifts (active > 20 hours).
+    Marks them as auto-closed. Supervisor/owner only.
+    """
+    closed = check_and_close_stale_shifts(ctx["storage"], ctx["station_id"])
+    return {
+        "checked": True,
+        "auto_closed_count": len(closed),
+        "auto_closed_shift_ids": closed,
+    }
+
 
 @router.post("/", dependencies=[Depends(require_supervisor_or_owner)])
 def create_shift(shift: Shift, ctx: dict = Depends(get_station_context)):

@@ -349,6 +349,7 @@ export default function Shifts() {
     if (status === 'completed') return 'bg-action-primary-light text-action-primary border-action-primary'
     if (status === 'reconciled') return 'bg-category-a-light text-category-a border-category-a-border'
     if (status === 'inactive') return 'bg-status-error-light text-status-error border-status-error'
+    if (status === 'auto-closed') return 'bg-status-pending-light text-status-warning border-status-warning'
     return 'bg-surface-bg text-content-primary border-surface-border'
   }
 
@@ -1269,6 +1270,8 @@ export default function Shifts() {
                         ? 'bg-action-primary-light border-action-primary'
                         : shift.status === 'reconciled'
                         ? 'bg-category-a-light border-category-a-border'
+                        : shift.status === 'auto-closed'
+                        ? 'bg-status-pending-light border-status-warning'
                         : 'bg-surface-bg border-surface-border'
                     }`}
                   >
@@ -1281,6 +1284,11 @@ export default function Shifts() {
                         <span className={`ml-3 px-2 py-0.5 text-xs font-semibold rounded-full border ${getShiftStatusColor(shift.status)}`}>
                           {shift.status.toUpperCase()}
                         </span>
+                        {shift.auto_closed && (
+                          <span className="ml-2 text-xs text-status-warning" title={shift.auto_close_reason || 'Auto-closed due to inactivity'}>
+                            (auto-closed)
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center space-x-2">
                         {/* Deactivate: supervisor/owner, active shifts only */}
