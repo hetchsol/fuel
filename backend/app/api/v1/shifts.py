@@ -11,6 +11,7 @@ from ...models.models import Shift, ShiftType, DualReading, NozzleShiftSummary, 
 from ...services.relationship_validation import validate_create, validate_delete_operation
 from ...services.shift_validation import validate_shift_assignments
 from .auth import get_current_user, require_supervisor_or_owner, require_owner, get_station_context
+from ...services.audit_service import log_audit_event
 
 router = APIRouter()
 
@@ -64,10 +65,14 @@ def create_shift(shift: Shift, ctx: dict = Depends(get_station_context)):
 
     shifts_data[shift.shift_id] = shift_dict
 
-    # Debug output
-    print(f"DEBUG: Returning shift_dict with keys: {list(shift_dict.keys())}")
-    print(f"DEBUG: assignments value: {shift_dict.get('assignments')}")
-    print(f"DEBUG: shift_dict: {shift_dict}")
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="shift_create",
+        performed_by=ctx["username"],
+        entity_type="shift",
+        entity_id=shift.shift_id,
+        details={"date": shift.date, "shift_type": shift_dict.get("shift_type"), "attendants": shift.attendants},
+    )
 
     return JSONResponse(content=shift_dict)
 
@@ -238,6 +243,15 @@ def complete_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
         raise HTTPException(status_code=404, detail="Shift not found")
 
     shifts_data[shift_id]["status"] = "completed"
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="shift_complete",
+        performed_by=ctx["username"],
+        entity_type="shift",
+        entity_id=shift_id,
+    )
+
     return {"status": "success", "shift_id": shift_id, "new_status": "completed"}
 
 @router.put("/{shift_id}/reconcile")

@@ -4,6 +4,7 @@ Authentication API with Role-Based Access Control
 from fastapi import APIRouter, HTTPException, Header, Depends
 from ...models.models import UserLogin, User, UserRole
 from ...database.storage import get_station_storage
+from ...services.audit_service import log_audit_event
 import hashlib
 from typing import Optional
 
@@ -303,8 +304,8 @@ def list_users():
         for user in users_db.values()
     ]
 
-@router.post("/users", dependencies=[Depends(require_owner)])
-def create_user(user_data: dict):
+@router.post("/users")
+def create_user(user_data: dict, current_user: dict = Depends(require_owner)):
     """
     Create a new user (Owner only)
     """
@@ -340,6 +341,15 @@ def create_user(user_data: dict):
         "station_id": station_id if role != "owner" else None
     }
 
+    log_audit_event(
+        station_id=current_user.get("station_id") or "ST001",
+        action="user_create",
+        performed_by=current_user["username"],
+        entity_type="user",
+        entity_id=user_id,
+        details={"username": username, "role": role},
+    )
+
     return {
         "message": "User created successfully",
         "user": {
@@ -351,8 +361,8 @@ def create_user(user_data: dict):
         }
     }
 
-@router.put("/users/{username}", dependencies=[Depends(require_owner)])
-def update_user(username: str, user_data: dict):
+@router.put("/users/{username}")
+def update_user(username: str, user_data: dict, current_user: dict = Depends(require_owner)):
     """
     Update an existing user (Owner only)
     """
@@ -360,16 +370,32 @@ def update_user(username: str, user_data: dict):
         raise HTTPException(status_code=404, detail="User not found")
 
     user = users_db[username]
+    changed = {}
 
     # Update fields
     if "full_name" in user_data:
+        if user["full_name"] != user_data["full_name"]:
+            changed["full_name"] = {"old": user["full_name"], "new": user_data["full_name"]}
         user["full_name"] = user_data["full_name"]
     if "role" in user_data:
+        old_role = user["role"].value if hasattr(user["role"], "value") else user["role"]
+        if old_role != user_data["role"]:
+            changed["role"] = {"old": old_role, "new": user_data["role"]}
         user["role"] = user_data["role"]
     if "station_id" in user_data:
         user["station_id"] = user_data["station_id"] if user_data["role"] != "owner" else None
     if "password" in user_data and user_data["password"]:
+        changed["password"] = "changed"
         user["password"] = hashlib.sha256(user_data["password"].encode()).hexdigest()
+
+    log_audit_event(
+        station_id=current_user.get("station_id") or "ST001",
+        action="user_update",
+        performed_by=current_user["username"],
+        entity_type="user",
+        entity_id=user["user_id"],
+        details={"username": username, "changed": changed},
+    )
 
     return {
         "message": "User updated successfully",
@@ -382,8 +408,8 @@ def update_user(username: str, user_data: dict):
         }
     }
 
-@router.delete("/users/{username}", dependencies=[Depends(require_owner)])
-def delete_user(username: str):
+@router.delete("/users/{username}")
+def delete_user(username: str, current_user: dict = Depends(require_owner)):
     """
     Delete a user (Owner only, cannot delete owner)
     """
@@ -396,6 +422,8 @@ def delete_user(username: str):
     if user["role"] == "owner":
         raise HTTPException(status_code=403, detail="Cannot delete owner account")
 
+    deleted_user_id = user["user_id"]
+
     # Invalidate all sessions for this user
     sessions_to_remove = [token for token, session in active_sessions.items() if session["username"] == username]
     for token in sessions_to_remove:
@@ -403,6 +431,15 @@ def delete_user(username: str):
 
     # Delete user
     del users_db[username]
+
+    log_audit_event(
+        station_id=current_user.get("station_id") or "ST001",
+        action="user_delete",
+        performed_by=current_user["username"],
+        entity_type="user",
+        entity_id=deleted_user_id,
+        details={"username": username},
+    )
 
     return {"message": f"User {username} deleted successfully"}
 

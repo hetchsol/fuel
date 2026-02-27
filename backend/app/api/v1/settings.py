@@ -5,6 +5,7 @@ Station-aware: all data lives in ctx["storage"]
 from fastapi import APIRouter, Depends, HTTPException
 from ...models.models import FuelSettings, SystemSettings, ValidationThresholds
 from .auth import get_station_context
+from ...services.audit_service import log_audit_event
 
 router = APIRouter()
 
@@ -23,10 +24,19 @@ def update_fuel_settings(settings: FuelSettings, ctx: dict = Depends(get_station
     Update fuel pricing and allowable loss settings
     """
     storage = ctx["storage"]
+    old_settings = dict(storage['fuel_settings'])
     storage['fuel_settings']["diesel_price_per_liter"] = settings.diesel_price_per_liter
     storage['fuel_settings']["petrol_price_per_liter"] = settings.petrol_price_per_liter
     storage['fuel_settings']["diesel_allowable_loss_percent"] = settings.diesel_allowable_loss_percent
     storage['fuel_settings']["petrol_allowable_loss_percent"] = settings.petrol_allowable_loss_percent
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="price_change",
+        performed_by=ctx["username"],
+        entity_type="fuel_settings",
+        details={"old": old_settings, "new": dict(storage['fuel_settings'])},
+    )
 
     return {
         "status": "success",
@@ -48,6 +58,7 @@ def update_system_settings(settings: SystemSettings, ctx: dict = Depends(get_sta
     Update system/business information (software_version is read-only)
     """
     storage = ctx["storage"]
+    old_settings = dict(storage['system_settings'])
     storage['system_settings']["business_name"] = settings.business_name
     storage['system_settings']["license_key"] = settings.license_key
     storage['system_settings']["contact_email"] = settings.contact_email
@@ -55,6 +66,14 @@ def update_system_settings(settings: SystemSettings, ctx: dict = Depends(get_sta
     storage['system_settings']["license_expiry_date"] = settings.license_expiry_date
     storage['system_settings']["station_location"] = settings.station_location
     # software_version is read-only, not updated from request
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="settings_update",
+        performed_by=ctx["username"],
+        entity_type="system_settings",
+        details={"old": old_settings, "new": dict(storage['system_settings'])},
+    )
 
     return {
         "status": "success",
@@ -84,9 +103,18 @@ def update_validation_thresholds(thresholds: ValidationThresholds, ctx: dict = D
         raise HTTPException(status_code=422, detail="pass_threshold must be less than warning_threshold")
 
     storage = ctx["storage"]
+    old_thresholds = dict(storage['validation_thresholds'])
     storage['validation_thresholds']["pass_threshold"] = thresholds.pass_threshold
     storage['validation_thresholds']["warning_threshold"] = thresholds.warning_threshold
     storage['validation_thresholds']["meter_discrepancy_threshold"] = thresholds.meter_discrepancy_threshold
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="threshold_update",
+        performed_by=ctx["username"],
+        entity_type="validation_thresholds",
+        details={"old": old_thresholds, "new": dict(storage['validation_thresholds'])},
+    )
 
     return {
         "status": "success",

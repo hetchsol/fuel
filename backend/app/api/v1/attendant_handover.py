@@ -15,6 +15,7 @@ from ...models.models import (
 from ...config import resolve_fuel_price
 from ...database.storage import get_nozzle
 from .auth import get_current_user, require_supervisor_or_owner, get_station_context
+from ...services.audit_service import log_audit_event
 from ...database.station_files import get_station_file
 from .enter_readings import _load_readings as _load_enter_readings
 from .lpg_daily import (
@@ -525,6 +526,21 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     # Save handover
     handovers[handover_id] = handover_output.dict()
     _save_handovers(handovers, station_id)
+
+    log_audit_event(
+        station_id=station_id,
+        action="handover_submit",
+        performed_by=ctx["username"],
+        entity_type="handover",
+        entity_id=handover_id,
+        details={
+            "shift_id": data.shift_id,
+            "fuel_revenue": fuel_revenue,
+            "total_expected": total_expected,
+            "actual_cash": data.actual_cash,
+            "difference": difference,
+        },
+    )
 
     # Update nozzle electronic readings in islands data
     # Skip if enter_readings already handled nozzle state updates
