@@ -60,7 +60,8 @@ export async function getDaily(date?: string) {
 }
 
 export async function getFlags(limit: number = 10) {
-  const res = await fetch(`${BASE}/discrepancies?limit=${limit}`, { headers: getHeaders() });
+  const res = await fetch(`${BASE}/discrepancies?lookback_days=7`, { headers: getHeaders() });
+  if (res.status === 403) return [];  // Not authorized (regular user) — return empty
   if (!res.ok) throw new Error('Failed to load flags');
   return res.json();
 }
