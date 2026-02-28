@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#1976D2"/>
+  <!-- Pump body -->
+  <rect x="14" y="18" width="24" height="32" rx="3" fill="white"/>
+  <!-- Pump screen -->
+  <rect x="18" y="22" width="16" height="10" rx="1.5" fill="#1976D2"/>
+  <!-- Nozzle hose -->
+  <path d="M38 30 Q46 30 46 22 Q46 14 54 14" stroke="white" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  <!-- Nozzle tip -->
+  <rect x="52" y="11" width="4" height="10" rx="1" fill="white" transform="rotate(15 54 16)"/>
+  <!-- Pump base -->
+  <rect x="12" y="48" width="28" height="4" rx="2" fill="white"/>
+  <!-- Dollar lines on screen -->
+  <line x1="20" y1="26" x2="32" y2="26" stroke="white" stroke-width="1.2" opacity="0.7"/>
+  <line x1="20" y1="29" x2="28" y2="29" stroke="white" stroke-width="1.2" opacity="0.7"/>
+</svg>

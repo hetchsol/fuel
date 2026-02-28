@@ -2,6 +2,7 @@ import '../styles/globals.css'
 import type { AppProps } from 'next/app'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
+import Head from 'next/head'
 import Layout from '../components/Layout'
 import { ThemeProvider } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -29,6 +30,9 @@ export default function App({ Component, pageProps }: AppProps) {
 
   return (
     <ThemeProvider>
+      <Head>
+        <title>NextStop</title>
+      </Head>
       <Layout>
         {loading ? (
           <LoadingSpinner fullPage text="Loading page..." />

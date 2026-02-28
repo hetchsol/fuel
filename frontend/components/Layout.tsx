@@ -142,7 +142,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Top row */}
           <div className="flex justify-between items-center h-16 border-b border-white/20">
-            <h1 className="text-xl font-bold text-header-text">Fuel Management</h1>
+            <h1 className="text-xl font-bold text-header-text">NextStop</h1>
 
             {user && (
               <div className="flex items-center space-x-4">
