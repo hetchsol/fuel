@@ -22,7 +22,7 @@ export default function Home() {
   const { data: daily, error: dailyError } = useSWR(['daily', date], () => getDaily(date))
   const { data: flags, error: flagsError } = useSWR('flags', () => getFlags(10))
   const { data: tanks, error: tanksError, mutate: mutateTanks } = useSWR('tanks', getTankLevels, {
-    refreshInterval: 5000, // Auto-refresh every 5 seconds for real-time updates
+    refreshInterval: 30000, // Auto-refresh every 30 seconds
   })
 
   // Check if user has supervisor or owner role
