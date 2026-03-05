@@ -76,6 +76,11 @@ def create_notification(
 
         notifications.append(notification)
         _save_notifications(station_id, notifications)
+
+        # Send email notification (never blocks — email_service handles errors)
+        from .email_service import send_notification_email
+        send_notification_email(station_id, notification)
+
         return notification
     except Exception as exc:
         print(f"[notification] WARNING: failed to create notification: {exc}")

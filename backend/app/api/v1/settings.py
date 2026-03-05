@@ -2,11 +2,15 @@
 Owner Settings API - Fuel pricing and allowable losses
 Station-aware: all data lives in ctx["storage"]
 """
+import re
+import json
+import os
 from fastapi import APIRouter, Depends, HTTPException
-from ...models.models import FuelSettings, SystemSettings, ValidationThresholds
+from ...models.models import FuelSettings, SystemSettings, ValidationThresholds, EmailSettings
 from .auth import get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
+from ...database.station_files import get_station_file
 
 router = APIRouter()
 
@@ -150,3 +154,72 @@ def update_validation_thresholds(thresholds: ValidationThresholds, ctx: dict = D
         "message": "Validation thresholds updated successfully",
         "thresholds": storage['validation_thresholds']
     }
+
+
+# ── Email Settings ────────────────────────────────────────────
+
+def _load_email_settings(station_id: str) -> dict:
+    filepath = get_station_file(station_id, "email_settings.json")
+    if not os.path.exists(filepath):
+        return {"enabled": False, "from_address": "NextStop <onboarding@resend.dev>", "recipients": []}
+    try:
+        with open(filepath, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {"enabled": False, "from_address": "NextStop <onboarding@resend.dev>", "recipients": []}
+
+
+def _save_email_settings(station_id: str, data: dict):
+    filepath = get_station_file(station_id, "email_settings.json")
+    with open(filepath, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
+
+
+@router.get("/email")
+def get_email_settings(ctx: dict = Depends(get_station_context)):
+    """Get current email notification settings"""
+    return _load_email_settings(ctx["station_id"])
+
+
+@router.put("/email")
+def update_email_settings(settings: EmailSettings, ctx: dict = Depends(get_station_context)):
+    """Update email notification settings (Owner only)"""
+    # Validate email addresses
+    for email in settings.recipients:
+        if not EMAIL_REGEX.match(email):
+            raise HTTPException(status_code=422, detail=f"Invalid email address: {email}")
+
+    old_settings = _load_email_settings(ctx["station_id"])
+    new_settings = {
+        "enabled": settings.enabled,
+        "from_address": settings.from_address,
+        "recipients": settings.recipients,
+    }
+    _save_email_settings(ctx["station_id"], new_settings)
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="email_settings_update",
+        performed_by=ctx["username"],
+        entity_type="email_settings",
+        details={"old": old_settings, "new": new_settings},
+    )
+
+    return {
+        "status": "success",
+        "message": "Email settings updated successfully",
+        "settings": new_settings,
+    }
+
+
+@router.post("/email/test")
+def send_test_email(ctx: dict = Depends(get_station_context)):
+    """Send a test email to verify configuration"""
+    from ...services.email_service import send_test_email as _send_test
+    result = _send_test(ctx["station_id"])
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Test email failed"))
+    return result

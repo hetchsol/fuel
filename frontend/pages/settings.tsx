@@ -36,12 +36,24 @@ export default function Settings() {
   const [thresholdsMessage, setThresholdsMessage] = useState('')
   const [thresholdsError, setThresholdsError] = useState('')
 
-  const [activeTab, setActiveTab] = useState<'system' | 'fuel' | 'validation'>('system')
+  const [emailSettings, setEmailSettings] = useState({
+    enabled: false,
+    from_address: 'NextStop <onboarding@resend.dev>',
+    recipients: [] as string[],
+  })
+  const [emailLoading, setEmailLoading] = useState(false)
+  const [emailMessage, setEmailMessage] = useState('')
+  const [emailError, setEmailError] = useState('')
+  const [newRecipient, setNewRecipient] = useState('')
+  const [testLoading, setTestLoading] = useState(false)
+
+  const [activeTab, setActiveTab] = useState<'system' | 'fuel' | 'validation' | 'email'>('system')
 
   useEffect(() => {
     loadSettings()
     loadSystemSettings()
     loadValidationThresholds()
+    loadEmailSettings()
   }, [])
 
   const loadSettings = async () => {
@@ -107,6 +119,90 @@ export default function Settings() {
     } finally {
       setThresholdsLoading(false)
     }
+  }
+
+  const loadEmailSettings = async () => {
+    try {
+      const res = await fetch(`${BASE}/settings/email`, {
+        headers: getHeaders()
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setEmailSettings(data)
+      }
+    } catch (err) {
+      console.error('Failed to load email settings:', err)
+    }
+  }
+
+  const updateEmailSettings = async () => {
+    setEmailLoading(true)
+    setEmailMessage('')
+    setEmailError('')
+    try {
+      const res = await fetch(`${BASE}/settings/email`, {
+        method: 'PUT',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(emailSettings),
+      })
+      if (res.ok) {
+        setEmailMessage('Email settings updated successfully!')
+        setTimeout(() => setEmailMessage(''), 3000)
+      } else {
+        const data = await res.json()
+        setEmailError(data.detail || 'Failed to update email settings')
+      }
+    } catch (err) {
+      setEmailError('Error updating email settings')
+    } finally {
+      setEmailLoading(false)
+    }
+  }
+
+  const sendTestEmail = async () => {
+    setTestLoading(true)
+    setEmailMessage('')
+    setEmailError('')
+    try {
+      const res = await fetch(`${BASE}/settings/email/test`, {
+        method: 'POST',
+        headers: getHeaders(),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setEmailMessage(data.message || 'Test email sent!')
+        setTimeout(() => setEmailMessage(''), 5000)
+      } else {
+        setEmailError(data.detail || 'Test email failed')
+      }
+    } catch (err) {
+      setEmailError('Error sending test email')
+    } finally {
+      setTestLoading(false)
+    }
+  }
+
+  const addRecipient = () => {
+    const email = newRecipient.trim()
+    if (!email) return
+    if (!/^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(email)) {
+      setEmailError('Invalid email address')
+      return
+    }
+    if (emailSettings.recipients.includes(email)) {
+      setEmailError('Email already in list')
+      return
+    }
+    setEmailSettings({ ...emailSettings, recipients: [...emailSettings.recipients, email] })
+    setNewRecipient('')
+    setEmailError('')
+  }
+
+  const removeRecipient = (email: string) => {
+    setEmailSettings({
+      ...emailSettings,
+      recipients: emailSettings.recipients.filter(r => r !== email),
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -202,6 +298,16 @@ export default function Settings() {
             }`}
           >
             ✓ Validation Thresholds
+          </button>
+          <button
+            onClick={() => setActiveTab('email')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'email'
+                ? 'border-action-primary text-action-primary'
+                : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
+            }`}
+          >
+            ✉ Email Notifications
           </button>
         </nav>
       </div>
@@ -572,6 +678,142 @@ export default function Settings() {
             >
               {thresholdsLoading ? 'Saving...' : 'Save Validation Thresholds'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Email Notifications Tab */}
+      {activeTab === 'email' && (
+        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
+          <div className="space-y-6">
+            <div className="border-b pb-4">
+              <h2 className="text-xl font-semibold text-content-primary mb-2">✉ Email Notifications</h2>
+              <p className="text-sm text-content-secondary">
+                Configure email alerts for all in-app notifications. Requires a valid Resend API key on the server.
+              </p>
+            </div>
+
+            {/* Enabled Toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-sm font-medium text-content-primary">Enable Email Notifications</label>
+                <p className="text-xs text-content-secondary">When enabled, all notifications will also be emailed</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEmailSettings({ ...emailSettings, enabled: !emailSettings.enabled })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  emailSettings.enabled ? 'bg-action-primary' : 'bg-surface-border'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    emailSettings.enabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* From Address */}
+            <div>
+              <label className="block text-sm font-medium text-content-secondary mb-1">
+                From Address
+              </label>
+              <input
+                type="text"
+                value={emailSettings.from_address}
+                onChange={(e) => setEmailSettings({ ...emailSettings, from_address: e.target.value })}
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                placeholder="NextStop <noreply@yourdomain.com>"
+              />
+              <p className="text-xs text-content-secondary mt-1">
+                Must be a verified sender in your Resend account
+              </p>
+            </div>
+
+            {/* Recipients */}
+            <div>
+              <label className="block text-sm font-medium text-content-secondary mb-1">
+                Recipients
+              </label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="email"
+                  value={newRecipient}
+                  onChange={(e) => setNewRecipient(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addRecipient(); } }}
+                  className="flex-1 px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  placeholder="email@example.com"
+                />
+                <button
+                  type="button"
+                  onClick={addRecipient}
+                  className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover text-sm"
+                >
+                  Add
+                </button>
+              </div>
+              {emailSettings.recipients.length > 0 ? (
+                <ul className="space-y-1">
+                  {emailSettings.recipients.map((email) => (
+                    <li key={email} className="flex items-center justify-between bg-surface-bg px-3 py-2 rounded-md">
+                      <span className="text-sm text-content-primary">{email}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeRecipient(email)}
+                        className="text-status-error hover:text-status-error text-sm font-medium"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-content-secondary">No recipients added yet</p>
+              )}
+            </div>
+
+            {/* Messages */}
+            {emailMessage && (
+              <div className="p-4 bg-status-success-light border border-status-success rounded-md">
+                <p className="text-sm text-status-success">✓ {emailMessage}</p>
+              </div>
+            )}
+
+            {emailError && (
+              <div className="p-4 bg-status-error-light border border-status-error rounded-md">
+                <p className="text-sm text-status-error">✗ {emailError}</p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={updateEmailSettings}
+                disabled={emailLoading}
+                className="flex-1 px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {emailLoading ? 'Saving...' : 'Save Email Settings'}
+              </button>
+              <button
+                onClick={sendTestEmail}
+                disabled={testLoading || !emailSettings.enabled || emailSettings.recipients.length === 0}
+                className="px-4 py-3 border border-action-primary text-action-primary font-medium rounded-md hover:bg-action-primary-light focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {testLoading ? 'Sending...' : 'Send Test'}
+              </button>
+            </div>
+
+            {/* Info Card */}
+            <div className="bg-action-primary-light border border-action-primary rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-action-primary mb-2">How it works</h3>
+              <ul className="text-sm text-action-primary space-y-1">
+                <li>• Requires a valid Resend API key configured on the server (.env file)</li>
+                <li>• All in-app notifications will be emailed to the listed recipients when enabled</li>
+                <li>• Emails include severity level, title, message, and timestamp</li>
+                <li>• Email delivery failures never block normal system operations</li>
+              </ul>
+            </div>
           </div>
         </div>
       )}

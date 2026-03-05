@@ -195,6 +195,14 @@ def _seed_settings(storage: dict):
     if 'meter_discrepancy_threshold' not in vt:
         vt['meter_discrepancy_threshold'] = 0.5
 
+    # Seed email settings if missing
+    if 'email_settings' not in storage or not storage['email_settings']:
+        storage['email_settings'] = {
+            "enabled": False,
+            "from_address": "NextStop <onboarding@resend.dev>",
+            "recipients": [],
+        }
+
 
 def _migrate_islands_add_display_fields(storage: dict):
     """

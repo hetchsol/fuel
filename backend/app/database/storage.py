@@ -38,6 +38,7 @@ def _make_empty_storage() -> Dict[str, Any]:
         'fuel_settings': {},
         'system_settings': {},
         'validation_thresholds': {},
+        'email_settings': {},
 
         # Reconciliation (previously module-level lists)
         'reconciliations_data': [],

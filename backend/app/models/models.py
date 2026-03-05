@@ -91,6 +91,11 @@ class ValidationThresholds(BaseModel):
     # Variance > warning_threshold = FAIL
     meter_discrepancy_threshold: float = Field(default=0.5, ge=0, le=10.0)  # Electronic vs mechanical discrepancy % requiring note
 
+class EmailSettings(BaseModel):
+    enabled: bool = False
+    from_address: str = "NextStop <onboarding@resend.dev>"
+    recipients: List[str] = []
+
 class SystemSettings(BaseModel):
     business_name: str
     license_key: str
