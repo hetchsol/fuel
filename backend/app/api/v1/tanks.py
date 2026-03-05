@@ -8,6 +8,7 @@ from ...models.models import FuelTankLevel, StockDelivery
 from ...config import TANK_CONVERSION_FACTOR, get_allowable_loss_percent
 from .auth import get_station_context
 from .sales import load_sales
+from ...services.notification_service import create_notification
 
 router = APIRouter()
 
@@ -145,6 +146,56 @@ def receive_delivery(delivery: StockDelivery, ctx: dict = Depends(get_station_co
         "delivery_note": delivery.delivery_note
     }
     delivery_history.append(delivery_record)
+
+    # Notifications
+    station_id = ctx["station_id"]
+    create_notification(
+        station_id=station_id,
+        type="DELIVERY_RECEIVED",
+        severity="medium",
+        title="Delivery Received",
+        message=f"{delivery.fuel_type} delivery of {delivery.volume_delivered}L from {delivery.supplier}",
+        entity_type="delivery",
+        entity_id=delivery_record["delivery_id"],
+        created_by=ctx.get("username", "system"),
+    )
+
+    if loss_status == "excessive":
+        create_notification(
+            station_id=station_id,
+            type="DELIVERY_LOSS_EXCESSIVE",
+            severity="high",
+            title="Excessive Delivery Loss",
+            message=f"Delivery {delivery_record['delivery_id']}: Loss {actual_loss:.2f}L ({actual_loss_percent:.2f}%) exceeds allowable {allowable_loss:.2f}L ({allowable_loss_percent}%)",
+            entity_type="delivery",
+            entity_id=delivery_record["delivery_id"],
+            created_by=ctx.get("username", "system"),
+        )
+
+    # Tank level check after delivery
+    capacity = tank_data[delivery.tank_id]["capacity"]
+    if capacity > 0:
+        pct = (new_level / capacity) * 100
+        if pct < 10:
+            create_notification(
+                station_id=station_id,
+                type="TANK_LEVEL_CRITICAL",
+                severity="critical",
+                title="Critical Tank Level",
+                message=f"Tank {delivery.tank_id} is at {pct:.1f}% capacity ({new_level:.0f}L / {capacity:.0f}L)",
+                entity_type="tank",
+                entity_id=delivery.tank_id,
+            )
+        elif pct < 25:
+            create_notification(
+                station_id=station_id,
+                type="TANK_LEVEL_LOW",
+                severity="medium",
+                title="Low Tank Level",
+                message=f"Tank {delivery.tank_id} is at {pct:.1f}% capacity ({new_level:.0f}L / {capacity:.0f}L)",
+                entity_type="tank",
+                entity_id=delivery.tank_id,
+            )
 
     return {
         "status": "success",

@@ -29,6 +29,7 @@ const SUPERVISOR_ROUTES = [
   '/tank-readings-report',
   '/advanced-reports',
   '/alerts',
+  '/notifications',
 ]
 
 // Routes accessible to any authenticated user (all other non-public routes)

@@ -66,6 +66,20 @@ def check_and_close_stale_shifts(storage: dict, station_id: str) -> list:
                 )
         except Exception:
             pass
+        try:
+            from .notification_service import create_notification
+            for sid in closed_ids:
+                create_notification(
+                    station_id=station_id,
+                    type="SHIFT_AUTO_CLOSED",
+                    severity="critical",
+                    title="Shift Auto-Closed",
+                    message=f"Shift {sid} was active for over {STALE_HOURS} hours and was automatically closed",
+                    entity_type="shift",
+                    entity_id=sid,
+                )
+        except Exception:
+            pass
 
     return closed_ids
 

@@ -16,6 +16,7 @@ from ...config import resolve_fuel_price
 from ...database.storage import get_nozzle
 from .auth import get_current_user, require_supervisor_or_owner, get_station_context
 from ...services.audit_service import log_audit_event
+from ...services.notification_service import create_notification
 from ...database.station_files import get_station_file
 from .enter_readings import _load_readings as _load_enter_readings
 from .lpg_daily import (
@@ -541,6 +542,29 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
             "difference": difference,
         },
     )
+
+    create_notification(
+        station_id=station_id,
+        type="HANDOVER_SUBMITTED",
+        severity="info",
+        title="Handover Submitted",
+        message=f"Shift {data.shift_id} handover by {user_name}: Expected K{expected_cash:,.2f}, Actual K{data.actual_cash:,.2f}",
+        entity_type="handover",
+        entity_id=handover_id,
+        created_by=ctx["username"],
+    )
+
+    if difference < -500:
+        create_notification(
+            station_id=station_id,
+            type="CASH_SHORTAGE",
+            severity="critical",
+            title="Cash Shortage Detected",
+            message=f"Shift {data.shift_id} ({user_name}): Cash shortage of K{abs(difference):,.2f} (Expected K{expected_cash:,.2f}, Actual K{data.actual_cash:,.2f})",
+            entity_type="handover",
+            entity_id=handover_id,
+            created_by=ctx["username"],
+        )
 
     # Update nozzle electronic readings in islands data
     # Skip if enter_readings already handled nozzle state updates

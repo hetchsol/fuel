@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ...models.models import FuelSettings, SystemSettings, ValidationThresholds
 from .auth import get_station_context
 from ...services.audit_service import log_audit_event
+from ...services.notification_service import create_notification
 
 router = APIRouter()
 
@@ -37,6 +38,23 @@ def update_fuel_settings(settings: FuelSettings, ctx: dict = Depends(get_station
         entity_type="fuel_settings",
         details={"old": old_settings, "new": dict(storage['fuel_settings'])},
     )
+
+    changes = []
+    if old_settings.get("diesel_price_per_liter") != settings.diesel_price_per_liter:
+        changes.append(f"Diesel: {old_settings.get('diesel_price_per_liter')} -> {settings.diesel_price_per_liter}")
+    if old_settings.get("petrol_price_per_liter") != settings.petrol_price_per_liter:
+        changes.append(f"Petrol: {old_settings.get('petrol_price_per_liter')} -> {settings.petrol_price_per_liter}")
+    if changes:
+        create_notification(
+            station_id=ctx["station_id"],
+            type="FUEL_PRICE_CHANGE",
+            severity="high",
+            title="Fuel Price Changed",
+            message="Price updated: " + ", ".join(changes),
+            entity_type="settings",
+            entity_id="fuel_settings",
+            created_by=ctx["username"],
+        )
 
     return {
         "status": "success",
@@ -114,6 +132,17 @@ def update_validation_thresholds(thresholds: ValidationThresholds, ctx: dict = D
         performed_by=ctx["username"],
         entity_type="validation_thresholds",
         details={"old": old_thresholds, "new": dict(storage['validation_thresholds'])},
+    )
+
+    create_notification(
+        station_id=ctx["station_id"],
+        type="THRESHOLD_CHANGE",
+        severity="medium",
+        title="Validation Thresholds Updated",
+        message=f"Pass: {thresholds.pass_threshold}%, Warning: {thresholds.warning_threshold}%",
+        entity_type="settings",
+        entity_id="validation_thresholds",
+        created_by=ctx["username"],
     )
 
     return {

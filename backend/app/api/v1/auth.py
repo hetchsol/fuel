@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Header, Depends
 from ...models.models import UserLogin, User, UserRole
 from ...database.storage import get_station_storage
 from ...services.audit_service import log_audit_event
+from ...services.notification_service import create_notification
 import hashlib
 from typing import Optional
 
@@ -350,6 +351,17 @@ def create_user(user_data: dict, current_user: dict = Depends(require_owner)):
         details={"username": username, "role": role},
     )
 
+    create_notification(
+        station_id=current_user.get("station_id") or "ST001",
+        type="USER_CREATED",
+        severity="high",
+        title="New User Created",
+        message=f"User '{full_name}' ({username}) created with role '{role}'",
+        entity_type="user",
+        entity_id=user_id,
+        created_by=current_user["username"],
+    )
+
     return {
         "message": "User created successfully",
         "user": {
@@ -397,6 +409,18 @@ def update_user(username: str, user_data: dict, current_user: dict = Depends(req
         details={"username": username, "changed": changed},
     )
 
+    if "role" in changed:
+        create_notification(
+            station_id=current_user.get("station_id") or "ST001",
+            type="USER_ROLE_CHANGE",
+            severity="high",
+            title="User Role Changed",
+            message=f"User '{username}' role changed from '{changed['role']['old']}' to '{changed['role']['new']}'",
+            entity_type="user",
+            entity_id=user["user_id"],
+            created_by=current_user["username"],
+        )
+
     return {
         "message": "User updated successfully",
         "user": {
@@ -439,6 +463,17 @@ def delete_user(username: str, current_user: dict = Depends(require_owner)):
         entity_type="user",
         entity_id=deleted_user_id,
         details={"username": username},
+    )
+
+    create_notification(
+        station_id=current_user.get("station_id") or "ST001",
+        type="USER_DELETED",
+        severity="high",
+        title="User Deleted",
+        message=f"User '{username}' has been deleted",
+        entity_type="user",
+        entity_id=deleted_user_id,
+        created_by=current_user["username"],
     )
 
     return {"message": f"User {username} deleted successfully"}

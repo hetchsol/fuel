@@ -41,6 +41,7 @@ from ...services.reconciliation_service import (
 from ...api.v1.auth import get_current_user
 from .auth import get_station_context
 from ...database.station_files import get_station_file
+from ...services.notification_service import create_notification
 
 router = APIRouter()
 
@@ -603,6 +604,77 @@ def submit_tank_reading(
     if deliveries:
         save_tank_deliveries(tank_deliveries_db, station_id)  # Persist linked delivery updates
 
+    # --- Notifications ---
+    # Tank level checks
+    tank_capacity = tank_config.get('capacity', 0)
+    if tank_capacity > 0 and closing_volume is not None:
+        level_pct = (closing_volume / tank_capacity) * 100
+        if level_pct < 10:
+            create_notification(
+                station_id=station_id,
+                type="TANK_LEVEL_CRITICAL",
+                severity="critical",
+                title="Critical Tank Level",
+                message=f"Tank {reading_input.tank_id} is at {level_pct:.1f}% capacity ({closing_volume:.0f}L / {tank_capacity:.0f}L)",
+                entity_type="tank",
+                entity_id=reading_input.tank_id,
+            )
+        elif level_pct < 25:
+            create_notification(
+                station_id=station_id,
+                type="TANK_LEVEL_LOW",
+                severity="medium",
+                title="Low Tank Level",
+                message=f"Tank {reading_input.tank_id} is at {level_pct:.1f}% capacity ({closing_volume:.0f}L / {tank_capacity:.0f}L)",
+                entity_type="tank",
+                entity_id=reading_input.tank_id,
+            )
+
+    # High variance
+    if validation_status == 'FAIL':
+        create_notification(
+            station_id=station_id,
+            type="HIGH_VARIANCE",
+            severity="high",
+            title="High Variance Detected",
+            message=f"Tank {reading_input.tank_id} on {reading_input.date} ({reading_input.shift_type}): Variance exceeds warning threshold",
+            entity_type="tank",
+            entity_id=reading_input.tank_id,
+        )
+
+    # Delivery loss check
+    if deliveries and total_delivery_volume > 0:
+        from ...config import get_allowable_loss_percent
+        fuel_type = tank_config.get('fuel_type', 'Diesel')
+        allowable_pct = get_allowable_loss_percent(fuel_type)
+        # Simple loss estimation from tank movement vs delivery
+        for d in deliveries:
+            if d.volume_delivered > 0 and d.before_volume and d.after_volume:
+                measured = d.after_volume - d.before_volume
+                loss = d.volume_delivered - measured
+                loss_pct = (loss / d.volume_delivered * 100) if d.volume_delivered > 0 else 0
+                if loss_pct > allowable_pct:
+                    create_notification(
+                        station_id=station_id,
+                        type="DELIVERY_LOSS_EXCESSIVE",
+                        severity="high",
+                        title="Excessive Delivery Loss",
+                        message=f"Delivery to {reading_input.tank_id}: Loss {loss:.1f}L ({loss_pct:.2f}%) exceeds allowable {allowable_pct}%",
+                        entity_type="delivery",
+                        entity_id=reading_id,
+                    )
+
+        # Delivery received notification
+        create_notification(
+            station_id=station_id,
+            type="DELIVERY_RECEIVED",
+            severity="medium",
+            title="Delivery Recorded",
+            message=f"{fuel_type} delivery of {total_delivery_volume:.0f}L recorded for {reading_input.tank_id}",
+            entity_type="delivery",
+            entity_id=reading_id,
+        )
+
     # Return JSONResponse to ensure all fields are included
     return JSONResponse(content=jsonable_encoder(output_dict))
 
@@ -968,6 +1040,30 @@ def get_tank_movement_summary(
 
     # Detect anomalies
     anomalies = detect_anomalies(readings, lookback_days=7)
+
+    # Create notifications for detected anomalies
+    for anomaly in anomalies:
+        a_type = anomaly.get("type", "")
+        if a_type == "CONSISTENT_LOSS":
+            create_notification(
+                station_id=ctx["station_id"],
+                type="CONSISTENT_LOSS",
+                severity="critical",
+                title="Consistent Tank Loss",
+                message=anomaly.get("message", f"Consistent loss detected for {tank_id}"),
+                entity_type="tank",
+                entity_id=tank_id,
+            )
+        elif a_type == "HIGH_CONSUMPTION":
+            create_notification(
+                station_id=ctx["station_id"],
+                type="HIGH_CONSUMPTION",
+                severity="high",
+                title="High Consumption Detected",
+                message=anomaly.get("message", f"High consumption detected for {tank_id}"),
+                entity_type="tank",
+                entity_id=tank_id,
+            )
 
     # Determine overall status
     loss_detected = total_electronic_variance < -100  # More than 100L total loss
