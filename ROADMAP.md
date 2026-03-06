@@ -9,7 +9,7 @@ This roadmap addresses the highest-priority improvements identified in the syste
 - **JWT token migration** — would invalidate all existing sessions
 - **Offline/service worker support** — complex, defer
 - **Previous shift auto-populate** — already fully implemented
-- **Notification system** — medium priority, defer
+- ~~**Notification system**~~ — **Done** (in-app + email via Resend)
 
 ---
 
@@ -292,6 +292,25 @@ Show "Auto-Closed" badge (amber/warning color) with auto-close reason text when 
 Each phase is independently deployable. Recommended implementation order: 1 → 2 → 3 → 4 → 5.
 
 Phase 5 benefits from Phase 2 being completed first (auto-close events get audit logged), but it works without it.
+
+---
+
+## Pending Configuration
+
+### Configure Resend API Key for Email Notifications
+
+**Priority:** When ready to go live with email alerts
+
+Email notifications are fully implemented (Settings → Email tab) but require a real Resend API key to deliver emails.
+
+**Steps:**
+1. Sign up at [resend.com](https://resend.com) and get an API key
+2. Replace the placeholder in `backend/.env`:
+   ```
+   RESEND_API_KEY=re_your_real_key_here
+   ```
+3. (Optional) Verify a custom sender domain in Resend to use a from address other than `onboarding@resend.dev`
+4. Go to Settings → Email → enable, add recipients, click "Send Test" to verify
 
 ---
 
