@@ -1,6 +1,73 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import LoadingSpinner from '../components/LoadingSpinner'
+
+function FuelMeter() {
+  const [liters, setLiters] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLiters(prev => {
+        const next = prev + 0.07
+        return next >= 999.99 ? 0 : parseFloat(next.toFixed(2))
+      })
+    }, 50)
+    return () => clearInterval(interval)
+  }, [])
+
+  const display = liters.toFixed(2).padStart(6, '0')
+
+  return (
+    <div className="flex flex-col items-center mb-4">
+      {/* Nozzle */}
+      <svg width="120" height="70" viewBox="0 0 120 75" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* Hose */}
+        <path d="M20 55 Q5 55 5 42 Q5 28 15 25" stroke="#374151" strokeWidth="6" strokeLinecap="round" fill="none" />
+        {/* Nozzle handle */}
+        <rect x="20" y="38" width="45" height="14" rx="4" fill="#4B5563" />
+        <rect x="25" y="41" width="35" height="8" rx="2" fill="#6B7280" />
+        {/* Trigger */}
+        <path d="M30 52 L25 63 L33 63 L35 52 Z" fill="#4B5563" />
+        {/* Nozzle arm */}
+        <path d="M55 35 L78 12 L83 12 L83 20 L62 41 Z" fill="#6B7280" />
+        <path d="M78 12 L83 12 L83 20 L78 20 Z" fill="#4B5563" />
+        {/* Spout */}
+        <rect x="81" y="10" width="24" height="12" rx="2" fill="#4B5563" />
+        <rect x="103" y="12" width="8" height="8" rx="1" fill="#374151" />
+        {/* Fuel drops */}
+        <circle cx="111" cy="24" r="2" fill="#3B82F6">
+          <animate attributeName="cy" values="24;45;65" dur="0.9s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="1;0.6;0" dur="0.9s" repeatCount="indefinite" />
+        </circle>
+        <circle cx="111" cy="24" r="1.5" fill="#60A5FA">
+          <animate attributeName="cy" values="24;45;65" dur="0.9s" begin="0.45s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="1;0.6;0" dur="0.9s" begin="0.45s" repeatCount="indefinite" />
+        </circle>
+      </svg>
+
+      {/* Numeric Odometer Display */}
+      <div className="bg-[#0A1929] border-2 border-[#1E3A5F] rounded-lg px-1 py-2 flex items-center gap-[2px] shadow-lg">
+        {display.split('').map((char, i) => (
+          <div key={i} className={char === '.' ? 'flex items-end pb-1' : ''}>
+            {char === '.' ? (
+              <span className="text-[#F59E0B] text-lg font-bold leading-none">.</span>
+            ) : (
+              <div className="bg-[#0F2A4A] border border-[#1E3A5F] rounded w-7 h-10 flex items-center justify-center overflow-hidden">
+                <span
+                  className="text-[#22D3EE] text-xl font-mono font-bold tabular-nums transition-all duration-150"
+                  style={{ textShadow: '0 0 8px rgba(34,211,238,0.5)' }}
+                >
+                  {char}
+                </span>
+              </div>
+            )}
+          </div>
+        ))}
+        <span className="text-[#6B7280] text-[10px] font-mono ml-1 self-end pb-2">L</span>
+      </div>
+    </div>
+  )
+}
 
 const BASE = '/api/v1'
 
@@ -71,58 +138,7 @@ export default function Login() {
           )}
 
           <div className="text-center mb-8">
-            {/* Nozzle with Filling Meter Animation */}
-            <div className="flex justify-center mb-4">
-              <svg width="100" height="120" viewBox="0 0 120 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-                {/* Nozzle handle */}
-                <rect x="25" y="45" width="40" height="14" rx="4" fill="#4B5563" />
-                <rect x="30" y="48" width="30" height="8" rx="2" fill="#6B7280" />
-                {/* Nozzle body */}
-                <path d="M55 42 L75 20 L80 20 L80 28 L62 48 Z" fill="#6B7280" />
-                <path d="M75 20 L80 20 L80 28 L75 28 Z" fill="#4B5563" />
-                {/* Nozzle spout */}
-                <rect x="78" y="18" width="22" height="12" rx="2" fill="#4B5563" />
-                <rect x="98" y="20" width="8" height="8" rx="1" fill="#374151" />
-                {/* Trigger */}
-                <path d="M35 59 L30 70 L38 70 L40 59 Z" fill="#4B5563" />
-                {/* Hose */}
-                <path d="M25 52 Q10 52 10 65 Q10 80 20 85" stroke="#374151" strokeWidth="6" strokeLinecap="round" fill="none" />
-                {/* Fuel drops from spout */}
-                <circle cx="106" cy="32" r="2" fill="#3B82F6">
-                  <animate attributeName="cy" values="30;50;70" dur="1s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="1;0.6;0" dur="1s" repeatCount="indefinite" />
-                </circle>
-                <circle cx="106" cy="32" r="1.5" fill="#60A5FA">
-                  <animate attributeName="cy" values="30;50;70" dur="1s" begin="0.5s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="1;0.6;0" dur="1s" begin="0.5s" repeatCount="indefinite" />
-                </circle>
-                {/* Gauge circle */}
-                <circle cx="60" cy="105" r="25" fill="#0A1929" stroke="#1E3A5F" strokeWidth="2" />
-                <circle cx="60" cy="105" r="21" fill="none" stroke="#1E3A5F" strokeWidth="3" />
-                {/* Gauge fill arc */}
-                <circle cx="60" cy="105" r="21" fill="none" stroke="#3B82F6" strokeWidth="3"
-                  strokeDasharray="132" strokeDashoffset="132" strokeLinecap="round"
-                  transform="rotate(-90 60 105)">
-                  <animate attributeName="stroke-dashoffset" values="132;33;132" dur="4s" repeatCount="indefinite" />
-                </circle>
-                {/* Gauge ticks */}
-                <line x1="60" y1="86" x2="60" y2="89" stroke="#4B5563" strokeWidth="1" />
-                <line x1="42" y1="93" x2="44" y2="95" stroke="#4B5563" strokeWidth="1" />
-                <line x1="39" y1="105" x2="42" y2="105" stroke="#4B5563" strokeWidth="1" />
-                <line x1="42" y1="117" x2="44" y2="115" stroke="#4B5563" strokeWidth="1" />
-                <line x1="60" y1="124" x2="60" y2="121" stroke="#4B5563" strokeWidth="1" />
-                <line x1="78" y1="117" x2="76" y2="115" stroke="#4B5563" strokeWidth="1" />
-                <line x1="81" y1="105" x2="78" y2="105" stroke="#4B5563" strokeWidth="1" />
-                <line x1="78" y1="93" x2="76" y2="95" stroke="#4B5563" strokeWidth="1" />
-                {/* Gauge needle */}
-                <line x1="60" y1="105" x2="60" y2="88" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round">
-                  <animateTransform attributeName="transform" type="rotate" values="-90,60,105;90,60,105;-90,60,105" dur="4s" repeatCount="indefinite" />
-                </line>
-                <circle cx="60" cy="105" r="3" fill="#EF4444" />
-                {/* Gauge label */}
-                <text x="60" y="118" textAnchor="middle" fill="#60A5FA" fontSize="6" fontFamily="monospace">LITERS</text>
-              </svg>
-            </div>
+            <FuelMeter />
             <h1 className="text-3xl font-bold text-content-primary">NextStop</h1>
             <p className="text-content-secondary mt-2">Fuel Management System</p>
           </div>
