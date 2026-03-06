@@ -71,8 +71,60 @@ export default function Login() {
           )}
 
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-content-primary">⛽ Fuel Management</h1>
-            <p className="text-content-secondary mt-2">Sign in to your account</p>
+            {/* Nozzle with Filling Meter Animation */}
+            <div className="flex justify-center mb-4">
+              <svg width="100" height="120" viewBox="0 0 120 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {/* Nozzle handle */}
+                <rect x="25" y="45" width="40" height="14" rx="4" fill="#4B5563" />
+                <rect x="30" y="48" width="30" height="8" rx="2" fill="#6B7280" />
+                {/* Nozzle body */}
+                <path d="M55 42 L75 20 L80 20 L80 28 L62 48 Z" fill="#6B7280" />
+                <path d="M75 20 L80 20 L80 28 L75 28 Z" fill="#4B5563" />
+                {/* Nozzle spout */}
+                <rect x="78" y="18" width="22" height="12" rx="2" fill="#4B5563" />
+                <rect x="98" y="20" width="8" height="8" rx="1" fill="#374151" />
+                {/* Trigger */}
+                <path d="M35 59 L30 70 L38 70 L40 59 Z" fill="#4B5563" />
+                {/* Hose */}
+                <path d="M25 52 Q10 52 10 65 Q10 80 20 85" stroke="#374151" strokeWidth="6" strokeLinecap="round" fill="none" />
+                {/* Fuel drops from spout */}
+                <circle cx="106" cy="32" r="2" fill="#3B82F6">
+                  <animate attributeName="cy" values="30;50;70" dur="1s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="1;0.6;0" dur="1s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="106" cy="32" r="1.5" fill="#60A5FA">
+                  <animate attributeName="cy" values="30;50;70" dur="1s" begin="0.5s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="1;0.6;0" dur="1s" begin="0.5s" repeatCount="indefinite" />
+                </circle>
+                {/* Gauge circle */}
+                <circle cx="60" cy="105" r="25" fill="#0A1929" stroke="#1E3A5F" strokeWidth="2" />
+                <circle cx="60" cy="105" r="21" fill="none" stroke="#1E3A5F" strokeWidth="3" />
+                {/* Gauge fill arc */}
+                <circle cx="60" cy="105" r="21" fill="none" stroke="#3B82F6" strokeWidth="3"
+                  strokeDasharray="132" strokeDashoffset="132" strokeLinecap="round"
+                  transform="rotate(-90 60 105)">
+                  <animate attributeName="stroke-dashoffset" values="132;33;132" dur="4s" repeatCount="indefinite" />
+                </circle>
+                {/* Gauge ticks */}
+                <line x1="60" y1="86" x2="60" y2="89" stroke="#4B5563" strokeWidth="1" />
+                <line x1="42" y1="93" x2="44" y2="95" stroke="#4B5563" strokeWidth="1" />
+                <line x1="39" y1="105" x2="42" y2="105" stroke="#4B5563" strokeWidth="1" />
+                <line x1="42" y1="117" x2="44" y2="115" stroke="#4B5563" strokeWidth="1" />
+                <line x1="60" y1="124" x2="60" y2="121" stroke="#4B5563" strokeWidth="1" />
+                <line x1="78" y1="117" x2="76" y2="115" stroke="#4B5563" strokeWidth="1" />
+                <line x1="81" y1="105" x2="78" y2="105" stroke="#4B5563" strokeWidth="1" />
+                <line x1="78" y1="93" x2="76" y2="95" stroke="#4B5563" strokeWidth="1" />
+                {/* Gauge needle */}
+                <line x1="60" y1="105" x2="60" y2="88" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round">
+                  <animateTransform attributeName="transform" type="rotate" values="-90,60,105;90,60,105;-90,60,105" dur="4s" repeatCount="indefinite" />
+                </line>
+                <circle cx="60" cy="105" r="3" fill="#EF4444" />
+                {/* Gauge label */}
+                <text x="60" y="118" textAnchor="middle" fill="#60A5FA" fontSize="6" fontFamily="monospace">LITERS</text>
+              </svg>
+            </div>
+            <h1 className="text-3xl font-bold text-content-primary">NextStop</h1>
+            <p className="text-content-secondary mt-2">Fuel Management System</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">

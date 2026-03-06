@@ -445,7 +445,44 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full relative">
+        {/* Pump Station Watermark */}
+        <div className="pointer-events-none fixed inset-0 flex items-center justify-center opacity-[0.10]" aria-hidden="true">
+          <svg width="500" height="320" viewBox="0 0 180 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* Ground */}
+            <rect x="0" y="120" width="180" height="20" rx="2" fill="#1E3A5F" />
+            {/* Canopy */}
+            <rect x="10" y="15" width="160" height="6" rx="2" fill="#1E3A5F" />
+            <rect x="15" y="20" width="150" height="3" fill="#0F2A4A" />
+            {/* Canopy pillars */}
+            <rect x="20" y="20" width="5" height="100" fill="#1E3A5F" />
+            <rect x="155" y="20" width="5" height="100" fill="#1E3A5F" />
+            {/* Pump unit left */}
+            <rect x="45" y="55" width="35" height="65" rx="4" fill="#1E3A5F" />
+            <rect x="49" y="60" width="27" height="18" rx="2" fill="#0A1929" />
+            <text x="62.5" y="73" textAnchor="middle" fill="#22D3EE" fontSize="7" fontFamily="monospace">LSD</text>
+            {/* Pump nozzle left */}
+            <rect x="72" y="82" width="12" height="4" rx="1" fill="#6B7280" />
+            <path d="M84 84 Q92 84 92 76 L92 70" stroke="#4B5563" strokeWidth="3" strokeLinecap="round" fill="none" />
+            {/* Status light left */}
+            <circle cx="62" cy="90" r="3" fill="#22C55E" />
+            {/* Pump unit right */}
+            <rect x="100" y="55" width="35" height="65" rx="4" fill="#1E3A5F" />
+            <rect x="104" y="60" width="27" height="18" rx="2" fill="#0A1929" />
+            <text x="117.5" y="73" textAnchor="middle" fill="#F59E0B" fontSize="7" fontFamily="monospace">UNL</text>
+            {/* Pump nozzle right */}
+            <path d="M96 84 Q88 84 88 76 L88 70" stroke="#4B5563" strokeWidth="3" strokeLinecap="round" fill="none" />
+            {/* Status light right */}
+            <circle cx="117" cy="90" r="3" fill="#22C55E" />
+            {/* Canopy lights */}
+            <circle cx="60" cy="12" r="3" fill="#FBBF24" />
+            <circle cx="90" cy="12" r="3" fill="#FBBF24" />
+            <circle cx="120" cy="12" r="3" fill="#FBBF24" />
+            {/* Brand sign */}
+            <rect x="60" y="3" width="60" height="10" rx="2" fill="#0F2A4A" stroke="#3B82F6" strokeWidth="0.5" />
+            <text x="90" y="11" textAnchor="middle" fill="white" fontSize="7" fontFamily="sans-serif" fontWeight="bold">NextStop</text>
+          </svg>
+        </div>
         {children}
       </main>
 
