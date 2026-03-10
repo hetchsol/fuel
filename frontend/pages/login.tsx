@@ -92,6 +92,18 @@ export default function Login() {
         body: JSON.stringify(credentials),
       })
 
+      // Handle rate limiting (Render free tier) before parsing body
+      if (res.status === 429) {
+        const retryAfter = res.headers.get('retry-after')
+        const wait = retryAfter ? `${retryAfter} seconds` : 'a moment'
+        throw new Error(`Too many requests. Please wait ${wait} and try again.`)
+      }
+
+      // Handle backend unavailable (cold start / sleeping)
+      if (res.status === 502 || res.status === 503 || res.status === 504) {
+        throw new Error('The server is starting up. Please wait a moment and try again.')
+      }
+
       const contentType = res.headers.get('content-type') || ''
       if (!contentType.includes('application/json')) {
         throw new Error('Cannot reach the API server. Please try again in a moment.')
