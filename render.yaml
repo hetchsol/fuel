@@ -9,6 +9,8 @@ services:
     envVars:
       - key: PORT
         value: "10000"
+      - key: CORS_ORIGINS
+        value: "https://fuel-frontend.onrender.com"
 
   - type: web
     name: fuel-frontend

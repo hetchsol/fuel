@@ -10,7 +10,7 @@ from ...models.models import FuelSettings, SystemSettings, ValidationThresholds,
 from .auth import get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
-from ...database.station_files import get_station_file
+from ...database.station_files import load_station_json, save_station_json
 
 router = APIRouter()
 
@@ -159,20 +159,12 @@ def update_validation_thresholds(thresholds: ValidationThresholds, ctx: dict = D
 # ── Email Settings ────────────────────────────────────────────
 
 def _load_email_settings(station_id: str) -> dict:
-    filepath = get_station_file(station_id, "email_settings.json")
-    if not os.path.exists(filepath):
-        return {"enabled": False, "from_address": "NextStop <onboarding@resend.dev>", "recipients": []}
-    try:
-        with open(filepath, "r") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return {"enabled": False, "from_address": "NextStop <onboarding@resend.dev>", "recipients": []}
+    default = {"enabled": False, "from_address": "NextStop <onboarding@resend.dev>", "recipients": []}
+    return load_station_json(station_id, "email_settings.json", default=default)
 
 
 def _save_email_settings(station_id: str, data: dict):
-    filepath = get_station_file(station_id, "email_settings.json")
-    with open(filepath, "w") as f:
-        json.dump(data, f, indent=2)
+    save_station_json(station_id, "email_settings.json", data)
 
 
 EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")

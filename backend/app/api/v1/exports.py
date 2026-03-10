@@ -10,7 +10,7 @@ import json
 import os
 
 from .auth import require_supervisor_or_owner, get_station_context
-from ...database.station_files import get_station_file
+from ...database.station_files import load_station_json
 from ...services.export_service import (
     tank_readings_to_csv, tank_readings_to_excel,
     sales_to_csv, sales_to_excel,
@@ -21,11 +21,7 @@ router = APIRouter()
 
 
 def _load_json(station_id: str, filename: str):
-    path = get_station_file(station_id, filename)
-    if not os.path.exists(path):
-        return {}
-    with open(path, "r") as f:
-        return json.load(f)
+    return load_station_json(station_id, filename, default={})
 
 
 def _stream(content: bytes | str, filename: str, media_type: str):

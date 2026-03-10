@@ -40,48 +40,30 @@ from ...services.reconciliation_service import (
 )
 from ...api.v1.auth import get_current_user
 from .auth import get_station_context
-from ...database.station_files import get_station_file
+from ...database.station_files import load_station_json, save_station_json
 from ...services.notification_service import create_notification
 
 router = APIRouter()
 
 
 def load_tank_readings(station_id: str) -> dict:
-    """Load tank readings from station-specific JSON file"""
-    filepath = get_station_file(station_id, 'tank_readings.json')
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return {}
-    return {}
+    """Load tank readings from station-specific storage"""
+    return load_station_json(station_id, 'tank_readings.json', default={})
 
 
 def save_tank_readings(tank_readings_db: dict, station_id: str):
-    """Save tank readings to station-specific JSON file"""
-    filepath = get_station_file(station_id, 'tank_readings.json')
-    with open(filepath, 'w') as f:
-        json.dump(tank_readings_db, f, indent=2, default=str)
+    """Save tank readings to station-specific storage"""
+    save_station_json(station_id, 'tank_readings.json', tank_readings_db)
 
 
 def load_tank_deliveries(station_id: str) -> dict:
-    """Load tank deliveries from station-specific JSON file"""
-    filepath = get_station_file(station_id, 'tank_deliveries.json')
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return {}
-    return {}
+    """Load tank deliveries from station-specific storage"""
+    return load_station_json(station_id, 'tank_deliveries.json', default={})
 
 
 def save_tank_deliveries(tank_deliveries_db: dict, station_id: str):
-    """Save tank deliveries to station-specific JSON file"""
-    filepath = get_station_file(station_id, 'tank_deliveries.json')
-    with open(filepath, 'w') as f:
-        json.dump(tank_deliveries_db, f, indent=2, default=str)
+    """Save tank deliveries to station-specific storage"""
+    save_station_json(station_id, 'tank_deliveries.json', tank_deliveries_db)
 
 
 

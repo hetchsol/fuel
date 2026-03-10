@@ -11,35 +11,19 @@ from datetime import datetime
 from ...models.models import ValidatedReadingInput, ValidatedReadingOutput
 from ...services.reading_validation import create_validated_reading
 from .auth import get_station_context
-from ...database.station_files import get_station_file
+from ...database.station_files import load_station_json, save_station_json
 
 router = APIRouter()
 
 
 def load_validated_readings(station_id: str) -> List[dict]:
-    """Load validated readings from station-specific file"""
-    filepath = get_station_file(station_id, 'validated_readings.json')
-    if not os.path.exists(filepath):
-        return []
-
-    try:
-        with open(filepath, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error loading validated readings: {e}")
-        return []
+    """Load validated readings from station-specific storage"""
+    return load_station_json(station_id, 'validated_readings.json', default=[])
 
 
 def save_validated_readings(readings: List[dict], station_id: str):
-    """Save validated readings to station-specific file"""
-    filepath = get_station_file(station_id, 'validated_readings.json')
-
-    try:
-        with open(filepath, 'w') as f:
-            json.dump(readings, f, indent=2)
-    except Exception as e:
-        print(f"Error saving validated readings: {e}")
-        raise
+    """Save validated readings to station-specific storage"""
+    save_station_json(station_id, 'validated_readings.json', readings)
 
 
 @router.post("/validated-readings", response_model=ValidatedReadingOutput)

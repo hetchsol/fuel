@@ -10,36 +10,19 @@ from ...models.models import SaleIn, SaleOut
 from ...services.sales_calculator import calculate_sale
 from ...config import resolve_fuel_price
 from .auth import get_station_context
-from ...database.station_files import get_station_file
+from ...database.station_files import load_station_json, save_station_json
 
 router = APIRouter()
 
 
 def load_sales(station_id: str) -> List[dict]:
-    """Load sales from station-specific file"""
-    path = get_station_file(station_id, 'sales.json')
-    if not os.path.exists(path):
-        return []
-
-    try:
-        with open(path, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error loading sales: {e}")
-        return []
+    """Load sales from station-specific storage"""
+    return load_station_json(station_id, 'sales.json', default=[])
 
 
 def save_sales(sales: List[dict], station_id: str):
-    """Save sales to station-specific file"""
-    path = get_station_file(station_id, 'sales.json')
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-
-    try:
-        with open(path, 'w') as f:
-            json.dump(sales, f, indent=2)
-    except Exception as e:
-        print(f"Error saving sales: {e}")
-        raise
+    """Save sales to station-specific storage"""
+    save_station_json(station_id, 'sales.json', sales)
 
 
 @router.post("", response_model=SaleOut)

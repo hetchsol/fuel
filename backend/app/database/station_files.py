@@ -1,11 +1,18 @@
 """
-Station File Paths
+Station File Paths & Persistence
 Maps station_id + filename to storage/stations/{station_id}/filename.json
 Also handles migrating existing flat files into ST001 directory.
+
+When DATABASE_URL is set, load_station_json/save_station_json use PostgreSQL.
+Otherwise they fall back to local JSON files (for local development).
 """
 import os
 import shutil
 import json
+import logging
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 STORAGE_ROOT = os.path.join(os.path.dirname(__file__), '..', '..', 'storage')
 
@@ -59,3 +66,46 @@ def migrate_existing_data():
     if os.path.exists(customers_src) and not os.path.exists(customers_dst):
         shutil.copy2(customers_src, customers_dst)
         print(f"[migrate] Copied customers.json -> stations/ST001/customers.json")
+
+
+# ──────────────────────────────────────────────────────────
+# Dual-mode JSON persistence (DB or file)
+# ──────────────────────────────────────────────────────────
+
+def load_station_json(station_id: str, filename: str, default: Any = None) -> Any:
+    """
+    Load JSON data for a station.
+    Uses PostgreSQL when DATABASE_URL is set, otherwise falls back to local files.
+    """
+    from .db import DATABASE_URL, db_load_json
+
+    if DATABASE_URL:
+        result = db_load_json(station_id, filename, default)
+        return result if result is not None else (default if default is not None else None)
+
+    # File fallback
+    filepath = get_station_file(station_id, filename)
+    if not os.path.exists(filepath):
+        return default if default is not None else None
+    try:
+        with open(filepath, 'r') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return default if default is not None else None
+
+
+def save_station_json(station_id: str, filename: str, data: Any):
+    """
+    Save JSON data for a station.
+    Uses PostgreSQL when DATABASE_URL is set, otherwise falls back to local files.
+    """
+    from .db import DATABASE_URL, db_save_json
+
+    if DATABASE_URL:
+        db_save_json(station_id, filename, data)
+        return
+
+    # File fallback
+    filepath = get_station_file(station_id, filename)
+    with open(filepath, 'w') as f:
+        json.dump(data, f, indent=2, default=str)

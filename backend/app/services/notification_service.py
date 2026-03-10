@@ -8,26 +8,17 @@ import os
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional, List
-from ..database.station_files import get_station_file
+from ..database.station_files import load_station_json, save_station_json
 
 
 def _load_notifications(station_id: str) -> List[dict]:
-    """Load notifications from station-specific JSON file."""
-    filepath = get_station_file(station_id, "notifications.json")
-    if not os.path.exists(filepath):
-        return []
-    try:
-        with open(filepath, "r") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return []
+    """Load notifications from station-specific storage."""
+    return load_station_json(station_id, "notifications.json", default=[])
 
 
 def _save_notifications(station_id: str, data: List[dict]):
-    """Save notifications to station-specific JSON file."""
-    filepath = get_station_file(station_id, "notifications.json")
-    with open(filepath, "w") as f:
-        json.dump(data, f, indent=2)
+    """Save notifications to station-specific storage."""
+    save_station_json(station_id, "notifications.json", data)
 
 
 def create_notification(

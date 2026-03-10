@@ -12,7 +12,7 @@ from ...models.models import (
 from ...config import get_fuel_price
 from ...database.storage import get_nozzle
 from .auth import get_current_user, get_station_context
-from ...database.station_files import get_station_file
+from ...database.station_files import load_station_json, save_station_json
 
 router = APIRouter()
 
@@ -20,17 +20,11 @@ router = APIRouter()
 # ── helpers ──────────────────────────────────────────────
 
 def _load_readings(station_id: str) -> dict:
-    filepath = get_station_file(station_id, 'attendant_readings.json')
-    if os.path.exists(filepath):
-        with open(filepath, 'r') as f:
-            return json.load(f)
-    return {}
+    return load_station_json(station_id, 'attendant_readings.json', default={})
 
 
 def _save_readings(data: dict, station_id: str):
-    filepath = get_station_file(station_id, 'attendant_readings.json')
-    with open(filepath, 'w') as f:
-        json.dump(data, f, indent=2)
+    save_station_json(station_id, 'attendant_readings.json', data)
 
 
 def _get_assigned_nozzle_ids(assignment: dict, islands_data: dict) -> list:
@@ -57,17 +51,11 @@ def _get_meter_discrepancy_threshold(storage: dict) -> float:
 
 def _load_tank_readings_db(station_id: str) -> dict:
     """Load tank_readings.json safely, handling empty/list/dict formats."""
-    filepath = get_station_file(station_id, 'tank_readings.json')
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r') as f:
-                data = json.load(f)
-            # tank_readings.json should be a dict keyed by reading_id
-            # but may be [] if never written to — treat as empty
-            if isinstance(data, dict):
-                return data
-        except (json.JSONDecodeError, IOError):
-            pass
+    data = load_station_json(station_id, 'tank_readings.json', default={})
+    # tank_readings.json should be a dict keyed by reading_id
+    # but may be [] if never written to — treat as empty
+    if isinstance(data, dict):
+        return data
     return {}
 
 

@@ -8,10 +8,8 @@ from typing import Optional, List
 from ...services.reporting import ReportingService
 from ...services.relational_queries import RelationalQueryService
 from .auth import require_supervisor_or_owner, get_station_context
-from ...database.station_files import get_station_file
+from ...database.station_files import load_station_json
 from datetime import datetime
-import json
-import os
 
 router = APIRouter()
 
@@ -64,12 +62,8 @@ def load_all_sales_sources(station_id: str, storage: dict):
     Returns:
         Dictionary with all sales data
     """
-    # Load fuel sales from station-specific JSON file
-    fuel_sales = []
-    sales_file = get_station_file(station_id, 'sales.json')
-    if os.path.exists(sales_file):
-        with open(sales_file, 'r') as f:
-            fuel_sales = json.load(f)
+    # Load fuel sales from station-specific storage
+    fuel_sales = load_station_json(station_id, 'sales.json', default=[])
 
     # Load other sales from station's in-memory storage
     credit_sales = storage.get('credit_sales', [])

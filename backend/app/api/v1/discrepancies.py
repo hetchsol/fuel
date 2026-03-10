@@ -11,21 +11,14 @@ import os
 
 from .auth import require_supervisor_or_owner, get_station_context
 from ...services.tank_movement import detect_anomalies
-from ...database.station_files import get_station_file
+from ...database.station_files import load_station_json
 
 router = APIRouter()
 
 
 def load_tank_readings(station_id: str) -> dict:
-    """Load tank readings from station-specific JSON file"""
-    filepath = get_station_file(station_id, 'tank_readings.json')
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return {}
-    return {}
+    """Load tank readings from station-specific storage"""
+    return load_station_json(station_id, 'tank_readings.json', default={})
 
 
 SEVERITY_ORDER = {'CRITICAL': 0, 'WARNING': 1, 'INFO': 2}

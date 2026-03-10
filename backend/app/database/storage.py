@@ -2,9 +2,15 @@
 Centralized Storage Registry
 Provides unified access to all in-memory data storage.
 Supports per-station isolated storage.
+
+When DATABASE_URL is set, storage is persisted to PostgreSQL.
+Otherwise it lives only in memory (original behavior).
 """
 from typing import Dict, List, Any, Optional
 import copy
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _make_empty_storage() -> Dict[str, Any]:
@@ -63,10 +69,42 @@ STORAGE: Dict[str, Any] = _make_empty_storage()
 def get_station_storage(station_id: str) -> Dict[str, Any]:
     """
     Get or create the storage dict for a station.
+    On first access, attempts to load from PostgreSQL if DATABASE_URL is set.
     """
     if station_id not in STATIONS_STORAGE:
-        STATIONS_STORAGE[station_id] = _make_empty_storage()
+        # Try loading from DB first
+        from .db import DATABASE_URL, db_load_storage
+        if DATABASE_URL:
+            db_data = db_load_storage(station_id)
+            if db_data:
+                logger.info(f"[storage] Loaded station {station_id} from database")
+                STATIONS_STORAGE[station_id] = db_data
+            else:
+                STATIONS_STORAGE[station_id] = _make_empty_storage()
+        else:
+            STATIONS_STORAGE[station_id] = _make_empty_storage()
     return STATIONS_STORAGE[station_id]
+
+
+def save_station_storage(station_id: str):
+    """
+    Persist the in-memory storage dict for a station to PostgreSQL.
+    No-op if DATABASE_URL is not set.
+    """
+    from .db import DATABASE_URL, db_save_storage
+    if not DATABASE_URL:
+        return
+    if station_id in STATIONS_STORAGE:
+        db_save_storage(station_id, STATIONS_STORAGE[station_id])
+
+
+def save_all_stations_storage():
+    """Persist all stations' storage dicts to PostgreSQL."""
+    from .db import DATABASE_URL, db_save_storage
+    if not DATABASE_URL:
+        return
+    for station_id, storage in STATIONS_STORAGE.items():
+        db_save_storage(station_id, storage)
 
 
 # ──────────────────────────────────────────────────────────

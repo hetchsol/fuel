@@ -17,7 +17,7 @@ from ...database.storage import get_nozzle
 from .auth import get_current_user, require_supervisor_or_owner, get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
-from ...database.station_files import get_station_file
+from ...database.station_files import load_station_json, save_station_json
 from .enter_readings import _load_readings as _load_enter_readings
 from .lpg_daily import (
     load_lpg_pricing, LPG_SIZES, DEFAULT_LPG_ACCESSORIES,
@@ -34,17 +34,11 @@ router = APIRouter()
 
 
 def _load_handovers(station_id: str) -> dict:
-    filepath = get_station_file(station_id, 'attendant_handovers.json')
-    if os.path.exists(filepath):
-        with open(filepath, 'r') as f:
-            return json.load(f)
-    return {}
+    return load_station_json(station_id, 'attendant_handovers.json', default={})
 
 
 def _save_handovers(data: dict, station_id: str):
-    filepath = get_station_file(station_id, 'attendant_handovers.json')
-    with open(filepath, 'w') as f:
-        json.dump(data, f, indent=2)
+    save_station_json(station_id, 'attendant_handovers.json', data)
 
 
 def _get_fuel_type(nozzle_id: str, storage: dict = None) -> str:

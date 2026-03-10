@@ -7,7 +7,7 @@ import json
 import os
 from datetime import datetime
 from typing import Optional, List
-from ..database.station_files import get_station_file
+from ..database.station_files import load_station_json, save_station_json
 
 
 def log_audit_event(
@@ -32,11 +32,7 @@ def log_audit_event(
         notes:        free-text note
     """
     try:
-        filepath = get_station_file(station_id, "audit_log.json")
-        entries: List[dict] = []
-        if os.path.exists(filepath):
-            with open(filepath, "r") as f:
-                entries = json.load(f)
+        entries: List[dict] = load_station_json(station_id, "audit_log.json", default=[])
 
         entry = {
             "timestamp": datetime.now().isoformat(),
@@ -49,8 +45,7 @@ def log_audit_event(
         }
         entries.append(entry)
 
-        with open(filepath, "w") as f:
-            json.dump(entries, f, indent=2)
+        save_station_json(station_id, "audit_log.json", entries)
     except Exception as exc:
         # Never let audit logging break the main operation
         print(f"[audit] WARNING: failed to write audit log: {exc}")
@@ -71,12 +66,7 @@ def get_audit_log(
     All filter parameters are optional.  Dates are compared as ISO-string
     prefixes against the timestamp field (YYYY-MM-DD).
     """
-    filepath = get_station_file(station_id, "audit_log.json")
-    if not os.path.exists(filepath):
-        return []
-
-    with open(filepath, "r") as f:
-        entries: List[dict] = json.load(f)
+    entries: List[dict] = load_station_json(station_id, "audit_log.json", default=[])
 
     # Apply filters
     if action:

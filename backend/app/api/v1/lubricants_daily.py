@@ -20,7 +20,7 @@ from ...models.models import (
 )
 from ...api.v1.auth import get_current_user
 from .auth import get_station_context
-from ...database.station_files import get_station_file
+from ...database.station_files import load_station_json, save_station_json
 
 router = APIRouter()
 
@@ -129,31 +129,15 @@ DEFAULT_PRODUCTS = [
 # ===== FILE PERSISTENCE =====
 
 def load_lubricant_daily(station_id: str) -> dict:
-    filepath = get_station_file(station_id, 'lubricant_daily_entries.json')
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return {}
-    return {}
+    return load_station_json(station_id, 'lubricant_daily_entries.json', default={})
 
 
 def save_lubricant_daily(db: dict, station_id: str):
-    filepath = get_station_file(station_id, 'lubricant_daily_entries.json')
-    with open(filepath, 'w') as f:
-        json.dump(db, f, indent=2, default=str)
+    save_station_json(station_id, 'lubricant_daily_entries.json', db)
 
 
 def load_product_catalog(station_id: str):
-    filepath = get_station_file(station_id, 'lubricant_products.json')
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return DEFAULT_PRODUCTS
-    return DEFAULT_PRODUCTS
+    return load_station_json(station_id, 'lubricant_products.json', default=DEFAULT_PRODUCTS)
 
 
 # ===== ENDPOINTS =====

@@ -9,9 +9,7 @@ from typing import List
 from app.models.models import Customer, CustomerAllocation
 from app.services.customer_service import validate_allocations, calculate_customer_revenue
 from app.api.v1.auth import get_current_user, get_station_context
-from ...database.station_files import get_station_file
-import json
-import os
+from ...database.station_files import load_station_json, save_station_json
 import uuid
 from datetime import datetime
 
@@ -19,24 +17,17 @@ router = APIRouter()
 
 
 # ──────────────────────────────────────────────────────────
-# Station-aware customer file helpers
+# Station-aware customer helpers
 # ──────────────────────────────────────────────────────────
 
 def _load_customers(station_id: str) -> dict:
-    """Load customers from the station-specific customers.json file"""
-    path = get_station_file(station_id, 'customers.json')
-    if os.path.exists(path):
-        with open(path, 'r') as f:
-            return json.load(f)
-    return {}
+    """Load customers from station-specific storage"""
+    return load_station_json(station_id, 'customers.json', default={})
 
 
 def _save_customers(customers: dict, station_id: str):
-    """Save customers to the station-specific customers.json file"""
-    path = get_station_file(station_id, 'customers.json')
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w') as f:
-        json.dump(customers, f, indent=2)
+    """Save customers to station-specific storage"""
+    save_station_json(station_id, 'customers.json', customers)
 
 
 def _initialize_default_customers(station_id: str) -> dict:

@@ -22,7 +22,7 @@ from ...models.models import (
 )
 from ...api.v1.auth import get_current_user
 from .auth import get_station_context
-from ...database.station_files import get_station_file
+from ...database.station_files import load_station_json, save_station_json
 
 router = APIRouter()
 
@@ -49,54 +49,27 @@ DEFAULT_LPG_ACCESSORIES = [
 # ===== FILE PERSISTENCE =====
 
 def load_lpg_pricing(station_id: str) -> dict:
-    filepath = get_station_file(station_id, 'lpg_pricing.json')
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return dict(DEFAULT_LPG_PRICING)
-    return dict(DEFAULT_LPG_PRICING)
+    return load_station_json(station_id, 'lpg_pricing.json', default=dict(DEFAULT_LPG_PRICING))
 
 
 def save_lpg_pricing(pricing_db: dict, station_id: str):
-    filepath = get_station_file(station_id, 'lpg_pricing.json')
-    with open(filepath, 'w') as f:
-        json.dump(pricing_db, f, indent=2, default=str)
+    save_station_json(station_id, 'lpg_pricing.json', pricing_db)
 
 
 def load_lpg_daily(station_id: str) -> dict:
-    filepath = get_station_file(station_id, 'lpg_daily_entries.json')
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return {}
-    return {}
+    return load_station_json(station_id, 'lpg_daily_entries.json', default={})
 
 
 def save_lpg_daily(db: dict, station_id: str):
-    filepath = get_station_file(station_id, 'lpg_daily_entries.json')
-    with open(filepath, 'w') as f:
-        json.dump(db, f, indent=2, default=str)
+    save_station_json(station_id, 'lpg_daily_entries.json', db)
 
 
 def load_lpg_accessories(station_id: str) -> dict:
-    filepath = get_station_file(station_id, 'lpg_accessories_daily.json')
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return {}
-    return {}
+    return load_station_json(station_id, 'lpg_accessories_daily.json', default={})
 
 
 def save_lpg_accessories(db: dict, station_id: str):
-    filepath = get_station_file(station_id, 'lpg_accessories_daily.json')
-    with open(filepath, 'w') as f:
-        json.dump(db, f, indent=2, default=str)
+    save_station_json(station_id, 'lpg_accessories_daily.json', db)
 
 
 def get_pricing_for_size(size_kg: int, lpg_pricing_db: dict) -> dict:

@@ -9,20 +9,14 @@ from ...models.models import ShiftReconciliation, TankReconciliation
 from ...config import PETROL_PRICE_PER_LITER, DIESEL_PRICE_PER_LITER
 from ...database.storage import get_nozzle
 from .auth import get_station_context
-from ...database.station_files import get_station_file
-import json
-import os
+from ...database.station_files import load_station_json
 
 router = APIRouter()
 
 
 def _load_station_tank_readings(station_id: str) -> dict:
-    """Load tank readings from the station file."""
-    path = get_station_file(station_id, 'tank_readings.json')
-    if os.path.exists(path):
-        with open(path, 'r') as f:
-            return json.load(f)
-    return {}
+    """Load tank readings from station-specific storage."""
+    return load_station_json(station_id, 'tank_readings.json', default={})
 
 
 @router.post("/shift", response_model=ShiftReconciliation)

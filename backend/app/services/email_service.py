@@ -5,7 +5,7 @@ Wrapped in try/except so failures never block the caller.
 """
 import os
 import json
-from ..database.station_files import get_station_file
+from ..database.station_files import load_station_json
 
 
 SEVERITY_COLORS = {
@@ -18,15 +18,8 @@ SEVERITY_COLORS = {
 
 
 def _load_email_settings(station_id: str) -> dict:
-    """Load email settings from station-specific JSON file."""
-    filepath = get_station_file(station_id, "email_settings.json")
-    if not os.path.exists(filepath):
-        return {}
-    try:
-        with open(filepath, "r") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return {}
+    """Load email settings from station-specific storage."""
+    return load_station_json(station_id, "email_settings.json", default={})
 
 
 def _build_html(notification: dict) -> str:
