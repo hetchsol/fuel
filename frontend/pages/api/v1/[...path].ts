@@ -73,6 +73,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     res.status(response.status)
 
+    const retryAfter = response.headers.get('retry-after')
+    if (retryAfter) res.setHeader('Retry-After', retryAfter)
+
     if (contentType.includes('application/json')) {
       const data = await response.json()
       res.json(data)

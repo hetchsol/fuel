@@ -32,18 +32,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [router.pathname])
 
   useEffect(() => {
+    if (router.pathname === '/login') return
     if (user && user.role === 'owner') {
       authFetch(`${BASE}/stations/`)
         .then(r => r.ok ? r.json() : [])
         .then(data => setStations(data))
         .catch(() => {})
     }
-  }, [user])
+  }, [user, router.pathname])
 
   // Poll unread notification count for supervisors/owners
   const isSupervisorOrOwner = user && (user.role === 'supervisor' || user.role === 'owner')
 
   useEffect(() => {
+    if (router.pathname === '/login') return
     if (!isSupervisorOrOwner) return
     const fetchCount = () => {
       fetch(`${BASE}/notifications/unread-count`, { headers: getHeaders() })
@@ -54,7 +56,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     fetchCount()
     const interval = setInterval(fetchCount, 60000)
     return () => clearInterval(interval)
-  }, [isSupervisorOrOwner])
+  }, [isSupervisorOrOwner, router.pathname])
 
   // Click outside to close notification dropdown
   useEffect(() => {
