@@ -21,15 +21,21 @@ def get_nozzle(nozzle_id: str, storage: Dict[str, Any] = None) -> Dict[str, Any]
 
 
 def validate_attendant_exists(attendant_id: str) -> bool:
-    """Check if attendant exists in users_db with role='user'"""
-    # Import here to avoid circular dependency
-    from ..api.v1.auth import users_db
-
-    # Check if user exists in users_db
-    for username, user_data in users_db.items():
-        if user_data.get('user_id') == attendant_id:
-            return user_data.get('role') == 'user'
-    return False
+    """Check if attendant exists with role='user'"""
+    from ..database.db import DATABASE_URL
+    if DATABASE_URL:
+        from ..database.db import db_get_all_users
+        for user in db_get_all_users():
+            if user.get('user_id') == attendant_id:
+                return user.get('role') == 'user'
+        return False
+    else:
+        # Import here to avoid circular dependency
+        from ..api.v1.auth import users_db
+        for username, user_data in users_db.items():
+            if user_data.get('user_id') == attendant_id:
+                return user_data.get('role') == 'user'
+        return False
 
 
 def validate_island_exists(island_id: str, storage: Dict[str, Any] = None) -> bool:
