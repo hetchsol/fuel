@@ -86,20 +86,31 @@ export default function Login() {
     setError('')
 
     try {
-      const res = await fetch(`${BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
-      })
+      // Retry with backoff for rate limits and cold starts (Render free tier)
+      let res: Response | null = null
+      for (let attempt = 0; attempt < 3; attempt++) {
+        res = await fetch(`${BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(credentials),
+        })
 
-      // Handle rate limiting (Render free tier) before parsing body
-      if (res.status === 429) {
+        const retryable = res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504
+        if (!retryable || attempt === 2) break
+
+        // Wait before retrying: use Retry-After header or exponential backoff (2s, 4s)
         const retryAfter = res.headers.get('retry-after')
-        const wait = retryAfter ? `${retryAfter} seconds` : 'a moment'
-        throw new Error(`Too many requests. Please wait ${wait} and try again.`)
+        const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : (attempt + 1) * 2000
+        setError(`Server busy, retrying in ${Math.round(delay / 1000)}s...`)
+        await new Promise(r => setTimeout(r, delay))
       }
 
-      // Handle backend unavailable (cold start / sleeping)
+      if (!res) throw new Error('Login failed')
+
+      if (res.status === 429) {
+        throw new Error('Server is busy. Please wait a moment and try again.')
+      }
+
       if (res.status === 502 || res.status === 503 || res.status === 504) {
         throw new Error('The server is starting up. Please wait a moment and try again.')
       }
