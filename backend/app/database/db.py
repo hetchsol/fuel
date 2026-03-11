@@ -20,16 +20,27 @@ _conn = None
 
 
 def _get_connection():
-    """Get a database connection (lazy-init on first call)."""
+    """Get a database connection, reconnecting if stale."""
     global _conn
-    if _conn is None or _conn.closed:
+    if _conn is not None and not _conn.closed:
         try:
-            import psycopg
-            _conn = psycopg.connect(DATABASE_URL, autocommit=False)
-            logger.info("[db] PostgreSQL connection established")
-        except Exception as e:
-            logger.error(f"[db] Failed to connect: {e}")
-            raise
+            _conn.execute("SELECT 1")
+            return _conn
+        except Exception:
+            logger.warning("[db] Stale connection detected, reconnecting...")
+            try:
+                _conn.close()
+            except Exception:
+                pass
+            _conn = None
+
+    try:
+        import psycopg
+        _conn = psycopg.connect(DATABASE_URL, autocommit=False)
+        logger.info("[db] PostgreSQL connection established")
+    except Exception as e:
+        logger.error(f"[db] Failed to connect: {e}")
+        raise
     return _conn
 
 
