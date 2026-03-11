@@ -13,10 +13,10 @@
   --color-text-primary: #1C1C1C;
   --color-text-secondary: #616161;
 
-  /* Action – Primary (Steel Blue) */
-  --color-action-primary: #1976D2;
-  --color-action-primary-hover: #1565C0;
-  --color-action-primary-light: #E3F2FD;
+  /* Action – Primary (Vibrant Blue) */
+  --color-action-primary: #007AFF;
+  --color-action-primary-hover: #0066D6;
+  --color-action-primary-light: #E5F1FF;
 
   /* Action – Secondary (Teal) */
   --color-action-secondary: #00897B;
@@ -44,7 +44,7 @@
   --color-status-error-light: #FFEBEE;
 
   /* Header / Footer */
-  --color-header-bg: #1976D2;
+  --color-header-bg: #007AFF;
   --color-header-text: #FFFFFF;
   --color-footer-bg: #212121;
   --color-footer-text: #FFFFFF;
@@ -79,9 +79,9 @@
   --color-text-secondary: #BDBDBD;
 
   /* Action – Primary (brighter for contrast) */
-  --color-action-primary: #42A5F5;
-  --color-action-primary-hover: #1E88E5;
-  --color-action-primary-light: #1A2332;
+  --color-action-primary: #0A84FF;
+  --color-action-primary-hover: #007AFF;
+  --color-action-primary-light: #0A1F33;
 
   /* Action – Secondary */
   --color-action-secondary: #26A69A;
@@ -106,7 +106,7 @@
   --color-status-error-light: #331A1A;
 
   /* Header / Footer */
-  --color-header-bg: #1565C0;
+  --color-header-bg: #0066D6;
   --color-header-text: #FFFFFF;
   --color-footer-bg: #1A1A1A;
   --color-footer-text: #BDBDBD;
