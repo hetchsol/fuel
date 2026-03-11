@@ -451,7 +451,7 @@ export default function EnterReadings() {
             </thead>
             <tbody>
               {nozzles.map(n => (
-                <tr key={n.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                <tr key={n.nozzle_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                   <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>
                     {nozzleLabel(n)}
                   </td>
@@ -545,7 +545,7 @@ export default function EnterReadings() {
                 const noteRequired = comp.valid && comp.disc > meterThreshold
                 const noteValue = nozzleNotes[n.nozzle_id] || ''
                 return (
-                  <tr key={n.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                  <tr key={n.nozzle_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                     <td className="px-2 py-2 font-medium" style={{ color: theme.textPrimary }}>
                       {nozzleLabel(n)}
                     </td>
@@ -657,7 +657,7 @@ export default function EnterReadings() {
             </thead>
             <tbody>
               {summary.nozzle_summaries.map(ns => (
-                <tr key={ns.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                <tr key={ns.nozzle_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                   <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{ns.nozzle_id}</td>
                   <td className="px-3 py-2"><FuelBadge fuelType={ns.fuel_type} /></td>
                   <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
@@ -984,7 +984,7 @@ function SupervisorSection({
                 </thead>
                 <tbody>
                   {att.nozzle_details.map(nd => (
-                    <tr key={nd.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <tr key={nd.nozzle_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                       <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{nd.nozzle_id}</td>
                       <td className="px-3 py-2"><FuelBadge fuelType={nd.fuel_type} /></td>
                       <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
@@ -1078,7 +1078,7 @@ function SupervisorSection({
                   const mechTotal = att.nozzle_summaries.reduce((s, ns) => s + ns.mechanical_dispensed, 0)
                   const avgTotal = att.nozzle_summaries.reduce((s, ns) => s + ns.average_dispensed, 0)
                   return (
-                    <tr key={att.attendant_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <tr key={att.attendant_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                       <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{att.attendant_name}</td>
                       <td className="px-3 py-2">
                         <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
@@ -1149,7 +1149,7 @@ function SupervisorSection({
                 </thead>
                 <tbody>
                   {shiftRecon.reconciliation.map(r => (
-                    <tr key={r.tank_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <tr key={r.tank_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                       <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{r.tank_id}</td>
                       <td className="px-3 py-2"><FuelBadge fuelType={r.fuel_type} /></td>
                       <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>

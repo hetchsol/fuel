@@ -360,7 +360,7 @@ export default function LubricantsDaily() {
                 </thead>
                 <tbody>
                   {rows.map(row => (
-                    <tr key={row.product_code} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <tr key={row.product_code} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                       <td className="px-3 py-2" style={{ color: theme.textPrimary }}>
                         <div className="font-medium text-xs">{row.description}</div>
                         <div className="text-xs" style={{ color: theme.textSecondary }}>{row.product_code}</div>
@@ -463,7 +463,7 @@ export default function LubricantsDaily() {
             </thead>
             <tbody>
               {entries.map((e: any) => (
-                <tr key={e.entry_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                <tr key={e.entry_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                   <td className="px-4 py-2 font-mono text-xs" style={{ color: theme.textPrimary }}>{e.entry_id}</td>
                   <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.location}</td>
                   <td className="px-4 py-2 font-semibold" style={{ color: theme.primary }}>

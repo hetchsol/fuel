@@ -6,6 +6,7 @@ import Head from 'next/head'
 import Layout from '../components/Layout'
 import { ThemeProvider } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { Toaster } from 'react-hot-toast'
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter()
@@ -33,11 +34,29 @@ export default function App({ Component, pageProps }: AppProps) {
       <Head>
         <title>NextStop</title>
       </Head>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: 'var(--color-bg-card)',
+            color: 'var(--color-text-primary)',
+            border: '1px solid var(--color-border)',
+          },
+          success: {
+            iconTheme: { primary: 'var(--color-status-success)', secondary: '#fff' },
+          },
+          error: {
+            iconTheme: { primary: 'var(--color-status-error)', secondary: '#fff' },
+          },
+        }}
+      />
       <Layout>
         {loading ? (
           <LoadingSpinner fullPage text="Loading page..." />
         ) : (
-          <Component {...pageProps} />
+          <div className="page-fade-in" key={router.asPath}>
+            <Component {...pageProps} />
+          </div>
         )}
       </Layout>
     </ThemeProvider>

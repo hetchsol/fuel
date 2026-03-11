@@ -488,7 +488,7 @@ export default function MyShift() {
               const closingVal = parseFloat(row.closing_reading)
               const hasError = row.closing_reading !== '' && !isNaN(closingVal) && closingVal < row.opening_reading
               return (
-                <tr key={row.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                <tr key={row.nozzle_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                   <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>
                     {row.fuel_type_abbrev && row.display_label
                       ? `${row.fuel_type_abbrev} ${row.display_label}`
@@ -588,7 +588,7 @@ export default function MyShift() {
               const comp = lpgComputations[idx]
               const splitError = comp.totalSold > 0 && !comp.splitValid && (row.sold_refill !== '' || row.sold_with_cylinder !== '')
               return (
-                <tr key={row.size_kg} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                <tr key={row.size_kg} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                   <td className="px-2 py-1 text-center font-medium whitespace-nowrap" style={{ color: theme.textPrimary }}>
                     {row.size_kg}kg
                   </td>
@@ -676,7 +676,7 @@ export default function MyShift() {
               {accessoryRows.map((row, idx) => {
                 const comp = accComputations[idx]
                 return (
-                  <tr key={row.product_code} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                  <tr key={row.product_code} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                     <td className="px-3 py-1" style={{ color: theme.textPrimary }}>
                       <div className="font-medium text-sm">{row.description}</div>
                       <div className="text-xs" style={{ color: theme.textSecondary }}>@ {fmtZMW(row.unit_price)}</div>
@@ -750,7 +750,7 @@ export default function MyShift() {
                 const row = lubricantRows[idx]
                 const comp = lubComputations[idx]
                 return (
-                  <tr key={row.product_code} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                  <tr key={row.product_code} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                     <td className="px-3 py-1" style={{ color: theme.textPrimary }}>
                       <div className="font-medium text-sm">{row.description}</div>
                       <div className="text-xs" style={{ color: theme.textSecondary }}>
@@ -962,7 +962,7 @@ export default function MyShift() {
                   ? `${row.fuel_type_abbrev} ${row.display_label}`
                   : ns.nozzle_id
                 return (
-                <tr key={ns.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                <tr key={ns.nozzle_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                   <td className="px-3 py-1 font-medium" style={{ color: theme.textPrimary }}>{displayName}</td>
                   <td className="px-3 py-1" style={{ color: theme.textSecondary }}>{ns.fuel_type}</td>
                   <td className="px-3 py-1 text-right font-mono" style={{ color: theme.textSecondary }}>
@@ -1059,7 +1059,7 @@ function PastHandoversTable({ handovers, theme }: { handovers: HandoverResult[],
         </thead>
         <tbody>
           {handovers.map(h => (
-            <tr key={h.handover_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+            <tr key={h.handover_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
               <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.date}</td>
               <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{h.shift_type}</td>
               <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.attendant_name}</td>

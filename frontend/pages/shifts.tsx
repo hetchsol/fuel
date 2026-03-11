@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getHeaders } from '../lib/api'
 
@@ -117,14 +118,14 @@ export default function Shifts() {
       })
       if (!res.ok) {
         const error = await res.json()
-        alert(`Error deactivating shift: ${error.detail || JSON.stringify(error)}`)
+        toast.error(`Error deactivating shift: ${error.detail || JSON.stringify(error)}`)
         return
       }
-      alert('Shift deactivated successfully.')
+      toast.success('Shift deactivated successfully')
       fetchActiveShift()
       fetchAllShifts()
     } catch (err: any) {
-      alert(`Failed to deactivate shift: ${err.message}`)
+      toast.error(`Failed to deactivate shift: ${err.message}`)
     }
   }
 
@@ -137,14 +138,14 @@ export default function Shifts() {
       })
       if (!res.ok) {
         const error = await res.json()
-        alert(`Error deleting shift: ${error.detail || JSON.stringify(error)}`)
+        toast.error(`Error deleting shift: ${error.detail || JSON.stringify(error)}`)
         return
       }
-      alert('Shift deleted permanently.')
+      toast.success('Shift deleted permanently')
       fetchActiveShift()
       fetchAllShifts()
     } catch (err: any) {
-      alert(`Failed to delete shift: ${err.message}`)
+      toast.error(`Failed to delete shift: ${err.message}`)
     }
   }
 
@@ -280,12 +281,12 @@ export default function Shifts() {
         throw new Error(error.detail || 'Failed to submit tank dip reading')
       }
 
-      alert('Tank dip reading recorded successfully!')
+      toast.success('Tank dip reading recorded successfully!')
       fetchTankDipReadings()
       setShowTankDipModal(false)
       setTankDipForm({ tank_id: '', opening_dip_cm: '', closing_dip_cm: '' })
     } catch (err: any) {
-      alert(err.message || 'Failed to submit tank dip reading')
+      toast.error(err.message || 'Failed to submit tank dip reading')
     } finally {
       setLoading(false)
     }
@@ -318,7 +319,7 @@ export default function Shifts() {
         throw new Error('Failed to submit reading')
       }
 
-      alert('Dual reading submitted successfully!')
+      toast.success('Dual reading submitted successfully!')
 
       // Reset form
       setReadingForm({
@@ -579,12 +580,12 @@ export default function Shifts() {
 
         if (!res.ok) {
           const error = await res.json()
-          alert(`Error updating shift: ${error.detail || JSON.stringify(error)}`)
+          toast.error(`Error updating shift: ${error.detail || JSON.stringify(error)}`)
           console.error('Shift update error:', error)
           return
         }
 
-        alert('Shift updated successfully!')
+        toast.success('Shift updated successfully!')
         setShowManagementModal(false)
         setShowConfirmation(false)
         setValidationMessages([])
@@ -594,7 +595,7 @@ export default function Shifts() {
         fetchAllShifts()
       } catch (err: any) {
         console.error('Failed to update shift:', err)
-        alert(`Failed to update shift: ${err.message || err.toString()}`)
+        toast.error(`Failed to update shift: ${err.message || err.toString()}`)
       }
     } else {
       // Create mode — POST new shift
@@ -619,15 +620,15 @@ export default function Shifts() {
           const error = await res.json()
           const errorMessage = error.detail || JSON.stringify(error)
           if (res.status === 400 && errorMessage.includes('already exists')) {
-            alert('A shift for this date and type already exists. Deactivate the existing shift first if it was created in error.')
+            toast.error('A shift for this date and type already exists. Deactivate the existing shift first.')
           } else {
-            alert(`Error creating shift: ${errorMessage}`)
+            toast.error(`Error creating shift: ${errorMessage}`)
           }
           console.error('Shift creation error:', error)
           return
         }
 
-        alert('Shift created successfully!')
+        toast.success('Shift created successfully!')
         setShowManagementModal(false)
         setShowConfirmation(false)
         setValidationMessages([])
@@ -636,7 +637,7 @@ export default function Shifts() {
         fetchAllShifts()
       } catch (err: any) {
         console.error('Failed to create shift:', err)
-        alert(`Failed to create shift: ${err.message || err.toString()}`)
+        toast.error(`Failed to create shift: ${err.message || err.toString()}`)
       }
     }
   }

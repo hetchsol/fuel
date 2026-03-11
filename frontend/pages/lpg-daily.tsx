@@ -411,7 +411,7 @@ export default function LPGDaily() {
             {cylinderRows.map(row => {
               const p = pricing.find(pr => pr.size_kg === row.size_kg)
               return (
-                <tr key={row.size_kg} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                <tr key={row.size_kg} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                   <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>
                     {row.size_kg} kg
                     {p && <span className="block text-xs" style={{ color: theme.textSecondary }}>
@@ -528,7 +528,7 @@ export default function LPGDaily() {
           </thead>
           <tbody>
             {accessoryRows.map(row => (
-              <tr key={row.product_code} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+              <tr key={row.product_code} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                 <td className="px-3 py-2" style={{ color: theme.textPrimary }}>
                   <div className="font-medium">{row.description}</div>
                   <div className="text-xs" style={{ color: theme.textSecondary }}>{row.product_code}</div>
@@ -602,7 +602,7 @@ export default function LPGDaily() {
             </thead>
             <tbody>
               {entries.map((e: any) => (
-                <tr key={e.entry_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                <tr key={e.entry_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                   <td className="px-4 py-2 font-mono text-xs" style={{ color: theme.textPrimary }}>{e.entry_id}</td>
                   <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.shift_type}</td>
                   <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.salesperson}</td>

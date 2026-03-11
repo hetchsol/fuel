@@ -2642,7 +2642,7 @@ export default function DailyTankReading() {
                             </thead>
                             <tbody>
                               {calculatedValues.delivery_timeline.inter_delivery_sales.map((seg: any, idx: number) => (
-                                <tr key={idx} className="border-t border-action-primary/30">
+                                <tr key={idx} className="border-t border-action-primary/30 hover:bg-surface-bg">
                                   <td className="px-3 py-2 font-medium text-action-primary">{idx + 1}</td>
                                   <td className="px-3 py-2 text-action-primary">{seg.period}</td>
                                   <td className="px-3 py-2 text-right font-mono text-action-primary">{seg.start_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
@@ -95,7 +96,7 @@ export default function UsersManagement() {
 
       setShowModal(false)
       fetchUsers()
-      alert(editingUser ? 'User updated successfully' : 'User created successfully')
+      toast.success(editingUser ? 'User updated successfully' : 'User created successfully')
     } catch (err: any) {
       setError(err.message)
     }
@@ -116,7 +117,7 @@ export default function UsersManagement() {
       }
 
       fetchUsers()
-      alert('User deleted successfully')
+      toast.success('User deleted successfully')
     } catch (err: any) {
       setError(err.message)
     }

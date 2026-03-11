@@ -517,7 +517,7 @@ export default function AdvancedReports() {
                   </thead>
                   <tbody className="bg-surface-card divide-y divide-surface-border">
                     {Object.entries(reportData.product_breakdown).map(([product, data]: [string, any]) => (
-                      <tr key={product}>
+                      <tr key={product} className="hover:bg-surface-bg">
                         <td className="px-4 py-3 text-sm font-medium text-content-primary">{product}</td>
                         <td className="px-4 py-3 text-sm text-content-secondary">{data.transactions || data.count}</td>
                         <td className="px-4 py-3 text-sm text-content-secondary">{formatCurrency(data.revenue)}</td>

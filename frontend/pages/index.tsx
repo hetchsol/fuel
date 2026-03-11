@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import useSWR from 'swr'
+import toast from 'react-hot-toast'
 import { getDaily, getFlags, getTankLevels, getHeaders } from '../lib/api'
 import TankCard from '../components/TankCard'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -52,13 +53,13 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json()
         mutateTanks() // Refresh tank levels
-        alert(`${fuelType} Tank Dip Readings Saved!\nTank level updated to ${data.current_level.toLocaleString()} L`)
+        toast.success(`${fuelType} dip readings saved — level updated to ${data.current_level.toLocaleString()} L`)
       } else {
-        alert('Failed to save dip readings')
+        toast.error('Failed to save dip readings')
       }
     } catch (err) {
       console.error('Error saving dip readings:', err)
-      alert('Error saving dip readings')
+      toast.error('Error saving dip readings')
     } finally {
       setSavingDips(false)
     }
@@ -108,7 +109,7 @@ export default function Home() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-surface-card rounded-lg shadow p-6">
+        <div className="bg-surface-card rounded-lg shadow p-6 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
           <h2 className="text-xl font-semibold text-content-primary mb-4">Daily Summary</h2>
           {dailyError && (
             <div className="text-status-error text-sm">Failed to load daily summary</div>
@@ -138,7 +139,7 @@ export default function Home() {
           )}
         </div>
 
-        <div className="bg-surface-card rounded-lg shadow p-6">
+        <div className="bg-surface-card rounded-lg shadow p-6 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
           <h2 className="text-xl font-semibold text-content-primary mb-4">Recent Discrepancies</h2>
           {flagsError && (
             <div className="text-status-error text-sm">Failed to load discrepancies</div>
@@ -166,17 +167,17 @@ export default function Home() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <div className="bg-action-primary-light rounded-lg p-6 border border-action-primary">
+        <div className="bg-action-primary-light rounded-lg p-6 border border-action-primary hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
           <h3 className="text-sm font-medium text-action-primary mb-2">Total Nozzles</h3>
           <p className="text-3xl font-bold text-action-primary">-</p>
           <p className="text-xs text-action-primary mt-1">Active monitoring</p>
         </div>
-        <div className="bg-status-success-light rounded-lg p-6 border border-status-success">
+        <div className="bg-status-success-light rounded-lg p-6 border border-status-success hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
           <h3 className="text-sm font-medium text-status-success mb-2">Today's Sales</h3>
           <p className="text-3xl font-bold text-status-success">-</p>
           <p className="text-xs text-status-success mt-1">Total transactions</p>
         </div>
-        <div className="bg-status-pending-light rounded-lg p-6 border border-status-warning">
+        <div className="bg-status-pending-light rounded-lg p-6 border border-status-warning hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
           <h3 className="text-sm font-medium text-status-warning mb-2">Alerts</h3>
           <p className="text-3xl font-bold text-status-warning">{flags?.length || 0}</p>
           <p className="text-xs text-status-warning mt-1">Requires attention</p>

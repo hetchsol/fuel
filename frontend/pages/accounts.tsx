@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getHeaders } from '../lib/api'
 
@@ -127,7 +128,7 @@ export default function Accounts() {
         throw new Error(errorData.detail || 'Failed to record credit sale')
       }
 
-      alert('Credit sale recorded successfully!')
+      toast.success('Credit sale recorded successfully!')
 
       // Reset form
       setSaleForm({
@@ -339,7 +340,7 @@ export default function Accounts() {
               return (
                 <div
                   key={account.account_id}
-                  className="bg-surface-card rounded-lg shadow-lg p-5 border-2 border-surface-border hover:border-action-primary transition-colors"
+                  className="bg-surface-card rounded-lg shadow-lg p-5 border-2 border-surface-border hover:border-action-primary hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">

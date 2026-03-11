@@ -102,7 +102,7 @@ const TankCard = ({
   }
 
   return (
-    <div className={`${colors.gradient} rounded-lg shadow-lg p-6 border-2 ${colors.border}`}>
+    <div className={`${colors.gradient} rounded-lg shadow-lg p-6 border-2 ${colors.border} hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200`}>
       <div className="flex items-center justify-between mb-4">
         <h2 className={`text-xl font-bold ${colors.title}`}>{icon} {fuelType} Tank</h2>
         <span className={`text-xs ${colors.badge} px-2 py-1 rounded`}>Real-time</span>
