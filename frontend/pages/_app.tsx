@@ -37,15 +37,32 @@ export default function App({ Component, pageProps }: AppProps) {
       <Toaster
         position="top-right"
         toastOptions={{
+          duration: 4000,
           style: {
             background: 'var(--color-bg-card)',
             color: 'var(--color-text-primary)',
             border: '1px solid var(--color-border)',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
           },
           success: {
+            style: {
+              background: 'var(--color-status-success-light)',
+              color: 'var(--color-status-success)',
+              border: '1px solid var(--color-status-success)',
+              borderLeft: '4px solid var(--color-status-success)',
+            },
             iconTheme: { primary: 'var(--color-status-success)', secondary: '#fff' },
           },
           error: {
+            duration: 5000,
+            style: {
+              background: 'var(--color-status-error-light)',
+              color: 'var(--color-status-error)',
+              border: '1px solid var(--color-status-error)',
+              borderLeft: '4px solid var(--color-status-error)',
+            },
             iconTheme: { primary: 'var(--color-status-error)', secondary: '#fff' },
           },
         }}
