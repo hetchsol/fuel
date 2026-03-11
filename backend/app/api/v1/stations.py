@@ -103,3 +103,40 @@ def run_setup_wizard(station_id: str, current_user: dict = Depends(get_current_u
         ),
         "accounts": len(storage.get('accounts', {})),
     }
+
+
+@router.post("/{station_id}/seed-test-data")
+def seed_test_data(station_id: str, current_user: dict = Depends(get_current_user)):
+    """Seed 14 days of realistic tank readings & deliveries. Owner only."""
+    import sys, os
+    role = current_user.get("role", "")
+    role_str = role.value if hasattr(role, 'value') else str(role)
+    if role_str != "owner":
+        raise HTTPException(status_code=403, detail="Only owners can seed test data")
+
+    if station_id not in stations_registry.STATIONS:
+        raise HTTPException(status_code=404, detail="Station not found")
+
+    # Import and run the seeder
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    sys.path.insert(0, backend_dir)
+    import seed_test_data as seeder
+
+    # Override the seeder's station/path
+    seeder.STATION_ID = station_id
+    seeder.BASE_DIR = os.path.join(backend_dir, "storage", "stations", station_id)
+
+    readings, deliveries = seeder.generate_all()
+    seeder.save_data(readings, deliveries)
+
+    # Evict cached storage so next access reloads from disk/DB
+    from ...database.storage import STATIONS_STORAGE
+    STATIONS_STORAGE.pop(station_id, None)
+    get_station_storage(station_id)
+
+    return {
+        "status": "success",
+        "message": f"Seeded {len(readings)} tank readings and {len(deliveries)} deliveries for station {station_id}",
+        "readings": len(readings),
+        "deliveries": len(deliveries),
+    }
