@@ -19,7 +19,7 @@ def get_tank_levels(ctx: dict = Depends(get_station_context)):
     Get current fuel levels for all tanks
     """
     storage = ctx["storage"]
-    tank_data = storage['tanks']
+    tank_data = storage.get('tanks', {})
 
     tanks = []
     for tank_id, data in tank_data.items():
@@ -41,9 +41,9 @@ def update_tank_level(tank_id: str, volume_dispensed: float, ctx: dict = Depends
     Called after each sale to reduce tank level
     """
     storage = ctx["storage"]
-    tank_data = storage['tanks']
-    delivery_history = storage['delivery_history']
-    dip_readings_data = storage['dip_readings_data']
+    tank_data = storage.get('tanks', {})
+    delivery_history = storage.get('delivery_history', [])
+    dip_readings_data = storage.get('dip_readings_data', {})
 
     if tank_id not in tank_data:
         return {"error": "Tank not found"}
@@ -66,9 +66,9 @@ def refill_tank(tank_id: str, volume_added: float, ctx: dict = Depends(get_stati
     Refill a tank with new fuel
     """
     storage = ctx["storage"]
-    tank_data = storage['tanks']
-    delivery_history = storage['delivery_history']
-    dip_readings_data = storage['dip_readings_data']
+    tank_data = storage.get('tanks', {})
+    delivery_history = storage.get('delivery_history', [])
+    dip_readings_data = storage.get('dip_readings_data', {})
 
     if tank_id not in tank_data:
         return {"error": "Tank not found"}
@@ -96,9 +96,9 @@ def receive_delivery(delivery: StockDelivery, ctx: dict = Depends(get_station_co
     Calculates actual loss vs expected loss.
     """
     storage = ctx["storage"]
-    tank_data = storage['tanks']
-    delivery_history = storage['delivery_history']
-    dip_readings_data = storage['dip_readings_data']
+    tank_data = storage.get('tanks', {})
+    delivery_history = storage.get('delivery_history', [])
+    dip_readings_data = storage.get('dip_readings_data', {})
 
     if delivery.tank_id not in tank_data:
         return {"error": "Tank not found"}
@@ -222,9 +222,9 @@ def get_delivery_history(limit: int = 50, ctx: dict = Depends(get_station_contex
     Get fuel delivery history
     """
     storage = ctx["storage"]
-    tank_data = storage['tanks']
-    delivery_history = storage['delivery_history']
-    dip_readings_data = storage['dip_readings_data']
+    tank_data = storage.get('tanks', {})
+    delivery_history = storage.get('delivery_history', [])
+    dip_readings_data = storage.get('dip_readings_data', {})
 
     return sorted(delivery_history, key=lambda x: x["timestamp"], reverse=True)[:limit]
 
@@ -235,8 +235,8 @@ def get_stock_movements(tank_id: str, date: Optional[str] = None, limit: int = 5
     Returns chronological list of all movements with summary totals.
     """
     storage = ctx["storage"]
-    tank_data = storage['tanks']
-    delivery_history = storage['delivery_history']
+    tank_data = storage.get('tanks', {})
+    delivery_history = storage.get('delivery_history', [])
     station_id = ctx["station_id"]
 
     if tank_id not in tank_data:
@@ -319,9 +319,9 @@ def record_dip_reading(tank_id: str, opening_dip: float = None, closing_dip: flo
     For more accuracy, use actual tank dimensions
     """
     storage = ctx["storage"]
-    tank_data = storage['tanks']
-    delivery_history = storage['delivery_history']
-    dip_readings_data = storage['dip_readings_data']
+    tank_data = storage.get('tanks', {})
+    delivery_history = storage.get('delivery_history', [])
+    dip_readings_data = storage.get('dip_readings_data', {})
 
     if tank_id not in tank_data:
         return {"error": "Tank not found"}
@@ -371,9 +371,9 @@ def get_dip_reading(tank_id: str, ctx: dict = Depends(get_station_context)):
     Get stored dip readings for a tank
     """
     storage = ctx["storage"]
-    tank_data = storage['tanks']
-    delivery_history = storage['delivery_history']
-    dip_readings_data = storage['dip_readings_data']
+    tank_data = storage.get('tanks', {})
+    delivery_history = storage.get('delivery_history', [])
+    dip_readings_data = storage.get('dip_readings_data', {})
 
     if tank_id not in tank_data:
         return {"error": "Tank not found"}
@@ -405,9 +405,9 @@ def create_tank(tank_id: str, fuel_type: str, capacity: float, initial_level: fl
         initial_level: Initial fuel level in liters (default: 0.0)
     """
     storage = ctx["storage"]
-    tank_data = storage['tanks']
-    delivery_history = storage['delivery_history']
-    dip_readings_data = storage['dip_readings_data']
+    tank_data = storage.get('tanks', {})
+    delivery_history = storage.get('delivery_history', [])
+    dip_readings_data = storage.get('dip_readings_data', {})
 
     # Validate tank doesn't already exist
     if tank_id in tank_data:
@@ -458,9 +458,9 @@ def delete_tank(tank_id: str, ctx: dict = Depends(get_station_context)):
         tank_id: Tank ID to delete
     """
     storage = ctx["storage"]
-    tank_data = storage['tanks']
-    delivery_history = storage['delivery_history']
-    dip_readings_data = storage['dip_readings_data']
+    tank_data = storage.get('tanks', {})
+    delivery_history = storage.get('delivery_history', [])
+    dip_readings_data = storage.get('dip_readings_data', {})
 
     if tank_id not in tank_data:
         raise HTTPException(status_code=404, detail="Tank not found")
@@ -496,9 +496,9 @@ def update_tank_capacity(tank_id: str, new_capacity: float, ctx: dict = Depends(
         new_capacity: New capacity in liters
     """
     storage = ctx["storage"]
-    tank_data = storage['tanks']
-    delivery_history = storage['delivery_history']
-    dip_readings_data = storage['dip_readings_data']
+    tank_data = storage.get('tanks', {})
+    delivery_history = storage.get('delivery_history', [])
+    dip_readings_data = storage.get('dip_readings_data', {})
 
     if tank_id not in tank_data:
         raise HTTPException(status_code=404, detail="Tank not found")

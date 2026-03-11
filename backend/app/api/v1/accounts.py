@@ -18,7 +18,7 @@ async def get_all_accounts(ctx: dict = Depends(get_station_context)):
     Get all account holders
     """
     storage = ctx["storage"]
-    accounts_data = storage['accounts']
+    accounts_data = storage.get('accounts', {})
     return [AccountHolder(**a) for a in accounts_data.values()]
 
 
@@ -28,7 +28,7 @@ async def get_account(account_id: str, ctx: dict = Depends(get_station_context))
     Get specific account details
     """
     storage = ctx["storage"]
-    accounts_data = storage['accounts']
+    accounts_data = storage.get('accounts', {})
     if account_id not in accounts_data:
         raise HTTPException(status_code=404, detail="Account not found")
     return AccountHolder(**accounts_data[account_id])
@@ -40,7 +40,7 @@ async def create_account(account: AccountHolder, ctx: dict = Depends(get_station
     Create new account holder
     """
     storage = ctx["storage"]
-    accounts_data = storage['accounts']
+    accounts_data = storage.get('accounts', {})
     item_dict = account.dict()
     account_id = item_dict['account_id']
 
@@ -57,7 +57,7 @@ async def update_account(account_id: str, account: AccountHolder, ctx: dict = De
     Update account details
     """
     storage = ctx["storage"]
-    accounts_data = storage['accounts']
+    accounts_data = storage.get('accounts', {})
     if account_id not in accounts_data:
         raise HTTPException(status_code=404, detail="Account not found")
 
@@ -72,8 +72,8 @@ async def record_credit_sale(sale: CreditSale, ctx: dict = Depends(get_station_c
     Updates account balance
     """
     storage = ctx["storage"]
-    accounts_data = storage['accounts']
-    credit_sales_data = storage['credit_sales']
+    accounts_data = storage.get('accounts', {})
+    credit_sales_data = storage.get('credit_sales', [])
 
     # Validate foreign keys (account_id, shift_id)
     validate_create('credit_sales', sale.dict())
@@ -95,7 +95,7 @@ async def get_shift_credit_sales(shift_id: str, ctx: dict = Depends(get_station_
     Get all credit sales for a specific shift
     """
     storage = ctx["storage"]
-    credit_sales_data = storage['credit_sales']
+    credit_sales_data = storage.get('credit_sales', [])
     shift_sales = [
         CreditSale(**sale) for sale in credit_sales_data
         if sale["shift_id"] == shift_id
@@ -109,7 +109,7 @@ async def get_account_sales(account_id: str, ctx: dict = Depends(get_station_con
     Get all sales for a specific account
     """
     storage = ctx["storage"]
-    credit_sales_data = storage['credit_sales']
+    credit_sales_data = storage.get('credit_sales', [])
     account_sales = [
         CreditSale(**sale) for sale in credit_sales_data
         if sale["account_id"] == account_id
@@ -124,7 +124,7 @@ async def record_payment(account_id: str, amount: float, reference: str = None, 
     Reduces account balance
     """
     storage = ctx["storage"]
-    accounts_data = storage['accounts']
+    accounts_data = storage.get('accounts', {})
 
     if account_id not in accounts_data:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -154,7 +154,7 @@ async def get_accounts_summary(ctx: dict = Depends(get_station_context)):
     Get summary of all accounts
     """
     storage = ctx["storage"]
-    accounts_data = storage['accounts']
+    accounts_data = storage.get('accounts', {})
 
     total_receivables = sum(account["current_balance"] for account in accounts_data.values())
     total_credit_limit = sum(account["credit_limit"] for account in accounts_data.values())

@@ -18,7 +18,7 @@ async def get_all_lubricants(ctx: dict = Depends(get_station_context)):
     Get all lubricants from all locations
     """
     storage = ctx["storage"]
-    lubricants_inventory = storage['lubricants']
+    lubricants_inventory = storage.get('lubricants', {})
     return [Lubricant(**item) for item in lubricants_inventory.values()]
 
 
@@ -28,7 +28,7 @@ async def get_lubricants_by_location(location: str, ctx: dict = Depends(get_stat
     Get lubricants from specific location (Island 3 or Buffer)
     """
     storage = ctx["storage"]
-    lubricants_inventory = storage['lubricants']
+    lubricants_inventory = storage.get('lubricants', {})
     return [
         Lubricant(**item) for item in lubricants_inventory.values()
         if item.get("location") == location
@@ -41,7 +41,7 @@ async def get_lubricant(product_code: str, ctx: dict = Depends(get_station_conte
     Get specific lubricant details
     """
     storage = ctx["storage"]
-    lubricants_inventory = storage['lubricants']
+    lubricants_inventory = storage.get('lubricants', {})
     if product_code not in lubricants_inventory:
         raise HTTPException(status_code=404, detail="Lubricant not found")
     return Lubricant(**lubricants_inventory[product_code])
@@ -54,8 +54,8 @@ async def record_lubricant_sale(sale: LubricantSale, ctx: dict = Depends(get_sta
     Updates inventory at Island 3
     """
     storage = ctx["storage"]
-    lubricants_inventory = storage['lubricants']
-    lubricants_sales_data = storage['lubricant_sales']
+    lubricants_inventory = storage.get('lubricants', {})
+    lubricants_sales_data = storage.get('lubricant_sales', [])
 
     process_stock_sale(
         inventory=lubricants_inventory,
@@ -75,7 +75,7 @@ async def get_shift_lubricant_sales(shift_id: str, ctx: dict = Depends(get_stati
     Get all lubricant sales for a specific shift
     """
     storage = ctx["storage"]
-    lubricants_sales_data = storage['lubricant_sales']
+    lubricants_sales_data = storage.get('lubricant_sales', [])
 
     return get_sales_summary(
         sales_log=lubricants_sales_data,
@@ -90,7 +90,7 @@ async def transfer_from_buffer(product_code: str, quantity: int, ctx: dict = Dep
     Transfer stock from Buffer to Island 3
     """
     storage = ctx["storage"]
-    lubricants_inventory = storage['lubricants']
+    lubricants_inventory = storage.get('lubricants', {})
 
     # Find buffer product
     buffer_code = f"{product_code}-BUF" if not product_code.endswith("-BUF") else product_code
@@ -130,7 +130,7 @@ async def restock_lubricant(product_code: str, quantity: int, ctx: dict = Depend
     Add stock to lubricant inventory (usually to Buffer)
     """
     storage = ctx["storage"]
-    lubricants_inventory = storage['lubricants']
+    lubricants_inventory = storage.get('lubricants', {})
 
     result = increment_stock(
         storage=lubricants_inventory,
@@ -149,7 +149,7 @@ async def get_inventory_summary(ctx: dict = Depends(get_station_context)):
     Get inventory summary by location and category
     """
     storage = ctx["storage"]
-    lubricants_inventory = storage['lubricants']
+    lubricants_inventory = storage.get('lubricants', {})
 
     island3_items = [item for item in lubricants_inventory.values() if item["location"] == "Island 3"]
     buffer_items = [item for item in lubricants_inventory.values() if item["location"] == "Buffer"]

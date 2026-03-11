@@ -40,8 +40,8 @@ def create_shift(shift: Shift, ctx: dict = Depends(get_station_context)):
     Create a new shift with attendant assignments (supervisor/owner only)
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
     current_user = ctx
 
     # Validate assignments if present
@@ -98,8 +98,8 @@ def get_all_shifts(ctx: dict = Depends(get_station_context)):
     Get all shifts
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
 
     return [Shift(**shift) for shift in shifts_data.values()]
 
@@ -109,8 +109,8 @@ def get_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     Get specific shift details
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
 
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
@@ -124,8 +124,8 @@ def get_shifts_by_date(date: str, ctx: dict = Depends(get_station_context)):
     Returns both Day and Night shifts
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
 
     date_shifts = [
         Shift(**shift) for shift in shifts_data.values()
@@ -139,8 +139,8 @@ def get_current_shift(ctx: dict = Depends(get_station_context)):
     Get the currently active shift based on time
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
 
     now = datetime.now()
     hour = now.hour
@@ -172,8 +172,8 @@ def submit_dual_reading(reading: DualReading, ctx: dict = Depends(get_station_co
     Submit dual reading (Electronic + Mechanical) for a nozzle
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
 
     # Validate foreign keys (nozzle_id, shift_id)
     validate_create('readings', reading.dict())
@@ -187,8 +187,8 @@ def get_shift_readings(shift_id: str, ctx: dict = Depends(get_station_context)):
     Get all readings for a specific shift
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
 
     shift_readings = [
         DualReading(**r) for r in readings_data
@@ -203,8 +203,8 @@ def get_nozzle_shift_summary(shift_id: str, nozzle_id: str, ctx: dict = Depends(
     Calculates opening, closing, and movement for both electronic and mechanical
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
 
     nozzle_readings = [
         r for r in readings_data
@@ -252,8 +252,8 @@ def complete_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     Mark shift as completed
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
 
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
@@ -276,8 +276,8 @@ def reconcile_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     Mark shift as reconciled (after banking and cash verification)
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
 
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
@@ -292,7 +292,7 @@ def deactivate_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     Only active shifts can be deactivated.
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
+    shifts_data = storage.get('shifts', {})
 
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
@@ -314,7 +314,7 @@ def delete_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     Only inactive shifts can be deleted.
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
+    shifts_data = storage.get('shifts', {})
 
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
@@ -338,8 +338,8 @@ def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_co
     Update shift assignments (supervisor/owner only)
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
     current_user = ctx
 
     if shift_id not in shifts_data:
@@ -373,8 +373,8 @@ def record_tank_dip_reading(shift_id: str, reading: TankDipReading, ctx: dict = 
     Converts dip measurement (cm) to volume (liters) using tank conversion factor
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
     current_user = ctx
 
     if shift_id not in shifts_data:
@@ -429,8 +429,8 @@ def get_shift_tank_dip_readings(shift_id: str, ctx: dict = Depends(get_station_c
     Get all tank dip readings for a shift
     """
     storage = ctx["storage"]
-    shifts_data = storage['shifts']
-    readings_data = storage['readings']
+    shifts_data = storage.get('shifts', {})
+    readings_data = storage.get('readings', [])
 
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")

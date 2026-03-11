@@ -47,7 +47,7 @@ async def get_all_islands(
     Optional ?status=active filter.
     """
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
     islands = [Island(**island) for island in islands_data.values()]
 
     if status:
@@ -60,7 +60,7 @@ async def get_all_islands(
 async def get_island(island_id: str, ctx: dict = Depends(get_station_context)):
     """Get specific island details"""
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
@@ -72,7 +72,7 @@ async def get_island(island_id: str, ctx: dict = Depends(get_station_context)):
 async def get_pump_station(island_id: str, ctx: dict = Depends(get_station_context)):
     """Get pump station for a specific island"""
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
@@ -88,7 +88,7 @@ async def get_pump_station(island_id: str, ctx: dict = Depends(get_station_conte
 async def get_island_nozzles(island_id: str, ctx: dict = Depends(get_station_context)):
     """Get all nozzles for a specific island"""
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
@@ -104,7 +104,7 @@ async def get_island_nozzles(island_id: str, ctx: dict = Depends(get_station_con
 async def get_nozzle_info(nozzle_id: str, ctx: dict = Depends(get_station_context)):
     """Get nozzle info including its island and pump station"""
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     for island_id, island in islands_data.items():
         pump_station = island.get("pump_station")
@@ -140,7 +140,7 @@ async def update_island_status(
     Islands default to active; owner can deactivate as needed.
     """
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
@@ -165,7 +165,7 @@ async def update_island_product(
     Atomically updates island product_type, pump tank_id, and both nozzles' fuel_type.
     """
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
@@ -203,7 +203,7 @@ async def update_island_product(
 async def update_nozzle_status(island_id: str, nozzle_id: str, status: str, ctx: dict = Depends(get_station_context)):
     """Update nozzle status (Active, Inactive, Maintenance)"""
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     if island_id not in islands_data:
         return {"error": "Island not found"}
@@ -234,7 +234,7 @@ async def update_nozzle_label(
     Setting custom_label to None reverts to the auto-computed label.
     """
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
@@ -268,7 +268,7 @@ async def create_island(island: Island, ctx: dict = Depends(get_station_context)
     New islands default to inactive with no product_type.
     """
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     if island.island_id in islands_data:
         raise HTTPException(status_code=400, detail="Island already exists")
@@ -281,7 +281,7 @@ async def create_island(island: Island, ctx: dict = Depends(get_station_context)
 async def delete_island(island_id: str, ctx: dict = Depends(get_station_context)):
     """Delete an island (Owner only)"""
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
@@ -302,7 +302,7 @@ async def update_pump_tank_mapping(island_id: str, tank_id: str, ctx: dict = Dep
     Consider using PUT /islands/{island_id}/product instead for standardized config.
     """
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
@@ -331,7 +331,7 @@ async def update_pump_tank_mapping(island_id: str, tank_id: str, ctx: dict = Dep
 async def add_nozzle(island_id: str, nozzle: Nozzle, ctx: dict = Depends(get_station_context)):
     """Add a nozzle to an island's pump station (Owner only)"""
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")
@@ -359,7 +359,7 @@ async def add_nozzle(island_id: str, nozzle: Nozzle, ctx: dict = Depends(get_sta
 async def remove_nozzle(island_id: str, nozzle_id: str, ctx: dict = Depends(get_station_context)):
     """Remove a nozzle from an island's pump station (Owner only)"""
     storage = ctx["storage"]
-    islands_data = storage['islands']
+    islands_data = storage.get('islands', {})
 
     if island_id not in islands_data:
         raise HTTPException(status_code=404, detail="Island not found")

@@ -19,7 +19,7 @@ async def record_lpg_sale(sale: LPGSale, ctx: dict = Depends(get_station_context
     Record LPG gas sale (by weight)
     """
     storage = ctx["storage"]
-    lpg_sales_data = storage['lpg_sales']
+    lpg_sales_data = storage.get('lpg_sales', [])
 
     # Validate foreign keys (shift_id)
     validate_create('lpg_sales', sale.dict())
@@ -34,7 +34,7 @@ async def get_shift_lpg_sales(shift_id: str, ctx: dict = Depends(get_station_con
     Get all LPG sales for a specific shift
     """
     storage = ctx["storage"]
-    lpg_sales_data = storage['lpg_sales']
+    lpg_sales_data = storage.get('lpg_sales', [])
 
     shift_sales = [
         LPGSale(**sale) for sale in lpg_sales_data
@@ -58,7 +58,7 @@ async def get_all_accessories(ctx: dict = Depends(get_station_context)):
     Get all LPG accessories inventory
     """
     storage = ctx["storage"]
-    accessories_inventory = storage['lpg_accessories']
+    accessories_inventory = storage.get('lpg_accessories', {})
     return [LPGAccessory(**item) for item in accessories_inventory.values()]
 
 
@@ -68,7 +68,7 @@ async def get_accessory(product_code: str, ctx: dict = Depends(get_station_conte
     Get specific accessory details
     """
     storage = ctx["storage"]
-    accessories_inventory = storage['lpg_accessories']
+    accessories_inventory = storage.get('lpg_accessories', {})
     if product_code not in accessories_inventory:
         raise HTTPException(status_code=404, detail="Accessory not found")
     return LPGAccessory(**accessories_inventory[product_code])
@@ -81,8 +81,8 @@ async def record_accessory_sale(sale: LPGAccessorySale, ctx: dict = Depends(get_
     Updates inventory
     """
     storage = ctx["storage"]
-    accessories_inventory = storage['lpg_accessories']
-    accessories_sales_data = storage['accessories_sales']
+    accessories_inventory = storage.get('lpg_accessories', {})
+    accessories_sales_data = storage.get('accessories_sales', [])
 
     process_stock_sale(
         inventory=accessories_inventory,
@@ -102,7 +102,7 @@ async def get_shift_accessory_sales(shift_id: str, ctx: dict = Depends(get_stati
     Get all accessory sales for a specific shift
     """
     storage = ctx["storage"]
-    accessories_sales_data = storage['accessories_sales']
+    accessories_sales_data = storage.get('accessories_sales', [])
 
     return get_sales_summary(
         sales_log=accessories_sales_data,
@@ -117,7 +117,7 @@ async def restock_accessory(product_code: str, quantity: int, ctx: dict = Depend
     Add stock to accessory inventory
     """
     storage = ctx["storage"]
-    accessories_inventory = storage['lpg_accessories']
+    accessories_inventory = storage.get('lpg_accessories', {})
 
     result = increment_stock(
         storage=accessories_inventory,
@@ -136,8 +136,8 @@ async def get_lpg_shift_summary(shift_id: str, ctx: dict = Depends(get_station_c
     Get complete LPG summary for a shift (gas + accessories)
     """
     storage = ctx["storage"]
-    lpg_sales_data = storage['lpg_sales']
-    accessories_sales_data = storage['accessories_sales']
+    lpg_sales_data = storage.get('lpg_sales', [])
+    accessories_sales_data = storage.get('accessories_sales', [])
 
     # LPG gas sales
     gas_sales = [sale for sale in lpg_sales_data if sale["shift_id"] == shift_id]

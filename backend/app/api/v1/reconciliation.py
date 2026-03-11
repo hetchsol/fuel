@@ -26,7 +26,7 @@ def create_shift_reconciliation(recon: ShiftReconciliation, ctx: dict = Depends(
     Matches Summary sheet in Excel
     """
     storage = ctx["storage"]
-    storage['reconciliations_data'].append(recon.dict())
+    storage.get('reconciliations_data', []).append(recon.dict())
     return recon
 
 @router.get("/shift/{shift_id}", response_model=ShiftReconciliation)
@@ -35,7 +35,7 @@ def get_shift_reconciliation(shift_id: str, ctx: dict = Depends(get_station_cont
     Get reconciliation for a specific shift
     """
     storage = ctx["storage"]
-    recon = next((r for r in storage['reconciliations_data'] if r["shift_id"] == shift_id), None)
+    recon = next((r for r in storage.get('reconciliations_data', []) if r["shift_id"] == shift_id), None)
 
     if not recon:
         raise HTTPException(status_code=404, detail="Reconciliation not found")
@@ -49,7 +49,7 @@ def get_date_reconciliation(date: str, ctx: dict = Depends(get_station_context))
     """
     storage = ctx["storage"]
     date_recons = [
-        ShiftReconciliation(**r) for r in storage['reconciliations_data']
+        ShiftReconciliation(**r) for r in storage.get('reconciliations_data', [])
         if r["date"] == date
     ]
     return date_recons
@@ -61,7 +61,7 @@ def record_bank_deposit(shift_id: str, amount: float, deposit_slip: str = None, 
     Updates difference and calculates variance
     """
     storage = ctx["storage"]
-    recon = next((r for r in storage['reconciliations_data'] if r["shift_id"] == shift_id), None)
+    recon = next((r for r in storage.get('reconciliations_data', []) if r["shift_id"] == shift_id), None)
 
     if not recon:
         raise HTTPException(status_code=404, detail="Reconciliation not found for this shift")
@@ -70,7 +70,7 @@ def record_bank_deposit(shift_id: str, amount: float, deposit_slip: str = None, 
     recon["difference"] = amount - recon["expected_cash"]
 
     # Update cumulative difference
-    previous_recons = [r for r in storage['reconciliations_data'] if r["date"] < recon["date"]]
+    previous_recons = [r for r in storage.get('reconciliations_data', []) if r["date"] < recon["date"]]
     previous_cumulative = sum(r.get("difference", 0) or 0 for r in previous_recons)
     recon["cumulative_difference"] = previous_cumulative + recon["difference"]
 
@@ -91,7 +91,7 @@ def create_tank_reconciliation(tank_recon: TankReconciliation, ctx: dict = Depen
     Compares electronic sales vs tank movement
     """
     storage = ctx["storage"]
-    storage['tank_reconciliations_data'].append(tank_recon.dict())
+    storage.get('tank_reconciliations_data', []).append(tank_recon.dict())
     return tank_recon
 
 @router.get("/tank/{shift_id}/{tank_id}")
@@ -101,7 +101,7 @@ def get_tank_reconciliation(shift_id: str, tank_id: str, ctx: dict = Depends(get
     """
     storage = ctx["storage"]
     tank_recon = next(
-        (r for r in storage['tank_reconciliations_data'] if r["shift_id"] == shift_id and r["tank_id"] == tank_id),
+        (r for r in storage.get('tank_reconciliations_data', []) if r["shift_id"] == shift_id and r["tank_id"] == tank_id),
         None
     )
 
@@ -253,7 +253,7 @@ def calculate_shift_reconciliation(shift_id: str, nozzle_summaries: dict, lpg_re
     expected_cash = total_expected - credit_sales_total
 
     # Get cumulative difference
-    previous_recons = [r for r in storage['reconciliations_data']]
+    previous_recons = [r for r in storage.get('reconciliations_data', [])]
     previous_cumulative = sum(r.get("difference", 0) or 0 for r in previous_recons)
 
     result = {
@@ -282,7 +282,7 @@ def get_monthly_summary(year: int, month: int, ctx: dict = Depends(get_station_c
     month_str = f"{year}-{month:02d}"
 
     month_recons = [
-        r for r in storage['reconciliations_data']
+        r for r in storage.get('reconciliations_data', [])
         if r["date"].startswith(month_str)
     ]
 
@@ -328,7 +328,7 @@ def get_discrepancies_analysis(ctx: dict = Depends(get_station_context)):
     Helps identify patterns
     """
     storage = ctx["storage"]
-    reconciliations_data = storage['reconciliations_data']
+    reconciliations_data = storage.get('reconciliations_data', [])
 
     if not reconciliations_data:
         return {"message": "No reconciliations found"}

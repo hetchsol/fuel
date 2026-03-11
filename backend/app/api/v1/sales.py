@@ -69,7 +69,7 @@ def record_sale(payload: SaleIn, ctx: dict = Depends(get_station_context)):
         # Auto-deduct from tank level on successful sale
         if sale["validation_status"] == "PASS":
             storage = ctx["storage"]
-            tank_data = storage['tanks']
+            tank_data = storage.get('tanks', {})
 
             # Find tank matching this fuel type
             target_tank = None
