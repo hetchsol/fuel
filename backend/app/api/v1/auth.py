@@ -14,10 +14,13 @@ from ...database.db import DATABASE_URL
 import hashlib
 import secrets
 import logging
+import os
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_STATION_ID = os.getenv("DEFAULT_STATION_ID", "ST001")
 
 router = APIRouter()
 
@@ -232,7 +235,9 @@ async def get_station_context(
     x_station_id: Optional[str] = Header(None)
 ) -> dict:
     """Resolve station from user token or X-Station-Id header."""
-    station_id = current_user.get("station_id") or x_station_id or "ST001"
+    station_id = current_user.get("station_id") or x_station_id or DEFAULT_STATION_ID
+    if not current_user.get("station_id") and not x_station_id:
+        logger.warning(f"[auth] Using fallback station_id={DEFAULT_STATION_ID} for user {current_user.get('username')}")
     storage = get_station_storage(station_id)
     return {**current_user, "station_id": station_id, "storage": storage}
 

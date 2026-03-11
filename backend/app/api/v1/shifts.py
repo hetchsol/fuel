@@ -13,11 +13,28 @@ from ...services.shift_validation import validate_shift_assignments
 from .auth import get_current_user, require_supervisor_or_owner, require_owner, get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.shift_auto_close import check_and_close_stale_shifts
+from ...database.db import DATABASE_URL
 
 router = APIRouter()
 
-# Sample attendants from the spreadsheet
-attendants_list = ["Violet", "Shaka", "Trevor", "Chileshe", "Matthew", "Mubanga", "Isabel", "Prosper"]
+
+def _get_attendants_from_db(station_id: str = None) -> list:
+    """Query attendant names from DB (users with role 'user' or 'supervisor')."""
+    if DATABASE_URL:
+        from ...database.db import db_get_all_users
+        users = db_get_all_users()
+        return [
+            u["full_name"] for u in users
+            if u["role"] in ("user", "supervisor")
+            and (station_id is None or u.get("station_id") == station_id)
+        ]
+    # Fallback: in-memory users from auth module
+    from .auth import users_db
+    return [
+        u["full_name"] for u in users_db.values()
+        if u["role"] in ("user", "supervisor")
+        and (station_id is None or u.get("station_id") == station_id)
+    ]
 
 
 @router.post("/check-stale", dependencies=[Depends(require_supervisor_or_owner)])
@@ -240,11 +257,11 @@ def get_nozzle_shift_summary(shift_id: str, nozzle_id: str, ctx: dict = Depends(
     return summary
 
 @router.get("/attendants/list")
-def get_attendants():
+def get_attendants(ctx: dict = Depends(get_station_context)):
     """
-    Get list of all attendants
+    Get list of all attendants for the current station (dynamically from users DB)
     """
-    return {"attendants": attendants_list}
+    return {"attendants": _get_attendants_from_db(ctx.get("station_id"))}
 
 @router.put("/{shift_id}/complete")
 def complete_shift(shift_id: str, ctx: dict = Depends(get_station_context)):

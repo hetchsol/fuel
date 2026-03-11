@@ -18,7 +18,15 @@ logger = logging.getLogger(__name__)
 
 
 def _seed_default_users():
-    """Seed default users into PostgreSQL when the users table is empty."""
+    """Seed default users into PostgreSQL when the users table is empty.
+
+    Gated by SEED_DEFAULT_USERS env var (default "true" for dev).
+    Set SEED_DEFAULT_USERS=false in production to prevent test credentials.
+    """
+    if os.getenv("SEED_DEFAULT_USERS", "true").lower() == "false":
+        logger.info("[seed] SEED_DEFAULT_USERS=false — skipping user seed")
+        return
+
     from app.database.db import db_get_all_users, db_create_user
     existing = db_get_all_users()
     if existing:
@@ -85,7 +93,12 @@ def startup():
     # Initialize storage and seed defaults for all stations
     for station_id in list(stations_registry.STATIONS.keys()):
         storage = get_station_storage(station_id)
-        seed_station_defaults(storage)
+        # Only seed defaults if station hasn't been initialized yet
+        if not storage.get('tanks'):
+            seed_station_defaults(storage)
+            logger.info(f"[startup] Seeded defaults for station {station_id}")
+        else:
+            logger.info(f"[startup] Station {station_id} already initialized — skipping seed")
         check_and_close_stale_shifts(storage, station_id)
 
     # Persist seeded data to DB if this is a fresh start

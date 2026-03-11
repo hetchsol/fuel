@@ -2,6 +2,7 @@ import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
+import { useTanks } from '../hooks/useTanks'
 
 
 interface NozzleReading {
@@ -21,18 +22,23 @@ export default function DailyTankReading() {
   const [selectedTank, setSelectedTank] = useState('TANK-DIESEL')
   const [activeSection, setActiveSection] = useState(1)
   const { theme } = useTheme()
+  const { tanks: availableTanks } = useTanks()
+
+  // Derive fuel type from the selected tank dynamically
+  const selectedTankData = availableTanks.find(t => t.tank_id === selectedTank)
+  const isDiesel = selectedTankData ? selectedTankData.fuel_type === 'Diesel' : selectedTank.toLowerCase().includes('diesel')
 
   // Get fuel type prefix and color based on selected tank
   const getFuelTypePrefix = () => {
-    return selectedTank === 'TANK-DIESEL' ? 'LSD' : 'UNL'
+    return isDiesel ? 'LSD' : 'UNL'
   }
 
   const getFuelColor = () => {
-    return getFuelColorSet(selectedTank === 'TANK-DIESEL' ? 'diesel' : 'petrol').main
+    return getFuelColorSet(isDiesel ? 'diesel' : 'petrol').main
   }
 
   const getFuelLightColor = () => {
-    return getFuelColorSet(selectedTank === 'TANK-DIESEL' ? 'diesel' : 'petrol').light
+    return getFuelColorSet(isDiesel ? 'diesel' : 'petrol').light
   }
 
   // Available attendants list
@@ -132,7 +138,7 @@ export default function DailyTankReading() {
   useEffect(() => {
     const fetchNozzlesFromIslands = async () => {
       try {
-        const fuelType = selectedTank === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'
+        const fuelType = isDiesel ? 'Diesel' : 'Petrol'
         const res = await authFetch(`${BASE}/islands/?status=active`, {
           headers: getHeaders(),
         })
@@ -203,7 +209,7 @@ export default function DailyTankReading() {
 
   // Fetch customers for allocation (diesel only)
   useEffect(() => {
-    if (selectedTank === 'TANK-DIESEL') {
+    if (isDiesel) {
       fetchCustomers()
     }
   }, [selectedTank])
@@ -407,7 +413,7 @@ export default function DailyTankReading() {
     const estimatedTankLevel = getCurrentTankReading()
 
     // Determine fuel type from selected tank
-    const fuelType = selectedTank === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'
+    const fuelType = isDiesel ? 'Diesel' : 'Petrol'
 
     const newDelivery = {
       id: `temp-${Date.now()}`,
@@ -473,7 +479,7 @@ export default function DailyTankReading() {
         time: standalone.time,
         supplier: standalone.supplier,
         invoice_number: standalone.invoice_number || '',
-        fuel_type: standalone.fuel_type || (selectedTank === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'),
+        fuel_type: standalone.fuel_type || (isDiesel ? 'Diesel' : 'Petrol'),
         before_volume: standalone.volume_before.toString(),
         after_volume: standalone.volume_after.toString(),
         volume_delivered: standalone.actual_volume_delivered
@@ -765,7 +771,7 @@ export default function DailyTankReading() {
 
   // Auto-validate allocations when nozzle readings change (for diesel)
   useEffect(() => {
-    if (selectedTank === 'TANK-DIESEL' && customerAllocations.length > 0) {
+    if (isDiesel && customerAllocations.length > 0) {
       validateAllocations(customerAllocations)
     }
   }, [formData.nozzles, customerAllocations, selectedTank])
@@ -805,7 +811,7 @@ export default function DailyTankReading() {
               delivery_id: d.id.startsWith('temp-') ? null : d.id,  // null for new inline, ID for linked
               delivery_time: d.time,
               supplier: d.supplier,
-              fuel_type: d.fuel_type || (selectedTank === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'),  // NEW
+              fuel_type: d.fuel_type || (isDiesel ? 'Diesel' : 'Petrol'),  // NEW
               invoice_number: d.invoice_number || null,
               before_volume: beforeVol,
               after_volume: afterVol,
@@ -847,7 +853,7 @@ export default function DailyTankReading() {
         actual_cash_banked: formData.actual_cash_banked ? parseFloat(formData.actual_cash_banked) : null,
 
         // Customer allocations (DIESEL ONLY - Columns AR-BB)
-        customer_allocations: selectedTank === 'TANK-DIESEL'
+        customer_allocations: isDiesel
           ? customerAllocations.filter(alloc => parseFloat(alloc.volume) > 0).map(alloc => ({
               customer_id: alloc.customer_id,
               customer_name: alloc.customer_name,
@@ -862,7 +868,7 @@ export default function DailyTankReading() {
       }
 
       // Validate diesel allocations before submission
-      if (selectedTank === 'TANK-DIESEL' && allocationBalance && !allocationBalance.valid) {
+      if (isDiesel && allocationBalance && !allocationBalance.valid) {
         if (!confirm(`Customer allocations do not balance (difference: ${allocationBalance.difference.toFixed(3)}L). Continue anyway?`)) {
           throw new Error('Allocation validation cancelled by user')
         }
@@ -924,8 +930,11 @@ export default function DailyTankReading() {
                   color: getFuelColor()
                 }}
               >
-                <option value="TANK-DIESEL">🟣 Diesel Tank (LSD)</option>
-                <option value="TANK-PETROL">🟢 Petrol Tank (UNL)</option>
+                {availableTanks.map(t => (
+                  <option key={t.tank_id} value={t.tank_id}>
+                    {t.fuel_type === 'Diesel' ? '🟣' : '🟢'} {t.fuel_type} Tank ({t.fuel_type === 'Diesel' ? 'LSD' : 'UNL'})
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -2197,7 +2206,7 @@ export default function DailyTankReading() {
               </div>
 
               {/* Customer Allocation Section (DIESEL ONLY - Columns AR-BB) */}
-              {selectedTank === 'TANK-DIESEL' && customers.length > 0 && (
+              {isDiesel && customers.length > 0 && (
                 <div className="rounded-lg p-6 mb-6 transition-colors duration-300" style={{
                   backgroundColor: 'var(--color-fuel-diesel-light)',
                   borderColor: 'var(--color-fuel-diesel)',

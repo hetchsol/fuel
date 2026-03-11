@@ -74,17 +74,19 @@ def record_sale(payload: SaleIn, ctx: dict = Depends(get_station_context)):
             # Find tank matching this fuel type
             target_tank = None
             for tid, tdata in tank_data.items():
-                if tdata["fuel_type"] == payload.fuel_type:
+                if tdata.get("fuel_type") == payload.fuel_type:
                     target_tank = tid
                     break
 
             if target_tank:
-                tank_data[target_tank]["current_level"] = max(
-                    0, tank_data[target_tank]["current_level"] - sale["average_volume"]
+                tank = tank_data[target_tank]
+                current_level = tank.get("current_level", 0)
+                tank["current_level"] = max(
+                    0, current_level - sale.get("average_volume", 0)
                 )
-                tank_data[target_tank]["last_updated"] = datetime.now().isoformat()
+                tank["last_updated"] = datetime.now().isoformat()
                 sale["tank_id"] = target_tank
-                sale["tank_level_after"] = tank_data[target_tank]["current_level"]
+                sale["tank_level_after"] = tank["current_level"]
 
         # Load existing sales
         sales = load_sales(station_id)

@@ -9,9 +9,20 @@ from typing import List, Optional
 from pydantic import BaseModel
 from ...models.models import Island, PumpStation, Nozzle, FUEL_TYPE_ABBREVIATIONS, FUEL_TYPE_FROM_ABBREV
 from ...services.naming_convention import compute_display_labels
+from ...config import TANK_ID_PETROL, TANK_ID_DIESEL
 from .auth import get_station_context
 
 router = APIRouter()
+
+
+def _find_tank_for_fuel(storage: dict, product_type: str) -> str:
+    """Find the first tank matching a fuel type, falling back to config constants."""
+    tanks = storage.get('tanks', {})
+    for tid, tdata in tanks.items():
+        if tdata.get("fuel_type") == product_type:
+            return tid
+    # Fallback to config defaults
+    return TANK_ID_PETROL if product_type == "Petrol" else TANK_ID_DIESEL
 
 
 # ── Request models ──────────────────────────────────────
@@ -177,8 +188,8 @@ async def update_island_product(
     island = islands_data[island_id]
     island["product_type"] = product
 
-    # Update pump station tank mapping
-    tank_id = "TANK-PETROL" if product == "Petrol" else "TANK-DIESEL"
+    # Dynamic tank lookup: find a tank matching this fuel type
+    tank_id = _find_tank_for_fuel(storage, product)
     pump_station = island.get("pump_station")
     if pump_station:
         pump_station["tank_id"] = tank_id
