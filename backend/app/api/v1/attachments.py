@@ -1,7 +1,8 @@
 
 import os, uuid
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import FileResponse
+from .auth import get_current_user
 
 STORAGE_DIR = os.getenv("STORAGE_DIR", "storage")
 os.makedirs(STORAGE_DIR, exist_ok=True)
@@ -9,7 +10,7 @@ os.makedirs(STORAGE_DIR, exist_ok=True)
 router = APIRouter()
 
 @router.post("")
-async def upload(file: UploadFile = File(...)):
+async def upload(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     if not file.filename:
         raise HTTPException(400, "File missing")
     ext = os.path.splitext(file.filename)[1]
@@ -20,8 +21,11 @@ async def upload(file: UploadFile = File(...)):
     return {"attachment_id": aid, "url": f"/api/v1/attachments/{aid}"}
 
 @router.get("/{attachment_id}")
-async def get(attachment_id: str):
+async def get(attachment_id: str, current_user: dict = Depends(get_current_user)):
     path = os.path.join(STORAGE_DIR, attachment_id)
-    if not os.path.exists(path):
+    real_path = os.path.realpath(path)
+    if not real_path.startswith(os.path.realpath(STORAGE_DIR)):
+        raise HTTPException(403, "Access denied")
+    if not os.path.exists(real_path):
         raise HTTPException(404, "Not found")
-    return FileResponse(path)
+    return FileResponse(real_path)

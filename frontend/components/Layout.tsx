@@ -129,8 +129,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('user')
     localStorage.removeItem('stationId')
-    document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-    document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+    const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+    document.cookie = `accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${secure}`
+    document.cookie = `user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${secure}`
     setUser(null)
     router.push('/login')
   }

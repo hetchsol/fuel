@@ -133,8 +133,9 @@ export default function Login() {
       localStorage.setItem('stationId', data.user.station_id || 'ST001')
 
       // Set cookies for server-side middleware route protection
-      document.cookie = `accessToken=${data.access_token}; path=/; SameSite=Lax`
-      document.cookie = `user=${encodeURIComponent(JSON.stringify(data.user))}; path=/; SameSite=Lax`
+      const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+      document.cookie = `accessToken=${data.access_token}; path=/; SameSite=Lax${secure}`
+      document.cookie = `user=${encodeURIComponent(JSON.stringify(data.user))}; path=/; SameSite=Lax${secure}`
 
       // Redirect to original page or dashboard
       const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/'
@@ -210,7 +211,8 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Demo Credentials */}
+          {/* Demo Credentials - only visible when NEXT_PUBLIC_DEMO_MODE=true */}
+          {process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && (
           <div className="mt-8 pt-8 border-t border-surface-border">
             <p className="text-sm text-content-secondary mb-4 text-center">Demo Accounts:</p>
             <div className="space-y-2">
@@ -237,6 +239,7 @@ export default function Login() {
               </button>
             </div>
           </div>
+          )}
         </div>
 
         <div className="mt-4 text-center">
