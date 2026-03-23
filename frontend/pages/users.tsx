@@ -13,6 +13,14 @@ interface User {
   is_active?: boolean
 }
 
+interface ConfirmDialog {
+  title: string
+  message: string
+  confirmLabel: string
+  confirmColor: string
+  onConfirm: () => void
+}
+
 export default function UsersManagement() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
@@ -27,6 +35,7 @@ export default function UsersManagement() {
     station_id: 'ST001'
   })
   const [resetPasswordResult, setResetPasswordResult] = useState<{ username: string; password: string } | null>(null)
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(null)
 
   useEffect(() => {
     fetchUsers()
@@ -104,69 +113,84 @@ export default function UsersManagement() {
     }
   }
 
-  const handleDelete = async (username: string) => {
-    if (!confirm(`Are you sure you want to delete user ${username}?`)) return
-
-    try {
-      const res = await fetch(`${BASE}/auth/users/${username}`, {
-        method: 'DELETE',
-        headers: getHeaders()
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.detail || 'Failed to delete user')
+  const handleDelete = (username: string) => {
+    setConfirmDialog({
+      title: 'Delete User',
+      message: `Are you sure you want to delete user "${username}"? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      confirmColor: 'bg-status-error hover:opacity-90',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        try {
+          const res = await fetch(`${BASE}/auth/users/${username}`, {
+            method: 'DELETE',
+            headers: getHeaders()
+          })
+          if (!res.ok) {
+            const errorData = await res.json()
+            throw new Error(errorData.detail || 'Failed to delete user')
+          }
+          fetchUsers()
+          toast.success('User deleted successfully')
+        } catch (err: any) {
+          setError(err.message)
+        }
       }
-
-      fetchUsers()
-      toast.success('User deleted successfully')
-    } catch (err: any) {
-      setError(err.message)
-    }
+    })
   }
 
-  const handleToggleStatus = async (user: User) => {
+  const handleToggleStatus = (user: User) => {
     const action = user.is_active !== false ? 'disable' : 'enable'
-    if (!confirm(`Are you sure you want to ${action} user ${user.username}?${action === 'disable' ? ' They will be logged out immediately.' : ''}`)) return
-
-    try {
-      const res = await fetch(`${BASE}/auth/users/${user.username}/toggle-status`, {
-        method: 'PATCH',
-        headers: getHeaders()
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.detail || `Failed to ${action} user`)
+    setConfirmDialog({
+      title: `${action === 'disable' ? 'Disable' : 'Enable'} User`,
+      message: `Are you sure you want to ${action} user "${user.username}"?${action === 'disable' ? ' They will be logged out immediately.' : ''}`,
+      confirmLabel: action === 'disable' ? 'Disable' : 'Enable',
+      confirmColor: action === 'disable' ? 'bg-status-warning hover:opacity-90' : 'bg-status-success hover:opacity-90',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        try {
+          const res = await fetch(`${BASE}/auth/users/${user.username}/toggle-status`, {
+            method: 'PATCH',
+            headers: getHeaders()
+          })
+          if (!res.ok) {
+            const errorData = await res.json()
+            throw new Error(errorData.detail || `Failed to ${action} user`)
+          }
+          fetchUsers()
+          toast.success(`User ${user.username} ${action}d successfully`)
+        } catch (err: any) {
+          setError(err.message)
+        }
       }
-
-      fetchUsers()
-      toast.success(`User ${user.username} ${action}d successfully`)
-    } catch (err: any) {
-      setError(err.message)
-    }
+    })
   }
 
-  const handleResetPassword = async (username: string) => {
-    if (!confirm(`Are you sure you want to reset the password for ${username}? Their current password will be replaced and they will be logged out.`)) return
-
-    try {
-      const res = await fetch(`${BASE}/auth/users/${username}/reset-password`, {
-        method: 'POST',
-        headers: getHeaders()
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.detail || 'Failed to reset password')
+  const handleResetPassword = (username: string) => {
+    setConfirmDialog({
+      title: 'Reset Password',
+      message: `Are you sure you want to reset the password for "${username}"? Their current password will be replaced and they will be logged out.`,
+      confirmLabel: 'Reset Password',
+      confirmColor: 'bg-action-primary hover:bg-action-primary-hover',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        try {
+          const res = await fetch(`${BASE}/auth/users/${username}/reset-password`, {
+            method: 'POST',
+            headers: getHeaders()
+          })
+          if (!res.ok) {
+            const errorData = await res.json()
+            throw new Error(errorData.detail || 'Failed to reset password')
+          }
+          const data = await res.json()
+          setResetPasswordResult({ username, password: data.new_password })
+          toast.success(`Password reset for ${username}`)
+        } catch (err: any) {
+          setError(err.message)
+        }
       }
-
-      const data = await res.json()
-      setResetPasswordResult({ username, password: data.new_password })
-      toast.success(`Password reset for ${username}`)
-    } catch (err: any) {
-      setError(err.message)
-    }
+    })
   }
 
   const copyToClipboard = (text: string) => {
@@ -308,10 +332,34 @@ export default function UsersManagement() {
         </div>
       )}
 
+      {/* Confirmation Dialog */}
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+          <div className="bg-surface-card rounded-lg p-6 w-full max-w-sm mx-4 shadow-xl">
+            <h2 className="text-lg font-bold text-content-primary mb-2">{confirmDialog.title}</h2>
+            <p className="text-sm text-content-secondary mb-6">{confirmDialog.message}</p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="px-4 py-2 bg-surface-bg text-content-secondary rounded-md hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className={`px-4 py-2 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${confirmDialog.confirmColor}`}
+              >
+                {confirmDialog.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-surface-card rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+          <div className="bg-surface-card rounded-lg p-6 w-full max-w-md mx-4 shadow-xl">
             <h2 className="text-xl font-bold mb-4">
               {editingUser ? 'Edit User' : 'Create New User'}
             </h2>
@@ -392,7 +440,7 @@ export default function UsersManagement() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-surface-bg text-content-secondary rounded-md hover:bg-surface-bg focus:outline-none focus:ring-2 focus:ring-gray-400"
+                  className="px-4 py-2 bg-surface-bg text-content-secondary rounded-md hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-gray-400"
                 >
                   Cancel
                 </button>
@@ -410,8 +458,8 @@ export default function UsersManagement() {
 
       {/* Password Reset Result Modal */}
       {resetPasswordResult && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-surface-card rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+          <div className="bg-surface-card rounded-lg p-6 w-full max-w-md mx-4 shadow-xl">
             <h2 className="text-xl font-bold mb-4 text-content-primary">Password Reset Successful</h2>
             <p className="text-sm text-content-secondary mb-4">
               New password for <strong>{resetPasswordResult.username}</strong>:
