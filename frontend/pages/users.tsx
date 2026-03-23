@@ -118,7 +118,7 @@ export default function UsersManagement() {
       title: 'Delete User',
       message: `Are you sure you want to delete user "${username}"? This action cannot be undone.`,
       confirmLabel: 'Delete',
-      confirmColor: 'bg-status-error hover:opacity-90',
+      confirmColor: 'bg-status-error text-white hover:opacity-90',
       onConfirm: async () => {
         setConfirmDialog(null)
         try {
@@ -145,7 +145,7 @@ export default function UsersManagement() {
       title: `${action === 'disable' ? 'Disable' : 'Enable'} User`,
       message: `Are you sure you want to ${action} user "${user.username}"?${action === 'disable' ? ' They will be logged out immediately.' : ''}`,
       confirmLabel: action === 'disable' ? 'Disable' : 'Enable',
-      confirmColor: action === 'disable' ? 'bg-status-warning hover:opacity-90' : 'bg-status-success hover:opacity-90',
+      confirmColor: action === 'disable' ? 'bg-status-warning text-gray-900 hover:opacity-90' : 'bg-status-success text-white hover:opacity-90',
       onConfirm: async () => {
         setConfirmDialog(null)
         try {
@@ -171,7 +171,7 @@ export default function UsersManagement() {
       title: 'Reset Password',
       message: `Are you sure you want to reset the password for "${username}"? Their current password will be replaced and they will be logged out.`,
       confirmLabel: 'Reset Password',
-      confirmColor: 'bg-action-primary hover:bg-action-primary-hover',
+      confirmColor: 'bg-action-primary text-white hover:bg-action-primary-hover',
       onConfirm: async () => {
         setConfirmDialog(null)
         try {
@@ -341,13 +341,13 @@ export default function UsersManagement() {
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setConfirmDialog(null)}
-                className="px-4 py-2 bg-surface-bg text-content-secondary rounded-md hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                className="px-4 py-2 bg-surface-bg text-content-primary border border-surface-border rounded-md hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-surface-border"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDialog.onConfirm}
-                className={`px-4 py-2 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${confirmDialog.confirmColor}`}
+                className={`px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${confirmDialog.confirmColor}`}
               >
                 {confirmDialog.confirmLabel}
               </button>
@@ -360,7 +360,7 @@ export default function UsersManagement() {
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
           <div className="bg-surface-card rounded-lg p-6 w-full max-w-md mx-4 shadow-xl">
-            <h2 className="text-xl font-bold mb-4">
+            <h2 className="text-xl font-bold mb-4 text-content-primary">
               {editingUser ? 'Edit User' : 'Create New User'}
             </h2>
 
@@ -376,7 +376,7 @@ export default function UsersManagement() {
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                     disabled={!!editingUser}
                     required
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary disabled:bg-surface-bg"
+                    className="w-full px-3 py-2 bg-surface-bg text-content-primary border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary disabled:opacity-60"
                   />
                 </div>
 
@@ -389,7 +389,7 @@ export default function UsersManagement() {
                     value={formData.full_name}
                     onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    className="w-full px-3 py-2 bg-surface-bg text-content-primary border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   />
                 </div>
 
@@ -402,7 +402,7 @@ export default function UsersManagement() {
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     required={!editingUser}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    className="w-full px-3 py-2 bg-surface-bg text-content-primary border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   />
                 </div>
 
@@ -413,7 +413,7 @@ export default function UsersManagement() {
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    className="w-full px-3 py-2 bg-surface-bg text-content-primary border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   >
                     <option value="user">User (Staff)</option>
                     <option value="supervisor">Supervisor</option>
@@ -430,7 +430,7 @@ export default function UsersManagement() {
                       type="text"
                       value={formData.station_id}
                       onChange={(e) => setFormData({ ...formData, station_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                      className="w-full px-3 py-2 bg-surface-bg text-content-primary border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                     />
                   </div>
                 )}
@@ -440,7 +440,7 @@ export default function UsersManagement() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-surface-bg text-content-secondary rounded-md hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                  className="px-4 py-2 bg-surface-bg text-content-primary border border-surface-border rounded-md hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-surface-border"
                 >
                   Cancel
                 </button>
@@ -462,7 +462,7 @@ export default function UsersManagement() {
           <div className="bg-surface-card rounded-lg p-6 w-full max-w-md mx-4 shadow-xl">
             <h2 className="text-xl font-bold mb-4 text-content-primary">Password Reset Successful</h2>
             <p className="text-sm text-content-secondary mb-4">
-              New password for <strong>{resetPasswordResult.username}</strong>:
+              New password for <strong className="text-content-primary">{resetPasswordResult.username}</strong>:
             </p>
             <div className="flex items-center gap-2 mb-4">
               <code className="flex-1 px-4 py-3 bg-surface-bg border border-surface-border rounded-md text-lg font-mono text-content-primary select-all">
