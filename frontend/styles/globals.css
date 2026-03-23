@@ -130,6 +130,7 @@ body {
   background: linear-gradient(135deg, #1A4F8C 0%, #0F2847 40%, #0A1B30 100%);
   background-attachment: fixed;
   min-height: 100vh;
+  color: var(--color-text-primary);
 }
 
 /* ── Page Fade-In ──────────────────────────────────────────── */
@@ -148,33 +149,60 @@ body {
   animation: fadeIn 0.3s ease-out;
 }
 
-/* ── Form Input Focus Transitions ──────────────────────────── */
-input[type='text'],
-input[type='number'],
-input[type='password'],
-input[type='email'],
-input[type='date'],
-input[type='month'],
-input[type='search'],
-input[type='tel'],
-input[type='url'],
+/* ── Form Input Default Colors & Transitions ──────────────── */
+/* Ensure all form elements are readable on the dark navy theme  */
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='submit']):not([type='button']):not([type='reset']):not([type='color']),
 select,
 textarea {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
-input[type='text']:focus,
-input[type='number']:focus,
-input[type='password']:focus,
-input[type='email']:focus,
-input[type='date']:focus,
-input[type='month']:focus,
-input[type='search']:focus,
-input[type='tel']:focus,
-input[type='url']:focus,
+/* Disabled form elements */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Style select option dropdowns for dark theme */
+select option {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+
+/* Placeholder text */
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+/* Date/time input icons (calendar, clock) — make them visible on dark bg */
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='month']::-webkit-calendar-picker-indicator,
+input[type='datetime-local']::-webkit-calendar-picker-indicator,
+input[type='time']::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='submit']):not([type='button']):not([type='reset']):not([type='color']):focus,
 select:focus,
 textarea:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-action-primary) 20%, transparent);
+}
+
+/* ── Global Text Color Defaults ────────────────────────────── */
+/* Labels, headings, and spans inside forms inherit readable text */
+label, legend {
+  color: var(--color-text-secondary);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--color-text-primary);
 }
 
 /* ── Table Row Transitions ─────────────────────────────────── */
