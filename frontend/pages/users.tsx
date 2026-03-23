@@ -10,6 +10,7 @@ interface User {
   full_name: string
   role: string
   station_id?: string
+  is_active?: boolean
 }
 
 export default function UsersManagement() {
@@ -25,6 +26,7 @@ export default function UsersManagement() {
     role: 'user',
     station_id: 'ST001'
   })
+  const [resetPasswordResult, setResetPasswordResult] = useState<{ username: string; password: string } | null>(null)
 
   useEffect(() => {
     fetchUsers()
@@ -123,6 +125,58 @@ export default function UsersManagement() {
     }
   }
 
+  const handleToggleStatus = async (user: User) => {
+    const action = user.is_active !== false ? 'disable' : 'enable'
+    if (!confirm(`Are you sure you want to ${action} user ${user.username}?${action === 'disable' ? ' They will be logged out immediately.' : ''}`)) return
+
+    try {
+      const res = await fetch(`${BASE}/auth/users/${user.username}/toggle-status`, {
+        method: 'PATCH',
+        headers: getHeaders()
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.detail || `Failed to ${action} user`)
+      }
+
+      fetchUsers()
+      toast.success(`User ${user.username} ${action}d successfully`)
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
+  const handleResetPassword = async (username: string) => {
+    if (!confirm(`Are you sure you want to reset the password for ${username}? Their current password will be replaced and they will be logged out.`)) return
+
+    try {
+      const res = await fetch(`${BASE}/auth/users/${username}/reset-password`, {
+        method: 'POST',
+        headers: getHeaders()
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.detail || 'Failed to reset password')
+      }
+
+      const data = await res.json()
+      setResetPasswordResult({ username, password: data.new_password })
+      toast.success(`Password reset for ${username}`)
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success('Password copied to clipboard')
+    }).catch(() => {
+      toast.error('Failed to copy — please select and copy manually')
+    })
+  }
+
   const getRoleBadge = (role: string) => {
     const colors = {
       owner: 'bg-category-a-light text-category-a',
@@ -130,6 +184,12 @@ export default function UsersManagement() {
       user: 'bg-status-success-light text-status-success'
     }
     return colors[role as keyof typeof colors] || 'bg-surface-bg text-content-primary'
+  }
+
+  const getStatusBadge = (isActive: boolean) => {
+    return isActive
+      ? 'bg-status-success-light text-status-success'
+      : 'bg-status-error-light text-status-error'
   }
 
   return (
@@ -173,6 +233,9 @@ export default function UsersManagement() {
                   Role
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                   Station
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-content-secondary uppercase tracking-wider">
@@ -182,7 +245,7 @@ export default function UsersManagement() {
             </thead>
             <tbody className="bg-surface-card divide-y divide-surface-border">
               {users.map((user) => (
-                <tr key={user.user_id} className="hover:bg-surface-bg">
+                <tr key={user.user_id} className={`hover:bg-surface-bg ${user.is_active === false ? 'opacity-60' : ''}`}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-content-primary">
                     {user.user_id}
                   </td>
@@ -197,23 +260,45 @@ export default function UsersManagement() {
                       {user.role}
                     </span>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadge(user.is_active !== false)}`}>
+                      {user.is_active !== false ? 'Active' : 'Disabled'}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-content-secondary">
                     {user.station_id || '-'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                     <button
                       onClick={() => handleEdit(user)}
-                      className="text-action-primary hover:text-action-primary mr-4"
+                      className="text-action-primary hover:text-action-primary-hover"
                     >
                       Edit
                     </button>
                     {user.role !== 'owner' && (
-                      <button
-                        onClick={() => handleDelete(user.username)}
-                        className="text-status-error hover:text-status-error"
-                      >
-                        Delete
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleToggleStatus(user)}
+                          className={user.is_active !== false
+                            ? 'text-status-warning hover:opacity-80'
+                            : 'text-status-success hover:opacity-80'
+                          }
+                        >
+                          {user.is_active !== false ? 'Disable' : 'Enable'}
+                        </button>
+                        <button
+                          onClick={() => handleResetPassword(user.username)}
+                          className="text-action-primary hover:text-action-primary-hover"
+                        >
+                          Reset PW
+                        </button>
+                        <button
+                          onClick={() => handleDelete(user.username)}
+                          className="text-status-error hover:opacity-80"
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -223,7 +308,7 @@ export default function UsersManagement() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-surface-card rounded-lg p-6 w-full max-w-md">
@@ -323,11 +408,46 @@ export default function UsersManagement() {
         </div>
       )}
 
+      {/* Password Reset Result Modal */}
+      {resetPasswordResult && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-surface-card rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 text-content-primary">Password Reset Successful</h2>
+            <p className="text-sm text-content-secondary mb-4">
+              New password for <strong>{resetPasswordResult.username}</strong>:
+            </p>
+            <div className="flex items-center gap-2 mb-4">
+              <code className="flex-1 px-4 py-3 bg-surface-bg border border-surface-border rounded-md text-lg font-mono text-content-primary select-all">
+                {resetPasswordResult.password}
+              </code>
+              <button
+                onClick={() => copyToClipboard(resetPasswordResult.password)}
+                className="px-3 py-3 bg-action-primary text-white rounded-md hover:bg-action-primary-hover"
+                title="Copy to clipboard"
+              >
+                Copy
+              </button>
+            </div>
+            <p className="text-xs text-status-warning mb-4">
+              Please save this password now. It will not be shown again.
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setResetPasswordResult(null)}
+                className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Staff List Info */}
       <div className="mt-6 bg-action-primary-light border border-action-primary rounded-lg p-4">
         <h3 className="text-sm font-semibold text-action-primary mb-2">Staff Members</h3>
         <p className="text-sm text-action-primary mb-2">
-          Registered staff members: <strong>{users.filter(u => u.role === 'user').map(u => u.full_name).join(', ')}</strong>
+          Active staff members: <strong>{users.filter(u => u.role === 'user' && u.is_active !== false).map(u => u.full_name).join(', ')}</strong>
         </p>
         <p className="text-sm text-action-primary">
           These staff members are available for selection when assigning shifts and recording readings.

@@ -26,6 +26,7 @@ class User(BaseModel):
     full_name: str
     role: UserRole
     station_id: Optional[str] = None
+    is_active: bool = True
 
 class UserWithPassword(User):
     password: str

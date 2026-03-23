@@ -110,6 +110,10 @@ def init_db():
                 expires_at TIMESTAMP NOT NULL
             );
         """)
+        # Add is_active column if it doesn't exist (migration)
+        conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+        """)
         conn.commit()
         logger.info("[db] PostgreSQL schema initialized")
         return True
@@ -265,13 +269,14 @@ def db_get_user_by_username(username: str) -> Optional[dict]:
     conn = _get_connection()
     try:
         row = conn.execute(
-            "SELECT user_id, username, password, full_name, role, station_id FROM users WHERE username = %s",
+            "SELECT user_id, username, password, full_name, role, station_id, is_active FROM users WHERE username = %s",
             (username,)
         ).fetchone()
         if row:
             return {
                 "user_id": row[0], "username": row[1], "password": row[2],
                 "full_name": row[3], "role": row[4], "station_id": row[5],
+                "is_active": row[6] if row[6] is not None else True,
             }
         return None
     except Exception as e:
@@ -284,11 +289,12 @@ def db_get_all_users() -> List[dict]:
     conn = _get_connection()
     try:
         rows = conn.execute(
-            "SELECT user_id, username, password, full_name, role, station_id FROM users ORDER BY user_id"
+            "SELECT user_id, username, password, full_name, role, station_id, is_active FROM users ORDER BY user_id"
         ).fetchall()
         return [
             {"user_id": r[0], "username": r[1], "password": r[2],
-             "full_name": r[3], "role": r[4], "station_id": r[5]}
+             "full_name": r[3], "role": r[4], "station_id": r[5],
+             "is_active": r[6] if r[6] is not None else True}
             for r in rows
         ]
     except Exception as e:
@@ -318,7 +324,7 @@ def db_update_user(username: str, fields: dict):
     conn = _get_connection()
     try:
         sets, vals = [], []
-        for col in ("full_name", "role", "station_id", "password"):
+        for col in ("full_name", "role", "station_id", "password", "is_active"):
             if col in fields:
                 sets.append(f"{col} = %s")
                 vals.append(fields[col])

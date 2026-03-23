@@ -13,6 +13,7 @@ from ...services.notification_service import create_notification
 from ...database.db import DATABASE_URL
 import hashlib
 import secrets
+import string
 import logging
 import os
 from typing import Optional
@@ -67,7 +68,8 @@ users_db = {
         "password": hashlib.sha256("password123".encode()).hexdigest(),
         "full_name": "Fashon Sakala",
         "role": UserRole.USER,
-        "station_id": "ST001"
+        "station_id": "ST001",
+        "is_active": True,
     },
     "supervisor1": {
         "user_id": "S001",
@@ -75,7 +77,8 @@ users_db = {
         "password": hashlib.sha256("super123".encode()).hexdigest(),
         "full_name": "Barbara Banda",
         "role": UserRole.SUPERVISOR,
-        "station_id": "ST001"
+        "station_id": "ST001",
+        "is_active": True,
     },
     "owner1": {
         "user_id": "O001",
@@ -83,7 +86,8 @@ users_db = {
         "password": hashlib.sha256("owner123".encode()).hexdigest(),
         "full_name": "Kanyembo Ndhlovu",
         "role": UserRole.OWNER,
-        "station_id": None
+        "station_id": None,
+        "is_active": True,
     },
     "shaka": {
         "user_id": "STF001",
@@ -91,7 +95,8 @@ users_db = {
         "password": hashlib.sha256("shaka123".encode()).hexdigest(),
         "full_name": "Shaka",
         "role": UserRole.USER,
-        "station_id": "ST001"
+        "station_id": "ST001",
+        "is_active": True,
     },
     "trevor": {
         "user_id": "STF002",
@@ -99,7 +104,8 @@ users_db = {
         "password": hashlib.sha256("trevor123".encode()).hexdigest(),
         "full_name": "Trevor",
         "role": UserRole.USER,
-        "station_id": "ST001"
+        "station_id": "ST001",
+        "is_active": True,
     },
     "violet": {
         "user_id": "STF003",
@@ -107,7 +113,8 @@ users_db = {
         "password": hashlib.sha256("violet123".encode()).hexdigest(),
         "full_name": "Violet",
         "role": UserRole.USER,
-        "station_id": "ST001"
+        "station_id": "ST001",
+        "is_active": True,
     },
     "chileshe": {
         "user_id": "STF004",
@@ -115,7 +122,8 @@ users_db = {
         "password": hashlib.sha256("chileshe123".encode()).hexdigest(),
         "full_name": "Chileshe",
         "role": UserRole.USER,
-        "station_id": "ST001"
+        "station_id": "ST001",
+        "is_active": True,
     },
     "matthew": {
         "user_id": "STF005",
@@ -123,7 +131,8 @@ users_db = {
         "password": hashlib.sha256("matthew123".encode()).hexdigest(),
         "full_name": "Matthew",
         "role": UserRole.USER,
-        "station_id": "ST001"
+        "station_id": "ST001",
+        "is_active": True,
     },
     "mubanga": {
         "user_id": "STF006",
@@ -131,7 +140,8 @@ users_db = {
         "password": hashlib.sha256("mubanga123".encode()).hexdigest(),
         "full_name": "Mubanga",
         "role": UserRole.USER,
-        "station_id": "ST001"
+        "station_id": "ST001",
+        "is_active": True,
     },
     "prosper": {
         "user_id": "STF007",
@@ -139,7 +149,8 @@ users_db = {
         "password": hashlib.sha256("prosper123".encode()).hexdigest(),
         "full_name": "Prosper",
         "role": UserRole.USER,
-        "station_id": "ST001"
+        "station_id": "ST001",
+        "is_active": True,
     }
 }
 
@@ -168,12 +179,15 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
         user = db_get_user_by_username(session["username"])
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
+        if not user.get("is_active", True):
+            raise HTTPException(status_code=403, detail="Account is disabled. Contact the owner.")
         return {
             "user_id": user["user_id"],
             "username": user["username"],
             "full_name": user["full_name"],
             "role": user["role"],
             "station_id": user.get("station_id"),
+            "is_active": user.get("is_active", True),
         }
     else:
         # Fallback: in-memory sessions
@@ -197,12 +211,15 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
         if username not in users_db:
             raise HTTPException(status_code=401, detail="User not found")
         user_data = users_db[username]
+        if not user_data.get("is_active", True):
+            raise HTTPException(status_code=403, detail="Account is disabled. Contact the owner.")
         return {
             "user_id": user_data["user_id"],
             "username": username,
             "full_name": user_data["full_name"],
             "role": user_data["role"],
             "station_id": user_data.get("station_id"),
+            "is_active": user_data.get("is_active", True),
         }
 
 
@@ -257,6 +274,8 @@ def login(credentials: UserLogin):
         user = db_get_user_by_username(username)
         if not user or not _verify_password(password, user["password"]):
             raise HTTPException(status_code=401, detail="Invalid username or password")
+        if not user.get("is_active", True):
+            raise HTTPException(status_code=403, detail="Account is disabled. Contact the owner.")
 
         token = _generate_token()
         expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
@@ -271,6 +290,7 @@ def login(credentials: UserLogin):
                 "full_name": user["full_name"],
                 "role": user["role"],
                 "station_id": user.get("station_id"),
+                "is_active": user.get("is_active", True),
             }
         }
     else:
@@ -279,6 +299,8 @@ def login(credentials: UserLogin):
         user_data = users_db[username]
         if not _verify_password(password, user_data["password"]):
             raise HTTPException(status_code=401, detail="Invalid username or password")
+        if not user_data.get("is_active", True):
+            raise HTTPException(status_code=403, detail="Account is disabled. Contact the owner.")
 
         session_token = f"token-{username}-{user_data['user_id']}"
         active_sessions[session_token] = {
@@ -295,6 +317,7 @@ def login(credentials: UserLogin):
                 "full_name": user_data["full_name"],
                 "role": user_data["role"],
                 "station_id": user_data.get("station_id"),
+                "is_active": user_data.get("is_active", True),
             }
         }
 
@@ -354,6 +377,7 @@ def list_users():
                 "user_id": u["user_id"], "username": u["username"],
                 "full_name": u["full_name"], "role": u["role"],
                 "station_id": u.get("station_id"),
+                "is_active": u.get("is_active", True),
             }
             for u in users
         ]
@@ -363,6 +387,7 @@ def list_users():
                 "user_id": user["user_id"], "username": user["username"],
                 "full_name": user["full_name"], "role": user["role"],
                 "station_id": user.get("station_id"),
+                "is_active": user.get("is_active", True),
             }
             for user in users_db.values()
         ]
@@ -403,6 +428,7 @@ def create_user(user_data: dict, current_user: dict = Depends(require_owner)):
             "user_id": user_id, "username": username, "password": hashed,
             "full_name": full_name, "role": role,
             "station_id": station_id if role != "owner" else None,
+            "is_active": True,
         }
 
     log_audit_event(
@@ -429,6 +455,7 @@ def create_user(user_data: dict, current_user: dict = Depends(require_owner)):
         "user": {
             "user_id": user_id, "username": username, "full_name": full_name,
             "role": role, "station_id": station_id if role != "owner" else None,
+            "is_active": True,
         }
     }
 
@@ -512,6 +539,7 @@ def update_user(username: str, user_data: dict, current_user: dict = Depends(req
             "user_id": user["user_id"], "username": username,
             "full_name": user["full_name"], "role": user["role"],
             "station_id": user.get("station_id"),
+            "is_active": user.get("is_active", True),
         }
     }
 
@@ -576,8 +604,9 @@ def list_staff():
                 "user_id": u["user_id"], "username": u["username"],
                 "full_name": u["full_name"], "role": u["role"],
                 "station_id": u.get("station_id"),
+                "is_active": u.get("is_active", True),
             }
-            for u in users if u["role"] in ["user", "supervisor"]
+            for u in users if u["role"] in ["user", "supervisor"] and u.get("is_active", True)
         ]
     else:
         return [
@@ -585,7 +614,131 @@ def list_staff():
                 "user_id": user["user_id"], "username": user["username"],
                 "full_name": user["full_name"], "role": user["role"],
                 "station_id": user.get("station_id"),
+                "is_active": user.get("is_active", True),
             }
             for user in users_db.values()
-            if user["role"] in ["user", "supervisor"]
+            if user["role"] in ["user", "supervisor"] and user.get("is_active", True)
         ]
+
+
+@router.patch("/users/{username}/toggle-status")
+def toggle_user_status(username: str, current_user: dict = Depends(require_owner)):
+    """Enable or disable a user account (Owner only). Cannot disable owner accounts."""
+    if _USE_DB:
+        from ...database.db import db_get_user_by_username, db_update_user, db_delete_user_sessions
+        user = db_get_user_by_username(username)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if user["role"] == "owner":
+            raise HTTPException(status_code=403, detail="Cannot disable owner accounts")
+
+        new_status = not user.get("is_active", True)
+        db_update_user(username, {"is_active": new_status})
+
+        # Invalidate all sessions when disabling
+        if not new_status:
+            db_delete_user_sessions(username)
+
+        user = db_get_user_by_username(username)
+    else:
+        if username not in users_db:
+            raise HTTPException(status_code=404, detail="User not found")
+        user = users_db[username]
+        role_val = user["role"].value if hasattr(user["role"], "value") else user["role"]
+        if role_val == "owner":
+            raise HTTPException(status_code=403, detail="Cannot disable owner accounts")
+
+        new_status = not user.get("is_active", True)
+        user["is_active"] = new_status
+
+        # Invalidate all sessions when disabling
+        if not new_status:
+            sessions_to_remove = [t for t, s in active_sessions.items() if s["username"] == username]
+            for t in sessions_to_remove:
+                del active_sessions[t]
+
+    action = "user_enable" if new_status else "user_disable"
+    status_label = "enabled" if new_status else "disabled"
+
+    log_audit_event(
+        station_id=current_user.get("station_id") or "ST001",
+        action=action,
+        performed_by=current_user["username"],
+        entity_type="user",
+        entity_id=user.get("user_id", ""),
+        details={"username": username, "is_active": new_status},
+    )
+    create_notification(
+        station_id=current_user.get("station_id") or "ST001",
+        type="USER_STATUS_CHANGE",
+        severity="high",
+        title=f"User Account {status_label.title()}",
+        message=f"User '{username}' has been {status_label}",
+        entity_type="user",
+        entity_id=user.get("user_id", ""),
+        created_by=current_user["username"],
+    )
+
+    return {
+        "message": f"User {username} {status_label} successfully",
+        "user": {
+            "user_id": user["user_id"], "username": user.get("username", username),
+            "full_name": user["full_name"], "role": user["role"],
+            "station_id": user.get("station_id"),
+            "is_active": user.get("is_active", new_status),
+        }
+    }
+
+
+@router.post("/users/{username}/reset-password")
+def reset_user_password(username: str, current_user: dict = Depends(require_owner)):
+    """Reset a user's password to a random 12-character string (Owner only)."""
+    # Generate random 12-char password
+    alphabet = string.ascii_letters + string.digits
+    new_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+    hashed = _hash_password(new_password)
+
+    if _USE_DB:
+        from ...database.db import db_get_user_by_username, db_update_user, db_delete_user_sessions
+        user = db_get_user_by_username(username)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        db_update_user(username, {"password": hashed})
+        # Invalidate existing sessions so user must re-login
+        db_delete_user_sessions(username)
+        user_id = user["user_id"]
+    else:
+        if username not in users_db:
+            raise HTTPException(status_code=404, detail="User not found")
+        users_db[username]["password"] = hashed
+        user_id = users_db[username]["user_id"]
+
+        # Invalidate existing sessions
+        sessions_to_remove = [t for t, s in active_sessions.items() if s["username"] == username]
+        for t in sessions_to_remove:
+            del active_sessions[t]
+
+    log_audit_event(
+        station_id=current_user.get("station_id") or "ST001",
+        action="user_password_reset",
+        performed_by=current_user["username"],
+        entity_type="user",
+        entity_id=user_id,
+        details={"username": username},
+    )
+    create_notification(
+        station_id=current_user.get("station_id") or "ST001",
+        type="USER_PASSWORD_RESET",
+        severity="high",
+        title="User Password Reset",
+        message=f"Password for user '{username}' has been reset by {current_user['username']}",
+        entity_type="user",
+        entity_id=user_id,
+        created_by=current_user["username"],
+    )
+
+    return {
+        "message": f"Password for {username} has been reset",
+        "new_password": new_password,
+    }
