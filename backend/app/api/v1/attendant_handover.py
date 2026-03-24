@@ -596,6 +596,8 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
                 "size_kg": cyl["size_kg"],
                 "opening_balance": cyl["opening_full"],
                 "receipts": cyl["additions"],
+                "traded_in": 0,
+                "traded_out": 0,
                 "sold_refill": cyl.get("sold_refill", 0),
                 "sold_with_cylinder": cyl.get("sold_with_cylinder", 0),
                 "balance": cyl["closing_full"],

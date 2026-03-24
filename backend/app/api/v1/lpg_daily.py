@@ -13,6 +13,7 @@ import json
 import os
 
 from ...models.models import (
+    LPGCylinderTrade,
     LPGCylinderShiftRow,
     LPGDailyEntryInput,
     LPGDailyEntryOutput,
@@ -31,8 +32,14 @@ LPG_SIZES = [3, 6, 9, 19, 45, 48]
 
 # Default pricing (used only when no saved pricing exists)
 DEFAULT_LPG_PRICING = {
-    "price_per_kg": 49,
-    "deposits": {"3": 330, "6": 550, "9": 800, "19": 1200, "45": 1700, "48": 1700},
+    "prices": {
+        "3":  {"price_refill": 147, "price_full_cylinder": 477},
+        "6":  {"price_refill": 294, "price_full_cylinder": 844},
+        "9":  {"price_refill": 441, "price_full_cylinder": 1241},
+        "19": {"price_refill": 931, "price_full_cylinder": 2131},
+        "45": {"price_refill": 2205, "price_full_cylinder": 3905},
+        "48": {"price_refill": 2352, "price_full_cylinder": 4052},
+    }
 }
 
 # Default LPG accessories
@@ -73,17 +80,21 @@ def save_lpg_accessories(db: dict, station_id: str):
 
 
 def get_pricing_for_size(size_kg: int, lpg_pricing_db: dict) -> dict:
-    """Calculate pricing for a given cylinder size using editable pricing."""
+    """Get pricing for a given cylinder size. Supports new flat-price format with backward compat."""
+    prices = lpg_pricing_db.get("prices", {})
+    size_prices = prices.get(str(size_kg))
+    if size_prices:
+        return {
+            "size_kg": size_kg,
+            "price_refill": size_prices["price_refill"],
+            "price_with_cylinder": size_prices["price_full_cylinder"],
+        }
+    # Backward compat: old price_per_kg model
     price_per_kg = lpg_pricing_db.get('price_per_kg', 49)
     deposits = lpg_pricing_db.get('deposits', {})
     refill = price_per_kg * size_kg
     deposit = deposits.get(str(size_kg), 0)
-    return {
-        "size_kg": size_kg,
-        "price_refill": refill,
-        "deposit": deposit,
-        "price_with_cylinder": refill + deposit,
-    }
+    return {"size_kg": size_kg, "price_refill": refill, "price_with_cylinder": refill + deposit}
 
 
 # ===== ENDPOINTS =====
@@ -93,8 +104,7 @@ def get_lpg_pricing_endpoint(ctx: dict = Depends(get_station_context)):
     """Return pricing table for all 6 LPG cylinder sizes."""
     lpg_pricing_db = load_lpg_pricing(ctx["station_id"])
     return {
-        "price_per_kg": lpg_pricing_db.get('price_per_kg', 49),
-        "deposits": lpg_pricing_db.get('deposits', {}),
+        "prices": lpg_pricing_db.get("prices", {}),
         "sizes": [get_pricing_for_size(s, lpg_pricing_db) for s in LPG_SIZES],
     }
 
@@ -107,36 +117,35 @@ def update_lpg_pricing(
     """
     Update LPG pricing. Requires supervisor or owner role.
 
-    Body: { "price_per_kg": 49, "deposits": {"3": 330, "6": 550, ...} }
+    Body: { "prices": { "3": {"price_refill": 147, "price_full_cylinder": 477}, ... } }
     """
     role = ctx.get('role', '')
     if role not in ('supervisor', 'owner'):
         raise HTTPException(status_code=403, detail="Only supervisors and owners can update pricing")
 
     station_id = ctx["station_id"]
-    lpg_pricing_db = load_lpg_pricing(station_id)
 
-    if 'price_per_kg' in pricing_data:
-        val = pricing_data['price_per_kg']
-        if not isinstance(val, (int, float)) or val <= 0:
-            raise HTTPException(status_code=400, detail="price_per_kg must be a positive number")
-        lpg_pricing_db['price_per_kg'] = val
+    if 'prices' not in pricing_data:
+        raise HTTPException(status_code=400, detail="Missing 'prices' object")
 
-    if 'deposits' in pricing_data:
-        deps = pricing_data['deposits']
-        if not isinstance(deps, dict):
-            raise HTTPException(status_code=400, detail="deposits must be an object mapping size_kg to deposit amount")
-        for key, val in deps.items():
-            if not isinstance(val, (int, float)) or val < 0:
-                raise HTTPException(status_code=400, detail=f"Deposit for {key}kg must be a non-negative number")
-        lpg_pricing_db['deposits'] = {str(k): v for k, v in deps.items()}
+    prices = pricing_data['prices']
+    if not isinstance(prices, dict):
+        raise HTTPException(status_code=400, detail="'prices' must be an object mapping size to price info")
 
+    for size_key, size_prices in prices.items():
+        if not isinstance(size_prices, dict):
+            raise HTTPException(status_code=400, detail=f"Prices for {size_key}kg must be an object")
+        for field in ("price_refill", "price_full_cylinder"):
+            val = size_prices.get(field)
+            if val is None or not isinstance(val, (int, float)) or val <= 0:
+                raise HTTPException(status_code=400, detail=f"{field} for {size_key}kg must be a positive number")
+
+    lpg_pricing_db = {"prices": {str(k): v for k, v in prices.items()}}
     save_lpg_pricing(lpg_pricing_db, station_id)
 
     return {
         "message": "LPG pricing updated successfully",
-        "price_per_kg": lpg_pricing_db.get('price_per_kg'),
-        "deposits": lpg_pricing_db.get('deposits'),
+        "prices": lpg_pricing_db["prices"],
         "sizes": [get_pricing_for_size(s, lpg_pricing_db) for s in LPG_SIZES],
     }
 
@@ -228,6 +237,31 @@ def submit_lpg_entry(
             detail=f"Missing cylinder sizes: {sorted(missing)}. All 6 sizes required.",
         )
 
+    # Process trades: compute traded_in / traded_out per size and trade revenue
+    traded_in_map = {s: 0 for s in LPG_SIZES}
+    traded_out_map = {s: 0 for s in LPG_SIZES}
+    processed_trades = []
+    total_trade_revenue = 0.0
+
+    if entry_input.trades:
+        for trade in entry_input.trades:
+            from_pricing = get_pricing_for_size(trade.from_size_kg, lpg_pricing_db)
+            to_pricing = get_pricing_for_size(trade.to_size_kg, lpg_pricing_db)
+            price_diff = to_pricing['price_refill'] - from_pricing['price_refill']
+            trade_type = "upgrade" if trade.to_size_kg > trade.from_size_kg else "downgrade"
+
+            traded_out_map[trade.from_size_kg] += trade.quantity
+            traded_in_map[trade.to_size_kg] += trade.quantity
+            total_trade_revenue += price_diff * trade.quantity
+
+            processed_trades.append(LPGCylinderTrade(
+                from_size_kg=trade.from_size_kg,
+                to_size_kg=trade.to_size_kg,
+                quantity=trade.quantity,
+                price_difference=price_diff,
+                trade_type=trade_type,
+            ))
+
     # Calculate values for each row
     calculated_rows = []
     grand_total = 0.0
@@ -235,7 +269,9 @@ def submit_lpg_entry(
     for row in entry_input.cylinder_rows:
         pricing = get_pricing_for_size(row.size_kg, lpg_pricing_db)
 
-        balance = row.opening_balance + row.receipts - row.sold_refill - row.sold_with_cylinder
+        t_in = traded_in_map.get(row.size_kg, 0)
+        t_out = traded_out_map.get(row.size_kg, 0)
+        balance = row.opening_balance + row.receipts + t_in - row.sold_refill - row.sold_with_cylinder - t_out
         value_refill = pricing['price_refill'] * row.sold_refill
         value_with_cyl = pricing['price_with_cylinder'] * row.sold_with_cylinder
         total_value = value_refill + value_with_cyl
@@ -244,6 +280,8 @@ def submit_lpg_entry(
             size_kg=row.size_kg,
             opening_balance=row.opening_balance,
             receipts=row.receipts,
+            traded_in=t_in,
+            traded_out=t_out,
             sold_refill=row.sold_refill,
             sold_with_cylinder=row.sold_with_cylinder,
             balance=balance,
@@ -273,6 +311,8 @@ def submit_lpg_entry(
         recorded_by=entry_input.recorded_by,
         created_at=datetime.now().isoformat(),
         notes=entry_input.notes,
+        trades=processed_trades if processed_trades else None,
+        total_trade_revenue=total_trade_revenue,
     )
 
     lpg_daily_db[entry_id] = output.model_dump(mode='json')

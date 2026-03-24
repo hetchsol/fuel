@@ -602,14 +602,24 @@ class TankMovementSummary(BaseModel):
 
 # ===== LPG Daily Operations Models =====
 
+class LPGCylinderTrade(BaseModel):
+    """Single cylinder trade (upgrade or downgrade)"""
+    from_size_kg: int       # e.g., 3
+    to_size_kg: int         # e.g., 6
+    quantity: int = 1
+    price_difference: float = 0.0   # Server-calculated: to_price - from_price (positive = upgrade fee)
+    trade_type: str = ""            # Server-calculated: "upgrade" or "downgrade"
+
 class LPGCylinderShiftRow(BaseModel):
     """Single cylinder size row within an LPG shift entry"""
     size_kg: int  # 3, 6, 9, 19, 45, 48
     opening_balance: int = 0
     receipts: int = 0
+    traded_in: int = 0      # Cylinders received via trade (increases stock of this size)
+    traded_out: int = 0     # Cylinders given away via trade (decreases stock of this size)
     sold_refill: int = 0
     sold_with_cylinder: int = 0
-    balance: int = 0  # Server-calculated: opening + receipts - sold_refill - sold_with_cylinder
+    balance: int = 0  # Server-calculated: opening + receipts + traded_in - sold_refill - sold_with_cylinder - traded_out
     value_refill: float = 0.0  # Server-calculated: price_refill * sold_refill
     value_with_cylinder: float = 0.0  # Server-calculated: price_with_cyl * sold_with_cylinder
     total_value: float = 0.0  # Server-calculated: value_refill + value_with_cylinder
@@ -624,6 +634,7 @@ class LPGDailyEntryInput(BaseModel):
     actual_cylinder_population: Optional[int] = None
     recorded_by: str
     notes: Optional[str] = None
+    trades: Optional[List[LPGCylinderTrade]] = None
 
 class LPGDailyEntryOutput(BaseModel):
     """Output after submitting an LPG shift entry with calculated values"""
@@ -639,6 +650,8 @@ class LPGDailyEntryOutput(BaseModel):
     recorded_by: str
     created_at: str
     notes: Optional[str] = None
+    trades: Optional[List[LPGCylinderTrade]] = None
+    total_trade_revenue: float = 0.0
 
 class LPGAccessoryDailyRow(BaseModel):
     """Single accessory product row"""
