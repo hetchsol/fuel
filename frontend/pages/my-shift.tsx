@@ -89,6 +89,7 @@ interface HandoverResult {
   actual_cash: number
   difference: number
   status: string
+  review_status?: string
   created_at: string
 }
 
@@ -1347,8 +1348,8 @@ export default function MyShift() {
               <div className="font-medium" style={{ color: theme.textPrimary }}>{handoverResult.shift_type}</div>
             </div>
             <div>
-              <span className="text-xs" style={{ color: theme.textSecondary }}>Status</span>
-              <div className="font-medium" style={{ color: 'var(--color-status-success)' }}>{handoverResult.status}</div>
+              <span className="text-xs" style={{ color: theme.textSecondary }}>Review Status</span>
+              <ReviewStatusBadge status={handoverResult.review_status || 'submitted'} />
             </div>
           </div>
 
@@ -1462,6 +1463,24 @@ function SummaryCell({ label, value, theme, bold, primary, negative }: {
   )
 }
 
+const REVIEW_STATUS_MAP: Record<string, { bg: string; color: string; label: string }> = {
+  submitted: { bg: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)', label: 'Pending Review' },
+  flagged: { bg: 'var(--color-status-error-light, #fde8e8)', color: 'var(--color-status-error)', label: 'Flagged' },
+  approved: { bg: 'var(--color-status-success-light, #e6f9e6)', color: 'var(--color-status-success)', label: 'Approved' },
+  returned: { bg: 'var(--color-status-warning-light, #fff8e1)', color: 'var(--color-status-warning)', label: 'Returned' },
+  reopened: { bg: 'var(--color-status-pending-light)', color: 'var(--color-status-warning)', label: 'Reopened' },
+}
+
+function ReviewStatusBadge({ status }: { status: string }) {
+  const style = REVIEW_STATUS_MAP[status] || REVIEW_STATUS_MAP.submitted
+  return (
+    <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+      style={{ backgroundColor: style.bg, color: style.color }}>
+      {style.label}
+    </span>
+  )
+}
+
 function PastHandoversTable({ handovers, theme }: { handovers: HandoverResult[], theme: any }) {
   return (
     <div className="rounded-lg shadow overflow-x-auto"
@@ -1473,7 +1492,7 @@ function PastHandoversTable({ handovers, theme }: { handovers: HandoverResult[],
       <table className="min-w-full text-sm">
         <thead>
           <tr style={{ backgroundColor: theme.background }}>
-            {['Date', 'Shift', 'Attendant', 'Fuel Rev.', 'Total Expected', 'Expected Cash', 'Actual Cash', 'Difference', 'Status'].map(h => (
+            {['Date', 'Shift', 'Attendant', 'Fuel Rev.', 'Total Expected', 'Expected Cash', 'Actual Cash', 'Difference', 'Review'].map(h => (
               <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
                 style={{ color: theme.textSecondary }}>{h}</th>
             ))}
@@ -1502,13 +1521,7 @@ function PastHandoversTable({ handovers, theme }: { handovers: HandoverResult[],
                 {h.difference >= 0 ? '+' : ''}{h.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </td>
               <td className="px-3 py-2">
-                <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
-                  style={{
-                    backgroundColor: h.status === 'submitted' ? 'var(--color-action-primary-light)' : 'var(--color-status-pending-light)',
-                    color: h.status === 'submitted' ? 'var(--color-action-primary)' : 'var(--color-status-warning)',
-                  }}>
-                  {h.status}
-                </span>
+                <ReviewStatusBadge status={h.review_status || h.status} />
               </td>
             </tr>
           ))}

@@ -8,9 +8,9 @@ from datetime import datetime
 import json
 import os
 from ...models.models import (
-    HandoverInput, HandoverOutput,
+    HandoverInput, HandoverOutput, HandoverReviewInput,
     HandoverNozzleReadingInput, HandoverNozzleReadingSummary,
-    ShiftStockSnapshot,
+    ShiftStockSnapshot, UserRole,
 )
 from ...config import resolve_fuel_price
 from ...database.storage import get_nozzle
@@ -511,6 +511,14 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     expected_cash = round(total_expected - data.credit_sales, 2)
     difference = round(data.actual_cash - expected_cash, 2)
 
+    # Auto-flag logic
+    auto_flag_reasons = []
+    if abs(difference) > 500:
+        auto_flag_reasons.append("cash_shortage")
+    if any(ns.meter_deviation_flagged for ns in nozzle_summaries):
+        auto_flag_reasons.append("meter_deviation")
+    review_status = "flagged" if auto_flag_reasons else "submitted"
+
     # Generate handover ID
     handovers = _load_handovers(station_id)
     handover_id = f"HO-{data.shift_id}-{user_id}-{datetime.now().strftime('%H%M%S')}"
@@ -533,6 +541,8 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
         actual_cash=data.actual_cash,
         difference=difference,
         status="submitted",
+        review_status=review_status,
+        auto_flag_reasons=auto_flag_reasons or None,
         notes=data.notes,
         created_at=datetime.now().isoformat(),
         stock_snapshot=enriched_snapshot,
@@ -808,3 +818,197 @@ async def reopen_handover(
     _save_handovers(handovers, station_id)
 
     return {"status": "success", "message": f"Handover {handover_id} reopened for correction"}
+
+
+@router.get("/review-queue")
+async def get_review_queue(
+    shift_id: str = None,
+    date: str = None,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Get handovers pending review. Supervisor/owner only.
+    Returns flagged first, then by created_at descending.
+    """
+    role = ctx["role"]
+    role_str = role.value if isinstance(role, UserRole) else str(role)
+    if role_str not in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]:
+        raise HTTPException(status_code=403, detail="Access forbidden. Supervisors and owners only.")
+
+    station_id = ctx["station_id"]
+    handovers = _load_handovers(station_id)
+    results = list(handovers.values())
+
+    # Optional filters
+    if shift_id:
+        results = [h for h in results if h.get("shift_id") == shift_id]
+    if date:
+        results = [h for h in results if h.get("date") == date]
+
+    # Separate by review_status
+    pending = [h for h in results if h.get("review_status", "submitted") in ["submitted", "flagged"]]
+    approved_today = [
+        h for h in results
+        if h.get("review_status") == "approved"
+        and h.get("supervisor_review", {}).get("reviewed_at", "")[:10] == datetime.now().strftime("%Y-%m-%d")
+    ]
+
+    # Sort: flagged first, then by created_at desc
+    def sort_key(h):
+        is_flagged = 0 if h.get("review_status") == "flagged" else 1
+        return (is_flagged, -(datetime.fromisoformat(h.get("created_at", "2000-01-01")).timestamp()))
+    pending.sort(key=sort_key)
+
+    flagged_count = sum(1 for h in pending if h.get("review_status") == "flagged")
+
+    return {
+        "pending": len(pending),
+        "flagged": flagged_count,
+        "approved_today": len(approved_today),
+        "handovers": pending,
+    }
+
+
+@router.post("/review")
+async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_station_context)):
+    """
+    Approve or return a single handover. Supervisor/owner only.
+    """
+    role = ctx["role"]
+    role_str = role.value if isinstance(role, UserRole) else str(role)
+    if role_str not in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]:
+        raise HTTPException(status_code=403, detail="Access forbidden. Supervisors and owners only.")
+
+    if data.action not in ("approve", "return"):
+        raise HTTPException(status_code=400, detail="Action must be 'approve' or 'return'")
+    if data.action == "return" and not data.supervisor_note:
+        raise HTTPException(status_code=400, detail="Supervisor note is required when returning a handover")
+
+    station_id = ctx["station_id"]
+    handovers = _load_handovers(station_id)
+
+    if data.handover_id not in handovers:
+        raise HTTPException(status_code=404, detail="Handover not found")
+
+    handover = handovers[data.handover_id]
+    current_review = handover.get("review_status", "submitted")
+    if current_review in ("approved",):
+        raise HTTPException(status_code=400, detail="Handover is already approved")
+
+    review_record = {
+        "reviewed_by": ctx["user_id"],
+        "reviewed_by_name": ctx["full_name"],
+        "reviewed_at": datetime.now().isoformat(),
+        "action": data.action,
+        "note": data.supervisor_note,
+    }
+
+    if data.action == "approve":
+        handover["review_status"] = "approved"
+        handover["supervisor_review"] = review_record
+        _save_handovers(handovers, station_id)
+
+        log_audit_event(
+            station_id=station_id,
+            action="handover_approved",
+            performed_by=ctx["username"],
+            entity_type="handover",
+            entity_id=data.handover_id,
+            details={"action": "approve", "note": data.supervisor_note},
+        )
+        create_notification(
+            station_id=station_id,
+            type="HANDOVER_APPROVED",
+            severity="info",
+            title="Handover Approved",
+            message=f"Handover {data.handover_id} approved by {ctx['full_name']}",
+            entity_type="handover",
+            entity_id=data.handover_id,
+            created_by=ctx["username"],
+        )
+    else:
+        handover["review_status"] = "returned"
+        handover["status"] = "reopened"
+        handover["supervisor_review"] = review_record
+        _save_handovers(handovers, station_id)
+
+        log_audit_event(
+            station_id=station_id,
+            action="handover_returned",
+            performed_by=ctx["username"],
+            entity_type="handover",
+            entity_id=data.handover_id,
+            details={"action": "return", "note": data.supervisor_note},
+        )
+        create_notification(
+            station_id=station_id,
+            type="HANDOVER_RETURNED",
+            severity="warning",
+            title="Handover Returned",
+            message=f"Handover {data.handover_id} returned by {ctx['full_name']}: {data.supervisor_note}",
+            entity_type="handover",
+            entity_id=data.handover_id,
+            created_by=ctx["username"],
+        )
+
+    return {"status": "success", "review_status": handover["review_status"], "handover_id": data.handover_id}
+
+
+@router.post("/batch-approve")
+async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
+    """
+    Batch-approve multiple clean (non-flagged) handovers. Supervisor/owner only.
+    Expects { "handover_ids": ["HO-...", ...] }
+    """
+    role = ctx["role"]
+    role_str = role.value if isinstance(role, UserRole) else str(role)
+    if role_str not in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]:
+        raise HTTPException(status_code=403, detail="Access forbidden. Supervisors and owners only.")
+
+    handover_ids = data.get("handover_ids", [])
+    if not handover_ids:
+        raise HTTPException(status_code=400, detail="No handover IDs provided")
+
+    station_id = ctx["station_id"]
+    handovers = _load_handovers(station_id)
+
+    approved_count = 0
+    skipped_count = 0
+    now_iso = datetime.now().isoformat()
+
+    for hid in handover_ids:
+        h = handovers.get(hid)
+        if not h:
+            skipped_count += 1
+            continue
+        # Only batch-approve clean (submitted) handovers, skip flagged
+        if h.get("review_status", "submitted") != "submitted":
+            skipped_count += 1
+            continue
+
+        h["review_status"] = "approved"
+        h["supervisor_review"] = {
+            "reviewed_by": ctx["user_id"],
+            "reviewed_by_name": ctx["full_name"],
+            "reviewed_at": now_iso,
+            "action": "approve",
+            "note": "Batch approved",
+        }
+        approved_count += 1
+
+        log_audit_event(
+            station_id=station_id,
+            action="handover_approved",
+            performed_by=ctx["username"],
+            entity_type="handover",
+            entity_id=hid,
+            details={"action": "batch_approve"},
+        )
+
+    _save_handovers(handovers, station_id)
+
+    return {
+        "status": "success",
+        "approved": approved_count,
+        "skipped": skipped_count,
+    }

@@ -787,6 +787,12 @@ class HandoverInput(BaseModel):
     notes: Optional[str] = None
     stock_snapshot: Optional[ShiftStockSnapshot] = None
 
+class HandoverReviewInput(BaseModel):
+    """Input for supervisor review of a handover"""
+    handover_id: str
+    action: str                            # "approve" or "return"
+    supervisor_note: Optional[str] = None  # required when returning
+
 class HandoverOutput(BaseModel):
     """Output after submitting a shift handover with all computed values"""
     handover_id: str
@@ -806,6 +812,9 @@ class HandoverOutput(BaseModel):
     actual_cash: float
     difference: float           # actual - expected (+surplus / -shortage)
     status: str                 # "submitted" or "reopened"
+    review_status: str = "submitted"           # "submitted" | "flagged" | "approved" | "returned"
+    supervisor_review: Optional[dict] = None   # {reviewed_by, reviewed_by_name, reviewed_at, action, note}
+    auto_flag_reasons: Optional[List[str]] = None  # e.g. ["cash_shortage", "meter_deviation"]
     notes: Optional[str] = None
     created_at: str
     stock_snapshot: Optional[dict] = None
