@@ -116,6 +116,7 @@ async def get_my_shift(ctx: dict = Depends(get_station_context)):
                 "nozzle_id": nozzle_id,
                 "fuel_type": fuel_type,
                 "opening_reading": nozzle.get("electronic_reading", 0) or 0,
+                "mechanical_opening_reading": nozzle.get("mechanical_reading") or 0,
                 "price_per_liter": price,
                 "status": nozzle.get("status", "Active"),
                 "display_label": nozzle.get("display_label"),
@@ -144,6 +145,7 @@ async def get_my_shift(ctx: dict = Depends(get_station_context)):
             "nozzle_ids": assigned_nozzle_ids,
         },
         "nozzles": nozzle_details,
+        "meter_discrepancy_threshold": storage.get('validation_thresholds', {}).get('meter_discrepancy_threshold', 0.5),
         "enter_readings_submitted": enter_readings_submitted,
         "enter_readings_closing": enter_readings_closing,
     }
@@ -374,6 +376,18 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
         revenue = round(volume * price, 2)
         fuel_revenue += revenue
 
+        # Compute mechanical (totalizer) deviation
+        mech_volume = round(reading.mechanical_closing - reading.mechanical_opening, 3)
+        deviation_liters = None
+        deviation_percent = None
+        deviation_flagged = None
+        if mech_volume >= 0 and (reading.mechanical_closing > 0 or reading.mechanical_opening > 0):
+            deviation_liters = round(abs(volume - mech_volume), 3)
+            avg = (volume + mech_volume) / 2
+            deviation_percent = round(deviation_liters / avg * 100, 2) if avg > 0 else 0.0
+            threshold = storage.get('validation_thresholds', {}).get('meter_discrepancy_threshold', 0.5)
+            deviation_flagged = deviation_percent > threshold
+
         nozzle_summaries.append(HandoverNozzleReadingSummary(
             nozzle_id=reading.nozzle_id,
             fuel_type=fuel_type,
@@ -382,6 +396,12 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
             volume_sold=round(volume, 3),
             price_per_liter=price,
             revenue=revenue,
+            mechanical_opening=reading.mechanical_opening if (reading.mechanical_closing > 0 or reading.mechanical_opening > 0) else None,
+            mechanical_closing=reading.mechanical_closing if (reading.mechanical_closing > 0 or reading.mechanical_opening > 0) else None,
+            mechanical_volume=mech_volume if (reading.mechanical_closing > 0 or reading.mechanical_opening > 0) else None,
+            meter_deviation_liters=deviation_liters,
+            meter_deviation_percent=deviation_percent,
+            meter_deviation_flagged=deviation_flagged,
         ))
 
     fuel_revenue = round(fuel_revenue, 2)
@@ -560,6 +580,22 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
             created_by=ctx["username"],
         )
 
+    # METER_DEVIATION notifications for flagged nozzles
+    for ns in nozzle_summaries:
+        if ns.meter_deviation_flagged:
+            create_notification(
+                station_id=station_id,
+                type="METER_DEVIATION",
+                severity="warning",
+                title="Meter Deviation Detected",
+                message=f"Nozzle {ns.nozzle_id}: Elec {ns.volume_sold:.3f}L vs Mech {ns.mechanical_volume:.3f}L "
+                        f"({ns.meter_deviation_percent:.2f}%) - Shift {data.shift_id}, {user_name}. "
+                        f"Note: {data.notes or 'N/A'}",
+                entity_type="handover",
+                entity_id=handover_id,
+                created_by=ctx["username"],
+            )
+
     # Update nozzle electronic readings in islands data
     # Skip if enter_readings already handled nozzle state updates
     if not er_closing:
@@ -567,6 +603,7 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
             nozzle = get_nozzle(reading.nozzle_id, storage=storage)
             if nozzle:
                 nozzle["electronic_reading"] = reading.closing_reading
+                nozzle["mechanical_reading"] = reading.mechanical_closing
 
     # --- Feed daily entry files from stock snapshot ---
     if enriched_snapshot:

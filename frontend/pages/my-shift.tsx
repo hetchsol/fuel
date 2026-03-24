@@ -9,6 +9,7 @@ interface NozzleInfo {
   nozzle_id: string
   fuel_type: string
   opening_reading: number
+  mechanical_opening_reading: number
   price_per_liter: number
   status: string
   display_label?: string | null
@@ -20,6 +21,8 @@ interface NozzleRow {
   fuel_type: string
   opening_reading: number
   closing_reading: string
+  mechanical_opening: number
+  mechanical_closing: string
   price_per_liter: number
   display_label?: string | null
   fuel_type_abbrev?: string | null
@@ -72,6 +75,9 @@ interface HandoverResult {
     volume_sold: number
     price_per_liter: number
     revenue: number
+    mechanical_volume?: number | null
+    meter_deviation_percent?: number | null
+    meter_deviation_flagged?: boolean | null
   }[]
   fuel_revenue: number
   lpg_sales: number
@@ -120,6 +126,9 @@ export default function MyShift() {
   const [handoverResult, setHandoverResult] = useState<HandoverResult | null>(null)
   const [pastHandovers, setPastHandovers] = useState<HandoverResult[]>([])
 
+  // Meter discrepancy threshold (%)
+  const [meterThreshold, setMeterThreshold] = useState<number>(0.5)
+
   // Wizard step state
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
 
@@ -144,11 +153,14 @@ export default function MyShift() {
             fuel_type: n.fuel_type,
             opening_reading: n.opening_reading,
             closing_reading: '',
+            mechanical_opening: n.mechanical_opening_reading || 0,
+            mechanical_closing: '',
             price_per_liter: n.price_per_liter,
             display_label: n.display_label,
             fuel_type_abbrev: n.fuel_type_abbrev,
           }))
         )
+        setMeterThreshold(shiftData.meter_discrepancy_threshold ?? 0.5)
 
         // Fetch stock opening separately — failure returns empty defaults
         fetch(`${BASE}/handover/stock-opening`, { headers: getAuthHeaders() })
@@ -213,11 +225,31 @@ export default function MyShift() {
   const nozzleComputations = nozzleRows.map(row => {
     const closing = parseFloat(row.closing_reading)
     if (isNaN(closing) || row.closing_reading === '') {
-      return { volume: 0, revenue: 0, valid: false }
+      return { volume: 0, revenue: 0, valid: false, mechVolume: 0, deviationL: 0, deviationPct: 0, flagged: false, mechValid: row.mechanical_closing === '' ? undefined : false }
     }
     const volume = closing - row.opening_reading
     const revenue = volume >= 0 ? volume * row.price_per_liter : 0
-    return { volume: Math.max(0, volume), revenue: volume >= 0 ? revenue : 0, valid: volume >= 0 }
+
+    // Mechanical (totalizer) deviation
+    const mechClose = parseFloat(row.mechanical_closing)
+    const mechValid = row.mechanical_closing !== '' && !isNaN(mechClose) && mechClose >= row.mechanical_opening
+    const mechVolume = mechValid ? mechClose - row.mechanical_opening : 0
+    const vol = Math.max(0, volume)
+    const deviationL = mechValid ? Math.abs(vol - mechVolume) : 0
+    const avg = mechValid ? (vol + mechVolume) / 2 : 0
+    const deviationPct = mechValid && avg > 0 ? (deviationL / avg) * 100 : 0
+    const flagged = mechValid && deviationPct > meterThreshold
+
+    return {
+      volume: Math.max(0, volume),
+      revenue: volume >= 0 ? revenue : 0,
+      valid: volume >= 0,
+      mechVolume,
+      deviationL,
+      deviationPct,
+      flagged,
+      mechValid: row.mechanical_closing === '' ? undefined : mechValid,
+    }
   })
 
   const fuelRevenue = nozzleComputations.reduce((s, c) => s + c.revenue, 0)
@@ -265,11 +297,16 @@ export default function MyShift() {
 
   const allClosingsEntered = nozzleRows.length > 0 && nozzleRows.every(r => r.closing_reading !== '')
   const allValid = nozzleComputations.every(c => c.valid || c.volume === 0)
+  const allMechEntered = nozzleRows.every(r => r.mechanical_closing !== '')
+  const allMechValid = nozzleComputations.every(c => c.mechValid !== false)
   // LPG split validation: for rows where total sold > 0, refill + with_cylinder must equal total
   const lpgSplitValid = lpgComputations.every(c => c.totalSold === 0 || c.splitValid)
+  const hasDeviationFlags = nozzleComputations.some(c => c.flagged)
 
-  const canProceedToReview = allClosingsEntered && allValid && lpgSplitValid
-  const canSubmit = currentStep === 3 && allClosingsEntered && allValid && lpgSplitValid && actualCash !== '' && !submitting
+  const canProceedToReview = allClosingsEntered && allValid && allMechEntered && allMechValid && lpgSplitValid
+  const canSubmit = currentStep === 3 && allClosingsEntered && allValid && allMechEntered && allMechValid
+    && lpgSplitValid && actualCash !== '' && !submitting
+    && (!hasDeviationFlags || notes.trim() !== '')
 
   const updateClosingReading = (nozzleId: string, value: string) => {
     setNozzleRows(prev =>
@@ -280,6 +317,18 @@ export default function MyShift() {
   const updateOpeningReading = (nozzleId: string, value: string) => {
     setNozzleRows(prev =>
       prev.map(r => r.nozzle_id === nozzleId ? { ...r, opening_reading: parseFloat(value) || 0 } : r)
+    )
+  }
+
+  const updateMechClosing = (nozzleId: string, value: string) => {
+    setNozzleRows(prev =>
+      prev.map(r => r.nozzle_id === nozzleId ? { ...r, mechanical_closing: value } : r)
+    )
+  }
+
+  const updateMechOpening = (nozzleId: string, value: string) => {
+    setNozzleRows(prev =>
+      prev.map(r => r.nozzle_id === nozzleId ? { ...r, mechanical_opening: parseFloat(value) || 0 } : r)
     )
   }
 
@@ -338,6 +387,8 @@ export default function MyShift() {
             nozzle_id: r.nozzle_id,
             opening_reading: r.opening_reading,
             closing_reading: parseFloat(r.closing_reading) || 0,
+            mechanical_opening: r.mechanical_opening,
+            mechanical_closing: parseFloat(r.mechanical_closing) || 0,
           })),
           lpg_sales: lpgTotal,
           lubricant_sales: lubricantTotal,
@@ -557,8 +608,8 @@ export default function MyShift() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
-                  {['Nozzle', 'Fuel Type', 'Opening Reading', 'Closing Reading', 'Volume (L)'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
+                  {['Nozzle', 'Fuel Type', 'Opening', 'Closing', 'Volume (L)', 'Mech. Open', 'Mech. Close', 'Deviation'].map(h => (
+                    <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
                       style={{ color: theme.textSecondary }}>{h}</th>
                   ))}
                 </tr>
@@ -568,6 +619,8 @@ export default function MyShift() {
                   const comp = nozzleComputations[idx]
                   const closingVal = parseFloat(row.closing_reading)
                   const hasError = row.closing_reading !== '' && !isNaN(closingVal) && closingVal < row.opening_reading
+                  const mechCloseVal = parseFloat(row.mechanical_closing)
+                  const mechError = row.mechanical_closing !== '' && !isNaN(mechCloseVal) && mechCloseVal < row.mechanical_opening
                   return (
                     <tr key={row.nozzle_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                       <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>
@@ -591,7 +644,7 @@ export default function MyShift() {
                           value={row.opening_reading || ''}
                           onChange={e => updateOpeningReading(row.nozzle_id, e.target.value)}
                           placeholder="Enter opening"
-                          className="w-36 px-2 py-1 rounded border text-sm text-right font-mono"
+                          className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
                           style={inputStyle}
                         />
                       </td>
@@ -602,7 +655,7 @@ export default function MyShift() {
                           value={row.closing_reading}
                           onChange={e => updateClosingReading(row.nozzle_id, e.target.value)}
                           placeholder="Enter closing"
-                          className="w-36 px-2 py-1 rounded border text-sm text-right font-mono"
+                          className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
                           style={{
                             ...inputStyle,
                             borderColor: hasError ? 'var(--color-status-error)' : theme.border,
@@ -619,13 +672,54 @@ export default function MyShift() {
                           ? comp.volume.toLocaleString(undefined, { minimumFractionDigits: 3 })
                           : '-'}
                       </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          step="0.001"
+                          value={row.mechanical_opening || ''}
+                          onChange={e => updateMechOpening(row.nozzle_id, e.target.value)}
+                          placeholder="Mech open"
+                          className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
+                          style={inputStyle}
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          step="0.001"
+                          value={row.mechanical_closing}
+                          onChange={e => updateMechClosing(row.nozzle_id, e.target.value)}
+                          placeholder="Mech close"
+                          className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
+                          style={{
+                            ...inputStyle,
+                            borderColor: mechError ? 'var(--color-status-error)' : theme.border,
+                          }}
+                        />
+                        {mechError && (
+                          <div className="text-xs mt-0.5" style={{ color: 'var(--color-status-error)' }}>
+                            Must be &ge; opening
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-xs whitespace-nowrap" style={{
+                        color: comp.flagged ? 'var(--color-status-error)' : theme.textSecondary,
+                        fontWeight: comp.flagged ? 600 : 400,
+                      }}>
+                        {comp.mechValid && row.closing_reading !== '' && comp.valid
+                          ? <>
+                              {comp.flagged && <span title="Deviation exceeds threshold">! </span>}
+                              {comp.deviationL.toFixed(3)} L ({comp.deviationPct.toFixed(2)}%)
+                            </>
+                          : '-'}
+                      </td>
                     </tr>
                   )
                 })}
               </tbody>
               <tfoot>
                 <tr style={{ borderTopColor: theme.border, borderTopWidth: 2, backgroundColor: theme.background }}>
-                  <td colSpan={4} className="px-3 py-2 font-semibold text-right" style={{ color: theme.textPrimary }}>
+                  <td colSpan={7} className="px-3 py-2 font-semibold text-right" style={{ color: theme.textPrimary }}>
                     Total Volume
                   </td>
                   <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: theme.primary }}>
@@ -858,8 +952,8 @@ export default function MyShift() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
-                  {['Nozzle', 'Fuel Type', 'Opening', 'Closing', 'Volume (L)'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
+                  {['Nozzle', 'Fuel Type', 'Opening', 'Closing', 'Volume (L)', 'Mech. Vol (L)', 'Deviation'].map(h => (
+                    <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
                       style={{ color: theme.textSecondary }}>{h}</th>
                   ))}
                 </tr>
@@ -892,13 +986,29 @@ export default function MyShift() {
                       <td className="px-3 py-2 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
                         {comp.volume.toLocaleString(undefined, { minimumFractionDigits: 3 })}
                       </td>
+                      <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
+                        {comp.mechValid
+                          ? comp.mechVolume.toLocaleString(undefined, { minimumFractionDigits: 3 })
+                          : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-xs whitespace-nowrap" style={{
+                        color: comp.flagged ? 'var(--color-status-error)' : theme.textSecondary,
+                        fontWeight: comp.flagged ? 600 : 400,
+                      }}>
+                        {comp.mechValid
+                          ? <>
+                              {comp.flagged && <span>! </span>}
+                              {comp.deviationL.toFixed(3)} L ({comp.deviationPct.toFixed(2)}%)
+                            </>
+                          : '-'}
+                      </td>
                     </tr>
                   )
                 })}
               </tbody>
               <tfoot>
                 <tr style={{ borderTopColor: theme.border, borderTopWidth: 2, backgroundColor: theme.background }}>
-                  <td colSpan={4} className="px-3 py-2 font-semibold text-right" style={{ color: theme.textPrimary }}>
+                  <td colSpan={6} className="px-3 py-2 font-semibold text-right" style={{ color: theme.textPrimary }}>
                     Total Volume
                   </td>
                   <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: theme.primary }}>
@@ -1168,15 +1278,30 @@ export default function MyShift() {
                   </div>
                 )}
 
+                {hasDeviationFlags && (
+                  <div className="rounded-lg p-3 text-sm"
+                    style={{
+                      backgroundColor: 'var(--color-status-warning-light, #fef3cd)',
+                      color: 'var(--color-status-warning, #856404)',
+                      borderWidth: 1,
+                      borderColor: 'var(--color-status-warning, #ffc107)',
+                    }}>
+                    <span className="font-semibold">Warning:</span> Meter discrepancy detected on {nozzleComputations.filter(c => c.flagged).length} nozzle(s). You must provide an explanation before submitting.
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-                    Notes (optional)
+                    {hasDeviationFlags ? 'Notes (required — explain meter discrepancy)' : 'Notes (optional)'}
                   </label>
                   <textarea value={notes} onChange={e => setNotes(e.target.value)}
-                    placeholder="Any remarks about the shift..."
+                    placeholder={hasDeviationFlags ? 'Explain the meter discrepancy...' : 'Any remarks about the shift...'}
                     rows={2}
                     className="w-full px-3 py-2 rounded border text-sm"
-                    style={inputStyle} />
+                    style={{
+                      ...inputStyle,
+                      borderColor: hasDeviationFlags && notes.trim() === '' ? 'var(--color-status-error)' : theme.border,
+                    }} />
                 </div>
               </div>
             </div>
@@ -1230,8 +1355,8 @@ export default function MyShift() {
           <table className="min-w-full text-sm mb-4">
             <thead>
               <tr style={{ backgroundColor: theme.background }}>
-                {['Nozzle', 'Fuel', 'Opening', 'Closing', 'Volume (L)', 'Revenue (ZMW)'].map(h => (
-                  <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
+                {['Nozzle', 'Fuel', 'Opening', 'Closing', 'Volume (L)', 'Mech. Vol', 'Deviation', 'Revenue (ZMW)'].map(h => (
+                  <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
                     style={{ color: theme.textSecondary }}>{h}</th>
                 ))}
               </tr>
@@ -1254,6 +1379,22 @@ export default function MyShift() {
                   </td>
                   <td className="px-3 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
                     {ns.volume_sold.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                  </td>
+                  <td className="px-3 py-1 text-right font-mono" style={{ color: theme.textPrimary }}>
+                    {ns.mechanical_volume != null
+                      ? ns.mechanical_volume.toLocaleString(undefined, { minimumFractionDigits: 3 })
+                      : '-'}
+                  </td>
+                  <td className="px-3 py-1 text-right font-mono text-xs whitespace-nowrap" style={{
+                    color: ns.meter_deviation_flagged ? 'var(--color-status-error)' : theme.textSecondary,
+                    fontWeight: ns.meter_deviation_flagged ? 600 : 400,
+                  }}>
+                    {ns.meter_deviation_percent != null
+                      ? <>
+                          {ns.meter_deviation_flagged && <span>! </span>}
+                          {ns.meter_deviation_percent.toFixed(2)}%
+                        </>
+                      : '-'}
                   </td>
                   <td className="px-3 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
                     {fmtZMW(ns.revenue)}

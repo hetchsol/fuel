@@ -725,6 +725,8 @@ class HandoverNozzleReadingInput(BaseModel):
     nozzle_id: str
     opening_reading: float = Field(..., ge=0)      # auto-populated from last known reading
     closing_reading: float = Field(..., ge=0)      # entered by attendant
+    mechanical_opening: float = Field(default=0, ge=0)  # mechanical (totalizer) opening
+    mechanical_closing: float = Field(default=0, ge=0)  # mechanical (totalizer) closing
 
 class HandoverNozzleReadingSummary(BaseModel):
     """Computed nozzle reading summary for handover output"""
@@ -735,6 +737,12 @@ class HandoverNozzleReadingSummary(BaseModel):
     volume_sold: float          # closing - opening
     price_per_liter: float
     revenue: float              # volume × price
+    mechanical_opening: Optional[float] = None
+    mechanical_closing: Optional[float] = None
+    mechanical_volume: Optional[float] = None
+    meter_deviation_liters: Optional[float] = None
+    meter_deviation_percent: Optional[float] = None
+    meter_deviation_flagged: Optional[bool] = None
 
 # ===== Shift-Level Stock Snapshot Models =====
 
