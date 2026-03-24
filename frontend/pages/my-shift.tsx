@@ -608,7 +608,7 @@ export default function MyShift() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
-                  {['Nozzle', 'Fuel Type', 'Opening', 'Closing', 'Volume (L)', 'Mech. Open', 'Mech. Close', 'Deviation'].map(h => (
+                  {['Nozzle', 'Fuel Type', 'Elect. Open', 'Elect. Close', 'Volume (L)', 'Mech. Open', 'Mech. Close', 'Deviation'].map(h => (
                     <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
                       style={{ color: theme.textSecondary }}>{h}</th>
                   ))}
@@ -643,7 +643,7 @@ export default function MyShift() {
                           step="0.001"
                           value={row.opening_reading || ''}
                           onChange={e => updateOpeningReading(row.nozzle_id, e.target.value)}
-                          placeholder="Enter opening"
+                          placeholder="Elect. open"
                           className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
                           style={inputStyle}
                         />
@@ -654,7 +654,7 @@ export default function MyShift() {
                           step="0.001"
                           value={row.closing_reading}
                           onChange={e => updateClosingReading(row.nozzle_id, e.target.value)}
-                          placeholder="Enter closing"
+                          placeholder="Elect. close"
                           className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
                           style={{
                             ...inputStyle,
@@ -952,7 +952,7 @@ export default function MyShift() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
-                  {['Nozzle', 'Fuel Type', 'Opening', 'Closing', 'Volume (L)', 'Mech. Vol (L)', 'Deviation'].map(h => (
+                  {['Nozzle', 'Fuel Type', 'Elect. Open', 'Elect. Close', 'Volume (L)', 'Mech. Vol (L)', 'Deviation'].map(h => (
                     <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
                       style={{ color: theme.textSecondary }}>{h}</th>
                   ))}
@@ -1355,7 +1355,7 @@ export default function MyShift() {
           <table className="min-w-full text-sm mb-4">
             <thead>
               <tr style={{ backgroundColor: theme.background }}>
-                {['Nozzle', 'Fuel', 'Opening', 'Closing', 'Volume (L)', 'Mech. Vol', 'Deviation', 'Revenue (ZMW)'].map(h => (
+                {['Nozzle', 'Fuel', 'Elect. Open', 'Elect. Close', 'Volume (L)', 'Mech. Vol', 'Deviation', 'Revenue (ZMW)'].map(h => (
                   <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
                     style={{ color: theme.textSecondary }}>{h}</th>
                 ))}
