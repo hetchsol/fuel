@@ -246,6 +246,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Administration',
       roles: ['owner'],
       children: [
+        { path: '/daily-close-off', label: 'Daily Close-Off', roles: ['owner'] },
         { path: '/stations', label: 'Stations', roles: ['owner'] },
         { path: '/infrastructure', label: 'Infrastructure', roles: ['owner'] },
         { path: '/settings', label: 'Settings', roles: ['owner'] },

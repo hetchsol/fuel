@@ -811,6 +811,12 @@ async def reopen_handover(
         raise HTTPException(status_code=404, detail="Handover not found")
 
     handover = handovers[handover_id]
+
+    # Block if the day has been closed off
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
+    if handover.get("date", "") in close_offs:
+        raise HTTPException(status_code=400, detail=f"Cannot reopen handover. Day {handover['date']} has been closed off.")
+
     if handover.get("status") == "reopened":
         raise HTTPException(status_code=400, detail="Handover is already reopened")
 
@@ -891,6 +897,12 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
         raise HTTPException(status_code=404, detail="Handover not found")
 
     handover = handovers[data.handover_id]
+
+    # Block if the day has been closed off
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
+    if handover.get("date", "") in close_offs:
+        raise HTTPException(status_code=400, detail=f"Cannot modify handover. Day {handover['date']} has been closed off.")
+
     current_review = handover.get("review_status", "submitted")
     if current_review in ("approved",):
         raise HTTPException(status_code=400, detail="Handover is already approved")
@@ -971,6 +983,7 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
 
     station_id = ctx["station_id"]
     handovers = _load_handovers(station_id)
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
 
     approved_count = 0
     skipped_count = 0
@@ -979,6 +992,10 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
     for hid in handover_ids:
         h = handovers.get(hid)
         if not h:
+            skipped_count += 1
+            continue
+        # Block if the day has been closed off
+        if h.get("date", "") in close_offs:
             skipped_count += 1
             continue
         # Only batch-approve clean (submitted) handovers, skip flagged
