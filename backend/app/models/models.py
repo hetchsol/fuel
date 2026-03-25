@@ -261,6 +261,7 @@ class AccountHolder(BaseModel):
     current_balance: float
     contact_person: Optional[str] = None
     phone: Optional[str] = None
+    default_price_per_liter: Optional[float] = None  # Custom rate; None = use global fuel price
 
 # Customer Allocation Models (Diesel Customer Types)
 class Customer(BaseModel):
@@ -289,6 +290,14 @@ class CreditSale(BaseModel):
     volume: float
     amount: float
     invoice_number: Optional[str] = None
+
+class HandoverCreditSaleItem(BaseModel):
+    account_id: str
+    account_name: str              # Denormalized for display
+    fuel_type: str                 # "Diesel" or "Petrol"
+    volume: float = Field(..., gt=0)
+    price_per_liter: float = 0     # Server-resolved on submit
+    amount: float = 0              # Server-calculated: volume × price_per_liter
 
 # Delivery Reference for Multiple Deliveries Support
 class DeliveryReference(BaseModel):
@@ -783,6 +792,7 @@ class HandoverInput(BaseModel):
     lubricant_sales: float = Field(default=0, ge=0)  # total ZMW from lubricants sold
     accessory_sales: float = Field(default=0, ge=0)  # total ZMW from accessories sold
     credit_sales: float = Field(default=0, ge=0)     # total credit sales (not collected as cash)
+    credit_sale_items: List['HandoverCreditSaleItem'] = []  # Itemized credit sales (preferred over flat credit_sales)
     actual_cash: float = Field(..., ge=0)          # cash being handed in
     notes: Optional[str] = None
     stock_snapshot: Optional[ShiftStockSnapshot] = None
@@ -808,6 +818,7 @@ class HandoverOutput(BaseModel):
     accessory_sales: float
     total_expected: float       # fuel + lpg + lubricants + accessories
     credit_sales: float
+    credit_sale_details: Optional[List[dict]] = None  # Enriched credit sale line items with resolved prices
     expected_cash: float        # total_expected - credit_sales
     actual_cash: float
     difference: float           # actual - expected (+surplus / -shortage)

@@ -10,10 +10,11 @@ import os
 from ...models.models import (
     HandoverInput, HandoverOutput, HandoverReviewInput,
     HandoverNozzleReadingInput, HandoverNozzleReadingSummary,
-    ShiftStockSnapshot, UserRole,
+    HandoverCreditSaleItem, ShiftStockSnapshot, UserRole,
 )
 from ...config import resolve_fuel_price
 from ...database.storage import get_nozzle
+from ...services.inventory import process_credit_sale
 from .auth import get_current_user, require_supervisor_or_owner, get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
@@ -47,6 +48,32 @@ def _get_fuel_type(nozzle_id: str, storage: dict = None) -> str:
     if nozzle:
         return nozzle.get("fuel_type", "") or "Diesel"
     return "Diesel"
+
+
+@router.get("/credit-accounts")
+async def get_credit_accounts(ctx: dict = Depends(get_station_context)):
+    """
+    Return account holders and current global fuel prices so the frontend
+    can build credit sale line items with auto-computed amounts.
+    """
+    storage = ctx["storage"]
+    accounts_data = storage.get('accounts', {})
+
+    accounts_list = []
+    for acc in accounts_data.values():
+        accounts_list.append({
+            "account_id": acc["account_id"],
+            "account_name": acc["account_name"],
+            "account_type": acc.get("account_type", ""),
+            "default_price_per_liter": acc.get("default_price_per_liter"),
+        })
+
+    fuel_prices = {
+        "Diesel": resolve_fuel_price("Diesel", storage),
+        "Petrol": resolve_fuel_price("Petrol", storage),
+    }
+
+    return {"accounts": accounts_list, "fuel_prices": fuel_prices}
 
 
 @router.get("/my-shift")
@@ -508,6 +535,71 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
         }
 
     total_expected = round(fuel_revenue + lpg_sales + lubricant_sales + accessory_sales, 2)
+
+    # --- Credit sale line-item processing ---
+    credit_sale_details = None
+    accounts_data = storage.get('accounts', {})
+    credit_sales_data = storage.get('credit_sales', [])
+
+    if data.credit_sale_items:
+        # 1) Resolve prices and compute amounts for each new item
+        enriched_items = []
+        for item in data.credit_sale_items:
+            account = accounts_data.get(item.account_id)
+            if account and account.get("default_price_per_liter"):
+                price = account["default_price_per_liter"]
+            else:
+                price = resolve_fuel_price(item.fuel_type, storage)
+            amount = round(item.volume * price, 2)
+            enriched_items.append({
+                "account_id": item.account_id,
+                "account_name": item.account_name,
+                "fuel_type": item.fuel_type,
+                "volume": item.volume,
+                "price_per_liter": price,
+                "amount": amount,
+                "source": "handover",
+            })
+
+        # 2) Query pre-existing credit sales for this shift (recorded via accounts page)
+        pre_existing = [
+            s for s in credit_sales_data
+            if s.get("shift_id") == data.shift_id
+        ]
+        pre_existing_details = []
+        for s in pre_existing:
+            pre_existing_details.append({
+                "account_id": s.get("account_id", ""),
+                "account_name": accounts_data.get(s.get("account_id", ""), {}).get("account_name", s.get("account_id", "")),
+                "fuel_type": s.get("fuel_type", ""),
+                "volume": s.get("volume", 0),
+                "price_per_liter": round(s["amount"] / s["volume"], 2) if s.get("volume") else 0,
+                "amount": s.get("amount", 0),
+                "source": "pre_existing",
+                "sale_id": s.get("sale_id", ""),
+            })
+
+        # 3) Deduplicate: skip new items where same account_id already has a pre-existing sale for this shift
+        pre_existing_account_ids = {s.get("account_id") for s in pre_existing}
+        new_items_to_create = []
+        for item in enriched_items:
+            if item["account_id"] in pre_existing_account_ids:
+                item["source"] = "skipped_duplicate"
+            else:
+                new_items_to_create.append(item)
+
+        # 4) Total credit = new items + pre-existing
+        new_total = sum(i["amount"] for i in new_items_to_create)
+        pre_existing_total = sum(s.get("amount", 0) for s in pre_existing)
+        credit_total = round(new_total + pre_existing_total, 2)
+
+        # Override flat credit_sales with computed total
+        data.credit_sales = credit_total
+
+        # Combine all details for storage
+        credit_sale_details = enriched_items + pre_existing_details
+    # END credit_sale_items processing
+
     expected_cash = round(total_expected - data.credit_sales, 2)
     difference = round(data.actual_cash - expected_cash, 2)
 
@@ -537,6 +629,7 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
         accessory_sales=accessory_sales,
         total_expected=total_expected,
         credit_sales=data.credit_sales,
+        credit_sale_details=credit_sale_details,
         expected_cash=expected_cash,
         actual_cash=data.actual_cash,
         difference=difference,
@@ -548,9 +641,44 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
         stock_snapshot=enriched_snapshot,
     )
 
-    # Save handover
+    # Save handover FIRST (before credit sale processing, per risk mitigation)
     handovers[handover_id] = handover_output.dict()
     _save_handovers(handovers, station_id)
+
+    # 5) Create CreditSale records for new items via process_credit_sale()
+    if data.credit_sale_items and 'new_items_to_create' in dir():
+        shift_date = shift.get("date", "")
+        for idx, item in enumerate(new_items_to_create):
+            sale_id = f"CS-HO-{handover_id}-{idx}"
+            sale_data = {
+                "sale_id": sale_id,
+                "account_id": item["account_id"],
+                "shift_id": data.shift_id,
+                "date": shift_date,
+                "fuel_type": item["fuel_type"],
+                "volume": item["volume"],
+                "amount": item["amount"],
+                "invoice_number": f"Handover {handover_id}",
+            }
+            try:
+                process_credit_sale(
+                    accounts=accounts_data,
+                    sales_log=credit_sales_data,
+                    account_id=item["account_id"],
+                    amount=item["amount"],
+                    sale_data=sale_data,
+                )
+            except HTTPException:
+                # Credit limit exceeded — flag item but don't block handover
+                item["over_limit"] = True
+                # Update stored details
+                for d in handover_output.credit_sale_details or []:
+                    if d.get("account_id") == item["account_id"] and d.get("source") == "handover":
+                        d["over_limit"] = True
+                        break
+                # Re-save with updated flag
+                handovers[handover_id] = handover_output.dict()
+                _save_handovers(handovers, station_id)
 
     log_audit_event(
         station_id=station_id,

@@ -390,7 +390,15 @@ export default function Accounts() {
                     </p>
                   </div>
 
-                  {/* Contact Info */}
+                  {/* Custom Price & Contact Info */}
+                  {account.default_price_per_liter && (
+                    <div className="mt-3 pt-3 border-t border-surface-border">
+                      <p className="text-xs text-content-secondary">Custom Rate</p>
+                      <p className="text-sm font-semibold text-content-primary">
+                        ZMW {account.default_price_per_liter.toFixed(2)}/L
+                      </p>
+                    </div>
+                  )}
                   {account.contact_person && (
                     <div className="mt-3 pt-3 border-t border-surface-border">
                       <p className="text-xs text-content-secondary">

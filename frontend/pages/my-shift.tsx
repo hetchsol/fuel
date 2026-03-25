@@ -119,6 +119,11 @@ export default function MyShift() {
   const [actualCash, setActualCash] = useState('')
   const [notes, setNotes] = useState('')
 
+  // Credit sale line items
+  const [creditAccounts, setCreditAccounts] = useState<{account_id: string, account_name: string, account_type: string, default_price_per_liter: number|null}[]>([])
+  const [fuelPrices, setFuelPrices] = useState<{Diesel: number, Petrol: number}>({Diesel: 0, Petrol: 0})
+  const [creditItems, setCreditItems] = useState<{account_id: string, account_name: string, fuel_type: string, volume: string, price_per_liter: number, amount: number}[]>([])
+
   // UI state
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -162,6 +167,15 @@ export default function MyShift() {
           }))
         )
         setMeterThreshold(shiftData.meter_discrepancy_threshold ?? 0.5)
+
+        // Fetch credit accounts for line-item entry
+        fetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
+          .then(r => r.ok ? r.json() : { accounts: [], fuel_prices: { Diesel: 0, Petrol: 0 } })
+          .then(data => {
+            setCreditAccounts(data.accounts || [])
+            setFuelPrices(data.fuel_prices || { Diesel: 0, Petrol: 0 })
+          })
+          .catch(() => {})
 
         // Fetch stock opening separately — failure returns empty defaults
         fetch(`${BASE}/handover/stock-opening`, { headers: getAuthHeaders() })
@@ -289,7 +303,8 @@ export default function MyShift() {
   })
   const lubricantTotal = lubComputations.reduce((s, c) => s + c.value, 0)
 
-  const creditVal = parseFloat(creditSales) || 0
+  const creditItemsTotal = creditItems.reduce((s, i) => s + i.amount, 0)
+  const creditVal = creditAccounts.length > 0 ? creditItemsTotal : (parseFloat(creditSales) || 0)
   const actualCashVal = parseFloat(actualCash) || 0
 
   const totalExpected = fuelRevenue + lpgTotal + lubricantTotal + accessoryTotal
@@ -395,6 +410,12 @@ export default function MyShift() {
           lubricant_sales: lubricantTotal,
           accessory_sales: accessoryTotal,
           credit_sales: creditVal,
+          credit_sale_items: creditItems.map(i => ({
+            account_id: i.account_id,
+            account_name: i.account_name,
+            fuel_type: i.fuel_type,
+            volume: parseFloat(i.volume) || 0,
+          })),
           actual_cash: actualCashVal,
           notes: notes || null,
           stock_snapshot: stockSnapshot,
@@ -423,6 +444,7 @@ export default function MyShift() {
   }
 
   const fmtZMW = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2 })
+  const round2 = (v: number) => Math.round(v * 100) / 100
 
   if (loading) {
     return <LoadingSpinner text="Loading shift data..." />
@@ -1242,15 +1264,99 @@ export default function MyShift() {
 
               {/* Right: actual cash + difference */}
               <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-                    Credit Sales (ZMW)
-                  </label>
-                  <input type="number" min={0} step="0.01" value={creditSales}
-                    onChange={e => setCreditSales(e.target.value)} placeholder="0.00"
-                    className="w-full px-3 py-2 rounded border text-sm text-right font-mono"
-                    style={inputStyle} />
-                </div>
+                {/* Credit Sales — line items or legacy input */}
+                {creditAccounts.length > 0 ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Credit Sales</label>
+                      <button type="button" onClick={() => setCreditItems(prev => [...prev, { account_id: creditAccounts[0]?.account_id || '', account_name: creditAccounts[0]?.account_name || '', fuel_type: 'Diesel', volume: '', price_per_liter: creditAccounts[0]?.default_price_per_liter || fuelPrices.Diesel, amount: 0 }])}
+                        className="px-2 py-1 text-xs font-medium rounded text-white"
+                        style={{ backgroundColor: theme.primary }}>
+                        + Add
+                      </button>
+                    </div>
+                    {creditItems.length === 0 && (
+                      <div className="text-xs py-2 text-center" style={{ color: theme.textSecondary }}>No credit sales — tap Add to record one</div>
+                    )}
+                    {creditItems.map((item, idx) => {
+                      const acct = creditAccounts.find(a => a.account_id === item.account_id)
+                      const resolvedPrice = acct?.default_price_per_liter || fuelPrices[item.fuel_type as 'Diesel'|'Petrol'] || 0
+                      const vol = parseFloat(item.volume) || 0
+                      const amt = round2(vol * resolvedPrice)
+                      // Sync amount if changed
+                      if (item.price_per_liter !== resolvedPrice || item.amount !== amt) {
+                        const updated = [...creditItems]
+                        updated[idx] = { ...item, price_per_liter: resolvedPrice, amount: amt }
+                        setCreditItems(updated)
+                      }
+                      return (
+                        <div key={idx} className="grid grid-cols-12 gap-1 items-end mb-1">
+                          <div className="col-span-4">
+                            {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Account</div>}
+                            <select value={item.account_id} onChange={e => {
+                              const a = creditAccounts.find(x => x.account_id === e.target.value)
+                              const updated = [...creditItems]
+                              updated[idx] = { ...item, account_id: e.target.value, account_name: a?.account_name || '' }
+                              setCreditItems(updated)
+                            }} className="w-full px-1 py-1.5 rounded border text-xs" style={inputStyle}>
+                              {creditAccounts.map(a => <option key={a.account_id} value={a.account_id}>{a.account_name}</option>)}
+                            </select>
+                          </div>
+                          <div className="col-span-2">
+                            {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Fuel</div>}
+                            <select value={item.fuel_type} onChange={e => {
+                              const updated = [...creditItems]
+                              updated[idx] = { ...item, fuel_type: e.target.value }
+                              setCreditItems(updated)
+                            }} className="w-full px-1 py-1.5 rounded border text-xs" style={inputStyle}>
+                              <option value="Diesel">Diesel</option>
+                              <option value="Petrol">Petrol</option>
+                            </select>
+                          </div>
+                          <div className="col-span-2">
+                            {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Vol (L)</div>}
+                            <input type="number" min={0} step="0.01" value={item.volume}
+                              onChange={e => {
+                                const updated = [...creditItems]
+                                updated[idx] = { ...item, volume: e.target.value }
+                                setCreditItems(updated)
+                              }}
+                              placeholder="0" className="w-full px-1 py-1.5 rounded border text-xs text-right font-mono" style={inputStyle} />
+                          </div>
+                          <div className="col-span-1">
+                            {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>K/L</div>}
+                            <div className="px-1 py-1.5 text-xs font-mono text-right" style={{ color: theme.textSecondary }}>{resolvedPrice.toFixed(2)}</div>
+                          </div>
+                          <div className="col-span-2">
+                            {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Amount</div>}
+                            <div className="px-1 py-1.5 text-xs font-mono text-right font-medium" style={{ color: theme.textPrimary }}>{fmtZMW(amt)}</div>
+                          </div>
+                          <div className="col-span-1 flex justify-center">
+                            {idx === 0 && <div className="text-[10px] mb-0.5 invisible">X</div>}
+                            <button type="button" onClick={() => setCreditItems(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-xs px-1 py-1" style={{ color: 'var(--color-status-error)' }}>✕</button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {creditItems.length > 0 && (
+                      <div className="flex justify-between text-xs font-semibold pt-1 mt-1" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                        <span style={{ color: theme.textSecondary }}>Credit Total</span>
+                        <span className="font-mono" style={{ color: theme.textPrimary }}>{fmtZMW(creditItemsTotal)}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+                      Credit Sales (ZMW)
+                    </label>
+                    <input type="number" min={0} step="0.01" value={creditSales}
+                      onChange={e => setCreditSales(e.target.value)} placeholder="0.00"
+                      className="w-full px-3 py-2 rounded border text-sm text-right font-mono"
+                      style={inputStyle} />
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
                     Actual Cash Handed In (ZMW)

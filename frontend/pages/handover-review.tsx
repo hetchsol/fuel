@@ -38,6 +38,16 @@ interface HandoverEntry {
   accessory_sales: number
   total_expected: number
   credit_sales: number
+  credit_sale_details?: {
+    account_id: string
+    account_name: string
+    fuel_type: string
+    volume: number
+    price_per_liter: number
+    amount: number
+    source: string
+    over_limit?: boolean
+  }[] | null
   expected_cash: number
   actual_cash: number
   difference: number
@@ -578,6 +588,59 @@ function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
           </div>
         </div>
       </div>
+
+      {/* Credit Sale Details */}
+      {h.credit_sale_details && h.credit_sale_details.length > 0 && (
+        <div>
+          <div className="text-xs font-medium uppercase mb-2" style={{ color: theme.textSecondary }}>Credit Sale Items</div>
+          <table className="min-w-full text-xs">
+            <thead>
+              <tr style={{ backgroundColor: theme.cardBg }}>
+                {['Account', 'Fuel Type', 'Volume (L)', 'Price/L', 'Amount', 'Source'].map(col => (
+                  <th key={col} className="px-2 py-1 text-left font-medium uppercase" style={{ color: theme.textSecondary }}>{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {h.credit_sale_details.map((d, idx) => (
+                <tr key={idx} style={{ borderTopWidth: 1, borderTopColor: theme.border }}>
+                  <td className="px-2 py-1 font-medium" style={{ color: theme.textPrimary }}>{d.account_name}</td>
+                  <td className="px-2 py-1" style={{ color: theme.textSecondary }}>{d.fuel_type}</td>
+                  <td className="px-2 py-1 text-right font-mono" style={{ color: theme.textPrimary }}>
+                    {d.volume.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono" style={{ color: theme.textSecondary }}>
+                    {d.price_per_liter.toFixed(2)}
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
+                    K{d.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-2 py-1">
+                    {d.source === 'pre_existing' && (
+                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                        style={{ backgroundColor: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
+                        Already Recorded
+                      </span>
+                    )}
+                    {d.over_limit && (
+                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                        style={{ backgroundColor: 'var(--color-status-error-light, #fde8e8)', color: 'var(--color-status-error)' }}>
+                        Over Limit
+                      </span>
+                    )}
+                    {d.source === 'skipped_duplicate' && (
+                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                        style={{ backgroundColor: 'var(--color-status-warning-light, #fff8e1)', color: 'var(--color-status-warning)' }}>
+                        Duplicate (Skipped)
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Notes */}
       {h.notes && (
