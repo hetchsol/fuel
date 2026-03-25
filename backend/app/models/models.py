@@ -163,6 +163,8 @@ class TankDipReading(BaseModel):
     closing_dip_cm: Optional[float] = None
     opening_volume_liters: Optional[float] = None
     closing_volume_liters: Optional[float] = None
+    recorded_at: Optional[str] = None   # ISO timestamp of last update
+    recorded_by: Optional[str] = None   # User ID who recorded/updated
 
 class Shift(BaseModel):
     shift_id: str

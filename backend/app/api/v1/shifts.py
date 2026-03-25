@@ -423,6 +423,10 @@ def record_tank_dip_reading(shift_id: str, reading: TankDipReading, ctx: dict = 
     if reading.closing_dip_cm is not None:
         reading.closing_volume_liters = reading.closing_dip_cm * TANK_CONVERSION_FACTOR
 
+    # Add audit fields
+    reading.recorded_at = datetime.now().isoformat()
+    reading.recorded_by = ctx.get("user_id", "")
+
     reading_dict = reading.dict()
 
     if existing_reading is not None:
@@ -447,10 +451,99 @@ def get_shift_tank_dip_readings(shift_id: str, ctx: dict = Depends(get_station_c
     """
     storage = ctx["storage"]
     shifts_data = storage.get('shifts', {})
-    readings_data = storage.get('readings', [])
 
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
 
     shift = shifts_data[shift_id]
     return shift.get('tank_dip_readings', [])
+
+
+@router.get("/{shift_id}/previous-dip-readings")
+def get_previous_dip_readings(shift_id: str, ctx: dict = Depends(get_station_context)):
+    """
+    Get closing dip readings from the previous shift to auto-populate opening values.
+    Logic: If current is Night → get Day of same date. If Day → get Night of previous day.
+    Falls back to the most recent completed shift with dip readings.
+    """
+    from datetime import timedelta
+
+    storage = ctx["storage"]
+    shifts_data = storage.get('shifts', {})
+
+    if shift_id not in shifts_data:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    current_shift = shifts_data[shift_id]
+    current_date = current_shift.get("date", "")
+    current_type = current_shift.get("shift_type", "Day")
+
+    # Determine the target previous shift
+    if current_type == "Night":
+        target_date = current_date
+        target_type = "Day"
+    else:
+        try:
+            prev = datetime.strptime(current_date, "%Y-%m-%d") - timedelta(days=1)
+            target_date = prev.strftime("%Y-%m-%d")
+        except ValueError:
+            target_date = current_date
+        target_type = "Night"
+
+    # Search for target shift
+    previous_dips = []
+    found_shift_id = None
+
+    # First try exact match
+    for sid, s in shifts_data.items():
+        if sid == shift_id:
+            continue
+        if s.get("date") == target_date and s.get("shift_type") == target_type:
+            dips = s.get("tank_dip_readings", [])
+            if dips:
+                previous_dips = dips
+                found_shift_id = sid
+                break
+
+    # Fallback: most recent shift with dip readings
+    if not previous_dips:
+        candidates = []
+        for sid, s in shifts_data.items():
+            if sid == shift_id:
+                continue
+            dips = s.get("tank_dip_readings", [])
+            if not dips:
+                continue
+            shift_order = 1 if s.get("shift_type") == "Night" else 0
+            candidates.append((s.get("date", ""), shift_order, sid, dips))
+
+        candidates.sort(reverse=True)
+        # Filter to only shifts before current
+        current_order = 1 if current_type == "Night" else 0
+        for date_str, order, sid, dips in candidates:
+            if date_str < current_date or (date_str == current_date and order < current_order):
+                previous_dips = dips
+                found_shift_id = sid
+                break
+
+    if not previous_dips:
+        return {"found": False, "message": "No previous dip readings found", "readings": []}
+
+    # Map closing values → opening values for auto-populate
+    auto_populate = []
+    for dip in previous_dips:
+        if dip.get("closing_dip_cm") is not None:
+            auto_populate.append({
+                "tank_id": dip["tank_id"],
+                "opening_dip_cm": dip["closing_dip_cm"],
+                "opening_volume_liters": dip.get("closing_volume_liters"),
+            })
+
+    prev_shift = shifts_data.get(found_shift_id, {})
+    return {
+        "found": True,
+        "source_shift_id": found_shift_id,
+        "source_date": prev_shift.get("date", ""),
+        "source_shift_type": prev_shift.get("shift_type", ""),
+        "readings": auto_populate,
+    }

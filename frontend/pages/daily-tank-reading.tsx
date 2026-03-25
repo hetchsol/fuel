@@ -120,6 +120,10 @@ export default function DailyTankReading() {
   } | null>(null)
   const [fetchingPrevious, setFetchingPrevious] = useState(false)
 
+  // Pull from Shift Dip Readings state
+  const [shiftDipPulled, setShiftDipPulled] = useState(false)
+  const [fetchingShiftDip, setFetchingShiftDip] = useState(false)
+
   // Pull from Enter Readings state
   const [pullingFromER, setPullingFromER] = useState(false)
   const [erPulled, setErPulled] = useState(false)
@@ -265,7 +269,41 @@ export default function DailyTankReading() {
     }
   }
 
-  // NEW: Fetch previous shift closing readings to auto-populate opening values
+  // Auto-pull dip readings from the Shift's tank_dip_readings (recorded on Shifts page)
+  useEffect(() => {
+    if (selectedTank && formData.date && formData.shift_type) {
+      fetchShiftDipReadings()
+    }
+  }, [selectedTank, formData.date, formData.shift_type])
+
+  const fetchShiftDipReadings = async () => {
+    const shiftId = `${formData.date}-${formData.shift_type}`
+    setFetchingShiftDip(true)
+    setShiftDipPulled(false)
+    try {
+      const res = await authFetch(`${BASE}/shifts/${shiftId}/tank-dip-readings`, { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        const tankDip = data.find((d: any) => d.tank_id === selectedTank)
+        if (tankDip && (tankDip.opening_dip_cm != null || tankDip.closing_dip_cm != null)) {
+          setFormData(prev => ({
+            ...prev,
+            opening_dip_cm: tankDip.opening_dip_cm != null ? tankDip.opening_dip_cm.toString() : prev.opening_dip_cm,
+            closing_dip_cm: tankDip.closing_dip_cm != null ? tankDip.closing_dip_cm.toString() : prev.closing_dip_cm,
+            opening_volume: tankDip.opening_volume_liters != null ? tankDip.opening_volume_liters.toString() : prev.opening_volume,
+            closing_volume: tankDip.closing_volume_liters != null ? tankDip.closing_volume_liters.toString() : prev.closing_volume,
+          }))
+          setShiftDipPulled(true)
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching shift dip readings:', err)
+    } finally {
+      setFetchingShiftDip(false)
+    }
+  }
+
+  // Fetch previous shift closing readings to auto-populate opening values
   const fetchPreviousShiftData = async () => {
     try {
       setFetchingPrevious(true)
@@ -1016,7 +1054,7 @@ export default function DailyTankReading() {
             <div className="rounded-lg shadow p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>📏 Tank Dip Readings & Volume Levels</h2>
-                {!autoPopulated?.active && !fetchingPrevious && (
+                {!autoPopulated?.active && !fetchingPrevious && !shiftDipPulled && (
                   <button
                     type="button"
                     onClick={fetchPreviousShiftData}
@@ -1029,7 +1067,45 @@ export default function DailyTankReading() {
               </div>
               <p className="text-sm mb-6 transition-colors duration-300" style={{ color: theme.textSecondary }}>Physical measurements in centimeters and volume levels in liters (Columns AF-AH, AI, AL)</p>
 
-              {/* Auto-populated indicator */}
+              {/* Shift dip readings indicator */}
+              {fetchingShiftDip && (
+                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: 'var(--color-action-primary-light)', borderColor: 'var(--color-action-primary)', borderWidth: '1px' }}>
+                  <svg className="animate-spin h-5 w-5 text-action-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="text-action-primary text-sm font-medium">Loading shift dip readings...</span>
+                </div>
+              )}
+
+              {shiftDipPulled && !fetchingShiftDip && (
+                <div className="mb-4 p-3 rounded-lg flex items-center justify-between" style={{ backgroundColor: 'var(--color-status-success-light)', borderColor: 'var(--color-status-success)', borderWidth: '1px' }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-status-success text-lg">✓</span>
+                    <span className="text-status-success text-sm font-medium">
+                      Dip readings pulled from Shift ({formData.date} - {formData.shift_type})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShiftDipPulled(false)
+                      setFormData(prev => ({
+                        ...prev,
+                        opening_dip_cm: '',
+                        closing_dip_cm: '',
+                        opening_volume: '',
+                        closing_volume: '',
+                      }))
+                    }}
+                    className="text-status-success hover:text-status-success text-sm underline"
+                  >
+                    Clear & enter manually
+                  </button>
+                </div>
+              )}
+
+              {/* Auto-populated from previous shift indicator */}
               {fetchingPrevious && (
                 <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: 'var(--color-action-primary-light)', borderColor: 'var(--color-action-primary)', borderWidth: '1px' }}>
                   <svg className="animate-spin h-5 w-5 text-action-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
