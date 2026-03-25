@@ -9,6 +9,11 @@
   --color-bg-card: #162A4A;
   --color-border: #1E3A60;
 
+  /* Glass card */
+  --color-glass-bg: rgba(22, 42, 74, 0.65);
+  --color-glass-border: rgba(255, 255, 255, 0.08);
+  --color-glass-highlight: rgba(255, 255, 255, 0.04);
+
   /* Content — white on blue */
   --color-text-primary: #F0F4FF;
   --color-text-secondary: #8BA3C7;
@@ -74,6 +79,11 @@
   --color-bg-card: #0F1E38;
   --color-border: #162D50;
 
+  /* Glass card */
+  --color-glass-bg: rgba(15, 30, 56, 0.7);
+  --color-glass-border: rgba(255, 255, 255, 0.06);
+  --color-glass-highlight: rgba(255, 255, 255, 0.02);
+
   /* Content */
   --color-text-primary: #F0F4FF;
   --color-text-secondary: #7B96BA;
@@ -127,10 +137,13 @@
 
 /* ── Blue Gradient Page Background ──────────────────────────── */
 body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background: linear-gradient(135deg, #1A4F8C 0%, #0F2847 40%, #0A1B30 100%);
   background-attachment: fixed;
   min-height: 100vh;
   color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ── Page Fade-In ──────────────────────────────────────────── */
@@ -149,14 +162,79 @@ body {
   animation: fadeIn 0.3s ease-out;
 }
 
+/* ── Glass Card ──────────────────────────────────────────────── */
+@layer components {
+  .glass-card {
+    background: var(--color-glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--color-glass-border);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.08),
+      inset 0 1px 0 var(--color-glass-highlight);
+    border-radius: 16px;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .glass-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 var(--color-glass-highlight);
+  }
+
+  .glass-card-static {
+    background: var(--color-glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--color-glass-border);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.08),
+      inset 0 1px 0 var(--color-glass-highlight);
+    border-radius: 16px;
+  }
+
+  .glass-nav {
+    background: rgba(0, 122, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .dark .glass-nav {
+    background: rgba(0, 102, 214, 0.85);
+  }
+
+  /* Stat card with gradient accent */
+  .stat-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    padding: 1.5rem;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-2px);
+  }
+}
+
 /* ── Form Input Default Colors & Transitions ──────────────── */
-/* Ensure all form elements are readable on the dark navy theme  */
 input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='submit']):not([type='button']):not([type='reset']):not([type='color']),
 select,
 textarea {
   background-color: var(--color-bg);
   color: var(--color-text-primary);
   border-color: var(--color-border);
+  border-radius: 10px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
@@ -196,16 +274,70 @@ textarea:focus {
 }
 
 /* ── Global Text Color Defaults ────────────────────────────── */
-/* Labels, headings, and spans inside forms inherit readable text */
 label, legend {
   color: var(--color-text-secondary);
 }
 
 h1, h2, h3, h4, h5, h6 {
   color: var(--color-text-primary);
+  letter-spacing: -0.02em;
 }
 
 /* ── Table Row Transitions ─────────────────────────────────── */
 tbody tr {
   transition: background-color 0.15s ease;
+}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+button {
+  transition: all 0.2s ease;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ── Scrollbar Styling ─────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Tank Gauge Animation ──────────────────────────────────── */
+.tank-gauge-fill {
+  animation: fill-tank 1s ease-out forwards;
+}
+
+@keyframes fill-tank {
+  from { height: 0%; }
+  to { height: var(--fill-level); }
+}
+
+/* ── Dropdown Animation ────────────────────────────────────── */
+.dropdown-enter {
+  animation: slide-down 0.2s ease-out;
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }

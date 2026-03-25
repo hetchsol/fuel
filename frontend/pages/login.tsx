@@ -18,9 +18,9 @@ function FuelMeter() {
   const display = liters.toFixed(2).padStart(6, '0')
 
   return (
-    <div className="flex flex-col items-center mb-4">
+    <div className="flex flex-col items-center mb-6">
       {/* Nozzle */}
-      <svg width="120" height="70" viewBox="0 0 120 75" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg width="120" height="70" viewBox="0 0 120 75" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-lg">
         {/* Hose */}
         <path d="M20 55 Q5 55 5 42 Q5 28 15 25" stroke="#374151" strokeWidth="6" strokeLinecap="round" fill="none" />
         {/* Nozzle handle */}
@@ -46,13 +46,13 @@ function FuelMeter() {
       </svg>
 
       {/* Numeric Odometer Display */}
-      <div className="bg-[#0A1929] border-2 border-[#1E3A5F] rounded-lg px-1 py-2 flex items-center gap-[2px] shadow-lg">
+      <div className="bg-[#0A1929] border-2 border-[#1E3A5F] rounded-xl px-1.5 py-2 flex items-center gap-[2px] shadow-lg">
         {display.split('').map((char, i) => (
           <div key={i} className={char === '.' ? 'flex items-end pb-1' : ''}>
             {char === '.' ? (
               <span className="text-[#F59E0B] text-lg font-bold leading-none">.</span>
             ) : (
-              <div className="bg-[#0F2A4A] border border-[#1E3A5F] rounded w-7 h-10 flex items-center justify-center overflow-hidden">
+              <div className="bg-[#0F2A4A] border border-[#1E3A5F] rounded-lg w-7 h-10 flex items-center justify-center overflow-hidden">
                 <span
                   className="text-[#22D3EE] text-xl font-mono font-bold tabular-nums transition-all duration-150"
                   style={{ textShadow: '0 0 8px rgba(34,211,238,0.5)' }}
@@ -98,7 +98,6 @@ export default function Login() {
         const retryable = res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504
         if (!retryable || attempt === 2) break
 
-        // Wait before retrying: use Retry-After header or exponential backoff (2s, 4s)
         const retryAfter = res.headers.get('retry-after')
         const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : (attempt + 1) * 2000
         setError(`Server busy, retrying in ${Math.round(delay / 1000)}s...`)
@@ -127,17 +126,14 @@ export default function Login() {
 
       const data = await res.json()
 
-      // Store user data and token in localStorage
       localStorage.setItem('accessToken', data.access_token)
       localStorage.setItem('user', JSON.stringify(data.user))
       localStorage.setItem('stationId', data.user.station_id || 'ST001')
 
-      // Set cookies for server-side middleware route protection
       const secure = window.location.protocol === 'https:' ? '; Secure' : ''
       document.cookie = `accessToken=${data.access_token}; path=/; SameSite=Lax${secure}`
       document.cookie = `user=${encodeURIComponent(JSON.stringify(data.user))}; path=/; SameSite=Lax${secure}`
 
-      // Redirect to original page or dashboard
       const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/'
       router.push(redirect)
     } catch (err: any) {
@@ -152,101 +148,147 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-header-bg to-action-primary-hover flex items-center justify-center px-4">
-      <div className="max-w-md w-full">
-        <div className="bg-surface-card rounded-lg shadow-2xl p-8 relative">
+    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
+      {/* Animated background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#0A3D7A] via-[#0F2847] to-[#0A1B30]" />
+
+      {/* Floating orbs */}
+      <div className="absolute top-[20%] left-[15%] w-64 h-64 bg-action-primary/10 rounded-full blur-3xl animate-float" />
+      <div className="absolute bottom-[20%] right-[10%] w-80 h-80 bg-action-primary/5 rounded-full blur-3xl animate-float" style={{ animationDelay: '1.5s' }} />
+      <div className="absolute top-[60%] left-[60%] w-48 h-48 bg-status-success/5 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }} />
+
+      {/* Grid pattern overlay */}
+      <div
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+          backgroundSize: '60px 60px',
+        }}
+      />
+
+      <div className="max-w-md w-full relative z-10 animate-scale-in">
+        <div className="glass-card-static p-8 border border-white/10 relative overflow-hidden">
+          {/* Top accent line */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-action-primary via-action-primary-hover to-status-success" />
+
           {loading && (
-            <div className="absolute inset-0 bg-surface-card bg-opacity-80 rounded-lg flex items-center justify-center z-10">
+            <div className="absolute inset-0 bg-surface-card/90 backdrop-blur-sm rounded-card flex items-center justify-center z-10">
               <LoadingSpinner text="Signing in..." />
             </div>
           )}
 
           <div className="text-center mb-8">
             <FuelMeter />
-            <h1 className="text-3xl font-bold text-content-primary">NextStop</h1>
-            <p className="text-content-secondary mt-2">Fuel Management System</p>
+            <h1 className="text-3xl font-extrabold text-content-primary tracking-tight">NextStop</h1>
+            <p className="text-content-secondary mt-1 text-sm">Fuel Management System</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1.5">
                 Username
               </label>
-              <input
-                type="text"
-                value={credentials.username}
-                onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
-                className="w-full px-4 py-3 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary focus:border-action-primary"
-                placeholder="Enter your username"
-                required
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="w-4 h-4 text-content-secondary/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={credentials.username}
+                  onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
+                  className="w-full pl-10 pr-4 py-3 border border-surface-border rounded-input focus:outline-none focus:ring-2 focus:ring-action-primary focus:border-action-primary"
+                  placeholder="Enter your username"
+                  required
+                />
+              </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
+              <label className="block text-sm font-medium text-content-secondary mb-1.5">
                 Password
               </label>
-              <input
-                type="password"
-                value={credentials.password}
-                onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
-                className="w-full px-4 py-3 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary focus:border-action-primary"
-                placeholder="Enter your password"
-                required
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="w-4 h-4 text-content-secondary/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <input
+                  type="password"
+                  value={credentials.password}
+                  onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
+                  className="w-full pl-10 pr-4 py-3 border border-surface-border rounded-input focus:outline-none focus:ring-2 focus:ring-action-primary focus:border-action-primary"
+                  placeholder="Enter your password"
+                  required
+                />
+              </div>
             </div>
 
             {error && (
-              <div className="p-4 bg-status-error-light border border-status-error rounded-md">
-                <p className="text-sm text-status-error">✗ {error}</p>
+              <div className="p-3 bg-status-error-light border border-status-error/30 rounded-btn animate-scale-in">
+                <p className="text-sm text-status-error flex items-center gap-2">
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {error}
+                </p>
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-3 bg-action-primary text-white font-semibold rounded-btn hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary focus:ring-offset-2 focus:ring-offset-surface-card disabled:opacity-50 disabled:cursor-not-allowed shadow-glow-blue"
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
-          {/* Demo Credentials - only visible when NEXT_PUBLIC_DEMO_MODE=true */}
+          {/* Demo Credentials */}
           {process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && (
-          <div className="mt-8 pt-8 border-t border-surface-border">
-            <p className="text-sm text-content-secondary mb-4 text-center">Demo Accounts:</p>
+          <div className="mt-8 pt-6 border-t border-white/[0.06]">
+            <p className="text-xs text-content-secondary/60 mb-3 text-center font-medium uppercase tracking-wider">Demo Accounts</p>
             <div className="space-y-2">
               <button
                 type="button"
                 onClick={() => handleDemoLogin('user1', 'password123')}
-                className="w-full px-4 py-2 bg-status-success-light border border-status-success text-status-success rounded-md hover:opacity-80 text-sm font-medium"
+                className="w-full px-4 py-2.5 bg-status-success/10 border border-status-success/20 text-status-success rounded-btn hover:bg-status-success/15 text-sm font-medium transition-all flex items-center gap-2 justify-center"
               >
-                👤 User: user1 / password123
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                User: user1 / password123
               </button>
               <button
                 type="button"
                 onClick={() => handleDemoLogin('supervisor1', 'super123')}
-                className="w-full px-4 py-2 bg-status-pending-light border border-status-warning text-status-warning rounded-md hover:opacity-80 text-sm font-medium"
+                className="w-full px-4 py-2.5 bg-status-warning/10 border border-status-warning/20 text-status-warning rounded-btn hover:bg-status-warning/15 text-sm font-medium transition-all flex items-center gap-2 justify-center"
               >
-                👔 Supervisor: supervisor1 / super123
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                Supervisor: supervisor1 / super123
               </button>
               <button
                 type="button"
                 onClick={() => handleDemoLogin('owner1', 'owner123')}
-                className="w-full px-4 py-2 bg-category-a-light border border-category-a-border text-category-a rounded-md hover:opacity-80 text-sm font-medium"
+                className="w-full px-4 py-2.5 bg-category-a/10 border border-category-a-border/20 text-category-a rounded-btn hover:bg-category-a/15 text-sm font-medium transition-all flex items-center gap-2 justify-center"
               >
-                👑 Owner: owner1 / owner123
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+                Owner: owner1 / owner123
               </button>
             </div>
           </div>
           )}
         </div>
 
-        <div className="mt-4 text-center">
-          <p className="text-sm text-white opacity-80">
-            Powered by Fuel Management System v1.0
-          </p>
-        </div>
+        <p className="mt-6 text-center text-xs text-white/30">
+          Powered by NextStop Fuel Management v1.0
+        </p>
       </div>
     </div>
   )
