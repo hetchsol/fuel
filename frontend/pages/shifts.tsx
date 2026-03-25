@@ -12,16 +12,6 @@ export default function Shifts() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Dual reading form state
-  const [readingForm, setReadingForm] = useState({
-    nozzle_id: '',
-    reading_type: 'Opening',
-    electronic_reading: '',
-    mechanical_reading: '',
-    attendant: '',
-    tank_dip_cm: ''
-  })
-
   // Shift management state
   const [showManagementModal, setShowManagementModal] = useState(false)
   const [shiftForm, setShiftForm] = useState({
@@ -292,52 +282,6 @@ export default function Shifts() {
     }
   }
 
-  const handleSubmitReading = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-
-    try {
-      const payload = {
-        nozzle_id: readingForm.nozzle_id,
-        shift_id: activeShift.shift_id,
-        attendant: currentUserAssignment ? currentUserAssignment.attendant_name : readingForm.attendant,
-        reading_type: readingForm.reading_type,
-        electronic_reading: parseFloat(readingForm.electronic_reading),
-        mechanical_reading: parseFloat(readingForm.mechanical_reading),
-        timestamp: new Date().toISOString(),
-        tank_dip_cm: readingForm.tank_dip_cm ? parseFloat(readingForm.tank_dip_cm) : null
-      }
-
-      const res = await fetch(`${BASE}/shifts/readings`, {
-        method: 'POST',
-        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-
-      if (!res.ok) {
-        throw new Error('Failed to submit reading')
-      }
-
-      toast.success('Dual reading submitted successfully!')
-
-      // Reset form
-      setReadingForm({
-        nozzle_id: '',
-        reading_type: 'Opening',
-        electronic_reading: '',
-        mechanical_reading: '',
-        attendant: '',
-        tank_dip_cm: ''
-      })
-
-      fetchActiveShift()
-    } catch (err: any) {
-      setError(err.message || 'Failed to submit reading')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const getShiftTypeDisplay = (shiftType: string) => {
     if (shiftType === 'Day') return '☀️ Day Shift (6AM - 6PM)'
@@ -896,196 +840,75 @@ export default function Shifts() {
         )}
       </div>
 
-      {/* Dual Reading Submission Form */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-surface-card rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-bold text-content-primary mb-4">📝 Submit Dual Reading</h2>
+      {/* Nozzle Status Overview — supervisor/owner only */}
+      {canManageShifts && (
+        <div className="mb-6 bg-surface-card rounded-lg shadow-lg p-6">
+          <h2 className="text-xl font-bold text-content-primary mb-4">Nozzle Status</h2>
 
-          <form onSubmit={handleSubmitReading} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
-                Nozzle
-              </label>
-              <select
-                value={readingForm.nozzle_id}
-                onChange={(e) => setReadingForm({ ...readingForm, nozzle_id: e.target.value })}
-                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                required
-              >
-                <option value="">Select Nozzle</option>
-                {userNozzles.map(nozzle => (
-                  <option key={nozzle.nozzle_id} value={nozzle.nozzle_id}>
-                    {getNozzleDisplayName(nozzle)} - {nozzle.fuel_type}
-                  </option>
-                ))}
-              </select>
-              {userNozzles.length === 0 && activeShift && (
-                <p className="text-xs text-status-error mt-1">
-                  You have no nozzles assigned for this shift. Contact your supervisor.
-                </p>
-              )}
-            </div>
+          {nozzles.length === 0 ? (
+            <LoadingSpinner text="Loading nozzles..." />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {nozzles.map(nozzle => {
+                // Find which attendant this nozzle is assigned to in the active shift
+                const assignedAttendant = activeShift?.assignments?.find((a: any) =>
+                  a.nozzle_ids?.includes(nozzle.nozzle_id) ||
+                  a.island_ids?.some((islId: string) => {
+                    // Check if nozzle belongs to this island (fallback for island-level assignments)
+                    const island = (activeShift as any)?._islands?.[islId]
+                    return island?.pump_station?.nozzles?.some((n: any) => n.nozzle_id === nozzle.nozzle_id)
+                  })
+                )
 
-            <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
-                Reading Type
-              </label>
-              <select
-                value={readingForm.reading_type}
-                onChange={(e) => setReadingForm({ ...readingForm, reading_type: e.target.value })}
-                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-              >
-                <option>Opening</option>
-                <option>Closing</option>
-              </select>
-            </div>
-
-            <div className="bg-status-success-light border-2 border-status-success rounded-lg p-3">
-              <label className="block text-sm font-bold text-status-success mb-1">
-                ⚡ Electronic Reading (3 decimals)
-              </label>
-              <input
-                type="number"
-                step="0.001"
-                value={readingForm.electronic_reading}
-                onChange={(e) => setReadingForm({ ...readingForm, electronic_reading: e.target.value })}
-                className="w-full px-3 py-2 border border-status-success rounded-md focus:outline-none focus:ring-status-success focus:border-status-success text-lg font-semibold"
-                placeholder="e.g., 12345.678"
-                required
-              />
-              <p className="text-xs text-status-success mt-1">
-                Primary precise reading from digital display
-              </p>
-            </div>
-
-            <div className="bg-category-d-light border-2 border-category-d-border rounded-lg p-3">
-              <label className="block text-sm font-bold text-category-d mb-1">
-                🔧 Mechanical Reading (whole numbers)
-              </label>
-              <input
-                type="number"
-                step="1"
-                value={readingForm.mechanical_reading}
-                onChange={(e) => setReadingForm({ ...readingForm, mechanical_reading: e.target.value })}
-                className="w-full px-3 py-2 border border-category-d-border rounded-md focus:outline-none focus:ring-category-d focus:border-category-d text-lg font-semibold"
-                placeholder="e.g., 12345"
-                required
-              />
-              <p className="text-xs text-category-d mt-1">
-                Backup reading from mechanical meter
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
-                Attendant
-              </label>
-              {currentUserAssignment ? (
-                <input
-                  type="text"
-                  value={currentUserAssignment.attendant_name}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-secondary"
-                  readOnly
-                />
-              ) : (
-                <select
-                  value={readingForm.attendant}
-                  onChange={(e) => setReadingForm({ ...readingForm, attendant: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                  required
-                >
-                  <option value="">Select Attendant</option>
-                  {attendants.map(attendant => (
-                    <option key={attendant} value={attendant}>
-                      {attendant}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
-                Tank Dip (cm) - Optional
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={readingForm.tank_dip_cm}
-                onChange={(e) => setReadingForm({ ...readingForm, tank_dip_cm: e.target.value })}
-                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                placeholder="e.g., 135.8"
-              />
-            </div>
-
-            {error && (
-              <div className="p-3 bg-status-error-light border border-status-error rounded-md">
-                <p className="text-sm text-status-error">{error}</p>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading || !activeShift}
-              className="w-full px-4 py-3 bg-action-primary text-white font-semibold rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Submitting...' : 'Submit Dual Reading'}
-            </button>
-          </form>
-        </div>
-
-        {/* Nozzle Status Overview — users see only their assigned nozzles */}
-        <div className="bg-surface-card rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-bold text-content-primary mb-4">
-            ⛽ {canManageShifts ? 'Nozzle Status' : 'Your Nozzles'}
-          </h2>
-
-          <div className="space-y-3">
-            {nozzles.length === 0 ? (
-              <LoadingSpinner text="Loading nozzles..." />
-            ) : (
-              (canManageShifts ? nozzles : userNozzles).map(nozzle => (
-                <div
-                  key={nozzle.nozzle_id}
-                  className={`p-4 rounded-lg border-2 ${
-                    nozzle.fuel_type === 'Petrol'
-                      ? 'bg-action-primary-light border-action-primary'
-                      : 'bg-category-c-light border-category-c-border'
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-bold text-content-primary">{getNozzleDisplayName(nozzle)}</p>
-                      <p className="text-xs text-content-secondary">{nozzle.nozzle_id}</p>
-                      <p className="text-xs text-content-secondary">{nozzle.fuel_type}</p>
+                return (
+                  <div
+                    key={nozzle.nozzle_id}
+                    className={`p-4 rounded-lg border-2 ${
+                      nozzle.fuel_type === 'Petrol'
+                        ? 'bg-action-primary-light border-action-primary'
+                        : 'bg-category-c-light border-category-c-border'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-bold text-content-primary">{getNozzleDisplayName(nozzle)}</p>
+                        <p className="text-xs text-content-secondary">{nozzle.fuel_type}</p>
+                      </div>
+                      <span className={`px-2 py-1 text-xs font-semibold rounded ${
+                        nozzle.status === 'Active'
+                          ? 'bg-status-success-light text-status-success'
+                          : nozzle.status === 'Maintenance'
+                          ? 'bg-status-warning-light text-status-warning'
+                          : 'bg-surface-bg text-content-secondary'
+                      }`}>
+                        {nozzle.status}
+                      </span>
                     </div>
-                    <span className={`px-2 py-1 text-xs font-semibold rounded ${
-                      nozzle.status === 'Active'
-                        ? 'bg-status-success-light text-status-success'
-                        : 'bg-surface-bg text-content-primary'
-                    }`}>
-                      {nozzle.status}
-                    </span>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <p className="text-content-secondary">Electronic</p>
-                      <p className="font-semibold">{nozzle.electronic_reading?.toFixed(3) || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-content-secondary">Mechanical</p>
-                      <p className="font-semibold">{nozzle.mechanical_reading?.toFixed(0) || 'N/A'}</p>
+                    {assignedAttendant && (
+                      <p className="text-xs mt-1 font-medium text-action-primary">
+                        Assigned: {assignedAttendant.attendant_name}
+                      </p>
+                    )}
+                    {!assignedAttendant && activeShift && (
+                      <p className="text-xs mt-1 text-content-secondary italic">Unassigned</p>
+                    )}
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <p className="text-content-secondary">Electronic</p>
+                        <p className="font-semibold">{nozzle.electronic_reading?.toFixed(3) || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-content-secondary">Mechanical</p>
+                        <p className="font-semibold">{nozzle.mechanical_reading?.toFixed(0) || 'N/A'}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
-            )}
-            {!canManageShifts && userNozzles.length === 0 && nozzles.length > 0 && (
-              <p className="text-sm text-content-secondary/60 text-center py-4">No nozzles assigned to you for this shift.</p>
-            )}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       {/* Tank Dip Readings Section */}
       {activeShift && (currentUser?.role === 'supervisor' || currentUser?.role === 'owner') && (
@@ -1446,7 +1269,7 @@ export default function Shifts() {
           <li>• Day Shift: 6:00 AM - 6:00 PM</li>
           <li>• Night Shift: 6:00 PM - 6:00 AM</li>
           <li>• Each shift requires Opening and Closing readings for all 8 nozzles</li>
-          <li>• Dual readings (Electronic + Mechanical) provide verification and loss detection</li>
+          <li>• Electronic + Mechanical readings provide verification and loss detection</li>
           <li>• Tank dip readings help reconcile physical inventory with meter readings</li>
         </ul>
       </div>
