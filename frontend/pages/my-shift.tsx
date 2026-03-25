@@ -451,6 +451,10 @@ export default function MyShift() {
   }
 
   if (shiftFound === false) {
+    const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null
+    const userRole = userData ? JSON.parse(userData).role : ''
+    const isOwnerOrSupervisor = userRole === 'owner' || userRole === 'supervisor'
+
     return (
       <div>
         <h1 className="text-2xl font-bold mb-4" style={{ color: theme.textPrimary }}>My Shift</h1>
@@ -458,10 +462,12 @@ export default function MyShift() {
           style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
           <div className="text-4xl mb-4">-</div>
           <h2 className="text-lg font-semibold mb-2" style={{ color: theme.textPrimary }}>
-            No Active Shift Assigned
+            {isOwnerOrSupervisor ? 'No Active Shift' : 'No Active Shift Assigned'}
           </h2>
           <p className="text-sm" style={{ color: theme.textSecondary }}>
-            You don't have an active shift assigned to you. Please contact your supervisor to be assigned to a shift.
+            {isOwnerOrSupervisor
+              ? 'There is no active shift assigned to you. Use the Shifts page to create or manage shifts, or the Handover Review page to review attendant submissions.'
+              : 'You don\'t have an active shift assigned to you. Please contact your supervisor to be assigned to a shift.'}
           </p>
         </div>
         {pastHandovers.length > 0 && (

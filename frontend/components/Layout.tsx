@@ -197,15 +197,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const allNavItems = [
     { path: '/', label: 'Dashboard', roles: ['user', 'supervisor', 'owner'] },
-    { path: '/my-shift', label: 'My Shift', roles: ['user', 'supervisor', 'owner'] },
+    { path: '/my-shift', label: 'My Shift', roles: ['user', 'supervisor'] },
     {
       label: 'Operations',
       roles: ['user', 'supervisor', 'owner'],
       children: [
         { path: '/shifts', label: 'Shifts', roles: ['user', 'supervisor', 'owner'] },
-        { path: '/enter-readings', label: 'Enter Readings', roles: ['user', 'supervisor', 'owner'] },
+        { path: '/enter-readings', label: 'Enter Readings', roles: ['user', 'supervisor'] },
         { path: '/handover-review', label: 'Handover Review', roles: ['supervisor', 'owner'] },
-        { path: '/readings', label: 'OCR Reading Entry', roles: ['user', 'supervisor', 'owner'], disabled: true },
+        { path: '/readings', label: 'OCR Reading Entry', roles: ['user', 'supervisor'], disabled: true },
         { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'owner'] },
         { path: '/tank-movement', label: 'Tank Readings & Deliveries', roles: ['supervisor', 'owner'] },
         { path: '/stock-movement', label: 'Stock Movement', roles: ['supervisor', 'owner'] },
