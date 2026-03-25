@@ -388,10 +388,8 @@ def record_tank_dip_reading(shift_id: str, reading: TankDipReading, ctx: dict = 
     """
     Record tank dip reading (opening or closing) for a shift
     Converts dip measurement (cm) to volume (liters) using tank conversion factor
-    Only supervisors can record; owners have read-only access.
+    Supervisors and owners can record; regular users have read-only access.
     """
-    if current_user.get("role") == "owner":
-        raise HTTPException(status_code=403, detail="Tank dip readings are read-only for owners. Only supervisors can record readings.")
 
     storage = ctx["storage"]
     shifts_data = storage.get('shifts', {})

@@ -912,11 +912,11 @@ export default function Shifts() {
       )}
 
       {/* Tank Dip Readings Section */}
-      {activeShift && (currentUser?.role === 'supervisor' || currentUser?.role === 'owner') && (
+      {activeShift && (
         <div className="mb-6 bg-surface-card rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-content-primary">Tank Dip Readings</h2>
-            {currentUser?.role === 'supervisor' && (
+            {(currentUser?.role === 'supervisor' || currentUser?.role === 'owner') && (
               <button
                 onClick={() => {
                   // Auto-populate opening dip from previous shift if form is empty
