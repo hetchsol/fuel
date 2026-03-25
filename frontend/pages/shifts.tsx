@@ -916,32 +916,34 @@ export default function Shifts() {
         <div className="mb-6 bg-surface-card rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-content-primary">Tank Dip Readings</h2>
-            <button
-              onClick={() => {
-                // Auto-populate opening dip from previous shift if form is empty
-                if (!tankDipForm.opening_dip_cm) {
-                  fetch(`${BASE}/shifts/${activeShift.shift_id}/previous-dip-readings`, { headers: getHeaders() })
-                    .then(r => r.ok ? r.json() : { found: false })
-                    .then(data => {
-                      if (data.found && data.readings?.length > 0) {
-                        // Pre-select first tank and auto-fill opening
-                        const first = data.readings[0]
-                        setTankDipForm(prev => ({
-                          ...prev,
-                          tank_id: prev.tank_id || first.tank_id,
-                          opening_dip_cm: first.opening_dip_cm?.toFixed(1) || '',
-                        }))
-                        setPreviousDipData(data)
-                      }
-                    })
-                    .catch(() => {})
-                }
-                setShowTankDipModal(true)
-              }}
-              className="px-4 py-2 bg-status-success text-white rounded-md hover:bg-status-success/90 font-medium"
-            >
-              + Record Dip Reading
-            </button>
+            {currentUser?.role === 'supervisor' && (
+              <button
+                onClick={() => {
+                  // Auto-populate opening dip from previous shift if form is empty
+                  if (!tankDipForm.opening_dip_cm) {
+                    fetch(`${BASE}/shifts/${activeShift.shift_id}/previous-dip-readings`, { headers: getHeaders() })
+                      .then(r => r.ok ? r.json() : { found: false })
+                      .then(data => {
+                        if (data.found && data.readings?.length > 0) {
+                          // Pre-select first tank and auto-fill opening
+                          const first = data.readings[0]
+                          setTankDipForm(prev => ({
+                            ...prev,
+                            tank_id: prev.tank_id || first.tank_id,
+                            opening_dip_cm: first.opening_dip_cm?.toFixed(1) || '',
+                          }))
+                          setPreviousDipData(data)
+                        }
+                      })
+                      .catch(() => {})
+                  }
+                  setShowTankDipModal(true)
+                }}
+                className="px-4 py-2 bg-status-success text-white rounded-md hover:bg-status-success/90 font-medium"
+              >
+                + Record Dip Reading
+              </button>
+            )}
           </div>
 
           {/* Existing Tank Dip Readings */}

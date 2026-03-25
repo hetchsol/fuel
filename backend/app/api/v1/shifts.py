@@ -384,15 +384,18 @@ def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_co
 
 
 @router.post("/{shift_id}/tank-dip-reading", dependencies=[Depends(require_supervisor_or_owner)])
-def record_tank_dip_reading(shift_id: str, reading: TankDipReading, ctx: dict = Depends(get_station_context)):
+def record_tank_dip_reading(shift_id: str, reading: TankDipReading, ctx: dict = Depends(get_station_context), current_user: dict = Depends(get_current_user)):
     """
     Record tank dip reading (opening or closing) for a shift
     Converts dip measurement (cm) to volume (liters) using tank conversion factor
+    Only supervisors can record; owners have read-only access.
     """
+    if current_user.get("role") == "owner":
+        raise HTTPException(status_code=403, detail="Tank dip readings are read-only for owners. Only supervisors can record readings.")
+
     storage = ctx["storage"]
     shifts_data = storage.get('shifts', {})
     readings_data = storage.get('readings', [])
-    current_user = ctx
 
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
