@@ -205,7 +205,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/shifts', label: 'Shifts', roles: ['user', 'supervisor', 'owner'] },
         { path: '/enter-readings', label: 'Enter Readings', roles: ['user', 'supervisor', 'owner'] },
         { path: '/handover-review', label: 'Handover Review', roles: ['supervisor', 'owner'] },
-        { path: '/readings', label: 'OCR Reading Entry', roles: ['user', 'supervisor', 'owner'] },
+        { path: '/readings', label: 'OCR Reading Entry', roles: ['user', 'supervisor', 'owner'], disabled: true },
         { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'owner'] },
         { path: '/tank-movement', label: 'Tank Readings & Deliveries', roles: ['supervisor', 'owner'] },
         { path: '/stock-movement', label: 'Stock Movement', roles: ['supervisor', 'owner'] },
@@ -451,17 +451,28 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <div className="absolute left-0 mt-1 w-56 rounded-card hidden group-hover:block z-50 glass-card-static border border-surface-border overflow-hidden dropdown-enter">
                     <div className="py-1">
                       {item.children.map((child: any) => (
-                        <Link
-                          key={child.path}
-                          href={child.path}
-                          className={`block px-4 py-2.5 text-sm transition-all ${
-                            isActive(child.path)
-                              ? 'bg-action-primary/10 text-action-primary font-medium border-l-2 border-action-primary'
-                              : 'text-content-primary hover:bg-white/5 border-l-2 border-transparent'
-                          }`}
-                        >
-                          {child.label}
-                        </Link>
+                        child.disabled ? (
+                          <span
+                            key={child.path}
+                            className="block px-4 py-2.5 text-sm text-content-secondary/40 border-l-2 border-transparent cursor-not-allowed select-none"
+                            title="Coming soon"
+                          >
+                            {child.label}
+                            <span className="ml-2 text-[10px] font-medium bg-white/5 px-1.5 py-0.5 rounded">Soon</span>
+                          </span>
+                        ) : (
+                          <Link
+                            key={child.path}
+                            href={child.path}
+                            className={`block px-4 py-2.5 text-sm transition-all ${
+                              isActive(child.path)
+                                ? 'bg-action-primary/10 text-action-primary font-medium border-l-2 border-action-primary'
+                                : 'text-content-primary hover:bg-white/5 border-l-2 border-transparent'
+                            }`}
+                          >
+                            {child.label}
+                          </Link>
+                        )
                       ))}
                     </div>
                   </div>
@@ -507,17 +518,27 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {openMenus.includes(item.label) && (
                     <div className="pl-4 space-y-0.5 mt-0.5">
                       {item.children.map((child: any) => (
-                        <Link
-                          key={child.path}
-                          href={child.path}
-                          className={`block px-3 py-2 rounded-btn text-sm transition-all ${
-                            isActive(child.path)
-                              ? 'bg-action-primary/10 text-action-primary font-medium'
-                              : 'text-content-secondary hover:text-content-primary hover:bg-white/5'
-                          }`}
-                        >
-                          {child.label}
-                        </Link>
+                        child.disabled ? (
+                          <span
+                            key={child.path}
+                            className="block px-3 py-2 rounded-btn text-sm text-content-secondary/30 cursor-not-allowed select-none"
+                          >
+                            {child.label}
+                            <span className="ml-2 text-[10px] font-medium bg-white/5 px-1.5 py-0.5 rounded">Soon</span>
+                          </span>
+                        ) : (
+                          <Link
+                            key={child.path}
+                            href={child.path}
+                            className={`block px-3 py-2 rounded-btn text-sm transition-all ${
+                              isActive(child.path)
+                                ? 'bg-action-primary/10 text-action-primary font-medium'
+                                : 'text-content-secondary hover:text-content-primary hover:bg-white/5'
+                            }`}
+                          >
+                            {child.label}
+                          </Link>
+                        )
                       ))}
                     </div>
                   )}

@@ -804,9 +804,17 @@ export default function Shifts() {
             {/* Attendant Assignments */}
             {activeShift.assignments && activeShift.assignments.length > 0 ? (
               <div className="mt-6">
-                <h3 className="font-semibold mb-3 text-content-primary">Attendant Assignments:</h3>
+                <h3 className="font-semibold mb-3 text-content-primary">
+                  {canManageShifts ? 'Attendant Assignments:' : 'Your Assignment:'}
+                </h3>
                 <div className="space-y-4">
-                  {activeShift.assignments.map((assignment: any) => (
+                  {/* Regular users only see their own assignment; supervisors/owners see all */}
+                  {(canManageShifts
+                    ? activeShift.assignments
+                    : activeShift.assignments.filter((a: any) =>
+                        a.attendant_id === currentUser?.user_id || a.attendant_name === currentUser?.full_name
+                      )
+                  ).map((assignment: any) => (
                     <div key={assignment.attendant_id} className="p-4 bg-surface-card rounded-lg border border-surface-border">
                       <p className="font-medium mb-2 text-content-primary">👤 {assignment.attendant_name}</p>
 
@@ -846,6 +854,12 @@ export default function Shifts() {
                       )}
                     </div>
                   ))}
+                  {/* User has no assignment */}
+                  {!canManageShifts && !currentUserAssignment && (
+                    <div className="p-4 bg-status-warning/10 rounded-lg border border-status-warning/30 text-sm text-status-warning">
+                      You are not assigned to this shift. Contact your supervisor.
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1020,15 +1034,17 @@ export default function Shifts() {
           </form>
         </div>
 
-        {/* Nozzle Status Overview */}
+        {/* Nozzle Status Overview — users see only their assigned nozzles */}
         <div className="bg-surface-card rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-bold text-content-primary mb-4">⛽ Nozzle Status</h2>
+          <h2 className="text-xl font-bold text-content-primary mb-4">
+            ⛽ {canManageShifts ? 'Nozzle Status' : 'Your Nozzles'}
+          </h2>
 
           <div className="space-y-3">
             {nozzles.length === 0 ? (
               <LoadingSpinner text="Loading nozzles..." />
             ) : (
-              nozzles.map(nozzle => (
+              (canManageShifts ? nozzles : userNozzles).map(nozzle => (
                 <div
                   key={nozzle.nozzle_id}
                   className={`p-4 rounded-lg border-2 ${
@@ -1063,6 +1079,9 @@ export default function Shifts() {
                   </div>
                 </div>
               ))
+            )}
+            {!canManageShifts && userNozzles.length === 0 && nozzles.length > 0 && (
+              <p className="text-sm text-content-secondary/60 text-center py-4">No nozzles assigned to you for this shift.</p>
             )}
           </div>
         </div>
@@ -1327,6 +1346,96 @@ export default function Shifts() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* My Recent Shifts — regular users see their own shifts from last 7 days */}
+      {!canManageShifts && (
+        <div className="mt-6 bg-surface-card rounded-lg shadow-lg p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-content-primary">My Recent Shifts</h2>
+            <span className="text-xs text-content-secondary">Last 7 days</span>
+          </div>
+
+          {(() => {
+            const sevenDaysAgo = new Date()
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+            const cutoff = sevenDaysAgo.toISOString().split('T')[0]
+
+            const myShifts = allShifts.filter((shift: any) => {
+              if (shift.date < cutoff) return false
+              // Check if user was assigned to this shift
+              if (shift.assignments?.length > 0) {
+                return shift.assignments.some((a: any) =>
+                  a.attendant_id === currentUser?.user_id || a.attendant_name === currentUser?.full_name
+                )
+              }
+              // Fallback: check attendants list
+              if (shift.attendants?.length > 0) {
+                return shift.attendants.includes(currentUser?.full_name)
+              }
+              return false
+            })
+
+            if (myShifts.length === 0) {
+              return <p className="text-sm text-content-secondary/60 text-center py-4">No shifts in the last 7 days.</p>
+            }
+
+            return (
+              <div className="space-y-3">
+                {myShifts.map((shift: any) => {
+                  const myAssignment = shift.assignments?.find((a: any) =>
+                    a.attendant_id === currentUser?.user_id || a.attendant_name === currentUser?.full_name
+                  )
+                  return (
+                    <div
+                      key={shift.shift_id}
+                      className={`p-4 rounded-lg border ${
+                        shift.status === 'active'
+                          ? 'bg-status-success-light border-status-success'
+                          : shift.status === 'completed' || shift.status === 'reconciled'
+                          ? 'bg-action-primary-light border-action-primary'
+                          : shift.status === 'auto-closed'
+                          ? 'bg-status-pending-light border-status-warning'
+                          : 'bg-surface-bg border-surface-border'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-semibold text-content-primary">{shift.date}</span>
+                          <span className="ml-2 text-sm text-content-secondary">
+                            {shift.shift_type === 'Day' ? 'Day Shift' : 'Night Shift'}
+                          </span>
+                          <span className={`ml-3 px-2 py-0.5 text-xs font-semibold rounded-full border ${getShiftStatusColor(shift.status)}`}>
+                            {shift.status.toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                      {myAssignment && myAssignment.nozzle_ids?.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {myAssignment.nozzle_ids.map((nid: string) => {
+                            const nozzle = nozzles.find((n: any) => n.nozzle_id === nid)
+                            return (
+                              <span
+                                key={nid}
+                                className={`px-2 py-0.5 text-xs rounded ${
+                                  nozzle?.fuel_type === 'Petrol'
+                                    ? 'bg-action-primary-light text-action-primary'
+                                    : 'bg-category-c-light text-category-c'
+                                }`}
+                              >
+                                {nozzle ? getNozzleDisplayName(nozzle) : nid}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
       )}
 
