@@ -626,13 +626,15 @@ class LPGCylinderTrade(BaseModel):
 class LPGCylinderShiftRow(BaseModel):
     """Single cylinder size row within an LPG shift entry"""
     size_kg: int  # 3, 6, 9, 19, 45, 48
-    opening_balance: int = 0
+    opening_balance: int = 0        # Filled cylinders at shift start
+    opening_empty: int = 0          # Empty cylinders at shift start
     receipts: int = 0
     traded_in: int = 0      # Cylinders received via trade (increases stock of this size)
     traded_out: int = 0     # Cylinders given away via trade (decreases stock of this size)
     sold_refill: int = 0
     sold_with_cylinder: int = 0
     balance: int = 0  # Server-calculated: opening + receipts + traded_in - sold_refill - sold_with_cylinder - traded_out
+    closing_empty: int = 0          # Empty cylinders at shift end
     value_refill: float = 0.0  # Server-calculated: price_refill * sold_refill
     value_with_cylinder: float = 0.0  # Server-calculated: price_with_cyl * sold_with_cylinder
     total_value: float = 0.0  # Server-calculated: value_refill + value_with_cylinder
@@ -665,6 +667,7 @@ class LPGDailyEntryOutput(BaseModel):
     notes: Optional[str] = None
     trades: Optional[List[LPGCylinderTrade]] = None
     total_trade_revenue: float = 0.0
+    warnings: Optional[List[str]] = None
 
 class LPGAccessoryDailyRow(BaseModel):
     """Single accessory product row"""

@@ -8,12 +8,14 @@ const LPG_SIZES = [3, 6, 9, 19, 45, 48]
 interface CylinderRow {
   size_kg: number
   opening_balance: number
+  opening_empty: number
   receipts: number
   traded_in: number
   traded_out: number
   sold_refill: number
   sold_with_cylinder: number
   balance: number
+  closing_empty: number
   value_refill: number
   value_with_cylinder: number
   total_value: number
@@ -61,16 +63,15 @@ export default function LPGDaily() {
   const [pricing, setPricing] = useState<Pricing[]>([])
   const [cylinderRows, setCylinderRows] = useState<CylinderRow[]>(
     LPG_SIZES.map(s => ({
-      size_kg: s, opening_balance: 0, receipts: 0,
+      size_kg: s, opening_balance: 0, opening_empty: 0, receipts: 0,
       traded_in: 0, traded_out: 0,
       sold_refill: 0, sold_with_cylinder: 0,
-      balance: 0, value_refill: 0, value_with_cylinder: 0, total_value: 0,
+      balance: 0, closing_empty: 0, value_refill: 0, value_with_cylinder: 0, total_value: 0,
     }))
   )
 
   const [trades, setTrades] = useState<CylinderTrade[]>([])
 
-  const [bookPopulation, setBookPopulation] = useState<string>('')
   const [actualPopulation, setActualPopulation] = useState<string>('')
 
   // Accessories
@@ -82,6 +83,7 @@ export default function LPGDaily() {
   const [pricingSaving, setPricingSaving] = useState(false)
   const [pricingMsg, setPricingMsg] = useState('')
 
+  const [showEmptyTracking, setShowEmptyTracking] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -131,9 +133,11 @@ export default function LPGDaily() {
       .then(r => r.json())
       .then(data => {
         if (data.found && data.cylinder_balances) {
+          const emptyBals = data.cylinder_empty_balances || {}
           setCylinderRows(prev => prev.map(row => ({
             ...row,
             opening_balance: data.cylinder_balances[row.size_kg] ?? row.opening_balance,
+            opening_empty: emptyBals[row.size_kg] ?? row.opening_empty,
           })))
         }
       })
@@ -178,8 +182,8 @@ export default function LPGDaily() {
   const tradedOutMap: Record<number, number> = {}
   for (const size of LPG_SIZES) { tradedInMap[size] = 0; tradedOutMap[size] = 0 }
   for (const t of trades) {
-    tradedOutMap[t.from_size_kg] = (tradedOutMap[t.from_size_kg] || 0) + t.quantity
-    tradedInMap[t.to_size_kg] = (tradedInMap[t.to_size_kg] || 0) + t.quantity
+    tradedInMap[t.from_size_kg] = (tradedInMap[t.from_size_kg] || 0) + t.quantity    // Station receives FROM-size
+    tradedOutMap[t.to_size_kg] = (tradedOutMap[t.to_size_kg] || 0) + t.quantity      // Station gives TO-size
   }
 
   // Recalculate balances and values in real-time
@@ -255,9 +259,15 @@ export default function LPGDaily() {
   const grandTotal = cylinderRows.reduce((s, r) => s + r.total_value, 0)
   const accessoryTotal = accessoryRows.reduce((s, r) => s + r.sales_value, 0)
 
-  const popDifference = bookPopulation && actualPopulation
-    ? parseInt(bookPopulation) - parseInt(actualPopulation)
+  // Auto-calculated book population: sum of closing filled + closing empty
+  const autoBookPopulation = cylinderRows.reduce((s, r) => s + r.balance + r.closing_empty, 0)
+
+  const popDifference = actualPopulation
+    ? autoBookPopulation - parseInt(actualPopulation)
     : null
+
+  // Oversell warnings
+  const oversellRows = cylinderRows.filter(r => r.balance < 0)
 
   const handleSubmit = async () => {
     if (!salesperson.trim()) {
@@ -281,16 +291,18 @@ export default function LPGDaily() {
           cylinder_rows: cylinderRows.map(r => ({
             size_kg: r.size_kg,
             opening_balance: r.opening_balance,
+            opening_empty: r.opening_empty,
             receipts: r.receipts,
             sold_refill: r.sold_refill,
             sold_with_cylinder: r.sold_with_cylinder,
+            closing_empty: r.closing_empty,
           })),
           trades: validTrades.length > 0 ? validTrades.map(t => ({
             from_size_kg: t.from_size_kg,
             to_size_kg: t.to_size_kg,
             quantity: t.quantity,
           })) : null,
-          book_cylinder_population: bookPopulation ? parseInt(bookPopulation) : null,
+          book_cylinder_population: autoBookPopulation,
           actual_cylinder_population: actualPopulation ? parseInt(actualPopulation) : null,
           recorded_by: user?.user_id || 'unknown',
         }),
@@ -474,13 +486,27 @@ export default function LPGDaily() {
       {/* Cylinder Sales Table */}
       <div className="rounded-lg shadow mb-6 overflow-x-auto"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <div className="p-4 font-semibold text-sm" style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
-          Cylinder Sales
+        <div className="p-4 font-semibold text-sm flex justify-between items-center" style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
+          <span>Cylinder Sales</span>
+          <details className="inline">
+            <summary className="cursor-pointer text-xs font-normal" style={{ color: theme.textSecondary }}>
+              Column Guide
+            </summary>
+            <div className="absolute right-4 mt-1 p-3 rounded-lg shadow-lg text-xs font-normal z-10 max-w-sm"
+              style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.textSecondary }}>
+              <p><strong style={{ color: theme.textPrimary }}>Opening Stock</strong>: Filled cylinders at shift start (auto-populated from previous shift)</p>
+              <p className="mt-1"><strong style={{ color: theme.textPrimary }}>Received</strong>: New filled cylinders delivered by supplier</p>
+              <p className="mt-1"><strong style={{ color: theme.textPrimary }}>Trade In/Out</strong>: Cylinder size exchanges with customers (managed in Trades section below)</p>
+              <p className="mt-1"><strong style={{ color: theme.textPrimary }}>Sold (Refill)</strong>: Customer returns empty cylinder, receives filled one — generates refill revenue</p>
+              <p className="mt-1"><strong style={{ color: theme.textPrimary }}>Sold (New Cylinder)</strong>: Customer buys a new filled cylinder (no return) — generates full cylinder revenue</p>
+              <p className="mt-1"><strong style={{ color: theme.textPrimary }}>Closing Stock</strong>: Remaining filled cylinders at shift end</p>
+            </div>
+          </details>
         </div>
         <table className="min-w-full text-sm">
           <thead>
             <tr style={{ backgroundColor: theme.background }}>
-              {['Size (kg)', 'Opening', 'Receipts', 'Traded In', 'Traded Out', 'Sold Refill', 'Sold w/Cyl', 'Balance', 'Value Refill', 'Value w/Cyl', 'Total Value'].map(h => (
+              {['Size (kg)', 'Opening Stock (Full)', 'Received (Deliveries)', 'Trade In (+)', 'Trade Out (-)', 'Sold (Refill Only)', 'Sold (New Cylinder)', 'Closing Stock (Full)', 'Refill Revenue', 'New Cyl Revenue', 'Total Revenue'].map(h => (
                 <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
                   style={{ color: theme.textSecondary }}>{h}</th>
               ))}
@@ -494,7 +520,7 @@ export default function LPGDaily() {
                   <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>
                     {row.size_kg} kg
                     {p && <span className="block text-xs" style={{ color: theme.textSecondary }}>
-                      Refill: {p.price_refill.toLocaleString()} | w/Cyl: {p.price_with_cylinder.toLocaleString()}
+                      Refill: K{p.price_refill.toLocaleString()} | New: K{p.price_with_cylinder.toLocaleString()}
                     </span>}
                   </td>
                   <td className="px-3 py-2">
@@ -531,6 +557,11 @@ export default function LPGDaily() {
                     color: row.balance < 0 ? 'var(--color-status-error)' : theme.textPrimary
                   }}>
                     {row.balance}
+                    {row.balance < 0 && (
+                      <div className="text-xs font-normal" style={{ color: 'var(--color-status-error)' }}>
+                        Oversell
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right" style={{ color: theme.textSecondary }}>
                     {row.value_refill.toLocaleString()}
@@ -573,6 +604,53 @@ export default function LPGDaily() {
         </table>
       </div>
 
+      {/* Empty Cylinder Tracking (Collapsible) */}
+      <div className="rounded-lg shadow mb-6 overflow-hidden"
+        style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+        <button
+          onClick={() => setShowEmptyTracking(!showEmptyTracking)}
+          className="w-full p-3 flex justify-between items-center text-sm font-medium"
+          style={{ color: theme.textPrimary }}>
+          <span>Empty Cylinder Tracking</span>
+          <span className="text-xs" style={{ color: theme.textSecondary }}>
+            {showEmptyTracking ? 'Hide' : 'Show'} {showEmptyTracking ? '-' : '+'}
+          </span>
+        </button>
+        {showEmptyTracking && (
+          <div className="p-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+            <p className="text-xs mb-3" style={{ color: theme.textSecondary }}>
+              Track empty cylinders on hand. Empty count increases when customers return cylinders for refill.
+            </p>
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr style={{ backgroundColor: theme.background }}>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Size</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Opening Empty</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Closing Empty</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cylinderRows.map(row => (
+                  <tr key={row.size_kg} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{row.size_kg} kg</td>
+                    <td className="px-3 py-2">
+                      <input type="number" min={0} value={row.opening_empty}
+                        onChange={e => updateCylinderField(row.size_kg, 'opening_empty', parseInt(e.target.value) || 0)}
+                        className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input type="number" min={0} value={row.closing_empty}
+                        onChange={e => updateCylinderField(row.size_kg, 'closing_empty', parseInt(e.target.value) || 0)}
+                        className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Cylinder Trades (Upgrades/Downgrades) */}
       <div className="rounded-lg shadow mb-6 overflow-hidden"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
@@ -586,9 +664,12 @@ export default function LPGDaily() {
           )}
         </div>
         <div className="p-4 space-y-3">
+          <p className="text-xs mb-2" style={{ color: theme.textSecondary }}>
+            When a customer exchanges one cylinder size for another. They return their current size and receive a different size. The station charges/refunds the price difference.
+          </p>
           {trades.length === 0 && (
             <p className="text-sm" style={{ color: theme.textSecondary }}>
-              No trades added. Use this section when a customer exchanges one cylinder size for another.
+              No trades added yet.
             </p>
           )}
           {trades.map((trade, idx) => {
@@ -600,7 +681,7 @@ export default function LPGDaily() {
               <div key={idx} className="flex flex-wrap items-center gap-3 p-3 rounded"
                 style={{ backgroundColor: theme.background, border: `1px solid ${theme.border}` }}>
                 <div>
-                  <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>From Size</label>
+                  <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Customer Returns</label>
                   <select value={trade.from_size_kg}
                     onChange={e => updateTrade(idx, 'from_size_kg', parseInt(e.target.value))}
                     className="px-2 py-1 rounded border text-sm" style={inputStyle}>
@@ -611,7 +692,7 @@ export default function LPGDaily() {
                   &rarr;
                 </div>
                 <div>
-                  <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>To Size</label>
+                  <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Customer Receives</label>
                   <select value={trade.to_size_kg}
                     onChange={e => updateTrade(idx, 'to_size_kg', parseInt(e.target.value))}
                     className="px-2 py-1 rounded border text-sm" style={inputStyle}>
@@ -641,6 +722,14 @@ export default function LPGDaily() {
                     {tradeType}
                   </span>
                 </div>
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Stock Impact</label>
+                  <div className="text-xs" style={{ color: theme.textSecondary }}>
+                    <span style={{ color: 'var(--color-status-success)' }}>+{trade.quantity} x {trade.from_size_kg}kg</span>
+                    {' / '}
+                    <span style={{ color: 'var(--color-status-error)' }}>-{trade.quantity} x {trade.to_size_kg}kg</span>
+                  </div>
+                </div>
                 <div className="flex items-end pb-1">
                   <button onClick={() => removeTrade(idx)}
                     className="px-2 py-1 rounded text-xs font-medium"
@@ -666,10 +755,14 @@ export default function LPGDaily() {
           Cylinder Population Count
         </div>
         <div>
-          <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Book Count</label>
-          <input type="number" min={0} value={bookPopulation}
-            onChange={e => setBookPopulation(e.target.value)}
-            className="w-full px-3 py-2 rounded border text-sm" style={inputStyle} />
+          <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Book Count (auto-calculated)</label>
+          <div className="w-full px-3 py-2 rounded text-sm font-semibold"
+            style={{ backgroundColor: theme.background, color: theme.textPrimary }}>
+            {autoBookPopulation}
+          </div>
+          <p className="text-xs mt-1" style={{ color: theme.textSecondary }}>
+            Total cylinders on hand (filled + empty) based on closing counts.
+          </p>
         </div>
         <div>
           <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Actual Count</label>
@@ -678,7 +771,7 @@ export default function LPGDaily() {
             className="w-full px-3 py-2 rounded border text-sm" style={inputStyle} />
         </div>
         <div>
-          <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Difference</label>
+          <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Difference (Book - Actual)</label>
           <div className="px-3 py-2 rounded text-sm font-semibold"
             style={{
               backgroundColor: theme.background,
@@ -748,6 +841,11 @@ export default function LPGDaily() {
       </div>
 
       {/* Submit */}
+      {oversellRows.length > 0 && (
+        <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: 'rgba(255,165,0,0.1)', color: 'var(--color-status-warning, orange)', border: '1px solid var(--color-status-warning, orange)' }}>
+          Warning: {oversellRows.map(r => `${r.size_kg}kg has negative closing stock (${r.balance})`).join('; ')}. Verify counts before submitting.
+        </div>
+      )}
       {error && (
         <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)', border: '1px solid var(--color-status-error)' }}>
           {error}

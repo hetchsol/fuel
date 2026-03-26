@@ -189,6 +189,7 @@ def get_previous_shift(
                 "found": False,
                 "message": "No previous shift data found. Enter opening balances manually.",
                 "cylinder_balances": {s: 0 for s in LPG_SIZES},
+                "cylinder_empty_balances": {s: 0 for s in LPG_SIZES},
             }
 
         def sort_key(e):
@@ -202,8 +203,10 @@ def get_previous_shift(
 
     # Extract closing balances per size
     balances = {}
+    empty_balances = {}
     for row in previous.get('cylinder_rows', []):
         balances[row['size_kg']] = row['balance']
+        empty_balances[row['size_kg']] = row.get('closing_empty', 0)
 
     return {
         "found": True,
@@ -211,6 +214,7 @@ def get_previous_shift(
         "source_shift": previous['shift_type'],
         "source_entry_id": previous.get('entry_id', ''),
         "cylinder_balances": balances,
+        "cylinder_empty_balances": empty_balances,
     }
 
 
@@ -250,8 +254,8 @@ def submit_lpg_entry(
             price_diff = to_pricing['price_refill'] - from_pricing['price_refill']
             trade_type = "upgrade" if trade.to_size_kg > trade.from_size_kg else "downgrade"
 
-            traded_out_map[trade.from_size_kg] += trade.quantity
-            traded_in_map[trade.to_size_kg] += trade.quantity
+            traded_in_map[trade.from_size_kg] += trade.quantity    # Station RECEIVES the FROM-size cylinder from customer
+            traded_out_map[trade.to_size_kg] += trade.quantity      # Station GIVES the TO-size cylinder to customer
             total_trade_revenue += price_diff * trade.quantity
 
             processed_trades.append(LPGCylinderTrade(
@@ -279,22 +283,35 @@ def submit_lpg_entry(
         calculated_rows.append(LPGCylinderShiftRow(
             size_kg=row.size_kg,
             opening_balance=row.opening_balance,
+            opening_empty=row.opening_empty,
             receipts=row.receipts,
             traded_in=t_in,
             traded_out=t_out,
             sold_refill=row.sold_refill,
             sold_with_cylinder=row.sold_with_cylinder,
             balance=balance,
+            closing_empty=row.closing_empty,
             value_refill=value_refill,
             value_with_cylinder=value_with_cyl,
             total_value=total_value,
         ))
         grand_total += total_value
 
+    # Oversell warnings (non-blocking)
+    warnings = []
+    for row in calculated_rows:
+        if row.balance < 0:
+            warnings.append(f"{row.size_kg}kg: closing stock is negative ({row.balance}). Verify counts.")
+
+    # Auto-calculate book population if not provided
+    book_pop = entry_input.book_cylinder_population
+    if book_pop is None:
+        book_pop = sum(row.balance + row.closing_empty for row in calculated_rows)
+
     # Calculate population difference
     pop_diff = None
-    if entry_input.book_cylinder_population is not None and entry_input.actual_cylinder_population is not None:
-        pop_diff = entry_input.book_cylinder_population - entry_input.actual_cylinder_population
+    if book_pop is not None and entry_input.actual_cylinder_population is not None:
+        pop_diff = book_pop - entry_input.actual_cylinder_population
 
     entry_id = f"LPG-{entry_input.date}-{entry_input.shift_type[0]}-{uuid.uuid4().hex[:8]}"
 
@@ -305,7 +322,7 @@ def submit_lpg_entry(
         salesperson=entry_input.salesperson,
         cylinder_rows=calculated_rows,
         grand_total_value=grand_total,
-        book_cylinder_population=entry_input.book_cylinder_population,
+        book_cylinder_population=book_pop,
         actual_cylinder_population=entry_input.actual_cylinder_population,
         population_difference=pop_diff,
         recorded_by=entry_input.recorded_by,
@@ -313,6 +330,7 @@ def submit_lpg_entry(
         notes=entry_input.notes,
         trades=processed_trades if processed_trades else None,
         total_trade_revenue=total_trade_revenue,
+        warnings=warnings if warnings else None,
     )
 
     lpg_daily_db[entry_id] = output.model_dump(mode='json')

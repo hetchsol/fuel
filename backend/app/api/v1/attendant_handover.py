@@ -770,16 +770,21 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
             cylinder_rows.append({
                 "size_kg": cyl["size_kg"],
                 "opening_balance": cyl["opening_full"],
+                "opening_empty": cyl.get("opening_empty", 0),
                 "receipts": cyl["additions"],
                 "traded_in": 0,
                 "traded_out": 0,
                 "sold_refill": cyl.get("sold_refill", 0),
                 "sold_with_cylinder": cyl.get("sold_with_cylinder", 0),
                 "balance": cyl["closing_full"],
+                "closing_empty": cyl.get("closing_empty", 0),
                 "value_refill": val_refill,
                 "value_with_cylinder": val_with_cyl,
                 "total_value": total_val,
             })
+
+        # Auto-calculate book population (filled + empty)
+        book_pop = sum(r["balance"] + r.get("closing_empty", 0) for r in cylinder_rows)
 
         lpg_daily_db[lpg_entry_id] = {
             "entry_id": lpg_entry_id,
@@ -788,7 +793,7 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
             "salesperson": user_name,
             "cylinder_rows": cylinder_rows,
             "grand_total_value": round(grand_total, 2),
-            "book_cylinder_population": None,
+            "book_cylinder_population": book_pop,
             "actual_cylinder_population": None,
             "population_difference": None,
             "recorded_by": user_id,
