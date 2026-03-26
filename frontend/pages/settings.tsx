@@ -407,12 +407,12 @@ export default function Settings() {
 
       {/* Tab Navigation */}
       <div className="mb-6 border-b border-surface-border">
-        <nav className="-mb-px flex flex-wrap justify-center gap-x-6">
+        <nav className="-mb-px flex">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+              className={`flex-1 py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap text-center ${
                 activeTab === tab.id
                   ? 'border-action-primary text-action-primary'
                   : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
@@ -426,7 +426,7 @@ export default function Settings() {
 
       {/* ── System Information Tab ── */}
       {activeTab === 'system' && (
-        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
+        <div className="bg-surface-card rounded-lg shadow p-6">
           <form onSubmit={handleSystemUpdate} className="space-y-6">
             <div className="border-b pb-6">
               <h2 className="text-xl font-semibold text-content-primary mb-4">System Information</h2>
@@ -524,7 +524,7 @@ export default function Settings() {
 
       {/* ── Fuel Settings Tab ── */}
       {activeTab === 'fuel' && (
-        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
+        <div className="bg-surface-card rounded-lg shadow p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="border-b pb-6">
               <h2 className="text-xl font-semibold text-content-primary mb-4">Fuel Pricing</h2>
@@ -628,7 +628,7 @@ export default function Settings() {
 
       {/* ── Tax & Levy Tab ── */}
       {activeTab === 'tax-levy' && (
-        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
+        <div className="bg-surface-card rounded-lg shadow p-6">
           <div className="space-y-6">
             <div className="border-b pb-4">
               <h2 className="text-xl font-semibold text-content-primary mb-2">Tax & Levy Settings</h2>
@@ -704,7 +704,7 @@ export default function Settings() {
 
       {/* ── Validation Thresholds Tab ── */}
       {activeTab === 'validation' && (
-        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
+        <div className="bg-surface-card rounded-lg shadow p-6">
           <div className="space-y-6">
             <div className="border-b pb-4">
               <h2 className="text-xl font-semibold text-content-primary mb-2">Validation Thresholds</h2>
@@ -815,7 +815,7 @@ export default function Settings() {
 
       {/* ── Stock Alerts Tab ── */}
       {activeTab === 'stock-alerts' && (
-        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
+        <div className="bg-surface-card rounded-lg shadow p-6">
           <div className="space-y-6">
             <div className="border-b pb-4">
               <h2 className="text-xl font-semibold text-content-primary mb-2">Stock Alert Thresholds</h2>
@@ -888,7 +888,7 @@ export default function Settings() {
 
       {/* ── Reconciliation Tolerances Tab ── */}
       {activeTab === 'recon-tolerances' && (
-        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
+        <div className="bg-surface-card rounded-lg shadow p-6">
           <div className="space-y-6">
             <div className="border-b pb-4">
               <h2 className="text-xl font-semibold text-content-primary mb-2">Reconciliation Tolerances</h2>
@@ -1060,7 +1060,7 @@ export default function Settings() {
 
       {/* ── Email Notifications Tab ── */}
       {activeTab === 'email' && (
-        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
+        <div className="bg-surface-card rounded-lg shadow p-6">
           <div className="space-y-6">
             <div className="border-b pb-4">
               <h2 className="text-xl font-semibold text-content-primary mb-2">Email Notifications</h2>
