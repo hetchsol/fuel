@@ -1,6 +1,12 @@
 import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
 
+interface NozzleOption {
+  nozzle_id: string
+  fuel_type: string
+  display_label?: string
+  island_name?: string
+}
 
 interface SaleResult {
   sale_id: string
@@ -33,6 +39,42 @@ export default function Sales() {
   const [result, setResult] = useState<SaleResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [nozzles, setNozzles] = useState<NozzleOption[]>([])
+  const [selectedNozzle, setSelectedNozzle] = useState('')
+
+  // Fetch nozzles from island configuration
+  useEffect(() => {
+    async function fetchNozzles() {
+      try {
+        const res = await authFetch(`${BASE}/islands`, { headers: getHeaders() })
+        if (!res.ok) return
+        const islands = await res.json()
+        const opts: NozzleOption[] = []
+        for (const island of islands) {
+          const ps = island.pump_station
+          if (!ps || !ps.nozzles) continue
+          for (const nz of ps.nozzles) {
+            opts.push({
+              nozzle_id: nz.nozzle_id,
+              fuel_type: nz.fuel_type,
+              display_label: nz.display_label || nz.nozzle_id,
+              island_name: island.name,
+            })
+          }
+        }
+        setNozzles(opts)
+      } catch {}
+    }
+    fetchNozzles()
+  }, [])
+
+  // Filter nozzles by selected fuel type
+  const filteredNozzles = nozzles.filter(n => n.fuel_type === formData.fuelType)
+
+  // Reset nozzle when fuel type changes
+  useEffect(() => {
+    setSelectedNozzle('')
+  }, [formData.fuelType])
 
   // Generate Shift ID based on shift type and current date
   const generateShiftId = (type: 'DAY' | 'NIGHT') => {
@@ -65,6 +107,7 @@ export default function Sales() {
         body: JSON.stringify({
           shift_id: formData.shiftId,
           fuel_type: formData.fuelType,
+          nozzle_id: selectedNozzle || undefined,
           mechanical_opening: parseFloat(formData.mechanicalOpening),
           mechanical_closing: parseFloat(formData.mechanicalClosing),
           electronic_opening: parseFloat(formData.electronicOpening),
@@ -199,6 +242,27 @@ export default function Sales() {
                 </select>
               </div>
             </div>
+
+            {/* Nozzle Selector (optional) */}
+            {filteredNozzles.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">
+                  Nozzle (optional — selects specific tank)
+                </label>
+                <select
+                  value={selectedNozzle}
+                  onChange={(e) => setSelectedNozzle(e.target.value)}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                >
+                  <option value="">Auto (first matching tank)</option>
+                  {filteredNozzles.map(n => (
+                    <option key={n.nozzle_id} value={n.nozzle_id}>
+                      {n.display_label} — {n.island_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Mechanical Readings */}
             <div className="border-t pt-4">

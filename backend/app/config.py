@@ -61,9 +61,11 @@ DIESEL_TANK_CAPACITY = 20000.0  # liters
 PETROL_TANK_CAPACITY = 25000.0  # liters
 
 # ============================================================================
-# TANK IDS
+# TANK IDS (DEPRECATED — valid only for default single-tank setups)
 # ============================================================================
-# Standardized tank identifiers used throughout the system
+# These constants remain valid for the default TANK-DIESEL and TANK-PETROL tanks.
+# For multi-tank setups, use the tank_id from the tanks API or island configuration.
+# Do NOT add new constants here for additional tanks.
 
 TANK_ID_DIESEL = "TANK-DIESEL"
 TANK_ID_PETROL = "TANK-PETROL"
@@ -155,7 +157,11 @@ def get_allowable_loss_percent(fuel_type: str) -> float:
 
 def get_tank_id(fuel_type: str) -> str:
     """
-    Get standard tank ID for a given fuel type
+    Get standard tank ID for a given fuel type.
+
+    DEPRECATED: Returns only the default tank ID for a fuel type.
+    For multi-tank setups, resolve tank_id via island pump_station configuration
+    or the nozzle-to-tank utilities in storage.py.
 
     Args:
         fuel_type: "Diesel" or "Petrol"

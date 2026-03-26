@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import useSWR from 'swr'
 import { getHeaders } from '../lib/api'
+import { useTanks } from '../hooks/useTanks'
 
 const BASE = '/api/v1'
 
@@ -66,9 +67,17 @@ export default function FuelOperations() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'levels' | 'readings' | 'deliveries' | 'summary'>('levels')
-  const [selectedTank, setSelectedTank] = useState('TANK-DIESEL')
+  const { tanks: availableTanks } = useTanks()
+  const [selectedTank, setSelectedTank] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [showDeliveryForm, setShowDeliveryForm] = useState(false)
+
+  // Default to first available tank on load
+  useEffect(() => {
+    if (!selectedTank && availableTanks.length > 0) {
+      setSelectedTank(availableTanks[0].tank_id)
+    }
+  }, [availableTanks, selectedTank])
 
   // Tank Reading Form State
   const [readingForm, setReadingForm] = useState({
@@ -378,8 +387,13 @@ export default function FuelOperations() {
             onChange={(e) => setSelectedTank(e.target.value)}
             className="w-full max-w-xs px-4 py-2 border border-surface-border rounded-md focus:ring-2 focus:ring-action-primary"
           >
-            <option value="TANK-DIESEL">Diesel Tank</option>
-            <option value="TANK-PETROL">Petrol Tank</option>
+            {availableTanks.map(t => (
+              <option key={t.tank_id} value={t.tank_id}>
+                {t.fuel_type} Tank{availableTanks.filter(x => x.fuel_type === t.fuel_type).length > 1
+                  ? ` ${availableTanks.filter(x => x.fuel_type === t.fuel_type).indexOf(t) + 1}`
+                  : ''}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -452,7 +466,7 @@ export default function FuelOperations() {
                     <div>
                       <h2 className="text-lg font-semibold text-action-primary mb-1">Current Tank Level</h2>
                       <p className="text-sm text-action-primary">
-                        {selectedTank === 'TANK-DIESEL' ? 'Diesel Tank' : 'Petrol Tank'}
+                        {(availableTanks.find(t => t.tank_id === selectedTank)?.fuel_type || 'Fuel') + ' Tank'}
                       </p>
                     </div>
                     {currentStock ? (
@@ -523,7 +537,7 @@ export default function FuelOperations() {
 
                 {/* Today's Activity */}
                 {(() => {
-                  const fuelType = selectedTank === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'
+                  const fuelType = availableTanks.find(t => t.tank_id === selectedTank)?.fuel_type || 'Diesel'
                   const todayDelivered = levelsMovements?.summary?.total_delivered ?? 0
                   const todaySold = levelsMovements?.summary?.total_sold ?? 0
                   const netChange = todayDelivered - todaySold
@@ -1218,7 +1232,7 @@ export default function FuelOperations() {
 
                     {/* Reconciliation Status */}
                     {(() => {
-                      const fuelType = selectedTank === 'TANK-DIESEL' ? 'Diesel' : 'Petrol'
+                      const fuelType = availableTanks.find(t => t.tank_id === selectedTank)?.fuel_type || 'Diesel'
                       const dayReadings = readings.filter(r => r.date === selectedDate)
                       const daySales = summarySales.filter((s: any) => s.fuel_type === fuelType)
                       const totalNozzleSales = daySales.reduce((sum: number, s: any) => sum + (s.average_volume || 0), 0)

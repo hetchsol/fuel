@@ -175,6 +175,51 @@ def filter_list_storage(
     return results
 
 
+def get_tank_id_for_nozzle(station_id: str = None, nozzle_id: str = None, storage: Dict[str, Any] = None) -> Optional[str]:
+    """
+    Resolve nozzle → pump_station → tank_id by scanning the islands data.
+    Returns the tank_id that the nozzle's pump station draws from, or None if not found.
+    """
+    store = storage
+    if store is None:
+        if station_id:
+            store = get_station_storage(station_id)
+        else:
+            store = STORAGE
+    for island_id, island_data in store.get('islands', {}).items():
+        ps = island_data.get('pump_station')
+        if not ps:
+            continue
+        for nozzle in ps.get('nozzles', []):
+            if nozzle.get('nozzle_id') == nozzle_id:
+                return ps.get('tank_id')
+    return None
+
+
+def get_nozzle_ids_for_tank(station_id: str = None, tank_id: str = None, storage: Dict[str, Any] = None) -> List[str]:
+    """
+    Reverse lookup: returns all nozzle_ids assigned to a given tank
+    by scanning pump_station.tank_id across all islands.
+    """
+    store = storage
+    if store is None:
+        if station_id:
+            store = get_station_storage(station_id)
+        else:
+            store = STORAGE
+    nozzle_ids = []
+    for island_id, island_data in store.get('islands', {}).items():
+        ps = island_data.get('pump_station')
+        if not ps:
+            continue
+        if ps.get('tank_id') == tank_id:
+            for nozzle in ps.get('nozzles', []):
+                nid = nozzle.get('nozzle_id')
+                if nid:
+                    nozzle_ids.append(nid)
+    return nozzle_ids
+
+
 def entity_exists(entity_type: str, entity_id: str) -> bool:
     """Check if an entity exists in storage"""
     if entity_type == 'nozzles':

@@ -19,10 +19,17 @@ interface NozzleReading {
 export default function DailyTankReading() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
-  const [selectedTank, setSelectedTank] = useState('TANK-DIESEL')
+  const [selectedTank, setSelectedTank] = useState('')
   const [activeSection, setActiveSection] = useState(1)
   const { theme } = useTheme()
   const { tanks: availableTanks } = useTanks()
+
+  // Default to first available tank on load
+  useEffect(() => {
+    if (!selectedTank && availableTanks.length > 0) {
+      setSelectedTank(availableTanks[0].tank_id)
+    }
+  }, [availableTanks, selectedTank])
 
   // Derive fuel type from the selected tank dynamically
   const selectedTankData = availableTanks.find(t => t.tank_id === selectedTank)

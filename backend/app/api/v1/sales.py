@@ -11,6 +11,7 @@ from ...services.sales_calculator import calculate_sale
 from ...config import resolve_fuel_price
 from .auth import get_station_context
 from ...database.station_files import load_station_json, save_station_json
+from ...database.storage import get_tank_id_for_nozzle
 
 router = APIRouter()
 
@@ -66,17 +67,35 @@ def record_sale(payload: SaleIn, ctx: dict = Depends(get_station_context)):
         except:
             sale["date"] = datetime.now().strftime("%Y-%m-%d")
 
+        # Store nozzle_id on the sale record
+        if payload.nozzle_id:
+            sale["nozzle_id"] = payload.nozzle_id
+
         # Auto-deduct from tank level on successful sale
         if sale["validation_status"] == "PASS":
             storage = ctx["storage"]
             tank_data = storage.get('tanks', {})
 
-            # Find tank matching this fuel type
+            # Resolve target tank: prefer nozzle_id → tank_id, fall back to fuel_type match
             target_tank = None
-            for tid, tdata in tank_data.items():
-                if tdata.get("fuel_type") == payload.fuel_type:
-                    target_tank = tid
-                    break
+            if payload.nozzle_id:
+                resolved_tank = get_tank_id_for_nozzle(nozzle_id=payload.nozzle_id, storage=storage)
+                if resolved_tank and resolved_tank in tank_data:
+                    # Validate fuel_type consistency
+                    resolved_fuel = tank_data[resolved_tank].get("fuel_type")
+                    if resolved_fuel != payload.fuel_type:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Nozzle {payload.nozzle_id} is connected to tank {resolved_tank} ({resolved_fuel}), but sale fuel_type is {payload.fuel_type}"
+                        )
+                    target_tank = resolved_tank
+
+            # Fall back to fuel_type match (backward compat for sales without nozzle_id)
+            if not target_tank:
+                for tid, tdata in tank_data.items():
+                    if tdata.get("fuel_type") == payload.fuel_type:
+                        target_tank = tid
+                        break
 
             if target_tank:
                 tank = tank_data[target_tank]

@@ -5,6 +5,8 @@ import LoadingSpinner from './LoadingSpinner'
 interface TankCardProps {
   fuelType: 'Diesel' | 'Petrol'
   tank: any
+  tankId?: string       // Explicit tank_id (for multi-tank support)
+  tankLabel?: string    // Display label e.g. "Diesel Tank 2"
   tanksError: any
   canEditDipReadings: boolean
   userRole: string
@@ -80,6 +82,8 @@ function TankGauge({ percentage, color }: { percentage: number; color: string })
 const TankCard = ({
   fuelType,
   tank,
+  tankId: tankIdProp,
+  tankLabel,
   tanksError,
   canEditDipReadings,
   userRole,
@@ -137,7 +141,8 @@ const TankCard = ({
         badgeBg: 'bg-fuel-petrol-light text-fuel-petrol'
       }
 
-  const tankId = `TANK-${fuelType.toUpperCase()}`
+  const tankId = tankIdProp || (tank?.tank_id) || `TANK-${fuelType.toUpperCase()}`
+  const displayName = tankLabel || `${fuelType} Tank`
 
   useEffect(() => {
     if (tank && canEditDipReadings) {
@@ -190,7 +195,7 @@ const TankCard = ({
             )}
           </div>
           <div>
-            <h2 className={`text-lg font-bold ${colors.title}`}>{fuelType} Tank</h2>
+            <h2 className={`text-lg font-bold ${colors.title}`}>{displayName}</h2>
             <p className={`text-xs ${colors.lightestText}`}>Real-time level</p>
           </div>
         </div>

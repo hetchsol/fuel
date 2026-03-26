@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from ...models.models import ShiftReconciliation, TankReconciliation
 from ...config import PETROL_PRICE_PER_LITER, DIESEL_PRICE_PER_LITER
-from ...database.storage import get_nozzle
+from ...database.storage import get_nozzle, get_tank_id_for_nozzle
 from .auth import get_station_context
 from ...database.station_files import load_station_json
 
@@ -155,11 +155,28 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
         # Calculate tank volume movement (decrease in tank level)
         tank_movement = opening_volume - closing_volume
 
-        # Get sales for this shift and fuel type
-        shift_sales = [
-            s for s in sales
-            if s.get('shift_id') == shift_id and s.get('fuel_type') == fuel_type
-        ]
+        # Get sales for this shift and tank — three-tier filter:
+        # 1. tank_id on sale record (set by Phase 1 nozzle resolution)
+        # 2. nozzle_id → tank resolution
+        # 3. fuel_type match (backward compat for single-tank setups)
+        shift_sales = []
+        for s in sales:
+            if s.get('shift_id') != shift_id:
+                continue
+            sale_tank = s.get('tank_id')
+            if sale_tank:
+                if sale_tank == tank_id:
+                    shift_sales.append(s)
+                continue
+            sale_nozzle = s.get('nozzle_id')
+            if sale_nozzle:
+                resolved = get_tank_id_for_nozzle(nozzle_id=sale_nozzle, storage=storage)
+                if resolved == tank_id:
+                    shift_sales.append(s)
+                continue
+            # Last resort: fuel_type match
+            if s.get('fuel_type') == fuel_type:
+                shift_sales.append(s)
 
         # Calculate total electronic and mechanical sales
         total_electronic = sum(s.get('electronic_volume', 0) or 0 for s in shift_sales)

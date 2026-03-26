@@ -10,7 +10,7 @@ from ...models.models import (
     AttendantReadingsInput, NozzleDualReadingEntry, UserRole, SupervisorReviewInput
 )
 from ...config import get_fuel_price
-from ...database.storage import get_nozzle
+from ...database.storage import get_nozzle, get_nozzle_ids_for_tank, get_tank_id_for_nozzle
 from .auth import get_current_user, get_station_context
 from ...database.station_files import load_station_json, save_station_json
 
@@ -622,11 +622,17 @@ async def get_shift_summary(shift_id: str, ctx: dict = Depends(get_station_conte
             "nozzle_summaries": nozzle_summaries,
         })
 
-    # Aggregate by fuel type
+    # Build per-tank nozzle totals using nozzle→tank resolution
+    # Also keep fuel-type totals as fallback
+    per_tank_totals = {}  # tank_id -> total
     diesel_total = 0.0
     petrol_total = 0.0
     for ar in attendant_results:
         for ns in ar["nozzle_summaries"]:
+            nid = ns.get("nozzle_id", "")
+            resolved_tank = get_tank_id_for_nozzle(nozzle_id=nid, storage=storage)
+            if resolved_tank:
+                per_tank_totals[resolved_tank] = per_tank_totals.get(resolved_tank, 0.0) + ns["average_dispensed"]
             if ns["fuel_type"] == "Diesel":
                 diesel_total += ns["average_dispensed"]
             else:
@@ -662,7 +668,11 @@ async def get_shift_summary(shift_id: str, ctx: dict = Depends(get_station_conte
             fuel_type = "Diesel" if "DIESEL" in tank_id.upper() else "Petrol"
             data_source = "dip_only"
 
-        nozzle_total = diesel_total if fuel_type == "Diesel" else petrol_total
+        # Use per-tank nozzle total if available, fall back to fuel-type total
+        if tank_id in per_tank_totals:
+            nozzle_total = per_tank_totals[tank_id]
+        else:
+            nozzle_total = diesel_total if fuel_type == "Diesel" else petrol_total
 
         variance = round(nozzle_total - tank_movement, 3) if tank_movement else 0
         variance_pct = round(abs(variance) / tank_movement * 100, 2) if tank_movement > 0 else 0
@@ -742,8 +752,15 @@ async def get_nozzle_readings_for_tank(
     station_id = ctx["station_id"]
     islands_data = storage.get('islands', {})
 
-    # Determine target fuel type from tank_id
-    target_fuel = "Diesel" if "DIESEL" in tank_id.upper() else "Petrol"
+    # Determine which nozzles belong to this specific tank
+    tank_nozzle_ids = set(get_nozzle_ids_for_tank(tank_id=tank_id, storage=storage))
+
+    # Determine target fuel type: prefer tank record, fall back to string parsing
+    tank_data = storage.get('tanks', {}).get(tank_id)
+    if tank_data:
+        target_fuel = tank_data.get("fuel_type", "Diesel")
+    else:
+        target_fuel = "Diesel" if "DIESEL" in tank_id.upper() else "Petrol"
 
     readings_db = _load_readings(station_id)
 
@@ -765,11 +782,16 @@ async def get_nozzle_readings_for_tank(
         for nr in record.get("nozzle_readings", []):
             nid = nr["nozzle_id"]
 
-            # Filter by fuel type — look up nozzle to check
-            nozzle_obj = get_nozzle(nid, storage=storage)
-            nozzle_fuel = nozzle_obj.get("fuel_type", "") if nozzle_obj else ""
-            if nozzle_fuel != target_fuel:
-                continue
+            # Filter by tank: use exact nozzle→tank mapping if available,
+            # fall back to fuel_type match for unmapped nozzles
+            if tank_nozzle_ids:
+                if nid not in tank_nozzle_ids:
+                    continue
+            else:
+                nozzle_obj = get_nozzle(nid, storage=storage)
+                nozzle_fuel = nozzle_obj.get("fuel_type", "") if nozzle_obj else ""
+                if nozzle_fuel != target_fuel:
+                    continue
 
             if is_opening:
                 openings[nid] = {

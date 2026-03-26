@@ -16,7 +16,13 @@ router = APIRouter()
 
 
 def _find_tank_for_fuel(storage: dict, product_type: str) -> str:
-    """Find the first tank matching a fuel type, falling back to config constants."""
+    """
+    Find the first tank matching a fuel type, falling back to config constants.
+
+    NOTE: This is a default/convenience behavior for backward compatibility.
+    For multi-tank setups, use the explicit PUT /islands/{id}/pump-station/tank
+    endpoint to manually assign islands to specific tanks.
+    """
     tanks = storage.get('tanks', {})
     for tid, tdata in tanks.items():
         if tdata.get("fuel_type") == product_type:

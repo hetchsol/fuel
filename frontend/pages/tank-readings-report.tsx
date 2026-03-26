@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { useTanks } from '../hooks/useTanks'
 
 interface ValidatedReading {
   reading_id: string
@@ -88,7 +89,8 @@ export default function TankReadingsReport() {
   const [activeTab, setActiveTab] = useState<'readings' | 'validated'>('readings')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [selectedTank, setSelectedTank] = useState('TANK-DIESEL')
+  const { tanks: availableTanks } = useTanks()
+  const [selectedTank, setSelectedTank] = useState('')
   const [readings, setReadings] = useState<TankReading[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -102,8 +104,17 @@ export default function TankReadingsReport() {
   const [filterShift, setFilterShift] = useState<string>('ALL')
   const [selectedValidatedReading, setSelectedValidatedReading] = useState<ValidatedReading | null>(null)
 
+  // Default to first available tank on load
+  useEffect(() => {
+    if (!selectedTank && availableTanks.length > 0) {
+      setSelectedTank(availableTanks[0].tank_id)
+    }
+  }, [availableTanks, selectedTank])
+
   // Get fuel type prefix and color based on tank
   const getFuelTypePrefix = (tankId: string) => {
+    const tankData = availableTanks.find(t => t.tank_id === tankId)
+    if (tankData) return tankData.fuel_type === 'Diesel' ? 'LSD' : 'UNL'
     return tankId === 'TANK-DIESEL' ? 'LSD' : 'UNL'
   }
 
@@ -292,8 +303,13 @@ export default function TankReadingsReport() {
                   borderColor: theme.border
                 }}
               >
-                <option value="TANK-DIESEL">Diesel Tank</option>
-                <option value="TANK-PETROL">Petrol Tank</option>
+                {availableTanks.map(t => (
+                  <option key={t.tank_id} value={t.tank_id}>
+                    {t.fuel_type} Tank{availableTanks.filter(x => x.fuel_type === t.fuel_type).length > 1
+                      ? ` ${availableTanks.filter(x => x.fuel_type === t.fuel_type).indexOf(t) + 1}`
+                      : ''}
+                  </option>
+                ))}
               </select>
             </div>
 

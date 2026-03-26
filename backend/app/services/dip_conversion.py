@@ -7,6 +7,27 @@ Uses tank calibration charts/formulas specific to each tank.
 
 from typing import Dict, Optional
 import math
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Dynamic calibration registry for tanks added at runtime
+_dynamic_calibrations: Dict[str, dict] = {}
+
+
+def register_tank_calibration(tank_id: str, chart_data: Dict[float, float], capacity: float = 50000, diameter: float = 250, length: float = 1000):
+    """
+    Register a calibration chart for a new tank at runtime.
+    This is used when a new tank is created and we clone the calibration from a sibling tank.
+    """
+    _dynamic_calibrations[tank_id] = {
+        "type": "cylindrical_horizontal",
+        "capacity": capacity,
+        "diameter": diameter,
+        "length": length,
+        "calibration_chart": dict(chart_data),
+    }
+    logger.info(f"Registered dynamic calibration for tank {tank_id}")
 
 
 # Tank Calibration Data
@@ -98,6 +119,52 @@ TANK_CALIBRATION = {
 }
 
 
+def _resolve_calibration(tank_id: str, fuel_type: str = None) -> dict:
+    """
+    Resolve calibration config for a tank_id.
+    Priority: hardcoded TANK_CALIBRATION → dynamic registry → same-fuel-type fallback.
+    Raises ValueError only if no calibration can be found at all.
+    """
+    # 1. Hardcoded charts (existing tanks)
+    if tank_id in TANK_CALIBRATION:
+        return TANK_CALIBRATION[tank_id]
+
+    # 2. Dynamic registry (registered at runtime via register_tank_calibration)
+    if tank_id in _dynamic_calibrations:
+        return _dynamic_calibrations[tank_id]
+
+    # 3. Fallback: find a sibling tank of the same fuel type
+    if fuel_type:
+        for known_id, known_config in TANK_CALIBRATION.items():
+            # Infer fuel type from known tank ID
+            known_fuel = "Diesel" if "DIESEL" in known_id.upper() else "Petrol"
+            if known_fuel == fuel_type:
+                logger.warning(
+                    f"Tank {tank_id} has no calibration chart — using {known_id} chart as fallback. "
+                    f"Provide actual calibration data for accurate readings."
+                )
+                return known_config
+
+    # 4. Last attempt: infer fuel_type from tank_id string
+    inferred_fuel = None
+    if "DIESEL" in tank_id.upper():
+        inferred_fuel = "Diesel"
+    elif "PETROL" in tank_id.upper():
+        inferred_fuel = "Petrol"
+
+    if inferred_fuel:
+        for known_id, known_config in TANK_CALIBRATION.items():
+            known_fuel = "Diesel" if "DIESEL" in known_id.upper() else "Petrol"
+            if known_fuel == inferred_fuel:
+                logger.warning(
+                    f"Tank {tank_id} has no calibration chart — using {known_id} chart as fallback (inferred fuel type: {inferred_fuel}). "
+                    f"Provide actual calibration data for accurate readings."
+                )
+                return known_config
+
+    raise ValueError(f"Unknown tank: {tank_id}. Add calibration chart for this tank.")
+
+
 def dip_to_volume(tank_id: str, dip_cm: float) -> float:
     """
     Convert dip stick reading (cm) to fuel volume (liters).
@@ -113,10 +180,7 @@ def dip_to_volume(tank_id: str, dip_cm: float) -> float:
         >>> dip_to_volume("TANK-DIESEL", 164.5)
         26887.21
     """
-    if tank_id not in TANK_CALIBRATION:
-        raise ValueError(f"Unknown tank: {tank_id}")
-
-    config = TANK_CALIBRATION[tank_id]
+    config = _resolve_calibration(tank_id)
     chart = config["calibration_chart"]
 
     # Handle edge cases
@@ -172,10 +236,7 @@ def volume_to_dip(tank_id: str, volume_liters: float) -> float:
 
     Note: This is an inverse operation and may not be exact due to tank geometry
     """
-    if tank_id not in TANK_CALIBRATION:
-        raise ValueError(f"Unknown tank: {tank_id}")
-
-    config = TANK_CALIBRATION[tank_id]
+    config = _resolve_calibration(tank_id)
     chart = config["calibration_chart"]
 
     if volume_liters <= 0:
@@ -256,13 +317,14 @@ def validate_dip_reading(tank_id: str, dip_cm: float) -> Dict[str, any]:
     Returns:
         dict with validation results
     """
-    if tank_id not in TANK_CALIBRATION:
+    try:
+        config = _resolve_calibration(tank_id)
+    except ValueError:
         return {
             'valid': False,
             'errors': [f"Unknown tank: {tank_id}"]
         }
 
-    config = TANK_CALIBRATION[tank_id]
     max_dip = max(config["calibration_chart"].keys())
     errors = []
     warnings = []
@@ -285,9 +347,8 @@ def validate_dip_reading(tank_id: str, dip_cm: float) -> Dict[str, any]:
 
 def get_tank_capacity(tank_id: str) -> float:
     """Get total capacity of a tank in liters."""
-    if tank_id not in TANK_CALIBRATION:
-        raise ValueError(f"Unknown tank: {tank_id}")
-    return float(TANK_CALIBRATION[tank_id]["capacity"])
+    config = _resolve_calibration(tank_id)
+    return float(config["capacity"])
 
 
 def get_tank_calibration_chart(tank_id: str) -> Dict[float, float]:
@@ -297,9 +358,8 @@ def get_tank_calibration_chart(tank_id: str) -> Dict[float, float]:
     Returns:
         Dictionary mapping dip (cm) to volume (liters)
     """
-    if tank_id not in TANK_CALIBRATION:
-        raise ValueError(f"Unknown tank: {tank_id}")
-    return TANK_CALIBRATION[tank_id]["calibration_chart"]
+    config = _resolve_calibration(tank_id)
+    return config["calibration_chart"]
 
 
 # Example usage and testing

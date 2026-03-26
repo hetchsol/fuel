@@ -46,8 +46,13 @@ export default function Home() {
 
   const canEditDipReadings = userRole === 'supervisor' || userRole === 'owner'
 
-  const dieselTank = tanks?.find((t: any) => t.fuel_type === 'Diesel')
-  const petrolTank = tanks?.find((t: any) => t.fuel_type === 'Petrol')
+  const dieselTanks = tanks?.filter((t: any) => t.fuel_type === 'Diesel') || []
+  const petrolTanks = tanks?.filter((t: any) => t.fuel_type === 'Petrol') || []
+  const allTanks = [...dieselTanks, ...petrolTanks]
+
+  // Backward compat: single tank per fuel type
+  const dieselTank = dieselTanks[0]
+  const petrolTank = petrolTanks[0]
 
   const handleSaveDipReadings = async (tankId: string, fuelType: string, dipReadings: any) => {
     setSavingDips(true)
@@ -103,27 +108,52 @@ export default function Home() {
       </div>
 
       {/* Tank Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 animate-fade-in-up-2">
-        <TankCard
-          fuelType="Diesel"
-          tank={dieselTank}
-          tanksError={tanksError}
-          canEditDipReadings={canEditDipReadings}
-          userRole={userRole}
-          onSaveDipReadings={handleSaveDipReadings}
-          savingDips={savingDips}
-          mutateTanks={mutateTanks}
-        />
-        <TankCard
-          fuelType="Petrol"
-          tank={petrolTank}
-          tanksError={tanksError}
-          canEditDipReadings={canEditDipReadings}
-          userRole={userRole}
-          onSaveDipReadings={handleSaveDipReadings}
-          savingDips={savingDips}
-          mutateTanks={mutateTanks}
-        />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6 animate-fade-in-up-2">
+        {allTanks.length > 0 ? allTanks.map((tank: any, idx: number) => {
+          const fuelType = tank.fuel_type as 'Diesel' | 'Petrol'
+          const sameFuelTanks = allTanks.filter((t: any) => t.fuel_type === fuelType)
+          const tankLabel = sameFuelTanks.length > 1
+            ? `${fuelType} Tank ${sameFuelTanks.indexOf(tank) + 1}`
+            : undefined
+          return (
+            <TankCard
+              key={tank.tank_id}
+              fuelType={fuelType}
+              tank={tank}
+              tankId={tank.tank_id}
+              tankLabel={tankLabel}
+              tanksError={tanksError}
+              canEditDipReadings={canEditDipReadings}
+              userRole={userRole}
+              onSaveDipReadings={handleSaveDipReadings}
+              savingDips={savingDips}
+              mutateTanks={mutateTanks}
+            />
+          )
+        }) : (
+          <>
+            <TankCard
+              fuelType="Diesel"
+              tank={dieselTank}
+              tanksError={tanksError}
+              canEditDipReadings={canEditDipReadings}
+              userRole={userRole}
+              onSaveDipReadings={handleSaveDipReadings}
+              savingDips={savingDips}
+              mutateTanks={mutateTanks}
+            />
+            <TankCard
+              fuelType="Petrol"
+              tank={petrolTank}
+              tanksError={tanksError}
+              canEditDipReadings={canEditDipReadings}
+              userRole={userRole}
+              onSaveDipReadings={handleSaveDipReadings}
+              savingDips={savingDips}
+              mutateTanks={mutateTanks}
+            />
+          </>
+        )}
       </div>
 
       {/* Summary + Discrepancies */}

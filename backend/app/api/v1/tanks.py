@@ -9,6 +9,10 @@ from ...config import TANK_CONVERSION_FACTOR, get_allowable_loss_percent
 from .auth import get_station_context
 from .sales import load_sales
 from ...services.notification_service import create_notification
+from ...services.dip_conversion import register_tank_calibration, TANK_CALIBRATION
+import logging
+
+_tanks_logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -263,15 +267,21 @@ def get_stock_movements(tank_id: str, date: Optional[str] = None, limit: int = 5
                 "supplier": delivery.get("supplier"),
             })
 
-    # 2. Gather sales for matching fuel_type on the target date
+    # 2. Gather sales for this tank on the target date
+    #    Prefer tank_id match, fall back to fuel_type for old sales without tank_id
     sales = load_sales(station_id)
     for sale in sales:
-        if sale.get("fuel_type") != fuel_type:
-            continue
         if sale.get("date") != target_date:
             continue
         if sale.get("validation_status") != "PASS":
             continue
+        sale_tank = sale.get("tank_id")
+        if sale_tank:
+            if sale_tank != tank_id:
+                continue
+        else:
+            if sale.get("fuel_type") != fuel_type:
+                continue
 
         avg_vol = sale.get("average_volume", 0)
         mech_vol = sale.get("mechanical_volume", 0)
@@ -441,6 +451,24 @@ def create_tank(tank_id: str, fuel_type: str, capacity: float, initial_level: fl
         "last_updated": datetime.now().isoformat(),
         "percentage": percentage
     }
+
+    # Auto-clone calibration chart from a sibling tank of the same fuel type
+    if tank_id not in TANK_CALIBRATION:
+        for known_id, known_config in TANK_CALIBRATION.items():
+            known_fuel = "Diesel" if "DIESEL" in known_id.upper() else "Petrol"
+            if known_fuel == fuel_type:
+                register_tank_calibration(
+                    tank_id,
+                    chart_data=known_config["calibration_chart"],
+                    capacity=known_config.get("capacity", 50000),
+                    diameter=known_config.get("diameter", 250),
+                    length=known_config.get("length", 1000),
+                )
+                _tanks_logger.warning(
+                    f"Tank {tank_id} calibration cloned from {known_id}. "
+                    f"Provide actual calibration data for accurate dip readings."
+                )
+                break
 
     return {
         "status": "success",

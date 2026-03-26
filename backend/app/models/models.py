@@ -46,6 +46,7 @@ class ReadingOut(BaseModel):
 class SaleIn(BaseModel):
     shift_id: str
     fuel_type: str  # Diesel or Petrol
+    nozzle_id: Optional[str] = None  # Optional: resolves exact tank via island config
     mechanical_opening: float = Field(..., ge=0)
     mechanical_closing: float = Field(..., ge=0)
     electronic_opening: float = Field(..., ge=0)
@@ -55,6 +56,7 @@ class SaleOut(BaseModel):
     sale_id: str
     shift_id: str
     fuel_type: str
+    nozzle_id: Optional[str] = None
     mechanical_opening: float
     mechanical_closing: float
     electronic_opening: float
