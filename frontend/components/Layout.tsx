@@ -225,6 +225,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Reconciliation',
       roles: ['supervisor', 'owner'],
       children: [
+        { path: '/reconciliation-dashboard', label: 'Dashboard', roles: ['supervisor', 'owner'] },
         { path: '/three-way-reconciliation', label: 'Three-Way Reconciliation', roles: ['supervisor', 'owner'] },
         { path: '/tank-analysis', label: 'Tank Analysis', roles: ['supervisor', 'owner'] },
         { path: '/reconciliation', label: 'Shift Reconciliation', roles: ['supervisor', 'owner'] },

@@ -6,10 +6,10 @@ Station-aware: all data lives in ctx["storage"]
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from ...models.models import ShiftReconciliation, TankReconciliation
-from ...config import PETROL_PRICE_PER_LITER, DIESEL_PRICE_PER_LITER
+from ...config import resolve_fuel_price
 from ...database.storage import get_nozzle, get_tank_id_for_nozzle
 from .auth import get_station_context
-from ...database.station_files import load_station_json
+from ...database.station_files import load_station_json, save_station_json
 
 router = APIRouter()
 
@@ -19,14 +19,67 @@ def _load_station_tank_readings(station_id: str) -> dict:
     return load_station_json(station_id, 'tank_readings.json', default={})
 
 
+def load_reconciliations(station_id: str) -> list:
+    """Load persisted reconciliations from station JSON file."""
+    return load_station_json(station_id, 'reconciliations.json', default=[])
+
+
+def save_reconciliations(data: list, station_id: str):
+    """Save reconciliations to station JSON file."""
+    save_station_json(station_id, 'reconciliations.json', data)
+
+
+def _get_reconciliations(station_id: str, storage: dict) -> list:
+    """
+    Get reconciliations from persisted file, falling back to in-memory storage.
+    Merges both sources (file takes priority, in-memory fills gaps).
+    """
+    file_data = load_reconciliations(station_id)
+    mem_data = storage.get('reconciliations_data', [])
+
+    if file_data:
+        # Merge any in-memory entries not already in file (by shift_id)
+        file_shift_ids = {r.get('shift_id') for r in file_data}
+        for r in mem_data:
+            if r.get('shift_id') not in file_shift_ids:
+                file_data.append(r)
+        return file_data
+    elif mem_data:
+        return mem_data
+    return []
+
+
+def _save_reconciliation_entry(entry: dict, station_id: str, storage: dict):
+    """
+    Save a reconciliation entry: update if shift_id exists, append otherwise.
+    Persists to both in-memory storage and JSON file.
+    """
+    recons = _get_reconciliations(station_id, storage)
+    # Check for existing entry by shift_id + attendant_id (avoid duplicates)
+    shift_id = entry.get('shift_id')
+    attendant_id = entry.get('attendant_id', '')
+    found = False
+    for i, r in enumerate(recons):
+        if r.get('shift_id') == shift_id and r.get('attendant_id', '') == attendant_id:
+            recons[i] = entry
+            found = True
+            break
+    if not found:
+        recons.append(entry)
+
+    # Persist to file
+    save_reconciliations(recons, station_id)
+    # Keep in-memory in sync
+    storage['reconciliations_data'] = recons
+
+
 @router.post("/shift", response_model=ShiftReconciliation)
 def create_shift_reconciliation(recon: ShiftReconciliation, ctx: dict = Depends(get_station_context)):
     """
     Create comprehensive shift reconciliation
     Matches Summary sheet in Excel
     """
-    storage = ctx["storage"]
-    storage.get('reconciliations_data', []).append(recon.dict())
+    _save_reconciliation_entry(recon.dict(), ctx["station_id"], ctx["storage"])
     return recon
 
 @router.get("/shift/{shift_id}", response_model=ShiftReconciliation)
@@ -34,8 +87,8 @@ def get_shift_reconciliation(shift_id: str, ctx: dict = Depends(get_station_cont
     """
     Get reconciliation for a specific shift
     """
-    storage = ctx["storage"]
-    recon = next((r for r in storage.get('reconciliations_data', []) if r["shift_id"] == shift_id), None)
+    recons = _get_reconciliations(ctx["station_id"], ctx["storage"])
+    recon = next((r for r in recons if r["shift_id"] == shift_id), None)
 
     if not recon:
         raise HTTPException(status_code=404, detail="Reconciliation not found")
@@ -47,9 +100,9 @@ def get_date_reconciliation(date: str, ctx: dict = Depends(get_station_context))
     """
     Get both Day and Night shift reconciliations for a specific date
     """
-    storage = ctx["storage"]
+    recons = _get_reconciliations(ctx["station_id"], ctx["storage"])
     date_recons = [
-        ShiftReconciliation(**r) for r in storage.get('reconciliations_data', [])
+        ShiftReconciliation(**r) for r in recons
         if r["date"] == date
     ]
     return date_recons
@@ -60,8 +113,10 @@ def record_bank_deposit(shift_id: str, amount: float, deposit_slip: str = None, 
     Record actual amount deposited to bank
     Updates difference and calculates variance
     """
+    station_id = ctx["station_id"]
     storage = ctx["storage"]
-    recon = next((r for r in storage.get('reconciliations_data', []) if r["shift_id"] == shift_id), None)
+    recons = _get_reconciliations(station_id, storage)
+    recon = next((r for r in recons if r["shift_id"] == shift_id), None)
 
     if not recon:
         raise HTTPException(status_code=404, detail="Reconciliation not found for this shift")
@@ -70,9 +125,13 @@ def record_bank_deposit(shift_id: str, amount: float, deposit_slip: str = None, 
     recon["difference"] = amount - recon["expected_cash"]
 
     # Update cumulative difference
-    previous_recons = [r for r in storage.get('reconciliations_data', []) if r["date"] < recon["date"]]
+    previous_recons = [r for r in recons if r["date"] < recon["date"]]
     previous_cumulative = sum(r.get("difference", 0) or 0 for r in previous_recons)
     recon["cumulative_difference"] = previous_cumulative + recon["difference"]
+
+    # Persist
+    save_reconciliations(recons, station_id)
+    storage['reconciliations_data'] = recons
 
     return {
         "status": "success",
@@ -250,6 +309,26 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
             "delivery_timeline": delivery_data,
         })
 
+    # Auto-create notifications for critical variances
+    critical_tanks = [t for t in tank_reconciliations if t['status'] == 'critical']
+    if critical_tanks:
+        try:
+            from ...services.notification_service import create_notification
+            for ct in critical_tanks:
+                create_notification(
+                    station_id=ctx["station_id"],
+                    type="CRITICAL_VARIANCE",
+                    severity="critical",
+                    title="Critical Tank Variance Detected",
+                    message=f"Tank {ct['tank_id']} ({ct['fuel_type']}): {ct['electronic_discrepancy_percent']}% variance "
+                            f"({ct['electronic_vs_tank_discrepancy']:.1f}L) during {shift.get('shift_type', '')} shift on {shift.get('date', '')}",
+                    entity_type="tank_reconciliation",
+                    entity_id=f"{shift_id}-{ct['tank_id']}",
+                    created_by="system",
+                )
+        except Exception:
+            pass  # Non-critical: don't break analysis if notification fails
+
     return {
         "shift_id": shift_id,
         "shift_date": shift.get('date'),
@@ -260,6 +339,10 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
             "critical_variances": len([t for t in tank_reconciliations if t['status'] == 'critical']),
             "warnings": len([t for t in tank_reconciliations if t['status'] == 'warning']),
             "acceptable": len([t for t in tank_reconciliations if t['status'] == 'acceptable'])
+        },
+        "fuel_prices": {
+            "Diesel": resolve_fuel_price("Diesel", storage),
+            "Petrol": resolve_fuel_price("Petrol", storage),
         }
     }
 
@@ -282,8 +365,8 @@ def calculate_shift_reconciliation(shift_id: str, nozzle_summaries: dict, lpg_re
         elif fuel_type == "Diesel":
             diesel_volume += summary["electronic_movement"]
 
-    petrol_revenue = petrol_volume * PETROL_PRICE_PER_LITER
-    diesel_revenue = diesel_volume * DIESEL_PRICE_PER_LITER
+    petrol_revenue = petrol_volume * resolve_fuel_price("Petrol", storage)
+    diesel_revenue = diesel_volume * resolve_fuel_price("Diesel", storage)
 
     # Calculate totals
     total_expected = petrol_revenue + diesel_revenue + lpg_revenue + lubricants_revenue + accessories_revenue
@@ -295,7 +378,7 @@ def calculate_shift_reconciliation(shift_id: str, nozzle_summaries: dict, lpg_re
     expected_cash = total_expected - credit_sales_total
 
     # Get cumulative difference
-    previous_recons = [r for r in storage.get('reconciliations_data', [])]
+    previous_recons = _get_reconciliations(ctx["station_id"], storage)
     previous_cumulative = sum(r.get("difference", 0) or 0 for r in previous_recons)
 
     result = {
@@ -324,7 +407,7 @@ def get_monthly_summary(year: int, month: int, ctx: dict = Depends(get_station_c
     month_str = f"{year}-{month:02d}"
 
     month_recons = [
-        r for r in storage.get('reconciliations_data', [])
+        r for r in _get_reconciliations(ctx["station_id"], storage)
         if r["date"].startswith(month_str)
     ]
 
@@ -370,7 +453,7 @@ def get_discrepancies_analysis(ctx: dict = Depends(get_station_context)):
     Helps identify patterns
     """
     storage = ctx["storage"]
-    reconciliations_data = storage.get('reconciliations_data', [])
+    reconciliations_data = _get_reconciliations(ctx["station_id"], storage)
 
     if not reconciliations_data:
         return {"message": "No reconciliations found"}
@@ -577,3 +660,102 @@ def get_three_way_config():
             'critical': 'Above investigation threshold is critical'
         }
     }
+
+
+# =======================================================================================
+# INVESTIGATIONS - Track and resolve flagged discrepancies
+# =======================================================================================
+
+def _load_investigations(station_id: str) -> list:
+    return load_station_json(station_id, 'investigations.json', default=[])
+
+
+def _save_investigations(data: list, station_id: str):
+    save_station_json(station_id, 'investigations.json', data)
+
+
+@router.get("/investigations")
+def list_investigations(status: str = None, ctx: dict = Depends(get_station_context)):
+    """
+    List all investigations, optionally filtered by status (open, resolved, all).
+    """
+    investigations = _load_investigations(ctx["station_id"])
+    if status and status != "all":
+        investigations = [i for i in investigations if i.get("status") == status]
+    return investigations
+
+
+@router.post("/investigations")
+def create_investigation(body: dict, ctx: dict = Depends(get_station_context)):
+    """
+    Create a new investigation record for a flagged discrepancy.
+
+    Expected body: {
+        "type": "tank_variance" | "cash_shortage" | "three_way",
+        "reference_id": "<reading_id or shift_id>",
+        "tank_id": "<optional>",
+        "date": "<YYYY-MM-DD>",
+        "shift_type": "<Day|Night>",
+        "severity": "warning" | "critical",
+        "description": "<what was flagged>",
+        "assigned_to": "<optional attendant name>"
+    }
+    """
+    from datetime import datetime
+
+    investigations = _load_investigations(ctx["station_id"])
+
+    inv_id = f"INV-{datetime.now().strftime('%Y%m%d%H%M%S')}-{len(investigations)+1}"
+    investigation = {
+        "investigation_id": inv_id,
+        "type": body.get("type", "general"),
+        "reference_id": body.get("reference_id", ""),
+        "tank_id": body.get("tank_id"),
+        "date": body.get("date", ""),
+        "shift_type": body.get("shift_type", ""),
+        "severity": body.get("severity", "warning"),
+        "description": body.get("description", ""),
+        "assigned_to": body.get("assigned_to"),
+        "status": "open",
+        "notes": [],
+        "created_at": datetime.now().isoformat(),
+        "created_by": ctx.get("username", "system"),
+        "resolved_at": None,
+    }
+    investigations.append(investigation)
+    _save_investigations(investigations, ctx["station_id"])
+    return investigation
+
+
+@router.put("/investigations/{investigation_id}")
+def update_investigation(investigation_id: str, body: dict, ctx: dict = Depends(get_station_context)):
+    """
+    Update an investigation: add notes, assign, or resolve.
+
+    Body can include:
+    - "note": string to append to notes list
+    - "assigned_to": reassign
+    - "status": "open" | "resolved"
+    """
+    from datetime import datetime
+
+    investigations = _load_investigations(ctx["station_id"])
+    inv = next((i for i in investigations if i["investigation_id"] == investigation_id), None)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    if "note" in body:
+        inv["notes"].append({
+            "text": body["note"],
+            "by": ctx.get("username", "unknown"),
+            "at": datetime.now().isoformat(),
+        })
+    if "assigned_to" in body:
+        inv["assigned_to"] = body["assigned_to"]
+    if "status" in body:
+        inv["status"] = body["status"]
+        if body["status"] == "resolved":
+            inv["resolved_at"] = datetime.now().isoformat()
+
+    _save_investigations(investigations, ctx["station_id"])
+    return inv

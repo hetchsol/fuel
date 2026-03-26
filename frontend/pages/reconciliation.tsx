@@ -1,14 +1,39 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
+import Link from 'next/link'
 import { getHeaders, downloadExport } from '../lib/api'
 
 const BASE = '/api/v1'
 
 export default function Reconciliation() {
+  const router = useRouter()
   const today = new Date().toISOString().split('T')[0]
   const [selectedDate, setSelectedDate] = useState(today)
   const [reconciliations, setReconciliations] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [fuelPrices, setFuelPrices] = useState<{petrol: number, diesel: number}>({petrol: 0, diesel: 0})
+
+  // Accept date query parameter and auto-load
+  useEffect(() => {
+    if (router.query.date && typeof router.query.date === 'string') {
+      setSelectedDate(router.query.date)
+    }
+  }, [router.query.date])
+
+  useEffect(() => {
+    fetch(`${BASE}/settings/fuel`, { headers: getHeaders() })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data) {
+          setFuelPrices({
+            petrol: data.petrol_price_per_liter || 0,
+            diesel: data.diesel_price_per_liter || 0,
+          })
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const fetchReconciliations = async () => {
     setLoading(true)
@@ -165,7 +190,7 @@ export default function Reconciliation() {
                     {formatCurrency(recon.petrol_revenue)}
                   </p>
                   <p className="text-xs text-content-secondary mt-1">
-                    @ ZMW 29.92/L
+                    {fuelPrices.petrol > 0 ? `@ ZMW ${fuelPrices.petrol.toFixed(2)}/L` : ''}
                   </p>
                 </div>
 
@@ -175,7 +200,7 @@ export default function Reconciliation() {
                     {formatCurrency(recon.diesel_revenue)}
                   </p>
                   <p className="text-xs text-content-secondary mt-1">
-                    @ ZMW 26.98/L
+                    {fuelPrices.diesel > 0 ? `@ ZMW ${fuelPrices.diesel.toFixed(2)}/L` : ''}
                   </p>
                 </div>
 
@@ -342,6 +367,23 @@ export default function Reconciliation() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Cross-links to other reconciliation pages */}
+      <div className="mt-6 bg-surface-card rounded-lg shadow p-4 flex gap-4 flex-wrap items-center">
+        <span className="text-sm font-medium text-content-secondary">Related:</span>
+        <Link
+          href={`/three-way-reconciliation?date=${selectedDate}`}
+          className="inline-flex items-center px-4 py-2 border border-action-primary text-action-primary rounded-lg hover:bg-action-primary-light font-medium text-sm"
+        >
+          Three-Way Reconciliation
+        </Link>
+        <Link
+          href="/tank-analysis"
+          className="inline-flex items-center px-4 py-2 border border-action-primary text-action-primary rounded-lg hover:bg-action-primary-light font-medium text-sm"
+        >
+          Tank Analysis
+        </Link>
       </div>
 
       {/* System Info */}

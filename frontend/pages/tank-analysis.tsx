@@ -133,14 +133,20 @@ export default function TankAnalysis() {
         </select>
       </div>
 
-      {/* Cross-link back to Three-Way Reconciliation */}
+      {/* Cross-links to other reconciliation pages */}
       {reconciliation && reconciliation.shift_date && (
-        <div className="mb-6">
+        <div className="mb-6 flex gap-4 flex-wrap">
           <Link
             href={`/three-way-reconciliation?date=${reconciliation.shift_date}`}
             className="inline-flex items-center text-sm text-action-primary hover:text-action-primary-hover font-medium"
           >
-            &larr; Back to Daily Overview ({reconciliation.shift_date})
+            &larr; Three-Way Reconciliation ({reconciliation.shift_date})
+          </Link>
+          <Link
+            href={`/reconciliation?date=${reconciliation.shift_date}`}
+            className="inline-flex items-center text-sm text-action-primary hover:text-action-primary-hover font-medium"
+          >
+            Shift Reconciliation &rarr;
           </Link>
         </div>
       )}
@@ -344,7 +350,7 @@ export default function TankAnalysis() {
                         <div className="flex justify-between text-sm">
                           <span className="text-content-secondary">Est. Revenue:</span>
                           <span className="font-bold text-status-success">
-                            K{(((tank.total_electronic_sales + tank.total_mechanical_sales) / 4) * (tank.fuel_type === 'Diesel' ? 26.98 : 29.92)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                            K{(((tank.total_electronic_sales + tank.total_mechanical_sales) / 4) * (reconciliation?.fuel_prices?.[tank.fuel_type] || 0)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                           </span>
                         </div>
                         <div className="text-xs text-content-secondary pt-2 border-t">
@@ -369,7 +375,7 @@ export default function TankAnalysis() {
                         <div className="flex justify-between text-sm">
                           <span className="text-content-secondary">Est. Revenue:</span>
                           <span className="font-bold text-status-success">
-                            K{(((tank.total_electronic_sales + tank.total_mechanical_sales) / 4) * (tank.fuel_type === 'Diesel' ? 26.98 : 29.92)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                            K{(((tank.total_electronic_sales + tank.total_mechanical_sales) / 4) * (reconciliation?.fuel_prices?.[tank.fuel_type] || 0)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                           </span>
                         </div>
                         <div className="text-xs text-content-secondary pt-2 border-t">

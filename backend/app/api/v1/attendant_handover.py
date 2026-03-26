@@ -734,6 +734,35 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
                 created_by=ctx["username"],
             )
 
+    # --- Auto-create reconciliation record from handover ---
+    # This populates Shift Reconciliation without needing a manual POST /reconciliation/calculate
+    try:
+        from .reconciliation import _save_reconciliation_entry
+        petrol_revenue = sum(ns.revenue for ns in nozzle_summaries if ns.fuel_type == "Petrol")
+        diesel_revenue = sum(ns.revenue for ns in nozzle_summaries if ns.fuel_type == "Diesel")
+        recon_entry = {
+            "shift_id": data.shift_id,
+            "attendant_id": user_id,
+            "attendant_name": user_name,
+            "date": shift.get("date", ""),
+            "shift_type": shift.get("shift_type", ""),
+            "petrol_revenue": round(petrol_revenue, 2),
+            "diesel_revenue": round(diesel_revenue, 2),
+            "lpg_revenue": round(lpg_sales, 2),
+            "lubricants_revenue": round(lubricant_sales, 2),
+            "accessories_revenue": round(accessory_sales, 2),
+            "total_expected": round(total_expected, 2),
+            "credit_sales_total": round(data.credit_sales, 2),
+            "expected_cash": round(expected_cash, 2),
+            "actual_deposited": round(data.actual_cash, 2),
+            "difference": round(difference, 2),
+            "cumulative_difference": 0,
+            "notes": data.notes,
+        }
+        _save_reconciliation_entry(recon_entry, station_id, storage)
+    except Exception:
+        pass  # Non-critical: don't block handover if reconciliation save fails
+
     # Update nozzle electronic readings in islands data
     # Skip if enter_readings already handled nozzle state updates
     if not er_closing:

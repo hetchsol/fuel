@@ -56,6 +56,7 @@ export default function ThreeWayReconciliation() {
   const [selectedReading, setSelectedReading] = useState<ReconciliationData | null>(null)
   const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [varianceTrends, setVarianceTrends] = useState<Record<string, any>>({})
 
   // Accept date query parameter
   useEffect(() => {
@@ -77,8 +78,25 @@ export default function ThreeWayReconciliation() {
       if (response.ok) {
         const data = await response.json()
         setDailySummary(data)
+        // Fetch variance trends for each unique tank
+        if (data.all_shifts) {
+          const tankIds = Array.from(new Set(data.all_shifts.map((s: any) => s.tank_id))) as string[]
+          const trends: Record<string, any> = {}
+          await Promise.all(tankIds.map(async (tankId) => {
+            try {
+              const tRes = await fetch(`${BASE}/reconciliation/three-way/patterns/${tankId}?days=30`, {
+                headers: getHeaders()
+              })
+              if (tRes.ok) {
+                trends[tankId] = await tRes.json()
+              }
+            } catch {}
+          }))
+          setVarianceTrends(trends)
+        }
       } else {
         setDailySummary(null)
+        setVarianceTrends({})
       }
     } catch (err) {
       console.error('Error fetching daily summary:', err)
@@ -232,6 +250,42 @@ export default function ThreeWayReconciliation() {
                 )}
               </div>
             </div>
+
+            {/* Variance Trends */}
+            {Object.keys(varianceTrends).length > 0 && (
+              <div className="bg-surface-card rounded-lg shadow mb-6">
+                <div className="bg-surface-bg px-6 py-4 border-b">
+                  <h2 className="text-lg font-semibold text-content-primary">Variance Trends (30 days)</h2>
+                </div>
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.entries(varianceTrends).map(([tankId, trend]: [string, any]) => {
+                    const direction = trend.trend_direction || 'stable'
+                    const avgVariance = trend.average_variance_percent ?? 0
+                    const trendColor = direction === 'improving' ? 'text-status-success' :
+                      direction === 'worsening' ? 'text-status-error' : 'text-content-secondary'
+                    const trendIcon = direction === 'improving' ? '↗' :
+                      direction === 'worsening' ? '↘' : '→'
+                    return (
+                      <div key={tankId} className="bg-surface-bg rounded-lg p-4 border border-surface-border">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-content-primary">{tankId}</span>
+                          <span className={`text-lg font-bold ${trendColor}`}>
+                            {trendIcon} {direction}
+                          </span>
+                        </div>
+                        <div className="text-sm text-content-secondary">
+                          <div>Avg variance: <strong>{avgVariance.toFixed(2)}%</strong></div>
+                          <div>Readings: {trend.readings_analyzed || 0}</div>
+                          {trend.dominant_outlier_source && (
+                            <div>Frequent outlier: <strong>{trend.dominant_outlier_source}</strong></div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* All Shifts List */}
             <div className="bg-surface-card rounded-lg shadow">
@@ -508,14 +562,20 @@ export default function ThreeWayReconciliation() {
                   </div>
                 </div>
 
-                {/* Cross-link to Tank Analysis */}
+                {/* Cross-links to other reconciliation pages */}
                 {selectedShiftId && (
-                  <div className="mt-6 pt-4 border-t border-surface-border">
+                  <div className="mt-6 pt-4 border-t border-surface-border flex gap-3 flex-wrap">
                     <Link
                       href={`/tank-analysis?shiftId=${selectedShiftId}`}
                       className="inline-flex items-center px-4 py-2 bg-action-primary text-white rounded-lg hover:bg-action-primary-hover font-medium text-sm"
                     >
                       View Full Tank Analysis &rarr;
+                    </Link>
+                    <Link
+                      href={`/reconciliation?date=${selectedDate}`}
+                      className="inline-flex items-center px-4 py-2 border border-action-primary text-action-primary rounded-lg hover:bg-action-primary-light font-medium text-sm"
+                    >
+                      View Shift Reconciliation &rarr;
                     </Link>
                   </div>
                 )}
