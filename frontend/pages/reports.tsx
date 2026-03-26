@@ -163,8 +163,8 @@ export default function Reports() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
-            <div className="max-w-7xl mx-auto">
+        <div>
+            <div>
                 {/* Header */}
                 <div className="mb-8 transform hover:scale-[1.01] transition-transform duration-300">
                     <h1 className="text-4xl font-bold bg-gradient-to-r from-action-primary to-indigo-600 bg-clip-text text-transparent drop-shadow-lg">
