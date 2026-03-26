@@ -1,3 +1,5 @@
+# DEPRECATED — Superseded by lpg_daily.py. Kept for backward compatibility.
+# New inventory endpoint: GET /lpg-daily/accessories/inventory
 """
 LPG and Accessories API
 Handles LPG sales and accessories inventory

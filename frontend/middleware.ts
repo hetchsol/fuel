@@ -15,6 +15,7 @@ const OWNER_ROUTES = ['/settings', '/users', '/stations', '/infrastructure', '/a
 // Routes that require supervisor or owner role
 const SUPERVISOR_ROUTES = [
   '/daily-tank-reading',
+  '/fuel-operations',
   '/tank-movement',
   '/stock-movement',
   '/lpg-daily',

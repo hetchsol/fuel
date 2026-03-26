@@ -1,3 +1,5 @@
+# DEPRECATED — Superseded by lubricants_daily.py. Kept for backward compatibility.
+# New inventory endpoint: GET /lubricants-daily/products
 """
 Lubricants Inventory and Sales API
 Handles lubricants across Island 3 and Buffer locations

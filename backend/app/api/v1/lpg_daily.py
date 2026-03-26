@@ -447,3 +447,40 @@ def list_accessories_entries(
 
     entries.sort(key=lambda x: x['date'], reverse=True)
     return entries
+
+
+@router.get("/accessories/inventory")
+def get_accessories_inventory(ctx: dict = Depends(get_station_context)):
+    """
+    Get LPG accessories with current stock levels.
+    Replaces GET /lpg/accessories — returns the same field shape
+    (product_code, description, unit_price, current_stock, opening_stock).
+    """
+    station_id = ctx["station_id"]
+    lpg_accessories_db = load_lpg_accessories(station_id)
+
+    # Find the most recent accessories entry to get current stock
+    all_entries = list(lpg_accessories_db.values())
+    current_stock = {}
+    opening_stock = {}
+    if all_entries:
+        all_entries.sort(key=lambda x: x['date'], reverse=True)
+        latest = all_entries[0]
+        for row in latest.get('product_rows', []):
+            current_stock[row['product_code']] = row.get('balance', 0)
+            opening_stock[row['product_code']] = row.get('opening_stock', 0)
+
+    # Merge stock into the default catalog
+    result = []
+    for acc in DEFAULT_LPG_ACCESSORIES:
+        code = acc['product_code']
+        result.append({
+            "product_code": code,
+            "description": acc['description'],
+            "unit_price": acc['selling_price'],
+            "selling_price": acc['selling_price'],
+            "current_stock": current_stock.get(code, 0),
+            "opening_stock": opening_stock.get(code, 0),
+        })
+
+    return result

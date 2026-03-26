@@ -318,6 +318,50 @@ def list_lubricant_entries(
     return entries
 
 
+@router.get("/products")
+def get_all_products(ctx: dict = Depends(get_station_context)):
+    """
+    Get all lubricant products with current stock from most recent daily entries.
+    Replaces GET /lubricants/ — returns the same field shape
+    (product_code, description, unit_price, current_stock, opening_stock, category, location).
+    """
+    station_id = ctx["station_id"]
+    products = load_product_catalog(station_id)
+    lubricant_daily_db = load_lubricant_daily(station_id)
+
+    # Get most recent stock per location
+    stock_by_location: dict = {}
+    opening_by_location: dict = {}
+    for location in ("Island 3", "Buffer"):
+        location_entries = [
+            e for e in lubricant_daily_db.values()
+            if e['location'] == location
+        ]
+        if location_entries:
+            location_entries.sort(key=lambda x: x['date'], reverse=True)
+            latest = location_entries[0]
+            for row in latest.get('product_rows', []):
+                stock_by_location[(row['product_code'], location)] = row.get('balance', 0)
+                opening_by_location[(row['product_code'], location)] = row.get('opening_stock', 0)
+
+    # Build result: each product appears twice (Island 3 + Buffer)
+    result = []
+    for p in products:
+        for location in ("Island 3", "Buffer"):
+            result.append({
+                "product_code": f"{p['product_code']}{'-BUF' if location == 'Buffer' else ''}",
+                "description": p['description'],
+                "category": p.get('category', ''),
+                "unit_price": p['selling_price'],
+                "selling_price": p['selling_price'],
+                "current_stock": stock_by_location.get((p['product_code'], location), 0),
+                "opening_stock": opening_by_location.get((p['product_code'], location), 0),
+                "location": location,
+            })
+
+    return result
+
+
 @router.post("/transfer")
 def bulk_transfer(
     date: str,

@@ -20,7 +20,7 @@ export default function Inventory() {
 
   const fetchLPGAccessories = async () => {
     try {
-      const res = await fetch(`${BASE}/lpg/accessories`, {
+      const res = await fetch(`${BASE}/lpg-daily/accessories/inventory`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -34,7 +34,7 @@ export default function Inventory() {
 
   const fetchLubricants = async () => {
     try {
-      const res = await fetch(`${BASE}/lubricants/`, {
+      const res = await fetch(`${BASE}/lubricants-daily/products`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -183,7 +183,7 @@ export default function Inventory() {
               <p className="text-xs text-action-primary mt-1">Use the Stock Movement page to record deliveries and track fuel intake</p>
             </div>
             <Link
-              href="/stock-movement"
+              href="/fuel-operations"
               className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover font-medium text-sm whitespace-nowrap"
             >
               Record Delivery &rarr;
