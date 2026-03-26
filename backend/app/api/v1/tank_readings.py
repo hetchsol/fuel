@@ -806,6 +806,94 @@ def get_previous_shift_closing(
     return previous_closing
 
 
+@router.get("/attendant-last-readings")
+def get_attendant_last_readings(
+    attendant_name: str,
+    tank_id: Optional[str] = None,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Get the most recent nozzle readings for a specific attendant.
+    Searches tank_readings for the last entry where this attendant was assigned.
+    Returns their closing readings (electronic + mechanical) per nozzle.
+    """
+    station_id = ctx["station_id"]
+    tank_readings_db = load_tank_readings(station_id)
+
+    # Collect all nozzle readings for this attendant across all tank reading entries
+    attendant_nozzles = []
+
+    for reading in tank_readings_db.values():
+        if tank_id and reading.get('tank_id') != tank_id:
+            continue
+        entry_date = reading.get('date', '')
+        shift_type = reading.get('shift_type', '')
+        shift_order = 1 if shift_type.lower() == 'night' else 0
+
+        for nozzle in reading.get('nozzle_readings', []):
+            if nozzle.get('attendant', '').lower() == attendant_name.lower():
+                attendant_nozzles.append({
+                    "nozzle_id": nozzle.get('nozzle_id', ''),
+                    "electronic_closing": nozzle.get('electronic_closing', 0),
+                    "mechanical_closing": nozzle.get('mechanical_closing', 0),
+                    "electronic_opening": nozzle.get('electronic_opening', 0),
+                    "mechanical_opening": nozzle.get('mechanical_opening', 0),
+                    "date": entry_date,
+                    "shift_type": shift_type,
+                    "sort_key": (entry_date, shift_order),
+                })
+
+    if not attendant_nozzles:
+        # Fallback: check handover data
+        from .attendant_handover import _load_handovers
+        handovers = _load_handovers(station_id)
+
+        for ho in handovers.values():
+            if ho.get('attendant_name', '').lower() != attendant_name.lower():
+                continue
+            ho_date = ho.get('date', '')
+            ho_shift = ho.get('shift_type', '')
+            shift_order = 1 if ho_shift.lower() == 'night' else 0
+
+            for ns in ho.get('nozzle_summaries', []):
+                attendant_nozzles.append({
+                    "nozzle_id": ns.get('nozzle_id', ''),
+                    "electronic_closing": ns.get('closing_reading', 0),
+                    "mechanical_closing": ns.get('mechanical_closing', 0),
+                    "electronic_opening": ns.get('opening_reading', 0),
+                    "mechanical_opening": ns.get('mechanical_opening', 0),
+                    "date": ho_date,
+                    "shift_type": ho_shift,
+                    "sort_key": (ho_date, shift_order),
+                })
+
+    if not attendant_nozzles:
+        return {
+            "found": False,
+            "message": f"No previous readings found for attendant '{attendant_name}'.",
+            "nozzle_readings": [],
+        }
+
+    # Sort by date+shift descending to get most recent first
+    attendant_nozzles.sort(key=lambda x: x['sort_key'], reverse=True)
+
+    # Get the most recent date+shift combo
+    latest_key = attendant_nozzles[0]['sort_key']
+    latest_nozzles = [n for n in attendant_nozzles if n['sort_key'] == latest_key]
+
+    # Clean up sort_key before returning
+    for n in latest_nozzles:
+        del n['sort_key']
+
+    return {
+        "found": True,
+        "attendant_name": attendant_name,
+        "source_date": latest_nozzles[0]['date'],
+        "source_shift": latest_nozzles[0]['shift_type'],
+        "nozzle_readings": latest_nozzles,
+    }
+
+
 @router.post("/deliveries", response_model=TankDeliveryOutput)
 def record_delivery(
     delivery_input: TankDeliveryInput,

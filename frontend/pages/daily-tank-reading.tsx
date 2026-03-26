@@ -825,6 +825,42 @@ export default function DailyTankReading() {
     const newNozzles = [...formData.nozzles]
     newNozzles[index] = { ...newNozzles[index], [field]: value }
     setFormData({ ...formData, nozzles: newNozzles })
+
+    // When attendant is selected, fetch their last nozzle readings
+    if (field === 'attendant' && value) {
+      fetchAttendantLastReadings(value, index, newNozzles[index].nozzle_id)
+    }
+  }
+
+  // Fetch last readings for a specific attendant and auto-populate nozzle fields
+  const fetchAttendantLastReadings = async (attendantName: string, nozzleIndex: number, nozzleId: string) => {
+    try {
+      const params = new URLSearchParams({ attendant_name: attendantName })
+      if (selectedTank) params.append('tank_id', selectedTank)
+      const res = await authFetch(
+        `${BASE}/tank-readings/attendant-last-readings?${params.toString()}`,
+        { headers: getHeaders() }
+      )
+      if (!res.ok) return
+      const data = await res.json()
+      if (!data.found || !data.nozzle_readings?.length) return
+
+      // Find a matching nozzle reading by nozzle_id, or use the first one
+      const match = data.nozzle_readings.find((nr: any) => nr.nozzle_id === nozzleId)
+        || data.nozzle_readings[0]
+
+      setFormData(prev => {
+        const updatedNozzles = [...prev.nozzles]
+        updatedNozzles[nozzleIndex] = {
+          ...updatedNozzles[nozzleIndex],
+          electronic_opening: match.electronic_closing?.toString() || updatedNozzles[nozzleIndex].electronic_opening,
+          mechanical_opening: match.mechanical_closing?.toString() || updatedNozzles[nozzleIndex].mechanical_opening,
+        }
+        return { ...prev, nozzles: updatedNozzles }
+      })
+    } catch (err) {
+      // Silently fail — user can still enter readings manually
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
