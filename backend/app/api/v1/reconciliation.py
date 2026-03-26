@@ -127,12 +127,37 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
         raise HTTPException(status_code=404, detail="Shift not found")
 
     shift = shifts[shift_id]
+    shift_date = shift.get('date', '')
+    shift_type_str = shift.get('shift_type', '')
     tank_dip_readings = shift.get('tank_dip_readings', [])
+
+    # Fallback: if shift has no inline dip readings, look in tank_readings.json
+    # (data entered via Operations > Daily Tank Readings page)
+    station_tank_readings = _load_station_tank_readings(ctx["station_id"])
+    tank_reading_entries = {}  # tank_id -> tank_readings.json entry (for nozzle fallback)
+
+    if not tank_dip_readings:
+        for tr in station_tank_readings.values():
+            if tr.get('date') == shift_date and tr.get('shift_type') == shift_type_str:
+                tank_id = tr.get('tank_id', '')
+                tank_reading_entries[tank_id] = tr
+                tank_dip_readings.append({
+                    'tank_id': tank_id,
+                    'opening_dip_cm': tr.get('opening_dip_cm'),
+                    'closing_dip_cm': tr.get('closing_dip_cm'),
+                    'opening_volume_liters': tr.get('opening_volume'),
+                    'closing_volume_liters': tr.get('closing_volume'),
+                })
+    else:
+        # Even with shift dips, index tank_readings for nozzle/delivery fallback
+        for tr in station_tank_readings.values():
+            if tr.get('date') == shift_date and tr.get('shift_type') == shift_type_str:
+                tank_reading_entries[tr.get('tank_id', '')] = tr
 
     if not tank_dip_readings:
         raise HTTPException(
             status_code=400,
-            detail="No tank dip readings found for this shift. Please record opening and closing dip readings."
+            detail="No tank dip readings found for this shift. Record readings via Operations > Daily Tank Readings or Shifts > Tank Dip Readings."
         )
 
     # Calculate tank reconciliation for each tank
@@ -182,6 +207,12 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
         total_electronic = sum(s.get('electronic_volume', 0) or 0 for s in shift_sales)
         total_mechanical = sum(s.get('mechanical_volume', 0) or 0 for s in shift_sales)
 
+        # Fallback: if no sales records found, use nozzle readings from tank_readings.json
+        if total_electronic == 0 and total_mechanical == 0 and tank_id in tank_reading_entries:
+            tr_entry = tank_reading_entries[tank_id]
+            total_electronic = tr_entry.get('total_electronic_dispensed', 0) or 0
+            total_mechanical = tr_entry.get('total_mechanical_dispensed', 0) or 0
+
         # Calculate discrepancies (variance between tank movement and sales)
         electronic_vs_tank_discrepancy = tank_movement - total_electronic
         mechanical_vs_tank_discrepancy = tank_movement - total_mechanical
@@ -190,19 +221,13 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
         electronic_discrepancy_percent = (electronic_vs_tank_discrepancy / tank_movement * 100) if tank_movement > 0 else 0
         mechanical_discrepancy_percent = (mechanical_vs_tank_discrepancy / tank_movement * 100) if tank_movement > 0 else 0
 
-        # Look up delivery data from tank readings store
-        shift_date = shift.get('date', '')
-        shift_type_str = shift.get('shift_type', '')
-        station_tank_readings = _load_station_tank_readings(ctx["station_id"])
+        # Look up delivery data from tank readings store (already indexed above)
         delivery_data = None
         deliveries_list = []
-        for tr in station_tank_readings.values():
-            if (tr.get('tank_id') == tank_id and
-                tr.get('date') == shift_date and
-                tr.get('shift_type') == shift_type_str):
-                deliveries_list = tr.get('deliveries', [])
-                delivery_data = tr.get('delivery_timeline')
-                break
+        if tank_id in tank_reading_entries:
+            tr = tank_reading_entries[tank_id]
+            deliveries_list = tr.get('deliveries', [])
+            delivery_data = tr.get('delivery_timeline')
 
         tank_reconciliations.append({
             "tank_id": tank_id,
