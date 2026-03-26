@@ -3,6 +3,8 @@ import { getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
 
+type SettingsTab = 'system' | 'fuel' | 'tax-levy' | 'validation' | 'stock-alerts' | 'recon-tolerances' | 'email'
+
 export default function Settings() {
   const [settings, setSettings] = useState({
     diesel_price_per_liter: 150.0,
@@ -47,30 +49,30 @@ export default function Settings() {
   const [newRecipient, setNewRecipient] = useState('')
   const [testLoading, setTestLoading] = useState(false)
 
-  // Tax & Levy state
   const [taxLevy, setTaxLevy] = useState({ vat_rate: 0.16, fuel_levy_per_liter: 1.44 })
   const [taxLevyLoading, setTaxLevyLoading] = useState(false)
   const [taxLevyMessage, setTaxLevyMessage] = useState('')
   const [taxLevyError, setTaxLevyError] = useState('')
 
-  // Stock Alerts state
   const [stockAlerts, setStockAlerts] = useState({ low_stock_threshold_percent: 25.0, critical_stock_threshold_percent: 10.0 })
   const [stockAlertsLoading, setStockAlertsLoading] = useState(false)
   const [stockAlertsMessage, setStockAlertsMessage] = useState('')
   const [stockAlertsError, setStockAlertsError] = useState('')
 
-  // Reconciliation Tolerances state
   const [reconTolerances, setReconTolerances] = useState({
-    volume_tolerance_minor: 50.0, volume_tolerance_investigation: 200.0,
-    percent_tolerance_minor: 0.5, percent_tolerance_investigation: 2.0,
-    cash_tolerance_minor: 500.0, cash_tolerance_investigation: 2000.0,
+    volume_tolerance_minor: 50.0,
+    volume_tolerance_investigation: 200.0,
+    percent_tolerance_minor: 0.5,
+    percent_tolerance_investigation: 2.0,
+    cash_tolerance_minor: 500.0,
+    cash_tolerance_investigation: 2000.0,
     min_volume_for_percent: 100.0,
   })
   const [reconLoading, setReconLoading] = useState(false)
   const [reconMessage, setReconMessage] = useState('')
   const [reconError, setReconError] = useState('')
 
-  const [activeTab, setActiveTab] = useState<'system' | 'fuel' | 'validation' | 'email' | 'tax-levy' | 'stock-alerts' | 'recon-tolerances'>('system')
+  const [activeTab, setActiveTab] = useState<SettingsTab>('system')
 
   useEffect(() => {
     loadSettings()
@@ -82,15 +84,12 @@ export default function Settings() {
     loadReconTolerances()
   }, [])
 
+  // ── Loaders ──────────────────────────────────────────────
+
   const loadSettings = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/fuel`, {
-        headers: getHeaders()
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setSettings(data)
-      }
+      const res = await fetch(`${BASE}/settings/fuel`, { headers: getHeaders() })
+      if (res.ok) setSettings(await res.json())
     } catch (err) {
       console.error('Failed to load settings:', err)
     }
@@ -98,13 +97,8 @@ export default function Settings() {
 
   const loadSystemSettings = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/system`, {
-        headers: getHeaders()
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setSystemSettings(data)
-      }
+      const res = await fetch(`${BASE}/settings/system`, { headers: getHeaders() })
+      if (res.ok) setSystemSettings(await res.json())
     } catch (err) {
       console.error('Failed to load system settings:', err)
     }
@@ -112,15 +106,92 @@ export default function Settings() {
 
   const loadValidationThresholds = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/validation-thresholds`, {
-        headers: getHeaders()
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setValidationThresholds(data)
-      }
+      const res = await fetch(`${BASE}/settings/validation-thresholds`, { headers: getHeaders() })
+      if (res.ok) setValidationThresholds(await res.json())
     } catch (err) {
       console.error('Failed to load validation thresholds:', err)
+    }
+  }
+
+  const loadEmailSettings = async () => {
+    try {
+      const res = await fetch(`${BASE}/settings/email`, { headers: getHeaders() })
+      if (res.ok) setEmailSettings(await res.json())
+    } catch (err) {
+      console.error('Failed to load email settings:', err)
+    }
+  }
+
+  const loadTaxLevy = async () => {
+    try {
+      const res = await fetch(`${BASE}/settings/tax-levy`, { headers: getHeaders() })
+      if (res.ok) setTaxLevy(await res.json())
+    } catch (err) {
+      console.error('Failed to load tax/levy settings:', err)
+    }
+  }
+
+  const loadStockAlerts = async () => {
+    try {
+      const res = await fetch(`${BASE}/settings/stock-alerts`, { headers: getHeaders() })
+      if (res.ok) setStockAlerts(await res.json())
+    } catch (err) {
+      console.error('Failed to load stock alert settings:', err)
+    }
+  }
+
+  const loadReconTolerances = async () => {
+    try {
+      const res = await fetch(`${BASE}/settings/reconciliation-tolerances`, { headers: getHeaders() })
+      if (res.ok) setReconTolerances(await res.json())
+    } catch (err) {
+      console.error('Failed to load reconciliation tolerances:', err)
+    }
+  }
+
+  // ── Updaters ─────────────────────────────────────────────
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setMessage('')
+    try {
+      const res = await fetch(`${BASE}/settings/fuel`, {
+        method: 'PUT',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      })
+      if (!res.ok) throw new Error('Failed to update settings')
+      await res.json()
+      setMessage('Settings updated successfully!')
+      setTimeout(() => setMessage(''), 3000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to update settings')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSystemUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSystemLoading(true)
+    setSystemError('')
+    setSystemMessage('')
+    try {
+      const res = await fetch(`${BASE}/settings/system`, {
+        method: 'PUT',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(systemSettings),
+      })
+      if (!res.ok) throw new Error('Failed to update system settings')
+      await res.json()
+      setSystemMessage('System settings updated successfully!')
+      setTimeout(() => setSystemMessage(''), 3000)
+    } catch (err: any) {
+      setSystemError(err.message || 'Failed to update system settings')
+    } finally {
+      setSystemLoading(false)
     }
   }
 
@@ -144,20 +215,6 @@ export default function Settings() {
       setThresholdsError('Error updating thresholds')
     } finally {
       setThresholdsLoading(false)
-    }
-  }
-
-  const loadEmailSettings = async () => {
-    try {
-      const res = await fetch(`${BASE}/settings/email`, {
-        headers: getHeaders()
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setEmailSettings(data)
-      }
-    } catch (err) {
-      console.error('Failed to load email settings:', err)
     }
   }
 
@@ -208,6 +265,100 @@ export default function Settings() {
     }
   }
 
+  const updateTaxLevy = async () => {
+    setTaxLevyLoading(true)
+    setTaxLevyMessage('')
+    setTaxLevyError('')
+    try {
+      const res = await fetch(`${BASE}/settings/tax-levy`, {
+        method: 'PUT',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(taxLevy),
+      })
+      if (res.ok) {
+        setTaxLevyMessage('Tax & levy settings updated successfully!')
+        setTimeout(() => setTaxLevyMessage(''), 3000)
+      } else {
+        const d = await res.json()
+        setTaxLevyError(d.detail || 'Failed to update')
+      }
+    } catch {
+      setTaxLevyError('Error updating tax & levy settings')
+    } finally {
+      setTaxLevyLoading(false)
+    }
+  }
+
+  const updateStockAlerts = async () => {
+    setStockAlertsLoading(true)
+    setStockAlertsMessage('')
+    setStockAlertsError('')
+    if (stockAlerts.critical_stock_threshold_percent >= stockAlerts.low_stock_threshold_percent) {
+      setStockAlertsError('Critical threshold must be less than low stock threshold')
+      setStockAlertsLoading(false)
+      return
+    }
+    try {
+      const res = await fetch(`${BASE}/settings/stock-alerts`, {
+        method: 'PUT',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(stockAlerts),
+      })
+      if (res.ok) {
+        setStockAlertsMessage('Stock alert settings updated successfully!')
+        setTimeout(() => setStockAlertsMessage(''), 3000)
+      } else {
+        const d = await res.json()
+        setStockAlertsError(d.detail || 'Failed to update')
+      }
+    } catch {
+      setStockAlertsError('Error updating stock alert settings')
+    } finally {
+      setStockAlertsLoading(false)
+    }
+  }
+
+  const updateReconTolerances = async () => {
+    setReconLoading(true)
+    setReconMessage('')
+    setReconError('')
+    if (reconTolerances.volume_tolerance_minor >= reconTolerances.volume_tolerance_investigation) {
+      setReconError('Volume minor must be less than investigation')
+      setReconLoading(false)
+      return
+    }
+    if (reconTolerances.percent_tolerance_minor >= reconTolerances.percent_tolerance_investigation) {
+      setReconError('Percent minor must be less than investigation')
+      setReconLoading(false)
+      return
+    }
+    if (reconTolerances.cash_tolerance_minor >= reconTolerances.cash_tolerance_investigation) {
+      setReconError('Cash minor must be less than investigation')
+      setReconLoading(false)
+      return
+    }
+    try {
+      const res = await fetch(`${BASE}/settings/reconciliation-tolerances`, {
+        method: 'PUT',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(reconTolerances),
+      })
+      if (res.ok) {
+        setReconMessage('Reconciliation tolerances updated successfully!')
+        setTimeout(() => setReconMessage(''), 3000)
+      } else {
+        const d = await res.json()
+        setReconError(d.detail || 'Failed to update')
+      }
+    } catch {
+      setReconError('Error updating reconciliation tolerances')
+    } finally {
+      setReconLoading(false)
+    }
+  }
+
+  // ── Helpers ──────────────────────────────────────────────
+
   const addRecipient = () => {
     const email = newRecipient.trim()
     if (!email) return
@@ -231,479 +382,341 @@ export default function Settings() {
     })
   }
 
-  // ── Tax & Levy ──
-  const loadTaxLevy = async () => {
-    try {
-      const res = await fetch(`${BASE}/settings/tax-levy`, { headers: getHeaders() })
-      if (res.ok) setTaxLevy(await res.json())
-    } catch (err) { console.error('Failed to load tax/levy settings:', err) }
-  }
+  // ── Tab config ───────────────────────────────────────────
 
-  const updateTaxLevy = async () => {
-    setTaxLevyLoading(true); setTaxLevyMessage(''); setTaxLevyError('')
-    try {
-      const res = await fetch(`${BASE}/settings/tax-levy`, {
-        method: 'PUT', headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(taxLevy),
-      })
-      if (res.ok) { setTaxLevyMessage('Tax & levy settings updated successfully!'); setTimeout(() => setTaxLevyMessage(''), 3000) }
-      else { const d = await res.json(); setTaxLevyError(d.detail || 'Failed to update') }
-    } catch { setTaxLevyError('Error updating tax & levy settings') }
-    finally { setTaxLevyLoading(false) }
-  }
+  const tabs: { id: SettingsTab; label: string }[] = [
+    { id: 'system', label: 'System Information' },
+    { id: 'fuel', label: 'Fuel Settings' },
+    { id: 'tax-levy', label: 'Tax & Levy' },
+    { id: 'validation', label: 'Validation Thresholds' },
+    { id: 'stock-alerts', label: 'Stock Alerts' },
+    { id: 'recon-tolerances', label: 'Reconciliation' },
+    { id: 'email', label: 'Email Notifications' },
+  ]
 
-  // ── Stock Alerts ──
-  const loadStockAlerts = async () => {
-    try {
-      const res = await fetch(`${BASE}/settings/stock-alerts`, { headers: getHeaders() })
-      if (res.ok) setStockAlerts(await res.json())
-    } catch (err) { console.error('Failed to load stock alert settings:', err) }
-  }
-
-  const updateStockAlerts = async () => {
-    setStockAlertsLoading(true); setStockAlertsMessage(''); setStockAlertsError('')
-    if (stockAlerts.critical_stock_threshold_percent >= stockAlerts.low_stock_threshold_percent) {
-      setStockAlertsError('Critical threshold must be less than low stock threshold')
-      setStockAlertsLoading(false); return
-    }
-    try {
-      const res = await fetch(`${BASE}/settings/stock-alerts`, {
-        method: 'PUT', headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(stockAlerts),
-      })
-      if (res.ok) { setStockAlertsMessage('Stock alert settings updated successfully!'); setTimeout(() => setStockAlertsMessage(''), 3000) }
-      else { const d = await res.json(); setStockAlertsError(d.detail || 'Failed to update') }
-    } catch { setStockAlertsError('Error updating stock alert settings') }
-    finally { setStockAlertsLoading(false) }
-  }
-
-  // ── Reconciliation Tolerances ──
-  const loadReconTolerances = async () => {
-    try {
-      const res = await fetch(`${BASE}/settings/reconciliation-tolerances`, { headers: getHeaders() })
-      if (res.ok) setReconTolerances(await res.json())
-    } catch (err) { console.error('Failed to load reconciliation tolerances:', err) }
-  }
-
-  const updateReconTolerances = async () => {
-    setReconLoading(true); setReconMessage(''); setReconError('')
-    if (reconTolerances.volume_tolerance_minor >= reconTolerances.volume_tolerance_investigation) {
-      setReconError('Volume minor must be less than investigation'); setReconLoading(false); return
-    }
-    if (reconTolerances.percent_tolerance_minor >= reconTolerances.percent_tolerance_investigation) {
-      setReconError('Percent minor must be less than investigation'); setReconLoading(false); return
-    }
-    if (reconTolerances.cash_tolerance_minor >= reconTolerances.cash_tolerance_investigation) {
-      setReconError('Cash minor must be less than investigation'); setReconLoading(false); return
-    }
-    try {
-      const res = await fetch(`${BASE}/settings/reconciliation-tolerances`, {
-        method: 'PUT', headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(reconTolerances),
-      })
-      if (res.ok) { setReconMessage('Reconciliation tolerances updated successfully!'); setTimeout(() => setReconMessage(''), 3000) }
-      else { const d = await res.json(); setReconError(d.detail || 'Failed to update') }
-    } catch { setReconError('Error updating reconciliation tolerances') }
-    finally { setReconLoading(false) }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    setMessage('')
-
-    try {
-      const res = await fetch(`${BASE}/settings/fuel`, {
-        method: 'PUT',
-        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      })
-
-      if (!res.ok) {
-        throw new Error('Failed to update settings')
-      }
-
-      const data = await res.json()
-      setMessage('Settings updated successfully!')
-      setTimeout(() => setMessage(''), 3000)
-    } catch (err: any) {
-      setError(err.message || 'Failed to update settings')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleSystemUpdate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSystemLoading(true)
-    setSystemError('')
-    setSystemMessage('')
-
-    try {
-      const res = await fetch(`${BASE}/settings/system`, {
-        method: 'PUT',
-        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(systemSettings),
-      })
-
-      if (!res.ok) {
-        throw new Error('Failed to update system settings')
-      }
-
-      const data = await res.json()
-      setSystemMessage('System settings updated successfully!')
-      setTimeout(() => setSystemMessage(''), 3000)
-    } catch (err: any) {
-      setSystemError(err.message || 'Failed to update system settings')
-    } finally {
-      setSystemLoading(false)
-    }
-  }
+  // ── Render ───────────────────────────────────────────────
 
   return (
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-content-primary">Owner Settings</h1>
-        <p className="mt-2 text-sm text-content-secondary">Configure system information, fuel pricing, and validation thresholds</p>
+        <p className="mt-2 text-sm text-content-secondary">
+          Configure system information, fuel pricing, tax rates, thresholds, and notifications
+        </p>
       </div>
 
       {/* Tab Navigation */}
       <div className="mb-6 border-b border-surface-border">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab('system')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'system'
-                ? 'border-action-primary text-action-primary'
-                : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
-            }`}
-          >
-            🏢 System Information
-          </button>
-          <button
-            onClick={() => setActiveTab('fuel')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'fuel'
-                ? 'border-action-primary text-action-primary'
-                : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
-            }`}
-          >
-            💰 Fuel Settings
-          </button>
-          <button
-            onClick={() => setActiveTab('validation')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'validation'
-                ? 'border-action-primary text-action-primary'
-                : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
-            }`}
-          >
-            ✓ Validation Thresholds
-          </button>
-          <button
-            onClick={() => setActiveTab('email')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'email'
-                ? 'border-action-primary text-action-primary'
-                : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
-            }`}
-          >
-            ✉ Email Notifications
-          </button>
-          <button
-            onClick={() => setActiveTab('tax-levy')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'tax-levy'
-                ? 'border-action-primary text-action-primary'
-                : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
-            }`}
-          >
-            % Tax & Levy
-          </button>
-          <button
-            onClick={() => setActiveTab('stock-alerts')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'stock-alerts'
-                ? 'border-action-primary text-action-primary'
-                : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
-            }`}
-          >
-            Stock Alerts
-          </button>
-          <button
-            onClick={() => setActiveTab('recon-tolerances')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'recon-tolerances'
-                ? 'border-action-primary text-action-primary'
-                : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
-            }`}
-          >
-            Reconciliation
-          </button>
+        <nav className="-mb-px flex flex-wrap gap-x-6">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'border-action-primary text-action-primary'
+                  : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </nav>
       </div>
 
-      {/* System Information Tab */}
+      {/* ── System Information Tab ── */}
       {activeTab === 'system' && (
-        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6 mb-6">
-        <form onSubmit={handleSystemUpdate} className="space-y-6">
-          <div className="border-b pb-6">
-            <h2 className="text-xl font-semibold text-content-primary mb-4">🏢 System Information</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Business Name
-                </label>
-                <input
-                  type="text"
-                  value={systemSettings.business_name}
-                  onChange={(e) => setSystemSettings({ ...systemSettings, business_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  License Key
-                </label>
-                <input
-                  type="text"
-                  value={systemSettings.license_key}
-                  onChange={(e) => setSystemSettings({ ...systemSettings, license_key: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Contact Email
-                </label>
-                <input
-                  type="email"
-                  value={systemSettings.contact_email}
-                  onChange={(e) => setSystemSettings({ ...systemSettings, contact_email: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Contact Phone
-                </label>
-                <input
-                  type="tel"
-                  value={systemSettings.contact_phone}
-                  onChange={(e) => setSystemSettings({ ...systemSettings, contact_phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Station Location
-                </label>
-                <input
-                  type="text"
-                  value={systemSettings.station_location}
-                  onChange={(e) => setSystemSettings({ ...systemSettings, station_location: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  License Expiry Date
-                </label>
-                <input
-                  type="date"
-                  value={systemSettings.license_expiry_date}
-                  onChange={(e) => setSystemSettings({ ...systemSettings, license_expiry_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Software Version
-                </label>
-                <input
-                  type="text"
-                  value={systemSettings.software_version}
-                  disabled
-                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg cursor-not-allowed"
-                />
-                <p className="text-xs text-content-secondary mt-1">Read-only</p>
+        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
+          <form onSubmit={handleSystemUpdate} className="space-y-6">
+            <div className="border-b pb-6">
+              <h2 className="text-xl font-semibold text-content-primary mb-4">System Information</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Business Name</label>
+                  <input
+                    type="text"
+                    value={systemSettings.business_name}
+                    onChange={(e) => setSystemSettings({ ...systemSettings, business_name: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">License Key</label>
+                  <input
+                    type="text"
+                    value={systemSettings.license_key}
+                    onChange={(e) => setSystemSettings({ ...systemSettings, license_key: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Contact Email</label>
+                  <input
+                    type="email"
+                    value={systemSettings.contact_email}
+                    onChange={(e) => setSystemSettings({ ...systemSettings, contact_email: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Contact Phone</label>
+                  <input
+                    type="tel"
+                    value={systemSettings.contact_phone}
+                    onChange={(e) => setSystemSettings({ ...systemSettings, contact_phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Station Location</label>
+                  <input
+                    type="text"
+                    value={systemSettings.station_location}
+                    onChange={(e) => setSystemSettings({ ...systemSettings, station_location: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">License Expiry Date</label>
+                  <input
+                    type="date"
+                    value={systemSettings.license_expiry_date}
+                    onChange={(e) => setSystemSettings({ ...systemSettings, license_expiry_date: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Software Version</label>
+                  <input
+                    type="text"
+                    value={systemSettings.software_version}
+                    disabled
+                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg cursor-not-allowed"
+                  />
+                  <p className="text-xs text-content-secondary mt-1">Read-only</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Messages */}
-          {systemMessage && (
-            <div className="p-4 bg-status-success-light border border-status-success rounded-md">
-              <p className="text-sm text-status-success">✓ {systemMessage}</p>
-            </div>
-          )}
+            {systemMessage && (
+              <div className="p-4 bg-status-success-light border border-status-success rounded-md">
+                <p className="text-sm text-status-success">✓ {systemMessage}</p>
+              </div>
+            )}
+            {systemError && (
+              <div className="p-4 bg-status-error-light border border-status-error rounded-md">
+                <p className="text-sm text-status-error">✗ {systemError}</p>
+              </div>
+            )}
 
-          {systemError && (
-            <div className="p-4 bg-status-error-light border border-status-error rounded-md">
-              <p className="text-sm text-status-error">✗ {systemError}</p>
-            </div>
-          )}
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={systemLoading}
-            className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {systemLoading ? 'Saving...' : 'Save System Information'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={systemLoading}
+              className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {systemLoading ? 'Saving...' : 'Save System Information'}
+            </button>
+          </form>
         </div>
       )}
 
-      {/* Fuel Settings Tab */}
+      {/* ── Fuel Settings Tab ── */}
       {activeTab === 'fuel' && (
         <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Fuel Pricing Section */}
-          <div className="border-b pb-6">
-            <h2 className="text-xl font-semibold text-content-primary mb-4">💰 Fuel Pricing</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Diesel Price per Liter
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={settings.diesel_price_per_liter}
-                    onChange={(e) => setSettings({ ...settings, diesel_price_per_liter: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    required
-                  />
-                  <span className="absolute right-3 top-2 text-content-secondary">ZMW</span>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="border-b pb-6">
+              <h2 className="text-xl font-semibold text-content-primary mb-4">Fuel Pricing</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Diesel Price per Liter</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={settings.diesel_price_per_liter}
+                      onChange={(e) => setSettings({ ...settings, diesel_price_per_liter: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                      required
+                    />
+                    <span className="absolute right-3 top-2 text-content-secondary">ZMW</span>
+                  </div>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Petrol Price per Liter
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={settings.petrol_price_per_liter}
-                    onChange={(e) => setSettings({ ...settings, petrol_price_per_liter: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    required
-                  />
-                  <span className="absolute right-3 top-2 text-content-secondary">ZMW</span>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Petrol Price per Liter</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={settings.petrol_price_per_liter}
+                      onChange={(e) => setSettings({ ...settings, petrol_price_per_liter: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                      required
+                    />
+                    <span className="absolute right-3 top-2 text-content-secondary">ZMW</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Allowable Losses Section */}
-          <div>
-            <h2 className="text-xl font-semibold text-content-primary mb-4">📊 Allowable Losses During Offloading</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Diesel Allowable Loss (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="5"
-                  value={settings.diesel_allowable_loss_percent}
-                  onChange={(e) => setSettings({ ...settings, diesel_allowable_loss_percent: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                  required
-                />
-                <p className="text-xs text-content-secondary mt-1">Default: 0.3% loss during delivery</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Petrol Allowable Loss (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="5"
-                  value={settings.petrol_allowable_loss_percent}
-                  onChange={(e) => setSettings({ ...settings, petrol_allowable_loss_percent: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                  required
-                />
-                <p className="text-xs text-content-secondary mt-1">Default: 0.5% loss during delivery</p>
+            <div>
+              <h2 className="text-xl font-semibold text-content-primary mb-4">Allowable Losses During Offloading</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Diesel Allowable Loss (%)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="5"
+                    value={settings.diesel_allowable_loss_percent}
+                    onChange={(e) => setSettings({ ...settings, diesel_allowable_loss_percent: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
+                  <p className="text-xs text-content-secondary mt-1">Default: 0.3% loss during delivery</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Petrol Allowable Loss (%)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="5"
+                    value={settings.petrol_allowable_loss_percent}
+                    onChange={(e) => setSettings({ ...settings, petrol_allowable_loss_percent: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
+                  <p className="text-xs text-content-secondary mt-1">Default: 0.5% loss during delivery</p>
+                </div>
               </div>
             </div>
+
+            {message && (
+              <div className="p-4 bg-status-success-light border border-status-success rounded-md">
+                <p className="text-sm text-status-success">✓ {message}</p>
+              </div>
+            )}
+            {error && (
+              <div className="p-4 bg-status-error-light border border-status-error rounded-md">
+                <p className="text-sm text-status-error">✗ {error}</p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Saving...' : 'Save Settings'}
+            </button>
+          </form>
+
+          <div className="mt-6 bg-action-primary-light border border-action-primary rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-action-primary mb-2">About Allowable Losses</h3>
+            <ul className="text-sm text-action-primary space-y-1">
+              <li>Allowable losses account for evaporation and spillage during fuel delivery</li>
+              <li>Typical industry standards: Diesel 0.2-0.4%, Petrol 0.3-0.6%</li>
+              <li>Losses exceeding these thresholds will be flagged in delivery reports</li>
+              <li>These settings are used to validate stock movements and calculate expected inventory</li>
+            </ul>
           </div>
-
-          {/* Messages */}
-          {message && (
-            <div className="p-4 bg-status-success-light border border-status-success rounded-md">
-              <p className="text-sm text-status-success">✓ {message}</p>
-            </div>
-          )}
-
-          {error && (
-            <div className="p-4 bg-status-error-light border border-status-error rounded-md">
-              <p className="text-sm text-status-error">✗ {error}</p>
-            </div>
-          )}
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Saving...' : 'Save Settings'}
-          </button>
-        </form>
-
-        {/* Info Card */}
-        <div className="mt-6 bg-action-primary-light border border-action-primary rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-action-primary mb-2">ℹ️ About Allowable Losses</h3>
-          <ul className="text-sm text-action-primary space-y-1">
-            <li>• Allowable losses account for evaporation and spillage during fuel delivery</li>
-            <li>• Typical industry standards: Diesel 0.2-0.4%, Petrol 0.3-0.6%</li>
-            <li>• Losses exceeding these thresholds will be flagged in delivery reports</li>
-            <li>• These settings are used to validate stock movements and calculate expected inventory</li>
-          </ul>
         </div>
-      </div>
       )}
 
-      {/* Validation Thresholds Tab */}
+      {/* ── Tax & Levy Tab ── */}
+      {activeTab === 'tax-levy' && (
+        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
+          <div className="space-y-6">
+            <div className="border-b pb-4">
+              <h2 className="text-xl font-semibold text-content-primary mb-2">Tax & Levy Settings</h2>
+              <p className="text-sm text-content-secondary">
+                Configure VAT rate and fuel levy used for delivery VAT calculations.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">VAT Rate (%)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={taxLevy.vat_rate * 100}
+                  onChange={(e) => setTaxLevy({ ...taxLevy, vat_rate: parseFloat(e.target.value) / 100 })}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  required
+                />
+                <p className="text-xs text-content-secondary mt-1">
+                  Current: {(taxLevy.vat_rate * 100).toFixed(1)}% (stored as {taxLevy.vat_rate})
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Fuel Levy per Liter (ZMW)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="50"
+                  value={taxLevy.fuel_levy_per_liter}
+                  onChange={(e) => setTaxLevy({ ...taxLevy, fuel_levy_per_liter: parseFloat(e.target.value) })}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  required
+                />
+                <p className="text-xs text-content-secondary mt-1">Levy deducted per liter before VAT calculation</p>
+              </div>
+            </div>
+
+            {taxLevyMessage && (
+              <div className="p-4 bg-status-success-light border border-status-success rounded-md">
+                <p className="text-sm text-status-success">✓ {taxLevyMessage}</p>
+              </div>
+            )}
+            {taxLevyError && (
+              <div className="p-4 bg-status-error-light border border-status-error rounded-md">
+                <p className="text-sm text-status-error">✗ {taxLevyError}</p>
+              </div>
+            )}
+
+            <button
+              onClick={updateTaxLevy}
+              disabled={taxLevyLoading}
+              className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {taxLevyLoading ? 'Saving...' : 'Save Tax & Levy Settings'}
+            </button>
+
+            <div className="bg-action-primary-light border border-action-primary rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-action-primary mb-2">How delivery VAT is calculated</h3>
+              <p className="text-sm text-action-primary">
+                VAT = Volume x ((Price - Levy) / (1 + VAT Rate)) x VAT Rate
+              </p>
+              <p className="text-sm text-action-primary mt-1">
+                These values are used in the Daily Tank Readings delivery VAT calculation.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Validation Thresholds Tab ── */}
       {activeTab === 'validation' && (
         <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
           <div className="space-y-6">
-            {/* Header */}
             <div className="border-b pb-4">
-              <h2 className="text-xl font-semibold text-content-primary mb-2">✓ Validation Thresholds</h2>
+              <h2 className="text-xl font-semibold text-content-primary mb-2">Validation Thresholds</h2>
               <p className="text-sm text-content-secondary">
                 Configure variance thresholds for tank vs nozzle reading validation. These settings determine when readings are marked as PASS, WARNING, or FAIL.
               </p>
             </div>
 
-            {/* Thresholds Form */}
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    PASS Threshold (%)
-                  </label>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">PASS Threshold (%)</label>
                   <input
                     type="number"
                     step="0.1"
@@ -714,15 +727,10 @@ export default function Settings() {
                     className="w-full px-3 py-2 border border-status-success rounded-md focus:outline-none focus:ring-status-success focus:border-status-success"
                     required
                   />
-                  <p className="text-xs text-content-secondary mt-1">
-                    Variance ≤ this % = PASS (Green status)
-                  </p>
+                  <p className="text-xs text-content-secondary mt-1">Variance &le; this % = PASS (Green status)</p>
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">
-                    WARNING Threshold (%)
-                  </label>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">WARNING Threshold (%)</label>
                   <input
                     type="number"
                     step="0.1"
@@ -733,16 +741,12 @@ export default function Settings() {
                     className="w-full px-3 py-2 border border-status-warning rounded-md focus:outline-none focus:ring-status-warning focus:border-status-warning"
                     required
                   />
-                  <p className="text-xs text-content-secondary mt-1">
-                    Variance ≤ this % = WARNING (Yellow status)
-                  </p>
+                  <p className="text-xs text-content-secondary mt-1">Variance &le; this % = WARNING (Yellow status)</p>
                 </div>
               </div>
 
               <div className="mt-4">
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Meter Discrepancy Threshold (%)
-                </label>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Meter Discrepancy Threshold (%)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -758,51 +762,46 @@ export default function Settings() {
                 </p>
               </div>
 
-              {/* Current Data Analysis */}
               <div className="bg-action-primary-light border border-action-primary rounded-lg p-4 mt-4">
-                <h3 className="text-sm font-semibold text-action-primary mb-2">📊 Based on December 2025 Data:</h3>
+                <h3 className="text-sm font-semibold text-action-primary mb-2">Based on December 2025 Data:</h3>
                 <ul className="text-sm text-action-primary space-y-1">
-                  <li>• Diesel average variance: 0.59%</li>
-                  <li>• Petrol average variance: 0.72%</li>
-                  <li>• Recommended PASS: 2.0%</li>
-                  <li>• Recommended WARNING: 3.5%</li>
+                  <li>Diesel average variance: 0.59%</li>
+                  <li>Petrol average variance: 0.72%</li>
+                  <li>Recommended PASS: 2.0%</li>
+                  <li>Recommended WARNING: 3.5%</li>
                 </ul>
               </div>
 
-              {/* Status Legend */}
               <div className="bg-surface-bg border border-surface-border rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-content-primary mb-2">📋 How It Works:</h3>
+                <h3 className="text-sm font-semibold text-content-primary mb-2">How It Works:</h3>
                 <ul className="text-sm text-content-secondary space-y-2">
                   <li className="flex items-start">
-                    <span className="text-status-success font-bold mr-2">✓ PASS:</span>
-                    <span>Variance is within acceptable range (≤ PASS threshold)</span>
+                    <span className="text-status-success font-bold mr-2">PASS:</span>
+                    <span>Variance is within acceptable range (&le; PASS threshold)</span>
                   </li>
                   <li className="flex items-start">
-                    <span className="text-status-warning font-bold mr-2">⚠ WARNING:</span>
-                    <span>Variance exceeds PASS but is ≤ WARNING threshold - requires attention</span>
+                    <span className="text-status-warning font-bold mr-2">WARNING:</span>
+                    <span>Variance exceeds PASS but is &le; WARNING threshold - requires attention</span>
                   </li>
                   <li className="flex items-start">
-                    <span className="text-status-error font-bold mr-2">✗ FAIL:</span>
+                    <span className="text-status-error font-bold mr-2">FAIL:</span>
                     <span>Variance exceeds WARNING threshold - significant discrepancy detected</span>
                   </li>
                 </ul>
               </div>
             </div>
 
-            {/* Messages */}
             {thresholdsMessage && (
               <div className="p-4 bg-status-success-light border border-status-success rounded-md">
                 <p className="text-sm text-status-success">✓ {thresholdsMessage}</p>
               </div>
             )}
-
             {thresholdsError && (
               <div className="p-4 bg-status-error-light border border-status-error rounded-md">
                 <p className="text-sm text-status-error">✗ {thresholdsError}</p>
               </div>
             )}
 
-            {/* Submit Button */}
             <button
               onClick={updateValidationThresholds}
               disabled={thresholdsLoading}
@@ -814,54 +813,7 @@ export default function Settings() {
         </div>
       )}
 
-      {/* Tax & Levy Tab */}
-      {activeTab === 'tax-levy' && (
-        <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
-          <div className="space-y-6">
-            <div className="border-b pb-4">
-              <h2 className="text-xl font-semibold text-content-primary mb-2">% Tax & Levy Settings</h2>
-              <p className="text-sm text-content-secondary">
-                Configure VAT rate and fuel levy used for delivery VAT calculations.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">VAT Rate (%)</label>
-                <input type="number" step="0.01" min="0" max="100"
-                  value={taxLevy.vat_rate * 100}
-                  onChange={(e) => setTaxLevy({ ...taxLevy, vat_rate: parseFloat(e.target.value) / 100 })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary" required />
-                <p className="text-xs text-content-secondary mt-1">Current: {(taxLevy.vat_rate * 100).toFixed(1)}% (stored as {taxLevy.vat_rate})</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">Fuel Levy per Liter (ZMW)</label>
-                <input type="number" step="0.01" min="0" max="50"
-                  value={taxLevy.fuel_levy_per_liter}
-                  onChange={(e) => setTaxLevy({ ...taxLevy, fuel_levy_per_liter: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary" required />
-                <p className="text-xs text-content-secondary mt-1">Levy deducted per liter before VAT calculation</p>
-              </div>
-            </div>
-
-            {taxLevyMessage && <div className="p-4 bg-status-success-light border border-status-success rounded-md"><p className="text-sm text-status-success">✓ {taxLevyMessage}</p></div>}
-            {taxLevyError && <div className="p-4 bg-status-error-light border border-status-error rounded-md"><p className="text-sm text-status-error">✗ {taxLevyError}</p></div>}
-
-            <button onClick={updateTaxLevy} disabled={taxLevyLoading}
-              className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed">
-              {taxLevyLoading ? 'Saving...' : 'Save Tax & Levy Settings'}
-            </button>
-
-            <div className="bg-action-primary-light border border-action-primary rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-action-primary mb-2">How delivery VAT is calculated</h3>
-              <p className="text-sm text-action-primary">VAT = Volume x ((Price - Levy) / (1 + VAT Rate)) x VAT Rate</p>
-              <p className="text-sm text-action-primary mt-1">These values are used in the Daily Tank Readings delivery VAT calculation.</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Stock Alerts Tab */}
+      {/* ── Stock Alerts Tab ── */}
       {activeTab === 'stock-alerts' && (
         <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
           <div className="space-y-6">
@@ -875,27 +827,50 @@ export default function Settings() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-content-secondary mb-1">Low Stock Threshold (%)</label>
-                <input type="number" step="0.1" min="0" max="100"
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
                   value={stockAlerts.low_stock_threshold_percent}
                   onChange={(e) => setStockAlerts({ ...stockAlerts, low_stock_threshold_percent: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-status-warning rounded-md focus:outline-none focus:ring-status-warning focus:border-status-warning" required />
+                  className="w-full px-3 py-2 border border-status-warning rounded-md focus:outline-none focus:ring-status-warning focus:border-status-warning"
+                  required
+                />
                 <p className="text-xs text-content-secondary mt-1">Yellow warning level</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-content-secondary mb-1">Critical Stock Threshold (%)</label>
-                <input type="number" step="0.1" min="0" max="100"
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
                   value={stockAlerts.critical_stock_threshold_percent}
                   onChange={(e) => setStockAlerts({ ...stockAlerts, critical_stock_threshold_percent: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-status-error rounded-md focus:outline-none focus:ring-status-error focus:border-status-error" required />
+                  className="w-full px-3 py-2 border border-status-error rounded-md focus:outline-none focus:ring-status-error focus:border-status-error"
+                  required
+                />
                 <p className="text-xs text-content-secondary mt-1">Red critical level (must be less than low stock)</p>
               </div>
             </div>
 
-            {stockAlertsMessage && <div className="p-4 bg-status-success-light border border-status-success rounded-md"><p className="text-sm text-status-success">✓ {stockAlertsMessage}</p></div>}
-            {stockAlertsError && <div className="p-4 bg-status-error-light border border-status-error rounded-md"><p className="text-sm text-status-error">✗ {stockAlertsError}</p></div>}
+            {stockAlertsMessage && (
+              <div className="p-4 bg-status-success-light border border-status-success rounded-md">
+                <p className="text-sm text-status-success">✓ {stockAlertsMessage}</p>
+              </div>
+            )}
+            {stockAlertsError && (
+              <div className="p-4 bg-status-error-light border border-status-error rounded-md">
+                <p className="text-sm text-status-error">✗ {stockAlertsError}</p>
+              </div>
+            )}
 
-            <button onClick={updateStockAlerts} disabled={stockAlertsLoading}
-              className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed">
+            <button
+              onClick={updateStockAlerts}
+              disabled={stockAlertsLoading}
+              className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               {stockAlertsLoading ? 'Saving...' : 'Save Stock Alert Settings'}
             </button>
 
@@ -911,7 +886,7 @@ export default function Settings() {
         </div>
       )}
 
-      {/* Reconciliation Tolerances Tab */}
+      {/* ── Reconciliation Tolerances Tab ── */}
       {activeTab === 'recon-tolerances' && (
         <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
           <div className="space-y-6">
@@ -928,18 +903,30 @@ export default function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Minor (L)</label>
-                  <input type="number" step="1" min="0" max="10000"
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="10000"
                     value={reconTolerances.volume_tolerance_minor}
                     onChange={(e) => setReconTolerances({ ...reconTolerances, volume_tolerance_minor: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary" required />
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
                   <p className="text-xs text-content-secondary mt-1">Up to this = acceptable</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Investigation (L)</label>
-                  <input type="number" step="1" min="0" max="50000"
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="50000"
                     value={reconTolerances.volume_tolerance_investigation}
                     onChange={(e) => setReconTolerances({ ...reconTolerances, volume_tolerance_investigation: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary" required />
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
                   <p className="text-xs text-content-secondary mt-1">Above minor, up to this = investigate</p>
                 </div>
               </div>
@@ -951,17 +938,29 @@ export default function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Minor (%)</label>
-                  <input type="number" step="0.1" min="0" max="100"
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
                     value={reconTolerances.percent_tolerance_minor}
                     onChange={(e) => setReconTolerances({ ...reconTolerances, percent_tolerance_minor: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary" required />
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Investigation (%)</label>
-                  <input type="number" step="0.1" min="0" max="100"
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
                     value={reconTolerances.percent_tolerance_investigation}
                     onChange={(e) => setReconTolerances({ ...reconTolerances, percent_tolerance_investigation: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary" required />
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
                 </div>
               </div>
             </div>
@@ -972,17 +971,29 @@ export default function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Minor (ZMW)</label>
-                  <input type="number" step="10" min="0" max="1000000"
+                  <input
+                    type="number"
+                    step="10"
+                    min="0"
+                    max="1000000"
                     value={reconTolerances.cash_tolerance_minor}
                     onChange={(e) => setReconTolerances({ ...reconTolerances, cash_tolerance_minor: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary" required />
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Investigation (ZMW)</label>
-                  <input type="number" step="10" min="0" max="1000000"
+                  <input
+                    type="number"
+                    step="10"
+                    min="0"
+                    max="1000000"
                     value={reconTolerances.cash_tolerance_investigation}
                     onChange={(e) => setReconTolerances({ ...reconTolerances, cash_tolerance_investigation: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary" required />
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
                 </div>
               </div>
             </div>
@@ -990,40 +1001,69 @@ export default function Settings() {
             {/* Min Volume for Percent */}
             <div>
               <label className="block text-sm font-medium text-content-secondary mb-1">Minimum Volume for % Calculation (L)</label>
-              <input type="number" step="10" min="0" max="10000"
+              <input
+                type="number"
+                step="10"
+                min="0"
+                max="10000"
                 value={reconTolerances.min_volume_for_percent}
                 onChange={(e) => setReconTolerances({ ...reconTolerances, min_volume_for_percent: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary max-w-xs" required />
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary max-w-xs"
+                required
+              />
               <p className="text-xs text-content-secondary mt-1">Percentage variance is not calculated for volumes below this</p>
             </div>
 
-            {reconMessage && <div className="p-4 bg-status-success-light border border-status-success rounded-md"><p className="text-sm text-status-success">✓ {reconMessage}</p></div>}
-            {reconError && <div className="p-4 bg-status-error-light border border-status-error rounded-md"><p className="text-sm text-status-error">✗ {reconError}</p></div>}
+            {reconMessage && (
+              <div className="p-4 bg-status-success-light border border-status-success rounded-md">
+                <p className="text-sm text-status-success">✓ {reconMessage}</p>
+              </div>
+            )}
+            {reconError && (
+              <div className="p-4 bg-status-error-light border border-status-error rounded-md">
+                <p className="text-sm text-status-error">✗ {reconError}</p>
+              </div>
+            )}
 
-            <button onClick={updateReconTolerances} disabled={reconLoading}
-              className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed">
+            <button
+              onClick={updateReconTolerances}
+              disabled={reconLoading}
+              className="w-full px-4 py-3 bg-action-primary text-white font-medium rounded-md hover:bg-action-primary-hover focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               {reconLoading ? 'Saving...' : 'Save Reconciliation Tolerances'}
             </button>
 
             <div className="bg-surface-bg border border-surface-border rounded-lg p-4">
               <h3 className="text-sm font-semibold text-content-primary mb-2">Reconciliation Levels</h3>
               <ul className="text-sm text-content-secondary space-y-2">
-                <li className="flex items-start"><span className="text-status-success font-bold mr-2">BALANCED:</span><span>All three sources match within minor tolerance</span></li>
-                <li className="flex items-start"><span className="text-status-warning font-bold mr-2">MINOR:</span><span>Small discrepancy within acceptable range</span></li>
-                <li className="flex items-start"><span className="text-status-warning font-bold mr-2">INVESTIGATION:</span><span>Between minor and investigation threshold - requires review</span></li>
-                <li className="flex items-start"><span className="text-status-error font-bold mr-2">CRITICAL:</span><span>Above investigation threshold - significant mismatch</span></li>
+                <li className="flex items-start">
+                  <span className="text-status-success font-bold mr-2">BALANCED:</span>
+                  <span>All three sources match within minor tolerance</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-status-warning font-bold mr-2">MINOR:</span>
+                  <span>Small discrepancy within acceptable range</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-status-warning font-bold mr-2">INVESTIGATION:</span>
+                  <span>Between minor and investigation threshold - requires review</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-status-error font-bold mr-2">CRITICAL:</span>
+                  <span>Above investigation threshold - significant mismatch</span>
+                </li>
               </ul>
             </div>
           </div>
         </div>
       )}
 
-      {/* Email Notifications Tab */}
+      {/* ── Email Notifications Tab ── */}
       {activeTab === 'email' && (
         <div className="max-w-2xl bg-surface-card rounded-lg shadow p-6">
           <div className="space-y-6">
             <div className="border-b pb-4">
-              <h2 className="text-xl font-semibold text-content-primary mb-2">✉ Email Notifications</h2>
+              <h2 className="text-xl font-semibold text-content-primary mb-2">Email Notifications</h2>
               <p className="text-sm text-content-secondary">
                 Configure email alerts for all in-app notifications. Requires a valid Resend API key on the server.
               </p>
@@ -1052,9 +1092,7 @@ export default function Settings() {
 
             {/* From Address */}
             <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
-                From Address
-              </label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">From Address</label>
               <input
                 type="text"
                 value={emailSettings.from_address}
@@ -1062,16 +1100,12 @@ export default function Settings() {
                 className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 placeholder="NextStop <noreply@yourdomain.com>"
               />
-              <p className="text-xs text-content-secondary mt-1">
-                Must be a verified sender in your Resend account
-              </p>
+              <p className="text-xs text-content-secondary mt-1">Must be a verified sender in your Resend account</p>
             </div>
 
             {/* Recipients */}
             <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
-                Recipients
-              </label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Recipients</label>
               <div className="flex gap-2 mb-2">
                 <input
                   type="email"
@@ -1109,20 +1143,17 @@ export default function Settings() {
               )}
             </div>
 
-            {/* Messages */}
             {emailMessage && (
               <div className="p-4 bg-status-success-light border border-status-success rounded-md">
                 <p className="text-sm text-status-success">✓ {emailMessage}</p>
               </div>
             )}
-
             {emailError && (
               <div className="p-4 bg-status-error-light border border-status-error rounded-md">
                 <p className="text-sm text-status-error">✗ {emailError}</p>
               </div>
             )}
 
-            {/* Action Buttons */}
             <div className="flex gap-3">
               <button
                 onClick={updateEmailSettings}
@@ -1140,14 +1171,13 @@ export default function Settings() {
               </button>
             </div>
 
-            {/* Info Card */}
             <div className="bg-action-primary-light border border-action-primary rounded-lg p-4">
               <h3 className="text-sm font-semibold text-action-primary mb-2">How it works</h3>
               <ul className="text-sm text-action-primary space-y-1">
-                <li>• Requires a valid Resend API key configured on the server (.env file)</li>
-                <li>• All in-app notifications will be emailed to the listed recipients when enabled</li>
-                <li>• Emails include severity level, title, message, and timestamp</li>
-                <li>• Email delivery failures never block normal system operations</li>
+                <li>Requires a valid Resend API key configured on the server (.env file)</li>
+                <li>All in-app notifications will be emailed to the listed recipients when enabled</li>
+                <li>Emails include severity level, title, message, and timestamp</li>
+                <li>Email delivery failures never block normal system operations</li>
               </ul>
             </div>
           </div>
