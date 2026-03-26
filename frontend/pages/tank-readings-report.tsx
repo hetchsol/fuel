@@ -1,6 +1,7 @@
 import { authFetch, BASE, getHeaders, downloadExport } from '../lib/api'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
+import Link from 'next/link'
 import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { useTanks } from '../hooks/useTanks'
@@ -253,6 +254,20 @@ export default function TankReadingsReport() {
           <p className="mt-2 transition-colors duration-300" style={{ color: theme.textSecondary }}>
             View tank readings history and validated readings monitor
           </p>
+        </div>
+
+        {/* Related Pages */}
+        <div className="mb-6 flex flex-wrap gap-3">
+          <span className="text-sm self-center font-medium" style={{ color: theme.textSecondary }}>Related:</span>
+          <Link href="/daily-tank-readings" className="text-sm px-3 py-1.5 rounded-lg border transition-colors hover:opacity-80" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.textPrimary }}>
+            Enter Daily Tank Readings
+          </Link>
+          <Link href="/three-way-reconciliation" className="text-sm px-3 py-1.5 rounded-lg border transition-colors hover:opacity-80" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.textPrimary }}>
+            Three-Way Reconciliation
+          </Link>
+          <Link href="/shift-reconciliation" className="text-sm px-3 py-1.5 rounded-lg border transition-colors hover:opacity-80" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.textPrimary }}>
+            Shift Reconciliation
+          </Link>
         </div>
 
         {/* Tab Navigation */}

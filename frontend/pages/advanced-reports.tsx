@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { getStaffList, getNozzleList, getIslandList, getProductList, getHeaders } from '../lib/api'
 
 const BASE = '/api/v1'
@@ -202,6 +203,17 @@ export default function AdvancedReports() {
         <p className="mt-2 text-sm text-content-secondary">
           Filter and analyze data by staff, nozzle, island, product, and more
         </p>
+      </div>
+
+      {/* Related Pages */}
+      <div className="mb-6 flex flex-wrap gap-3">
+        <span className="text-sm text-content-secondary self-center font-medium">Related:</span>
+        <Link href="/reports" className="text-sm px-3 py-1.5 bg-surface-card border border-surface-border rounded-lg hover:border-action-primary hover:text-action-primary transition-colors">
+          Sales Reports
+        </Link>
+        <Link href="/tank-readings-report" className="text-sm px-3 py-1.5 bg-surface-card border border-surface-border rounded-lg hover:border-action-primary hover:text-action-primary transition-colors">
+          Tank Readings Report
+        </Link>
       </div>
 
       {/* Report Type Selection */}

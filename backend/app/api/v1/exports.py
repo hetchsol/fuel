@@ -10,6 +10,7 @@ import json
 import os
 
 from .auth import require_supervisor_or_owner, get_station_context
+from .reconciliation import _get_reconciliations
 from ...database.station_files import load_station_json
 from ...services.export_service import (
     tank_readings_to_csv, tank_readings_to_excel,
@@ -118,7 +119,7 @@ def export_reconciliation(
 ):
     """Download reconciliation records as CSV or Excel."""
     storage = ctx["storage"]
-    recon_data = list(storage.get("reconciliations_data", []))
+    recon_data = list(_get_reconciliations(ctx["station_id"], storage))
 
     if start_date:
         recon_data = [r for r in recon_data if r.get("date", "") >= start_date]

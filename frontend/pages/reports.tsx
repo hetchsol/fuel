@@ -1,6 +1,7 @@
 import { authFetch, BASE, getHeaders, downloadExport } from '../lib/api'
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import DateRangePicker from '../components/DateRangePicker';
 
 interface Product {
@@ -172,6 +173,20 @@ export default function Reports() {
                     <p className="text-content-secondary mt-2 text-lg">
                         Generate comprehensive sales reports by date range
                     </p>
+                </div>
+
+                {/* Related Pages */}
+                <div className="mb-6 flex flex-wrap gap-3">
+                    <span className="text-sm text-content-secondary self-center font-medium">Related:</span>
+                    <Link href="/shift-reconciliation" className="text-sm px-3 py-1.5 bg-surface-card border border-surface-border rounded-lg hover:border-action-primary hover:text-action-primary transition-colors">
+                        Shift Reconciliation
+                    </Link>
+                    <Link href="/tank-readings-report" className="text-sm px-3 py-1.5 bg-surface-card border border-surface-border rounded-lg hover:border-action-primary hover:text-action-primary transition-colors">
+                        Tank Readings Report
+                    </Link>
+                    <Link href="/advanced-reports" className="text-sm px-3 py-1.5 bg-surface-card border border-surface-border rounded-lg hover:border-action-primary hover:text-action-primary transition-colors">
+                        Advanced Reports
+                    </Link>
                 </div>
 
                 {/* Date Range Picker */}
