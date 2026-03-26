@@ -6,7 +6,10 @@ import re
 import json
 import os
 from fastapi import APIRouter, Depends, HTTPException
-from ...models.models import FuelSettings, SystemSettings, ValidationThresholds, EmailSettings
+from ...models.models import (
+    FuelSettings, SystemSettings, ValidationThresholds, EmailSettings,
+    TaxLevySettings, StockAlertSettings, ReconciliationToleranceSettings,
+)
 from .auth import get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
@@ -215,3 +218,124 @@ def send_test_email(ctx: dict = Depends(get_station_context)):
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("message", "Test email failed"))
     return result
+
+
+# ── Tax & Levy Settings ─────────────────────────────────────
+
+@router.get("/tax-levy")
+def get_tax_levy_settings(ctx: dict = Depends(get_station_context)):
+    """Get current VAT rate and fuel levy settings"""
+    storage = ctx["storage"]
+    return TaxLevySettings(**storage.setdefault('tax_levy_settings', {}))
+
+
+@router.put("/tax-levy")
+def update_tax_levy_settings(settings: TaxLevySettings, ctx: dict = Depends(get_station_context)):
+    """Update VAT rate and fuel levy settings"""
+    storage = ctx["storage"]
+    old_settings = dict(storage.setdefault('tax_levy_settings', {}))
+    storage['tax_levy_settings'] = {
+        "vat_rate": settings.vat_rate,
+        "fuel_levy_per_liter": settings.fuel_levy_per_liter,
+    }
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="tax_levy_update",
+        performed_by=ctx["username"],
+        entity_type="tax_levy_settings",
+        details={"old": old_settings, "new": storage['tax_levy_settings']},
+    )
+
+    return {
+        "status": "success",
+        "message": "Tax & levy settings updated successfully",
+        "settings": storage['tax_levy_settings'],
+    }
+
+
+# ── Stock Alert Settings ────────────────────────────────────
+
+@router.get("/stock-alerts")
+def get_stock_alert_settings(ctx: dict = Depends(get_station_context)):
+    """Get current stock alert threshold settings"""
+    storage = ctx["storage"]
+    return StockAlertSettings(**storage.setdefault('stock_alert_settings', {}))
+
+
+@router.put("/stock-alerts")
+def update_stock_alert_settings(settings: StockAlertSettings, ctx: dict = Depends(get_station_context)):
+    """Update stock alert threshold settings"""
+    if settings.critical_stock_threshold_percent >= settings.low_stock_threshold_percent:
+        raise HTTPException(
+            status_code=422,
+            detail="Critical threshold must be less than low stock threshold"
+        )
+
+    storage = ctx["storage"]
+    old_settings = dict(storage.setdefault('stock_alert_settings', {}))
+    storage['stock_alert_settings'] = {
+        "low_stock_threshold_percent": settings.low_stock_threshold_percent,
+        "critical_stock_threshold_percent": settings.critical_stock_threshold_percent,
+    }
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="stock_alert_update",
+        performed_by=ctx["username"],
+        entity_type="stock_alert_settings",
+        details={"old": old_settings, "new": storage['stock_alert_settings']},
+    )
+
+    return {
+        "status": "success",
+        "message": "Stock alert settings updated successfully",
+        "settings": storage['stock_alert_settings'],
+    }
+
+
+# ── Reconciliation Tolerance Settings ───────────────────────
+
+@router.get("/reconciliation-tolerances")
+def get_reconciliation_tolerance_settings(ctx: dict = Depends(get_station_context)):
+    """Get current reconciliation tolerance settings"""
+    storage = ctx["storage"]
+    return ReconciliationToleranceSettings(**storage.setdefault('reconciliation_tolerance_settings', {}))
+
+
+@router.put("/reconciliation-tolerances")
+def update_reconciliation_tolerance_settings(settings: ReconciliationToleranceSettings, ctx: dict = Depends(get_station_context)):
+    """Update reconciliation tolerance settings"""
+    # Validate: minor < investigation for each pair
+    if settings.volume_tolerance_minor >= settings.volume_tolerance_investigation:
+        raise HTTPException(status_code=422, detail="Volume minor tolerance must be less than investigation tolerance")
+    if settings.percent_tolerance_minor >= settings.percent_tolerance_investigation:
+        raise HTTPException(status_code=422, detail="Percent minor tolerance must be less than investigation tolerance")
+    if settings.cash_tolerance_minor >= settings.cash_tolerance_investigation:
+        raise HTTPException(status_code=422, detail="Cash minor tolerance must be less than investigation tolerance")
+
+    storage = ctx["storage"]
+    old_settings = dict(storage.setdefault('reconciliation_tolerance_settings', {}))
+    storage['reconciliation_tolerance_settings'] = {
+        "volume_tolerance_minor": settings.volume_tolerance_minor,
+        "volume_tolerance_investigation": settings.volume_tolerance_investigation,
+        "percent_tolerance_minor": settings.percent_tolerance_minor,
+        "percent_tolerance_investigation": settings.percent_tolerance_investigation,
+        "cash_tolerance_minor": settings.cash_tolerance_minor,
+        "cash_tolerance_investigation": settings.cash_tolerance_investigation,
+        "min_volume_for_percent": settings.min_volume_for_percent,
+    }
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="reconciliation_tolerance_update",
+        performed_by=ctx["username"],
+        entity_type="reconciliation_tolerance_settings",
+        details={"old": old_settings, "new": storage['reconciliation_tolerance_settings']},
+    )
+
+    return {
+        "status": "success",
+        "message": "Reconciliation tolerance settings updated successfully",
+        "settings": storage['reconciliation_tolerance_settings'],
+    }

@@ -203,6 +203,34 @@ def _seed_settings(storage: dict):
             "recipients": [],
         }
 
+    # Seed tax & levy settings if missing
+    if 'tax_levy_settings' not in storage or not storage['tax_levy_settings']:
+        from ..config import VAT_RATE, FUEL_LEVY_PER_LITER
+        storage['tax_levy_settings'] = {
+            "vat_rate": VAT_RATE,
+            "fuel_levy_per_liter": FUEL_LEVY_PER_LITER,
+        }
+
+    # Seed stock alert settings if missing
+    if 'stock_alert_settings' not in storage or not storage['stock_alert_settings']:
+        from ..config import LOW_STOCK_THRESHOLD_PERCENT, CRITICAL_STOCK_THRESHOLD_PERCENT
+        storage['stock_alert_settings'] = {
+            "low_stock_threshold_percent": LOW_STOCK_THRESHOLD_PERCENT,
+            "critical_stock_threshold_percent": CRITICAL_STOCK_THRESHOLD_PERCENT,
+        }
+
+    # Seed reconciliation tolerance settings if missing
+    if 'reconciliation_tolerance_settings' not in storage or not storage['reconciliation_tolerance_settings']:
+        storage['reconciliation_tolerance_settings'] = {
+            "volume_tolerance_minor": 50.0,
+            "volume_tolerance_investigation": 200.0,
+            "percent_tolerance_minor": 0.5,
+            "percent_tolerance_investigation": 2.0,
+            "cash_tolerance_minor": 500.0,
+            "cash_tolerance_investigation": 2000.0,
+            "min_volume_for_percent": 100.0,
+        }
+
 
 def _migrate_islands_add_display_fields(storage: dict):
     """

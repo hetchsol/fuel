@@ -108,6 +108,23 @@ class SystemSettings(BaseModel):
     software_version: str = "1.0.0"  # Read-only
     station_location: Optional[str] = ""
 
+class TaxLevySettings(BaseModel):
+    vat_rate: float = Field(default=0.16, ge=0, le=1.0)              # 0-100% as decimal
+    fuel_levy_per_liter: float = Field(default=1.44, ge=0, le=50.0)  # ZMW per liter
+
+class StockAlertSettings(BaseModel):
+    low_stock_threshold_percent: float = Field(default=25.0, ge=0, le=100.0)
+    critical_stock_threshold_percent: float = Field(default=10.0, ge=0, le=100.0)
+
+class ReconciliationToleranceSettings(BaseModel):
+    volume_tolerance_minor: float = Field(default=50.0, ge=0, le=10000.0)
+    volume_tolerance_investigation: float = Field(default=200.0, ge=0, le=50000.0)
+    percent_tolerance_minor: float = Field(default=0.5, ge=0, le=100.0)
+    percent_tolerance_investigation: float = Field(default=2.0, ge=0, le=100.0)
+    cash_tolerance_minor: float = Field(default=500.0, ge=0, le=1000000.0)
+    cash_tolerance_investigation: float = Field(default=2000.0, ge=0, le=1000000.0)
+    min_volume_for_percent: float = Field(default=100.0, ge=0, le=10000.0)
+
 class StockDelivery(BaseModel):
     tank_id: str
     fuel_type: str  # Diesel or Petrol

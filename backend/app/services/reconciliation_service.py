@@ -32,25 +32,34 @@ class VarianceType(str, Enum):
 
 
 class ReconciliationConfig:
-    """Configuration for reconciliation tolerances."""
+    """Configuration for reconciliation tolerances.
+    When storage is provided, reads from runtime settings.
+    Otherwise uses class-level defaults (backward compatible).
+    """
 
-    # Volume tolerances (liters)
-    VOLUME_TOLERANCE_MINOR = 50.0  # Up to 50L variance is minor
-    VOLUME_TOLERANCE_INVESTIGATION = 200.0  # 50-200L requires investigation
-    # Above 200L is critical
+    # Class-level defaults (used when no storage provided)
+    _DEFAULTS = {
+        'volume_tolerance_minor': 50.0,
+        'volume_tolerance_investigation': 200.0,
+        'percent_tolerance_minor': 0.5,
+        'percent_tolerance_investigation': 2.0,
+        'cash_tolerance_minor': 500.0,
+        'cash_tolerance_investigation': 2000.0,
+        'min_volume_for_percent': 100.0,
+    }
 
-    # Percentage tolerances
-    PERCENT_TOLERANCE_MINOR = 0.5  # 0.5% variance is acceptable
-    PERCENT_TOLERANCE_INVESTIGATION = 2.0  # 0.5-2% requires investigation
-    # Above 2% is critical
-
-    # Cash tolerances (monetary units)
-    CASH_TOLERANCE_MINOR = 500.0  # Up to 500 cash units is minor
-    CASH_TOLERANCE_INVESTIGATION = 2000.0  # 500-2000 requires investigation
-    # Above 2000 is critical
-
-    # Minimum volumes for percentage calculations
-    MIN_VOLUME_FOR_PERCENT = 100.0  # Don't calculate % for very small volumes
+    def __init__(self, storage: dict = None):
+        settings = {}
+        if storage:
+            settings = storage.get('reconciliation_tolerance_settings', {}) or {}
+        d = self._DEFAULTS
+        self.VOLUME_TOLERANCE_MINOR = float(settings.get('volume_tolerance_minor', d['volume_tolerance_minor']))
+        self.VOLUME_TOLERANCE_INVESTIGATION = float(settings.get('volume_tolerance_investigation', d['volume_tolerance_investigation']))
+        self.PERCENT_TOLERANCE_MINOR = float(settings.get('percent_tolerance_minor', d['percent_tolerance_minor']))
+        self.PERCENT_TOLERANCE_INVESTIGATION = float(settings.get('percent_tolerance_investigation', d['percent_tolerance_investigation']))
+        self.CASH_TOLERANCE_MINOR = float(settings.get('cash_tolerance_minor', d['cash_tolerance_minor']))
+        self.CASH_TOLERANCE_INVESTIGATION = float(settings.get('cash_tolerance_investigation', d['cash_tolerance_investigation']))
+        self.MIN_VOLUME_FOR_PERCENT = float(settings.get('min_volume_for_percent', d['min_volume_for_percent']))
 
 
 def calculate_three_way_reconciliation(

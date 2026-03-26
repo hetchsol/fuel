@@ -631,7 +631,7 @@ def get_reconciliation_patterns(tank_id: str, days: int = 30, ctx: dict = Depend
 
 
 @router.get("/three-way/config")
-def get_three_way_config():
+def get_three_way_config(ctx: dict = Depends(get_station_context)):
     """
     Get current three-way reconciliation tolerance configuration.
 
@@ -641,7 +641,7 @@ def get_three_way_config():
     """
     from ...services.reconciliation_service import ReconciliationConfig
 
-    config = ReconciliationConfig()
+    config = ReconciliationConfig(storage=ctx["storage"])
 
     return {
         'volume_tolerances': {

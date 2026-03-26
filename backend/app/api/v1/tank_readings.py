@@ -453,7 +453,10 @@ def submit_tank_reading(
     delivery_net_price = None
     delivery_vat_per_liter = None
     if total_delivery_volume > 0 and price > 0:
-        vat_result = calculate_delivery_vat(total_delivery_volume, price)
+        from ...config import resolve_vat_rate, resolve_fuel_levy
+        _vat_rate = resolve_vat_rate(storage)
+        _levy = resolve_fuel_levy(storage)
+        vat_result = calculate_delivery_vat(total_delivery_volume, price, levy=_levy, vat_rate=_vat_rate, vat_divisor=1 + _vat_rate)
         delivery_vat_amount = vat_result['vat_amount']
         delivery_net_price = vat_result['net_price_per_liter']
         delivery_vat_per_liter = vat_result['vat_per_liter']

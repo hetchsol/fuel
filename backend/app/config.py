@@ -238,3 +238,36 @@ def resolve_fuel_price(fuel_type: str, storage: dict = None) -> float:
 
     # Fall back to config constants
     return get_fuel_price(fuel_type)
+
+
+def resolve_vat_rate(storage: dict = None) -> float:
+    """Resolve VAT rate from runtime settings, falling back to config constant."""
+    if storage:
+        tls = storage.get('tax_levy_settings')
+        if tls and tls.get('vat_rate') is not None:
+            return float(tls['vat_rate'])
+    return VAT_RATE
+
+
+def resolve_fuel_levy(storage: dict = None) -> float:
+    """Resolve fuel levy per liter from runtime settings, falling back to config constant."""
+    if storage:
+        tls = storage.get('tax_levy_settings')
+        if tls and tls.get('fuel_levy_per_liter') is not None:
+            return float(tls['fuel_levy_per_liter'])
+    return FUEL_LEVY_PER_LITER
+
+
+def resolve_stock_thresholds(storage: dict = None) -> dict:
+    """Resolve stock alert thresholds from runtime settings, falling back to config constants."""
+    if storage:
+        sas = storage.get('stock_alert_settings')
+        if sas:
+            return {
+                'low_stock_threshold_percent': float(sas.get('low_stock_threshold_percent', LOW_STOCK_THRESHOLD_PERCENT)),
+                'critical_stock_threshold_percent': float(sas.get('critical_stock_threshold_percent', CRITICAL_STOCK_THRESHOLD_PERCENT)),
+            }
+    return {
+        'low_stock_threshold_percent': LOW_STOCK_THRESHOLD_PERCENT,
+        'critical_stock_threshold_percent': CRITICAL_STOCK_THRESHOLD_PERCENT,
+    }

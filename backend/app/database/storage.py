@@ -45,6 +45,9 @@ def _make_empty_storage() -> Dict[str, Any]:
         'system_settings': {},
         'validation_thresholds': {},
         'email_settings': {},
+        'tax_levy_settings': {},
+        'stock_alert_settings': {},
+        'reconciliation_tolerance_settings': {},
 
         # Reconciliation (previously module-level lists)
         'reconciliations_data': [],
