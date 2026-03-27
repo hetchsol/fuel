@@ -465,9 +465,11 @@ export default function MyShift() {
   }
 
   if (shiftFound === false) {
-    const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null
-    const userRole = userData ? JSON.parse(userData).role : ''
-    const isOwnerOrSupervisor = userRole === 'owner' || userRole === 'supervisor'
+    const isOwnerOrSupervisor = !isAttendant && (userRole === 'owner' || userRole === 'supervisor')
+
+    if (isOwnerOrSupervisor) {
+      return <SupervisorDashboard theme={theme} pastHandovers={pastHandovers} />
+    }
 
     return (
       <div>
@@ -476,17 +478,15 @@ export default function MyShift() {
           style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
           <div className="text-4xl mb-4">-</div>
           <h2 className="text-lg font-semibold mb-2" style={{ color: theme.textPrimary }}>
-            {isOwnerOrSupervisor ? 'No Active Shift' : 'No Active Shift Assigned'}
+            No Active Shift Assigned
           </h2>
           <p className="text-sm" style={{ color: theme.textSecondary }}>
-            {isOwnerOrSupervisor
-              ? 'There is no active shift assigned to you. Use the Shifts page to create or manage shifts, or the Handover Review page to review attendant submissions.'
-              : 'You don\'t have an active shift assigned to you. Please contact your supervisor to be assigned to a shift.'}
+            You don't have an active shift assigned to you. Please contact your supervisor to be assigned to a shift.
           </p>
         </div>
         {pastHandovers.length > 0 && (
           <div className="mt-8">
-            <PastHandoversTable handovers={pastHandovers} theme={theme} isAttendant={isAttendant} />
+            <PastHandoversTable handovers={pastHandovers} theme={theme} isAttendant={true} />
           </div>
         )}
       </div>
@@ -1713,6 +1713,324 @@ export default function MyShift() {
       {/* Past Handovers — always visible */}
       {pastHandovers.length > 0 && (
         <PastHandoversTable handovers={pastHandovers} theme={theme} isAttendant={isAttendant} />
+      )}
+    </div>
+  )
+}
+
+function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandovers: HandoverResult[] }) {
+  const [activeShifts, setActiveShifts] = useState<any[]>([])
+  const [allStaff, setAllStaff] = useState<any[]>([])
+  const [islands, setIslands] = useState<any[]>([])
+  const [dashLoading, setDashLoading] = useState(true)
+
+  useEffect(() => {
+    const headers = { 'Content-Type': 'application/json', ...getHeaders() }
+    Promise.all([
+      fetch(`${BASE}/shifts/`, { headers }).then(r => r.ok ? r.json() : []),
+      fetch(`${BASE}/auth/staff`, { headers }).then(r => r.ok ? r.json() : []),
+      fetch(`${BASE}/islands/?status=active`, { headers }).then(r => r.ok ? r.json() : []),
+    ])
+      .then(([shifts, staff, islandsData]) => {
+        setActiveShifts(Array.isArray(shifts) ? shifts.filter((s: any) => s.status === 'active') : [])
+        setAllStaff(Array.isArray(staff) ? staff : [])
+        setIslands(Array.isArray(islandsData) ? islandsData : [])
+      })
+      .catch(() => {})
+      .finally(() => setDashLoading(false))
+  }, [])
+
+  // Determine which staff are assigned to active shifts
+  const assignedUserIds = new Set<string>()
+  const assignedNames = new Set<string>()
+  activeShifts.forEach(shift => {
+    (shift.assignments || []).forEach((a: any) => {
+      if (a.attendant_id) assignedUserIds.add(a.attendant_id)
+      if (a.attendant_name) assignedNames.add(a.attendant_name.toLowerCase())
+    })
+  })
+
+  const availableStaff = allStaff.filter(s =>
+    s.role === 'user' && !assignedUserIds.has(s.user_id) && !assignedNames.has((s.full_name || '').toLowerCase())
+  )
+  const assignedStaff = allStaff.filter(s =>
+    s.role === 'user' && (assignedUserIds.has(s.user_id) || assignedNames.has((s.full_name || '').toLowerCase()))
+  )
+
+  // Build island lookup
+  const islandMap: Record<string, any> = {}
+  islands.forEach(isl => { islandMap[isl.island_id] = isl })
+
+  const getNozzleDisplayName = (nozzle: any) => {
+    if (nozzle.fuel_type_abbrev && nozzle.display_label) return `${nozzle.fuel_type_abbrev} ${nozzle.display_label}`
+    return nozzle.display_label || nozzle.nozzle_id
+  }
+
+  if (dashLoading) {
+    return <LoadingSpinner text="Loading dashboard..." />
+  }
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold mb-4" style={{ color: theme.textPrimary }}>Shift Overview</h1>
+
+      {/* Active Shifts */}
+      {activeShifts.length === 0 ? (
+        <div className="rounded-lg shadow p-6 mb-6 text-center"
+          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+          <h2 className="text-lg font-semibold mb-2" style={{ color: theme.textPrimary }}>No Active Shifts</h2>
+          <p className="text-sm" style={{ color: theme.textSecondary }}>
+            Use the Shifts page to create or manage shifts.
+          </p>
+        </div>
+      ) : (
+        activeShifts.map(shift => (
+          <div key={shift.shift_id} className="rounded-lg shadow mb-6"
+            style={{ backgroundColor: theme.cardBg, borderColor: 'var(--color-status-success)', borderWidth: 2 }}>
+            {/* Shift Header */}
+            <div className="p-4" style={{ borderBottomColor: theme.border, borderBottomWidth: 1 }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold" style={{ color: theme.textPrimary }}>
+                    {shift.shift_type === 'Day' ? '\u2600\uFE0F' : '\uD83C\uDF19'} {shift.shift_type} Shift
+                  </h2>
+                  <p className="text-sm" style={{ color: theme.textSecondary }}>
+                    {shift.date} &middot; {shift.shift_id}
+                  </p>
+                </div>
+                <span className="px-3 py-1 rounded-full text-xs font-semibold"
+                  style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }}>
+                  ACTIVE
+                </span>
+              </div>
+            </div>
+
+            {/* Assignments */}
+            <div className="p-4">
+              {(!shift.assignments || shift.assignments.length === 0) ? (
+                <p className="text-sm italic" style={{ color: theme.textSecondary }}>No attendants assigned yet</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {shift.assignments.map((assignment: any, idx: number) => (
+                    <div key={idx} className="rounded-lg p-4"
+                      style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                          style={{ backgroundColor: theme.primary }}>
+                          {(assignment.attendant_name || '?')[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm" style={{ color: theme.textPrimary }}>
+                            {assignment.attendant_name || 'Unknown'}
+                          </p>
+                          <p className="text-xs" style={{ color: theme.textSecondary }}>Attendant</p>
+                        </div>
+                      </div>
+
+                      {/* Islands */}
+                      {assignment.island_ids?.length > 0 && (
+                        <div className="mb-2">
+                          <p className="text-xs font-medium uppercase mb-1" style={{ color: theme.textSecondary }}>Islands</p>
+                          <div className="flex flex-wrap gap-1">
+                            {assignment.island_ids.map((islId: string) => {
+                              const isl = islandMap[islId]
+                              return (
+                                <span key={islId} className="px-2 py-0.5 rounded text-xs font-medium"
+                                  style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }}>
+                                  {isl?.name || islId}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Nozzles */}
+                      {assignment.nozzle_ids?.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium uppercase mb-1" style={{ color: theme.textSecondary }}>Nozzles</p>
+                          <div className="flex flex-wrap gap-1">
+                            {assignment.nozzle_ids.map((nzId: string) => {
+                              // Find nozzle in islands data
+                              let nozzle: any = null
+                              for (const isl of islands) {
+                                const found = isl.pump_station?.nozzles?.find((n: any) => n.nozzle_id === nzId)
+                                if (found) { nozzle = { ...found, fuel_type_abbrev: isl.fuel_type_abbrev }; break }
+                              }
+                              const isPetrol = nozzle?.fuel_type === 'Petrol'
+                              return (
+                                <span key={nzId} className="px-2 py-0.5 rounded text-xs font-medium"
+                                  style={{
+                                    backgroundColor: isPetrol ? 'var(--color-action-primary-light)' : 'var(--color-status-pending-light)',
+                                    color: isPetrol ? 'var(--color-action-primary)' : 'var(--color-status-warning)',
+                                  }}>
+                                  {nozzle ? getNozzleDisplayName(nozzle) : nzId}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))
+      )}
+
+      {/* Staff Overview */}
+      <div className="rounded-lg shadow mb-6"
+        style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+        <div className="p-4" style={{ borderBottomColor: theme.border, borderBottomWidth: 1 }}>
+          <h2 className="text-lg font-bold" style={{ color: theme.textPrimary }}>Staff</h2>
+        </div>
+        <div className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* On Shift */}
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--color-status-success)' }}>
+                On Shift ({assignedStaff.length})
+              </h3>
+              {assignedStaff.length === 0 ? (
+                <p className="text-sm italic" style={{ color: theme.textSecondary }}>No staff currently on shift</p>
+              ) : (
+                <div className="space-y-2">
+                  {assignedStaff.map(staff => (
+                    <div key={staff.user_id} className="flex items-center gap-3 rounded-lg p-3"
+                      style={{ backgroundColor: 'var(--color-status-success-light)', borderColor: 'var(--color-status-success)', borderWidth: 1 }}>
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                        style={{ backgroundColor: 'var(--color-status-success)' }}>
+                        {(staff.full_name || '?')[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm" style={{ color: theme.textPrimary }}>{staff.full_name}</p>
+                        <p className="text-xs" style={{ color: theme.textSecondary }}>{staff.username}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Available */}
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: theme.textSecondary }}>
+                Available ({availableStaff.length})
+              </h3>
+              {availableStaff.length === 0 ? (
+                <p className="text-sm italic" style={{ color: theme.textSecondary }}>All staff are assigned</p>
+              ) : (
+                <div className="space-y-2">
+                  {availableStaff.map(staff => (
+                    <div key={staff.user_id} className="flex items-center gap-3 rounded-lg p-3"
+                      style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+                        style={{ backgroundColor: theme.border, color: theme.textSecondary }}>
+                        {(staff.full_name || '?')[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm" style={{ color: theme.textPrimary }}>{staff.full_name}</p>
+                        <p className="text-xs" style={{ color: theme.textSecondary }}>{staff.username}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Islands & Nozzles Overview */}
+      {islands.length > 0 && (
+        <div className="rounded-lg shadow mb-6"
+          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+          <div className="p-4" style={{ borderBottomColor: theme.border, borderBottomWidth: 1 }}>
+            <h2 className="text-lg font-bold" style={{ color: theme.textPrimary }}>Islands & Nozzles</h2>
+          </div>
+          <div className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {islands.map(island => (
+                <div key={island.island_id} className="rounded-lg p-4"
+                  style={{
+                    backgroundColor: theme.background,
+                    borderWidth: 2,
+                    borderColor: island.status === 'active' ? 'var(--color-status-success)' : theme.border,
+                  }}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-bold text-sm" style={{ color: theme.textPrimary }}>{island.name}</p>
+                      <p className="text-xs" style={{ color: theme.textSecondary }}>{island.island_id}</p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-xs font-medium"
+                      style={{
+                        backgroundColor: island.status === 'active' ? 'var(--color-status-success-light)' : theme.background,
+                        color: island.status === 'active' ? 'var(--color-status-success)' : theme.textSecondary,
+                      }}>
+                      {island.status}
+                    </span>
+                  </div>
+                  {island.product_type && (
+                    <p className="text-xs mb-2" style={{ color: theme.textSecondary }}>
+                      Product: {island.product_type}
+                    </p>
+                  )}
+                  {island.pump_station?.nozzles?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {island.pump_station.nozzles.map((nozzle: any) => {
+                        const isPetrol = nozzle.fuel_type === 'Petrol'
+                        const displayName = island.fuel_type_abbrev && nozzle.display_label
+                          ? `${island.fuel_type_abbrev} ${nozzle.display_label}`
+                          : nozzle.display_label || nozzle.nozzle_id
+
+                        // Check if this nozzle is assigned in any active shift
+                        let assignedTo: string | null = null
+                        for (const shift of activeShifts) {
+                          for (const a of shift.assignments || []) {
+                            if (a.nozzle_ids?.includes(nozzle.nozzle_id)) {
+                              assignedTo = a.attendant_name
+                              break
+                            }
+                          }
+                          if (assignedTo) break
+                        }
+
+                        return (
+                          <div key={nozzle.nozzle_id} className="px-2 py-1 rounded text-xs"
+                            style={{
+                              backgroundColor: isPetrol ? 'var(--color-action-primary-light)' : 'var(--color-status-pending-light)',
+                              color: isPetrol ? 'var(--color-action-primary)' : 'var(--color-status-warning)',
+                              borderWidth: 1,
+                              borderColor: isPetrol ? 'var(--color-action-primary)' : 'var(--color-status-warning)',
+                            }}>
+                            <span className="font-semibold">{displayName}</span>
+                            {assignedTo && (
+                              <span className="block text-[10px] mt-0.5" style={{ opacity: 0.8 }}>
+                                {assignedTo}
+                              </span>
+                            )}
+                            {!assignedTo && activeShifts.length > 0 && (
+                              <span className="block text-[10px] mt-0.5 italic" style={{ opacity: 0.6 }}>
+                                unassigned
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Past Handovers */}
+      {pastHandovers.length > 0 && (
+        <PastHandoversTable handovers={pastHandovers} theme={theme} isAttendant={false} />
       )}
     </div>
   )
