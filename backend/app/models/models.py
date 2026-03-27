@@ -87,6 +87,7 @@ class FuelSettings(BaseModel):
     petrol_price_per_liter: float = Field(..., gt=0, le=1000)
     diesel_allowable_loss_percent: float = Field(..., ge=0, le=5.0)  # e.g., 0.3%
     petrol_allowable_loss_percent: float = Field(..., ge=0, le=5.0)  # e.g., 0.5%
+    nozzle_allowable_loss_liters: float = Field(default=0.8, ge=0, le=50.0)  # per-nozzle loss threshold in liters
 
 class ValidationThresholds(BaseModel):
     pass_threshold: float = Field(default=0.5, ge=0, le=10.0)  # Variance <= this % = PASS

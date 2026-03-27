@@ -11,6 +11,7 @@ export default function Settings() {
     petrol_price_per_liter: 160.0,
     diesel_allowable_loss_percent: 0.3,
     petrol_allowable_loss_percent: 0.5,
+    nozzle_allowable_loss_liters: 0.8,
   })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -590,6 +591,26 @@ export default function Settings() {
                     required
                   />
                   <p className="text-xs text-content-secondary mt-1">Default: 0.5% loss during delivery</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-xl font-semibold text-content-primary mb-4">Nozzle Loss Threshold</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Allowable Loss Per Nozzle (Liters)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="50"
+                    value={settings.nozzle_allowable_loss_liters}
+                    onChange={(e) => setSettings({ ...settings, nozzle_allowable_loss_liters: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
+                  <p className="text-xs text-content-secondary mt-1">Default: 0.8L — losses above this per nozzle will be flagged during shift handover</p>
                 </div>
               </div>
             </div>

@@ -37,6 +37,7 @@ def update_fuel_settings(settings: FuelSettings, ctx: dict = Depends(get_station
     storage.setdefault('fuel_settings', {})["petrol_price_per_liter"] = settings.petrol_price_per_liter
     storage.setdefault('fuel_settings', {})["diesel_allowable_loss_percent"] = settings.diesel_allowable_loss_percent
     storage.setdefault('fuel_settings', {})["petrol_allowable_loss_percent"] = settings.petrol_allowable_loss_percent
+    storage.setdefault('fuel_settings', {})["nozzle_allowable_loss_liters"] = settings.nozzle_allowable_loss_liters
 
     log_audit_event(
         station_id=ctx["station_id"],

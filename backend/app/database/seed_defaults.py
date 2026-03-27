@@ -166,6 +166,7 @@ def _seed_settings(storage: dict):
         from ..config import (
             DIESEL_PRICE_PER_LITER, PETROL_PRICE_PER_LITER,
             DIESEL_ALLOWABLE_LOSS_PERCENT, PETROL_ALLOWABLE_LOSS_PERCENT,
+            NOZZLE_ALLOWABLE_LOSS_LITERS,
             BUSINESS_NAME, LICENSE_KEY, CONTACT_EMAIL, CONTACT_PHONE,
             LICENSE_EXPIRY_DATE, SOFTWARE_VERSION, STATION_LOCATION,
         )
@@ -174,6 +175,7 @@ def _seed_settings(storage: dict):
             "petrol_price_per_liter": PETROL_PRICE_PER_LITER,
             "diesel_allowable_loss_percent": DIESEL_ALLOWABLE_LOSS_PERCENT,
             "petrol_allowable_loss_percent": PETROL_ALLOWABLE_LOSS_PERCENT,
+            "nozzle_allowable_loss_liters": NOZZLE_ALLOWABLE_LOSS_LITERS,
         }
         storage['system_settings'] = {
             "business_name": BUSINESS_NAME,

@@ -23,6 +23,7 @@ PETROL_PRICE_PER_LITER = 29.92  # ZMW per liter
 
 DIESEL_ALLOWABLE_LOSS_PERCENT = 0.3  # 0.3% allowable loss for diesel
 PETROL_ALLOWABLE_LOSS_PERCENT = 0.5  # 0.5% allowable loss for petrol
+NOZZLE_ALLOWABLE_LOSS_LITERS = 0.8  # per-nozzle allowable loss in liters
 
 # ============================================================================
 # SYSTEM/BUSINESS INFORMATION

@@ -173,6 +173,7 @@ async def get_my_shift(ctx: dict = Depends(get_station_context)):
         },
         "nozzles": nozzle_details,
         "meter_discrepancy_threshold": storage.get('validation_thresholds', {}).get('meter_discrepancy_threshold', 0.5),
+        "nozzle_allowable_loss_liters": storage.get('fuel_settings', {}).get('nozzle_allowable_loss_liters', 0.8),
         "enter_readings_submitted": enter_readings_submitted,
         "enter_readings_closing": enter_readings_closing,
     }
@@ -609,6 +610,13 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
         auto_flag_reasons.append("cash_shortage")
     if any(ns.meter_deviation_flagged for ns in nozzle_summaries):
         auto_flag_reasons.append("meter_deviation")
+    # Flag if any nozzle loss exceeds the allowable liters threshold
+    nozzle_loss_threshold = storage.get('fuel_settings', {}).get('nozzle_allowable_loss_liters', 0.8)
+    if any(
+        ns.meter_deviation_liters is not None and ns.meter_deviation_liters > nozzle_loss_threshold
+        for ns in nozzle_summaries
+    ):
+        auto_flag_reasons.append("nozzle_loss_exceeded")
     review_status = "flagged" if auto_flag_reasons else "submitted"
 
     # Generate handover ID

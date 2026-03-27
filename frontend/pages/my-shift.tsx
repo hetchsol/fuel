@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getHeaders } from '../lib/api'
@@ -103,6 +103,11 @@ function getAuthHeaders() {
 export default function MyShift() {
   const { theme } = useTheme()
 
+  // Determine user role for visibility control
+  const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null
+  const userRole = userData ? JSON.parse(userData).role : ''
+  const isAttendant = userRole === 'user'
+
   // Shift state
   const [shiftFound, setShiftFound] = useState<boolean | null>(null)
   const [shiftInfo, setShiftInfo] = useState<any>(null)
@@ -134,9 +139,13 @@ export default function MyShift() {
 
   // Meter discrepancy threshold (%)
   const [meterThreshold, setMeterThreshold] = useState<number>(0.5)
+  // Nozzle allowable loss threshold (liters)
+  const [nozzleLossThreshold, setNozzleLossThreshold] = useState<number>(0.8)
 
   // Wizard step state
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
+  // Review confirmation modal
+  const [showReviewModal, setShowReviewModal] = useState(false)
 
   // Fetch active shift first, then stock opening separately (so stock failure doesn't kill the page)
   useEffect(() => {
@@ -167,6 +176,7 @@ export default function MyShift() {
           }))
         )
         setMeterThreshold(shiftData.meter_discrepancy_threshold ?? 0.5)
+        setNozzleLossThreshold(shiftData.nozzle_allowable_loss_liters ?? 0.8)
 
         // Fetch credit accounts for line-item entry
         fetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
@@ -255,6 +265,8 @@ export default function MyShift() {
     const deviationPct = mechValid && avg > 0 ? (deviationL / avg) * 100 : 0
     const flagged = mechValid && deviationPct > meterThreshold
 
+    const lossExceedsThreshold = mechValid && deviationL > nozzleLossThreshold
+
     return {
       volume: Math.max(0, volume),
       revenue: volume >= 0 ? revenue : 0,
@@ -263,6 +275,7 @@ export default function MyShift() {
       deviationL,
       deviationPct,
       flagged,
+      lossExceedsThreshold,
       mechValid: row.mechanical_closing === '' ? undefined : mechValid,
     }
   })
@@ -318,6 +331,7 @@ export default function MyShift() {
   // LPG split validation: for rows where total sold > 0, refill + with_cylinder must equal total
   const lpgSplitValid = lpgComputations.every(c => c.totalSold === 0 || c.splitValid)
   const hasDeviationFlags = nozzleComputations.some(c => c.flagged)
+  const hasLossFlags = nozzleComputations.some(c => c.lossExceedsThreshold)
 
   const canProceedToReview = allClosingsEntered && allValid && allMechEntered && allMechValid && lpgSplitValid
   const canSubmit = currentStep === 3 && allClosingsEntered && allValid && allMechEntered && allMechValid
@@ -472,7 +486,7 @@ export default function MyShift() {
         </div>
         {pastHandovers.length > 0 && (
           <div className="mt-8">
-            <PastHandoversTable handovers={pastHandovers} theme={theme} />
+            <PastHandoversTable handovers={pastHandovers} theme={theme} isAttendant={isAttendant} />
           </div>
         )}
       </div>
@@ -732,12 +746,13 @@ export default function MyShift() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-right font-mono text-xs whitespace-nowrap" style={{
-                        color: comp.flagged ? 'var(--color-status-error)' : theme.textSecondary,
-                        fontWeight: comp.flagged ? 600 : 400,
+                        color: comp.flagged || comp.lossExceedsThreshold ? 'var(--color-status-error)' : theme.textSecondary,
+                        fontWeight: comp.flagged || comp.lossExceedsThreshold ? 600 : 400,
                       }}>
                         {comp.mechValid && row.closing_reading !== '' && comp.valid
                           ? <>
                               {comp.flagged && <span title="Deviation exceeds threshold">! </span>}
+                              {comp.lossExceedsThreshold && <span title={`Loss exceeds ${nozzleLossThreshold}L threshold`}>!! </span>}
                               {comp.deviationL.toFixed(3)} L ({comp.deviationPct.toFixed(2)}%)
                             </>
                           : '-'}
@@ -1021,12 +1036,13 @@ export default function MyShift() {
                           : '-'}
                       </td>
                       <td className="px-3 py-2 text-right font-mono text-xs whitespace-nowrap" style={{
-                        color: comp.flagged ? 'var(--color-status-error)' : theme.textSecondary,
-                        fontWeight: comp.flagged ? 600 : 400,
+                        color: comp.flagged || comp.lossExceedsThreshold ? 'var(--color-status-error)' : theme.textSecondary,
+                        fontWeight: comp.flagged || comp.lossExceedsThreshold ? 600 : 400,
                       }}>
                         {comp.mechValid
                           ? <>
                               {comp.flagged && <span>! </span>}
+                              {comp.lossExceedsThreshold && <span title={`Loss exceeds ${nozzleLossThreshold}L threshold`}>!! </span>}
                               {comp.deviationL.toFixed(3)} L ({comp.deviationPct.toFixed(2)}%)
                             </>
                           : '-'}
@@ -1221,8 +1237,9 @@ export default function MyShift() {
             <h2 className="text-sm font-semibold mb-3 uppercase tracking-wide" style={{ color: theme.textSecondary }}>
               Cash Handover
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left: computation summary */}
+            <div className={`grid grid-cols-1 ${isAttendant ? '' : 'md:grid-cols-2'} gap-6`}>
+              {/* Left: computation summary — hidden from attendants */}
+              {!isAttendant && (
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span style={{ color: theme.textSecondary }}>Fuel Revenue</span>
@@ -1267,6 +1284,7 @@ export default function MyShift() {
                   </span>
                 </div>
               </div>
+              )}
 
               {/* Right: actual cash + difference */}
               <div className="space-y-4">
@@ -1296,8 +1314,8 @@ export default function MyShift() {
                         setCreditItems(updated)
                       }
                       return (
-                        <div key={idx} className="grid grid-cols-12 gap-1 items-end mb-1">
-                          <div className="col-span-4">
+                        <div key={idx} className={`grid ${isAttendant ? 'grid-cols-8' : 'grid-cols-12'} gap-1 items-end mb-1`}>
+                          <div className={isAttendant ? 'col-span-3' : 'col-span-4'}>
                             {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Account</div>}
                             <select value={item.account_id} onChange={e => {
                               const a = creditAccounts.find(x => x.account_id === e.target.value)
@@ -1329,14 +1347,18 @@ export default function MyShift() {
                               }}
                               placeholder="0" className="w-full px-1 py-1.5 rounded border text-xs text-right font-mono" style={inputStyle} />
                           </div>
+                          {!isAttendant && (
                           <div className="col-span-1">
                             {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>K/L</div>}
                             <div className="px-1 py-1.5 text-xs font-mono text-right" style={{ color: theme.textSecondary }}>{resolvedPrice.toFixed(2)}</div>
                           </div>
+                          )}
+                          {!isAttendant && (
                           <div className="col-span-2">
                             {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Amount</div>}
                             <div className="px-1 py-1.5 text-xs font-mono text-right font-medium" style={{ color: theme.textPrimary }}>{fmtZMW(amt)}</div>
                           </div>
+                          )}
                           <div className="col-span-1 flex justify-center">
                             {idx === 0 && <div className="text-[10px] mb-0.5 invisible">X</div>}
                             <button type="button" onClick={() => setCreditItems(prev => prev.filter((_, i) => i !== idx))}
@@ -1345,7 +1367,7 @@ export default function MyShift() {
                         </div>
                       )
                     })}
-                    {creditItems.length > 0 && (
+                    {creditItems.length > 0 && !isAttendant && (
                       <div className="flex justify-between text-xs font-semibold pt-1 mt-1" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                         <span style={{ color: theme.textSecondary }}>Credit Total</span>
                         <span className="font-mono" style={{ color: theme.textPrimary }}>{fmtZMW(creditItemsTotal)}</span>
@@ -1353,6 +1375,7 @@ export default function MyShift() {
                     )}
                   </div>
                 ) : (
+                  !isAttendant ? (
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
                       Credit Sales (ZMW)
@@ -1362,6 +1385,7 @@ export default function MyShift() {
                       className="w-full px-3 py-2 rounded border text-sm text-right font-mono"
                       style={inputStyle} />
                   </div>
+                  ) : null
                 )}
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
@@ -1373,7 +1397,7 @@ export default function MyShift() {
                     style={inputStyle} />
                 </div>
 
-                {actualCash !== '' && (
+                {actualCash !== '' && !isAttendant && (
                   <div className="rounded-lg p-4 text-center"
                     style={{
                       backgroundColor: difference >= 0 ? 'var(--color-status-success-light)' : 'var(--color-status-error-light)',
@@ -1403,6 +1427,18 @@ export default function MyShift() {
                   </div>
                 )}
 
+                {hasLossFlags && (
+                  <div className="rounded-lg p-3 text-sm"
+                    style={{
+                      backgroundColor: 'var(--color-status-error-light, #fde8e8)',
+                      color: 'var(--color-status-error)',
+                      borderWidth: 1,
+                      borderColor: 'var(--color-status-error)',
+                    }}>
+                    <span className="font-semibold">Nozzle Loss Alert:</span> {nozzleComputations.filter(c => c.lossExceedsThreshold).length} nozzle(s) exceed the allowable loss of {nozzleLossThreshold}L. Please verify your readings.
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
                     {hasDeviationFlags ? 'Notes (required — explain meter discrepancy)' : 'Notes (optional)'}
@@ -1429,13 +1465,82 @@ export default function MyShift() {
               {'\u2190'} Back to Review
             </button>
             <button
-              onClick={handleSubmit}
+              onClick={() => setShowReviewModal(true)}
               disabled={!canSubmit}
               className="px-6 py-3 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: canSubmit ? theme.primary : '#9ca3af' }}>
               {submitting ? 'Submitting...' : 'Submit Shift Handover'}
             </button>
           </div>
+
+          {/* Review Confirmation Modal */}
+          {showReviewModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+              <div className="rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
+                style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+                <h3 className="text-lg font-bold mb-3" style={{ color: theme.textPrimary }}>
+                  Review Your Readings
+                </h3>
+
+                {hasLossFlags && (
+                  <div className="rounded-lg p-3 mb-3 text-sm"
+                    style={{
+                      backgroundColor: 'var(--color-status-error-light, #fde8e8)',
+                      color: 'var(--color-status-error)',
+                      borderWidth: 1,
+                      borderColor: 'var(--color-status-error)',
+                    }}>
+                    <span className="font-semibold">Nozzle Loss Alert:</span>
+                    <ul className="mt-1 list-disc list-inside">
+                      {nozzleRows.map((row, idx) => {
+                        const comp = nozzleComputations[idx]
+                        if (!comp.lossExceedsThreshold) return null
+                        const label = row.fuel_type_abbrev && row.display_label
+                          ? `${row.fuel_type_abbrev} ${row.display_label}`
+                          : row.nozzle_id
+                        return (
+                          <li key={row.nozzle_id}>
+                            {label}: {comp.deviationL.toFixed(3)}L loss (threshold: {nozzleLossThreshold}L)
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
+                )}
+
+                {hasDeviationFlags && !hasLossFlags && (
+                  <div className="rounded-lg p-3 mb-3 text-sm"
+                    style={{
+                      backgroundColor: 'var(--color-status-warning-light, #fef3cd)',
+                      color: 'var(--color-status-warning, #856404)',
+                      borderWidth: 1,
+                      borderColor: 'var(--color-status-warning, #ffc107)',
+                    }}>
+                    <span className="font-semibold">Warning:</span> Meter discrepancy detected on {nozzleComputations.filter(c => c.flagged).length} nozzle(s).
+                  </div>
+                )}
+
+                <p className="text-sm mb-4" style={{ color: theme.textSecondary }}>
+                  Please review your readings carefully before submitting. Are you sure all inputs are correct?
+                </p>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowReviewModal(false)}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold"
+                    style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border, borderWidth: 1 }}>
+                    Go Back & Review
+                  </button>
+                  <button
+                    onClick={() => { setShowReviewModal(false); handleSubmit() }}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                    style={{ backgroundColor: theme.primary }}>
+                    Yes, Submit
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -1444,7 +1549,7 @@ export default function MyShift() {
         <div className="rounded-lg shadow p-6 mb-6"
           style={{ backgroundColor: theme.cardBg, borderColor: 'var(--color-status-success)', borderWidth: 2 }}>
           <h2 className="text-lg font-bold mb-4" style={{ color: theme.textPrimary }}>
-            Handover Summary
+            {isAttendant ? 'Shift Handover Submitted' : 'Handover Summary'}
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
             <div>
@@ -1465,91 +1570,149 @@ export default function MyShift() {
             </div>
           </div>
 
-          <table className="min-w-full text-sm mb-4">
-            <thead>
-              <tr style={{ backgroundColor: theme.background }}>
-                {['Nozzle', 'Fuel', 'Elect. Open', 'Elect. Close', 'Volume (L)', 'Mech. Vol', 'Deviation', 'Revenue (ZMW)'].map(h => (
-                  <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
-                    style={{ color: theme.textSecondary }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {handoverResult.nozzle_summaries.map(ns => {
-                const row = nozzleRows.find(r => r.nozzle_id === ns.nozzle_id)
-                const displayName = row?.fuel_type_abbrev && row?.display_label
-                  ? `${row.fuel_type_abbrev} ${row.display_label}`
-                  : ns.nozzle_id
-                return (
-                <tr key={ns.nozzle_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                  <td className="px-3 py-1 font-medium" style={{ color: theme.textPrimary }}>{displayName}</td>
-                  <td className="px-3 py-1" style={{ color: theme.textSecondary }}>{ns.fuel_type}</td>
-                  <td className="px-3 py-1 text-right font-mono" style={{ color: theme.textSecondary }}>
-                    {ns.opening_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })}
-                  </td>
-                  <td className="px-3 py-1 text-right font-mono" style={{ color: theme.textPrimary }}>
-                    {ns.closing_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })}
-                  </td>
-                  <td className="px-3 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
-                    {ns.volume_sold.toLocaleString(undefined, { minimumFractionDigits: 3 })}
-                  </td>
-                  <td className="px-3 py-1 text-right font-mono" style={{ color: theme.textPrimary }}>
-                    {ns.mechanical_volume != null
-                      ? ns.mechanical_volume.toLocaleString(undefined, { minimumFractionDigits: 3 })
-                      : '-'}
-                  </td>
-                  <td className="px-3 py-1 text-right font-mono text-xs whitespace-nowrap" style={{
-                    color: ns.meter_deviation_flagged ? 'var(--color-status-error)' : theme.textSecondary,
-                    fontWeight: ns.meter_deviation_flagged ? 600 : 400,
-                  }}>
-                    {ns.meter_deviation_percent != null
-                      ? <>
-                          {ns.meter_deviation_flagged && <span>! </span>}
-                          {ns.meter_deviation_percent.toFixed(2)}%
-                        </>
-                      : '-'}
-                  </td>
-                  <td className="px-3 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
-                    {fmtZMW(ns.revenue)}
-                  </td>
-                </tr>
-                )
-              })}
-            </tbody>
-          </table>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <SummaryCell label="Fuel Revenue" value={handoverResult.fuel_revenue} theme={theme} />
-            <SummaryCell label="LPG Sales" value={handoverResult.lpg_sales} theme={theme} />
-            <SummaryCell label="Lubricant Sales" value={handoverResult.lubricant_sales} theme={theme} />
-            <SummaryCell label="Accessory Sales" value={handoverResult.accessory_sales} theme={theme} />
-            <SummaryCell label="Total Expected" value={handoverResult.total_expected} theme={theme} bold />
-            <SummaryCell label="Credit Sales" value={handoverResult.credit_sales} theme={theme} negative />
-            <SummaryCell label="Expected Cash" value={handoverResult.expected_cash} theme={theme} bold primary />
-            <SummaryCell label="Actual Cash" value={handoverResult.actual_cash} theme={theme} bold />
-          </div>
-
-          <div className="mt-4 rounded-lg p-4 text-center"
-            style={{
-              backgroundColor: handoverResult.difference >= 0 ? 'var(--color-status-success-light)' : 'var(--color-status-error-light)',
-              borderWidth: 2,
-              borderColor: handoverResult.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)',
-            }}>
-            <div className="text-xs uppercase tracking-wide mb-1"
-              style={{ color: handoverResult.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
-              {handoverResult.difference >= 0 ? 'Surplus' : 'Shortage'}
+          {isAttendant ? (
+            /* Attendant view: volumes only, no monetary info */
+            <div>
+              <table className="min-w-full text-sm mb-4">
+                <thead>
+                  <tr style={{ backgroundColor: theme.background }}>
+                    {['Nozzle', 'Fuel', 'Volume (L)', 'Mech. Vol', 'Deviation'].map(h => (
+                      <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
+                        style={{ color: theme.textSecondary }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {handoverResult.nozzle_summaries.map(ns => {
+                    const row = nozzleRows.find(r => r.nozzle_id === ns.nozzle_id)
+                    const displayName = row?.fuel_type_abbrev && row?.display_label
+                      ? `${row.fuel_type_abbrev} ${row.display_label}`
+                      : ns.nozzle_id
+                    return (
+                    <tr key={ns.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                      <td className="px-3 py-1 font-medium" style={{ color: theme.textPrimary }}>{displayName}</td>
+                      <td className="px-3 py-1" style={{ color: theme.textSecondary }}>{ns.fuel_type}</td>
+                      <td className="px-3 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
+                        {ns.volume_sold.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                      </td>
+                      <td className="px-3 py-1 text-right font-mono" style={{ color: theme.textPrimary }}>
+                        {ns.mechanical_volume != null
+                          ? ns.mechanical_volume.toLocaleString(undefined, { minimumFractionDigits: 3 })
+                          : '-'}
+                      </td>
+                      <td className="px-3 py-1 text-right font-mono text-xs whitespace-nowrap" style={{
+                        color: ns.meter_deviation_flagged ? 'var(--color-status-error)' : theme.textSecondary,
+                        fontWeight: ns.meter_deviation_flagged ? 600 : 400,
+                      }}>
+                        {ns.meter_deviation_percent != null
+                          ? <>{ns.meter_deviation_flagged && <span>! </span>}{ns.meter_deviation_percent.toFixed(2)}%</>
+                          : '-'}
+                      </td>
+                    </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <div className="rounded-lg p-4 text-center"
+                style={{ backgroundColor: 'var(--color-action-primary-light)', borderWidth: 1, borderColor: theme.primary }}>
+                <p className="text-sm font-medium" style={{ color: theme.textPrimary }}>
+                  Your shift handover has been submitted successfully and is awaiting supervisor review.
+                </p>
+                <p className="text-xs mt-1" style={{ color: theme.textSecondary }}>
+                  Your sales summary will be available once the supervisor approves your submission.
+                </p>
+              </div>
             </div>
-            <div className="text-3xl font-bold font-mono"
-              style={{ color: handoverResult.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
-              {handoverResult.difference >= 0 ? '+' : ''}{fmtZMW(handoverResult.difference)} ZMW
-            </div>
-          </div>
+          ) : (
+            /* Supervisor/Owner view: full financial breakdown */
+            <>
+              <table className="min-w-full text-sm mb-4">
+                <thead>
+                  <tr style={{ backgroundColor: theme.background }}>
+                    {['Nozzle', 'Fuel', 'Elect. Open', 'Elect. Close', 'Volume (L)', 'Mech. Vol', 'Deviation', 'Revenue (ZMW)'].map(h => (
+                      <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
+                        style={{ color: theme.textSecondary }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {handoverResult.nozzle_summaries.map(ns => {
+                    const row = nozzleRows.find(r => r.nozzle_id === ns.nozzle_id)
+                    const displayName = row?.fuel_type_abbrev && row?.display_label
+                      ? `${row.fuel_type_abbrev} ${row.display_label}`
+                      : ns.nozzle_id
+                    return (
+                    <tr key={ns.nozzle_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                      <td className="px-3 py-1 font-medium" style={{ color: theme.textPrimary }}>{displayName}</td>
+                      <td className="px-3 py-1" style={{ color: theme.textSecondary }}>{ns.fuel_type}</td>
+                      <td className="px-3 py-1 text-right font-mono" style={{ color: theme.textSecondary }}>
+                        {ns.opening_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                      </td>
+                      <td className="px-3 py-1 text-right font-mono" style={{ color: theme.textPrimary }}>
+                        {ns.closing_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                      </td>
+                      <td className="px-3 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
+                        {ns.volume_sold.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                      </td>
+                      <td className="px-3 py-1 text-right font-mono" style={{ color: theme.textPrimary }}>
+                        {ns.mechanical_volume != null
+                          ? ns.mechanical_volume.toLocaleString(undefined, { minimumFractionDigits: 3 })
+                          : '-'}
+                      </td>
+                      <td className="px-3 py-1 text-right font-mono text-xs whitespace-nowrap" style={{
+                        color: ns.meter_deviation_flagged ? 'var(--color-status-error)' : theme.textSecondary,
+                        fontWeight: ns.meter_deviation_flagged ? 600 : 400,
+                      }}>
+                        {ns.meter_deviation_percent != null
+                          ? <>
+                              {ns.meter_deviation_flagged && <span>! </span>}
+                              {ns.meter_deviation_percent.toFixed(2)}%
+                            </>
+                          : '-'}
+                      </td>
+                      <td className="px-3 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
+                        {fmtZMW(ns.revenue)}
+                      </td>
+                    </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <SummaryCell label="Fuel Revenue" value={handoverResult.fuel_revenue} theme={theme} />
+                <SummaryCell label="LPG Sales" value={handoverResult.lpg_sales} theme={theme} />
+                <SummaryCell label="Lubricant Sales" value={handoverResult.lubricant_sales} theme={theme} />
+                <SummaryCell label="Accessory Sales" value={handoverResult.accessory_sales} theme={theme} />
+                <SummaryCell label="Total Expected" value={handoverResult.total_expected} theme={theme} bold />
+                <SummaryCell label="Credit Sales" value={handoverResult.credit_sales} theme={theme} negative />
+                <SummaryCell label="Expected Cash" value={handoverResult.expected_cash} theme={theme} bold primary />
+                <SummaryCell label="Actual Cash" value={handoverResult.actual_cash} theme={theme} bold />
+              </div>
+
+              <div className="mt-4 rounded-lg p-4 text-center"
+                style={{
+                  backgroundColor: handoverResult.difference >= 0 ? 'var(--color-status-success-light)' : 'var(--color-status-error-light)',
+                  borderWidth: 2,
+                  borderColor: handoverResult.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)',
+                }}>
+                <div className="text-xs uppercase tracking-wide mb-1"
+                  style={{ color: handoverResult.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
+                  {handoverResult.difference >= 0 ? 'Surplus' : 'Shortage'}
+                </div>
+                <div className="text-3xl font-bold font-mono"
+                  style={{ color: handoverResult.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
+                  {handoverResult.difference >= 0 ? '+' : ''}{fmtZMW(handoverResult.difference)} ZMW
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* Past Handovers — always visible */}
       {pastHandovers.length > 0 && (
-        <PastHandoversTable handovers={pastHandovers} theme={theme} />
+        <PastHandoversTable handovers={pastHandovers} theme={theme} isAttendant={isAttendant} />
       )}
     </div>
   )
@@ -1593,7 +1756,13 @@ function ReviewStatusBadge({ status }: { status: string }) {
   )
 }
 
-function PastHandoversTable({ handovers, theme }: { handovers: HandoverResult[], theme: any }) {
+function PastHandoversTable({ handovers, theme, isAttendant = false }: { handovers: HandoverResult[], theme: any, isAttendant?: boolean }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const fmtZMW = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2 })
+
+  const attendantHeaders = ['Date', 'Shift', 'Review']
+  const fullHeaders = ['Date', 'Shift', 'Attendant', 'Fuel Rev.', 'Total Expected', 'Expected Cash', 'Actual Cash', 'Difference', 'Review']
+
   return (
     <div className="rounded-lg shadow overflow-x-auto"
       style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
@@ -1604,39 +1773,108 @@ function PastHandoversTable({ handovers, theme }: { handovers: HandoverResult[],
       <table className="min-w-full text-sm">
         <thead>
           <tr style={{ backgroundColor: theme.background }}>
-            {['Date', 'Shift', 'Attendant', 'Fuel Rev.', 'Total Expected', 'Expected Cash', 'Actual Cash', 'Difference', 'Review'].map(h => (
+            {(isAttendant ? attendantHeaders : fullHeaders).map(h => (
               <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
                 style={{ color: theme.textSecondary }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {handovers.map(h => (
-            <tr key={h.handover_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-              <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.date}</td>
-              <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{h.shift_type}</td>
-              <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.attendant_name}</td>
-              <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
-                {h.fuel_revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </td>
-              <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
-                {h.total_expected.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </td>
-              <td className="px-3 py-2 text-right font-mono font-medium" style={{ color: theme.primary }}>
-                {h.expected_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </td>
-              <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
-                {h.actual_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </td>
-              <td className="px-3 py-2 text-right font-mono font-bold"
-                style={{ color: h.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
-                {h.difference >= 0 ? '+' : ''}{h.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </td>
-              <td className="px-3 py-2">
-                <ReviewStatusBadge status={h.review_status || h.status} />
-              </td>
-            </tr>
-          ))}
+          {handovers.map(h => {
+            const isApproved = (h.review_status || h.status) === 'approved'
+            const isExpanded = expandedId === h.handover_id
+            return (
+              <React.Fragment key={h.handover_id}>
+                <tr
+                  className={`hover:bg-surface-bg ${isAttendant && isApproved ? 'cursor-pointer' : ''}`}
+                  style={{ borderTopColor: theme.border, borderTopWidth: 1 }}
+                  onClick={() => isAttendant && isApproved && setExpandedId(isExpanded ? null : h.handover_id)}
+                >
+                  <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.date}</td>
+                  <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{h.shift_type}</td>
+                  {!isAttendant && (
+                    <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.attendant_name}</td>
+                  )}
+                  {!isAttendant && (
+                    <>
+                      <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
+                        {fmtZMW(h.fuel_revenue)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
+                        {fmtZMW(h.total_expected)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono font-medium" style={{ color: theme.primary }}>
+                        {fmtZMW(h.expected_cash)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
+                        {fmtZMW(h.actual_cash)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono font-bold"
+                        style={{ color: h.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
+                        {h.difference >= 0 ? '+' : ''}{fmtZMW(h.difference)}
+                      </td>
+                    </>
+                  )}
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <ReviewStatusBadge status={h.review_status || h.status} />
+                      {isAttendant && isApproved && (
+                        <span className="text-xs" style={{ color: theme.textSecondary }}>
+                          {isExpanded ? '\u25B2' : '\u25BC'} View Sales
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+
+                {/* Expanded sales summary for approved handovers (attendant only) */}
+                {isAttendant && isApproved && isExpanded && (
+                  <tr>
+                    <td colSpan={isAttendant ? 3 : 9} className="px-3 py-0">
+                      <div className="rounded-lg p-4 my-2"
+                        style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
+                        <h4 className="text-sm font-semibold mb-3" style={{ color: theme.textPrimary }}>
+                          Your total sales for the shift:
+                        </h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span style={{ color: theme.textSecondary }}>Fuel Sales</span>
+                            <span className="font-mono font-medium" style={{ color: theme.textPrimary }}>
+                              K {fmtZMW(h.fuel_revenue)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span style={{ color: theme.textSecondary }}>LPG Sales</span>
+                            <span className="font-mono font-medium" style={{ color: theme.textPrimary }}>
+                              K {fmtZMW(h.lpg_sales)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span style={{ color: theme.textSecondary }}>Lubricant Sales</span>
+                            <span className="font-mono font-medium" style={{ color: theme.textPrimary }}>
+                              K {fmtZMW(h.lubricant_sales)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span style={{ color: theme.textSecondary }}>Accessory Sales</span>
+                            <span className="font-mono font-medium" style={{ color: theme.textPrimary }}>
+                              K {fmtZMW(h.accessory_sales)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between pt-2" style={{ borderTopColor: theme.border, borderTopWidth: 2 }}>
+                            <span className="font-bold" style={{ color: theme.textPrimary }}>Total Sales</span>
+                            <span className="font-mono font-bold" style={{ color: theme.primary }}>
+                              K {fmtZMW(h.total_expected)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            )
+          })}
         </tbody>
       </table>
     </div>
