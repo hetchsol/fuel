@@ -134,8 +134,13 @@ export default function Login() {
       document.cookie = `accessToken=${data.access_token}; path=/; SameSite=Lax${secure}`
       document.cookie = `user=${encodeURIComponent(JSON.stringify(data.user))}; path=/; SameSite=Lax${secure}`
 
-      const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/'
-      router.push(redirect)
+      // Redirect to setup wizard if first-time owner login
+      if (data.needs_setup) {
+        router.push('/setup')
+      } else {
+        const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/'
+        router.push(redirect)
+      }
     } catch (err: any) {
       setError(err.message || 'Login failed')
     } finally {

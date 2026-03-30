@@ -91,6 +91,7 @@ def update_system_settings(settings: SystemSettings, ctx: dict = Depends(get_sta
     storage.setdefault('system_settings', {})["contact_phone"] = settings.contact_phone
     storage.setdefault('system_settings', {})["license_expiry_date"] = settings.license_expiry_date
     storage.setdefault('system_settings', {})["station_location"] = settings.station_location
+    storage.setdefault('system_settings', {})["setup_completed"] = settings.setup_completed
     # software_version is read-only, not updated from request
 
     log_audit_event(

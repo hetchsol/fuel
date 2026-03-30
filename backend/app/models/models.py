@@ -108,6 +108,7 @@ class SystemSettings(BaseModel):
     license_expiry_date: Optional[str] = ""  # YYYY-MM-DD format
     software_version: str = "1.0.0"  # Read-only
     station_location: Optional[str] = ""
+    setup_completed: bool = False
 
 class TaxLevySettings(BaseModel):
     vat_rate: float = Field(default=0.16, ge=0, le=1.0)              # 0-100% as decimal

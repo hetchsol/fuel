@@ -36,7 +36,7 @@ def _seed_default_users():
     import bcrypt
 
     default_users = [
-        ("O001", "owner1", "owner123", "Kanyembo Ndhlovu", "owner", None),
+        ("O001", "owner1", "owner123", "Business Owner", "owner", None),
     ]
 
     for user_id, username, password, full_name, role, station_id in default_users:

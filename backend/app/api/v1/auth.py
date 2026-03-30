@@ -69,7 +69,7 @@ users_db = {
         "user_id": "O001",
         "username": "owner1",
         "password": hashlib.sha256("owner123".encode()).hexdigest(),
-        "full_name": "Kanyembo Ndhlovu",
+        "full_name": "Business Owner",
         "role": UserRole.OWNER,
         "station_id": None,
         "is_active": True,
@@ -203,9 +203,13 @@ def login(credentials: UserLogin):
         expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
         db_create_session(token, user["user_id"], username, user["role"], expires_at)
 
+        # Check if setup wizard is needed (owner with default name)
+        needs_setup = (user["role"] == "owner" and user["full_name"] == "Business Owner")
+
         return {
             "access_token": token,
             "token_type": "bearer",
+            "needs_setup": needs_setup,
             "user": {
                 "user_id": user["user_id"],
                 "username": username,
@@ -230,9 +234,17 @@ def login(credentials: UserLogin):
             "username": username,
             "role": user_data["role"],
         }
+
+        # Check if setup wizard is needed (owner with default name)
+        full_name = user_data["full_name"]
+        if hasattr(full_name, 'value'):
+            full_name = full_name
+        needs_setup = (user_data.get("role") in [UserRole.OWNER, "owner"] and full_name == "Business Owner")
+
         return {
             "access_token": session_token,
             "token_type": "bearer",
+            "needs_setup": needs_setup,
             "user": {
                 "user_id": user_data["user_id"],
                 "username": username,

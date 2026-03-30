@@ -68,14 +68,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       const parsed = JSON.parse(userData)
       setUser(parsed)
       setActiveStationId(localStorage.getItem('stationId') || parsed.station_id || 'ST001')
-    } else if (router.pathname !== '/login') {
+    } else if (router.pathname !== '/login' && router.pathname !== '/setup') {
       router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`)
     }
     setLoading(false)
   }, [router.pathname])
 
   useEffect(() => {
-    if (router.pathname === '/login') return
+    if (router.pathname === '/login' || router.pathname === '/setup') return
     if (user && user.role === 'owner') {
       authFetch(`${BASE}/stations/`)
         .then(r => r.ok ? r.json() : [])
@@ -88,7 +88,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const isSupervisorOrOwner = user && (user.role === 'supervisor' || user.role === 'owner')
 
   useEffect(() => {
-    if (router.pathname === '/login') return
+    if (router.pathname === '/login' || router.pathname === '/setup') return
     if (!isSupervisorOrOwner) return
     const fetchCount = () => {
       fetch(`${BASE}/notifications/unread-count`, { headers: getHeaders() })
@@ -268,7 +268,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       })
     : []
 
-  if (router.pathname === '/login' || loading) {
+  if (router.pathname === '/login' || router.pathname === '/setup' || loading) {
     return <>{children}</>
   }
 
