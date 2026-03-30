@@ -131,6 +131,7 @@ class StockDelivery(BaseModel):
     fuel_type: str  # Diesel or Petrol
     volume_delivered: float  # Liters delivered
     expected_volume: float  # Expected volume from supplier
+    flowmeter_volume: Optional[float] = None  # Gauge reading from delivery pipe
     delivery_note: Optional[str] = None
     supplier: Optional[str] = None
 
@@ -331,6 +332,7 @@ class DeliveryReference(BaseModel):
     invoice_number: Optional[str] = None
     before_volume: float  # Tank level before this specific delivery
     after_volume: float   # Tank level after this specific delivery
+    flowmeter_volume: Optional[float] = None  # Gauge reading from delivery pipe
 
 # LPG Products
 class LPGSale(BaseModel):
@@ -561,6 +563,7 @@ class TankDeliveryInput(BaseModel):
     supplier: str
     invoice_number: Optional[str] = None
     expected_volume: Optional[float] = None  # What supplier said they delivered
+    flowmeter_volume: Optional[float] = None  # Gauge reading from delivery pipe
     temperature: Optional[float] = None  # Temperature at delivery
 
     # Who recorded
@@ -588,9 +591,19 @@ class TankDeliveryOutput(BaseModel):
     invoice_number: Optional[str] = None
     temperature: Optional[float] = None
 
+    # Flowmeter
+    flowmeter_volume: Optional[float] = None  # Gauge reading from delivery pipe
+
     # Validation
     validation_status: str  # PASS, WARNING, FAIL
     validation_message: str
+
+    # Delivery Three-Way Reconciliation (Invoice vs Flowmeter vs Tank Dip)
+    recon_invoice_vs_flowmeter: Optional[float] = None  # expected - flowmeter
+    recon_flowmeter_vs_tank: Optional[float] = None     # flowmeter - tank_dip_change
+    recon_invoice_vs_tank: Optional[float] = None        # expected - tank_dip_change
+    recon_status: Optional[str] = None                   # BALANCED, VARIANCE_MINOR, VARIANCE_INVESTIGATION
+    recon_outlier: Optional[str] = None                  # INVOICE, FLOWMETER, TANK, MULTIPLE, or None
 
     # NEW: Link to tank reading (for auto-linking functionality)
     linked_reading_id: Optional[str] = None  # FK to tank_readings

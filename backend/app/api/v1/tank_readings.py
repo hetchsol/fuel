@@ -67,6 +67,69 @@ def save_tank_deliveries(tank_deliveries_db: dict, station_id: str):
 
 
 
+# ===== DELIVERY THREE-WAY RECONCILIATION =====
+
+def compute_delivery_recon(expected_volume, flowmeter_volume, tank_dip_change):
+    """
+    Compute delivery three-way reconciliation: Invoice vs Flowmeter vs Tank Dip.
+    Returns dict of recon fields, or dict of Nones if insufficient data.
+    """
+    if expected_volume is None or flowmeter_volume is None or tank_dip_change is None or tank_dip_change <= 0:
+        return {
+            "recon_invoice_vs_flowmeter": None,
+            "recon_flowmeter_vs_tank": None,
+            "recon_invoice_vs_tank": None,
+            "recon_status": None,
+            "recon_outlier": None,
+        }
+
+    inv_vs_flow = round(expected_volume - flowmeter_volume, 2)
+    flow_vs_tank = round(flowmeter_volume - tank_dip_change, 2)
+    inv_vs_tank = round(expected_volume - tank_dip_change, 2)
+
+    # Percentage variances (relative to expected_volume as baseline)
+    baseline = expected_volume if expected_volume > 0 else 1
+    inv_flow_pct = abs(inv_vs_flow) / baseline * 100
+    flow_tank_pct = abs(flow_vs_tank) / baseline * 100
+    inv_tank_pct = abs(inv_vs_tank) / baseline * 100
+
+    # Tolerance thresholds (matching existing delivery variance thresholds)
+    MINOR_PCT = 2.0
+    INVESTIGATION_PCT = 5.0
+
+    max_pct = max(inv_flow_pct, flow_tank_pct, inv_tank_pct)
+    if max_pct <= MINOR_PCT:
+        status = "BALANCED"
+    elif max_pct <= INVESTIGATION_PCT:
+        status = "VARIANCE_MINOR"
+    else:
+        status = "VARIANCE_INVESTIGATION"
+
+    # Pattern matching: identify the outlier source
+    outlier = None
+    if status != "BALANCED":
+        inv_flow_ok = inv_flow_pct <= MINOR_PCT
+        flow_tank_ok = flow_tank_pct <= MINOR_PCT
+        inv_tank_ok = inv_tank_pct <= MINOR_PCT
+
+        if inv_flow_ok and not flow_tank_ok and not inv_tank_ok:
+            outlier = "TANK"       # Invoice & Flowmeter agree, Tank differs
+        elif flow_tank_ok and not inv_flow_ok and not inv_tank_ok:
+            outlier = "INVOICE"    # Flowmeter & Tank agree, Invoice differs
+        elif inv_tank_ok and not inv_flow_ok and not flow_tank_ok:
+            outlier = "FLOWMETER"  # Invoice & Tank agree, Flowmeter differs
+        else:
+            outlier = "MULTIPLE"
+
+    return {
+        "recon_invoice_vs_flowmeter": inv_vs_flow,
+        "recon_flowmeter_vs_tank": flow_vs_tank,
+        "recon_invoice_vs_tank": inv_vs_tank,
+        "recon_status": status,
+        "recon_outlier": outlier,
+    }
+
+
 # ===== HELPER FUNCTIONS FOR MULTIPLE DELIVERIES SUPPORT =====
 
 def is_time_in_shift(time_str: str, start_time: str, end_time: str, shift_type: str) -> bool:
@@ -954,6 +1017,13 @@ def record_delivery(
             validation_status = "FAIL"
             validation_message = f"CRITICAL: Delivery variance of {variance_percent:.2f}% - Investigation required"
 
+    # Compute delivery three-way reconciliation (Invoice vs Flowmeter vs Tank Dip)
+    recon = compute_delivery_recon(
+        expected_volume=delivery_input.expected_volume,
+        flowmeter_volume=delivery_input.flowmeter_volume,
+        tank_dip_change=actual_volume,
+    )
+
     # Generate delivery ID
     delivery_id = f"DEL-{delivery_input.tank_id}-{delivery_input.date}-{uuid.uuid4().hex[:8]}"
 
@@ -972,10 +1042,12 @@ def record_delivery(
         variance_percent=variance_percent,
         supplier=delivery_input.supplier,
         invoice_number=delivery_input.invoice_number,
+        flowmeter_volume=delivery_input.flowmeter_volume,
         temperature=delivery_input.temperature,
         validation_status=validation_status,
         validation_message=validation_message,
-        linked_reading_id=None,  # NEW: Initially unlinked, available for auto-linking
+        **recon,
+        linked_reading_id=None,  # Initially unlinked, available for auto-linking
         recorded_by=delivery_input.recorded_by,
         created_at=datetime.now().isoformat(),
         notes=delivery_input.notes

@@ -37,12 +37,18 @@ interface Delivery {
   volume_after: number
   actual_volume_delivered: number
   expected_volume?: number
+  flowmeter_volume?: number
   delivery_variance?: number
   variance_percent?: number
   supplier: string
   invoice_number?: string
   validation_status: string
   validation_message: string
+  recon_invoice_vs_flowmeter?: number
+  recon_flowmeter_vs_tank?: number
+  recon_invoice_vs_tank?: number
+  recon_status?: string
+  recon_outlier?: string
   recorded_by: string
   created_at: string
 }
@@ -56,6 +62,7 @@ interface QueuedTankDelivery {
   supplier: string
   invoice_number: string
   expected_volume: string
+  flowmeter_volume: string
   temperature: string
   notes: string
   status: 'pending' | 'submitted' | 'error'
@@ -96,6 +103,7 @@ export default function FuelOperations() {
     supplier: '',
     invoice_number: '',
     expected_volume: '',
+    flowmeter_volume: '',
     temperature: '',
     notes: ''
   })
@@ -279,6 +287,7 @@ export default function FuelOperations() {
       supplier: deliveryForm.supplier,
       invoice_number: deliveryForm.invoice_number,
       expected_volume: deliveryForm.expected_volume,
+      flowmeter_volume: deliveryForm.flowmeter_volume,
       temperature: deliveryForm.temperature,
       notes: deliveryForm.notes,
       status: 'pending',
@@ -294,6 +303,7 @@ export default function FuelOperations() {
       supplier: '',
       invoice_number: '',
       expected_volume: '',
+      flowmeter_volume: '',
       temperature: '',
       notes: ''
     })
@@ -326,6 +336,7 @@ export default function FuelOperations() {
           supplier: delivery.supplier,
           invoice_number: delivery.invoice_number || null,
           expected_volume: delivery.expected_volume ? parseFloat(delivery.expected_volume) : null,
+          flowmeter_volume: delivery.flowmeter_volume ? parseFloat(delivery.flowmeter_volume) : null,
           temperature: delivery.temperature ? parseFloat(delivery.temperature) : null,
           recorded_by: user.user_id,
           notes: delivery.notes || null
@@ -930,6 +941,19 @@ export default function FuelOperations() {
                       </div>
 
                       <div>
+                        <label className="block text-sm font-medium text-content-secondary mb-1">Flowmeter Reading (L) - Optional</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={deliveryForm.flowmeter_volume}
+                          onChange={(e) => setDeliveryForm({ ...deliveryForm, flowmeter_volume: e.target.value })}
+                          className="w-full px-3 py-2 border border-surface-border rounded-md"
+                          placeholder="Gauge reading from delivery pipe"
+                        />
+                      </div>
+
+                      <div>
                         <label className="block text-sm font-medium text-content-secondary mb-1">Temperature (C) - Optional</label>
                         <input
                           type="number"
@@ -1165,6 +1189,53 @@ export default function FuelOperations() {
                               Expected: {delivery.expected_volume.toLocaleString()}L |
                               Variance: {delivery.delivery_variance?.toFixed(2)}L ({delivery.variance_percent?.toFixed(2)}%)
                             </p>
+                          </div>
+                        )}
+
+                        {/* Delivery Three-Way Reconciliation */}
+                        {delivery.recon_status && (
+                          <div className={`rounded p-3 mb-2 border ${
+                            delivery.recon_status === 'BALANCED' ? 'bg-status-success-light border-status-success' :
+                            delivery.recon_status === 'VARIANCE_MINOR' ? 'bg-status-warning-light border-status-warning' :
+                            'bg-status-error-light border-status-error'
+                          }`}>
+                            <p className="text-xs font-semibold mb-2" style={{
+                              color: delivery.recon_status === 'BALANCED' ? 'var(--color-status-success)' :
+                                     delivery.recon_status === 'VARIANCE_MINOR' ? 'var(--color-status-warning)' :
+                                     'var(--color-status-error)'
+                            }}>
+                              Delivery Reconciliation: {delivery.recon_status.replace(/_/g, ' ')}
+                            </p>
+                            <div className="grid grid-cols-3 gap-2 text-xs mb-2">
+                              <div>
+                                <p className="text-content-secondary">OMC Invoice</p>
+                                <p className="font-semibold">{delivery.expected_volume?.toLocaleString()} L</p>
+                              </div>
+                              <div>
+                                <p className="text-content-secondary">Flowmeter</p>
+                                <p className="font-semibold">{delivery.flowmeter_volume?.toLocaleString()} L</p>
+                              </div>
+                              <div>
+                                <p className="text-content-secondary">Tank Dip</p>
+                                <p className="font-semibold">{delivery.actual_volume_delivered.toLocaleString()} L</p>
+                              </div>
+                            </div>
+                            <div className="text-xs space-y-0.5">
+                              <p>Invoice vs Flowmeter: <span className="font-mono font-medium">{delivery.recon_invoice_vs_flowmeter?.toFixed(2)}L</span></p>
+                              <p>Flowmeter vs Tank: <span className="font-mono font-medium">{delivery.recon_flowmeter_vs_tank?.toFixed(2)}L</span></p>
+                              <p>Invoice vs Tank: <span className="font-mono font-medium">{delivery.recon_invoice_vs_tank?.toFixed(2)}L</span></p>
+                            </div>
+                            {delivery.recon_outlier && delivery.recon_outlier !== 'MULTIPLE' && (
+                              <p className="text-xs mt-1 font-medium">
+                                Likely issue: <span className="font-bold">{delivery.recon_outlier}</span>
+                                {delivery.recon_outlier === 'TANK' && ' (dip error or leak)'}
+                                {delivery.recon_outlier === 'FLOWMETER' && ' (gauge malfunction)'}
+                                {delivery.recon_outlier === 'INVOICE' && ' (OMC short-shipped)'}
+                              </p>
+                            )}
+                            {delivery.recon_outlier === 'MULTIPLE' && (
+                              <p className="text-xs mt-1 font-medium">Multiple sources differ — investigation required</p>
+                            )}
                           </div>
                         )}
 

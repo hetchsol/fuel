@@ -116,6 +116,7 @@ export default function DailyTankReading() {
     before_volume: string;
     after_volume: string;
     volume_delivered: number;
+    flowmeter_volume: string;
   }>>([])
   const [availableDeliveries, setAvailableDeliveries] = useState<any[]>([])
 
@@ -468,7 +469,8 @@ export default function DailyTankReading() {
       fuel_type: fuelType,  // AUTO-POPULATED from selected tank
       before_volume: estimatedTankLevel > 0 ? estimatedTankLevel.toString() : '',  // AUTO-POPULATED
       after_volume: '',
-      volume_delivered: 0
+      volume_delivered: 0,
+      flowmeter_volume: '',
     }
     setDeliveries([...deliveries, newDelivery])
   }
@@ -527,7 +529,8 @@ export default function DailyTankReading() {
         fuel_type: standalone.fuel_type || (isDiesel ? 'Diesel' : 'Petrol'),
         before_volume: standalone.volume_before.toString(),
         after_volume: standalone.volume_after.toString(),
-        volume_delivered: standalone.actual_volume_delivered
+        volume_delivered: standalone.actual_volume_delivered,
+        flowmeter_volume: standalone.flowmeter_volume?.toString() || '',
       }
       setDeliveries([...deliveries, linked])
       setAvailableDeliveries(availableDeliveries.filter(d => d.delivery_id !== deliveryId))
@@ -892,11 +895,12 @@ export default function DailyTankReading() {
               delivery_id: d.id.startsWith('temp-') ? null : d.id,  // null for new inline, ID for linked
               delivery_time: d.time,
               supplier: d.supplier,
-              fuel_type: d.fuel_type || (isDiesel ? 'Diesel' : 'Petrol'),  // NEW
+              fuel_type: d.fuel_type || (isDiesel ? 'Diesel' : 'Petrol'),
               invoice_number: d.invoice_number || null,
               before_volume: beforeVol,
               after_volume: afterVol,
-              volume_delivered: volumeDelivered
+              volume_delivered: volumeDelivered,
+              flowmeter_volume: d.flowmeter_volume ? parseFloat(d.flowmeter_volume) : null,
             }
           })
         : []
@@ -2033,6 +2037,27 @@ export default function DailyTankReading() {
                               }}
                               placeholder="15000.00"
                               required
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
+                              Flowmeter Reading (Liters)
+                              <span className="text-xs ml-2 opacity-75">Gauge on delivery pipe</span>
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={delivery.flowmeter_volume || ''}
+                              onChange={(e) => updateDelivery(originalIndex, 'flowmeter_volume', e.target.value)}
+                              className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
+                              style={{
+                                borderColor: theme.accent,
+                                backgroundColor: theme.cardBg,
+                                color: theme.textPrimary
+                              }}
+                              placeholder="Optional"
                             />
                           </div>
 

@@ -139,6 +139,7 @@ def receive_delivery(delivery: StockDelivery, ctx: dict = Depends(get_station_co
         "fuel_type": delivery.fuel_type,
         "expected_volume": delivery.expected_volume,
         "volume_delivered": delivery.volume_delivered,
+        "flowmeter_volume": delivery.flowmeter_volume,
         "actual_loss": actual_loss,
         "actual_loss_percent": actual_loss_percent,
         "allowable_loss": allowable_loss,
@@ -201,6 +202,17 @@ def receive_delivery(delivery: StockDelivery, ctx: dict = Depends(get_station_co
                 entity_id=delivery.tank_id,
             )
 
+    # Flowmeter analysis (if provided)
+    flowmeter_analysis = None
+    if delivery.flowmeter_volume is not None and delivery.expected_volume > 0:
+        fm_vs_invoice = round(delivery.expected_volume - delivery.flowmeter_volume, 2)
+        fm_vs_delivered = round(delivery.flowmeter_volume - delivery.volume_delivered, 2)
+        flowmeter_analysis = {
+            "flowmeter_volume": delivery.flowmeter_volume,
+            "invoice_vs_flowmeter": fm_vs_invoice,
+            "flowmeter_vs_delivered": fm_vs_delivered,
+        }
+
     return {
         "status": "success",
         "message": f"Delivery received for {delivery.fuel_type} tank",
@@ -217,7 +229,8 @@ def receive_delivery(delivery: StockDelivery, ctx: dict = Depends(get_station_co
             "allowable_loss_percent": allowable_loss_percent,
             "status": loss_status,
             "message": f"Loss is {loss_status}. Actual: {actual_loss:.2f}L ({actual_loss_percent:.2f}%), Allowable: {allowable_loss:.2f}L ({allowable_loss_percent}%)"
-        }
+        },
+        "flowmeter_analysis": flowmeter_analysis,
     }
 
 @router.get("/deliveries")
