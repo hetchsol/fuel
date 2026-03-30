@@ -173,7 +173,7 @@ const TankCard = ({
 
   return (
     <div
-      className="glass-card p-6 border-l-4 overflow-hidden"
+      className="glass-card p-6 border-l-4 overflow-hidden flex flex-col"
       style={{ borderLeftColor: accentBorder }}
     >
       {/* Header */}

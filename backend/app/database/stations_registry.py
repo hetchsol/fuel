@@ -35,8 +35,8 @@ def load_stations():
     if not STATIONS:
         STATIONS["ST001"] = {
             "station_id": "ST001",
-            "name": "Luanshya Station",
-            "location": "Luanshya",
+            "name": "My Station",
+            "location": "",
             "created_by": "system",
             "created_at": datetime.now().isoformat(),
         }

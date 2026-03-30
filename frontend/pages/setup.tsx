@@ -164,6 +164,18 @@ export default function SetupWizard() {
         }),
       })
       if (!res.ok) throw new Error('Failed to save business settings')
+
+      // Also update the station name and location to match
+      const stationId = localStorage.getItem('stationId') || 'ST001'
+      await authFetch(`${BASE}/stations/${stationId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          station_id: stationId,
+          name: businessName.trim(),
+          location: stationLocation.trim(),
+        }),
+      })
+
       toast.success('Business details saved')
       return true
     } catch (err: any) {

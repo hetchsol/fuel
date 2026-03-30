@@ -96,6 +96,15 @@ def startup():
     logger.info("[startup] Step 3: Loading stations...")
     load_stations()
 
+    # Migrate legacy station name
+    from app.database.stations_registry import save_stations
+    st001 = stations_registry.STATIONS.get("ST001")
+    if st001 and st001.get("name") == "Luanshya Station":
+        st001["name"] = "My Station"
+        st001["location"] = ""
+        save_stations()
+        logger.info("[migrate] Renamed default station from 'Luanshya Station' to 'My Station'")
+
     # Step 4: Initialize storage and seed defaults for all stations
     logger.info("[startup] Step 4: Seeding station defaults...")
     for station_id in list(stations_registry.STATIONS.keys()):
