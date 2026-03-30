@@ -18,7 +18,7 @@ from ...models.models import (
     LubricantDailyEntryInput,
     LubricantDailyEntryOutput,
 )
-from ...api.v1.auth import get_current_user
+from ...api.v1.auth import get_current_user, require_supervisor_or_owner
 from .auth import get_station_context
 from ...database.station_files import load_station_json, save_station_json
 
@@ -27,102 +27,102 @@ router = APIRouter()
 # Default lubricant product catalog (86 products grouped by category)
 DEFAULT_PRODUCTS = [
     # Engine Oils
-    {"product_code": "EO-SAE30-1L", "description": "SAE 30 Engine Oil 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 450},
-    {"product_code": "EO-SAE30-4L", "description": "SAE 30 Engine Oil 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 1600},
-    {"product_code": "EO-SAE30-20L", "description": "SAE 30 Engine Oil 20L", "category": "Engine Oil", "unit_size": "20L", "selling_price": 7500},
-    {"product_code": "EO-SAE40-1L", "description": "SAE 40 Engine Oil 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 480},
-    {"product_code": "EO-SAE40-4L", "description": "SAE 40 Engine Oil 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 1700},
-    {"product_code": "EO-SAE40-20L", "description": "SAE 40 Engine Oil 20L", "category": "Engine Oil", "unit_size": "20L", "selling_price": 7800},
-    {"product_code": "EO-10W30-1L", "description": "10W-30 Synthetic 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 750},
-    {"product_code": "EO-10W30-4L", "description": "10W-30 Synthetic 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 2800},
-    {"product_code": "EO-10W40-1L", "description": "10W-40 Semi-Synthetic 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 650},
-    {"product_code": "EO-10W40-4L", "description": "10W-40 Semi-Synthetic 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 2400},
-    {"product_code": "EO-15W40-1L", "description": "15W-40 Diesel Engine Oil 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 550},
-    {"product_code": "EO-15W40-4L", "description": "15W-40 Diesel Engine Oil 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 2000},
-    {"product_code": "EO-15W40-20L", "description": "15W-40 Diesel Engine Oil 20L", "category": "Engine Oil", "unit_size": "20L", "selling_price": 9500},
-    {"product_code": "EO-20W50-1L", "description": "20W-50 Engine Oil 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 500},
-    {"product_code": "EO-20W50-4L", "description": "20W-50 Engine Oil 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 1800},
-    {"product_code": "EO-20W50-20L", "description": "20W-50 Engine Oil 20L", "category": "Engine Oil", "unit_size": "20L", "selling_price": 8500},
-    {"product_code": "EO-5W30-1L", "description": "5W-30 Full Synthetic 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 950},
-    {"product_code": "EO-5W30-4L", "description": "5W-30 Full Synthetic 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 3500},
-    {"product_code": "EO-5W40-1L", "description": "5W-40 Full Synthetic 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 1000},
-    {"product_code": "EO-5W40-4L", "description": "5W-40 Full Synthetic 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 3700},
+    {"product_code": "EO-SAE30-1L", "description": "SAE 30 Engine Oil 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "EO-SAE30-4L", "description": "SAE 30 Engine Oil 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "EO-SAE30-20L", "description": "SAE 30 Engine Oil 20L", "category": "Engine Oil", "unit_size": "20L", "selling_price": 0},
+    {"product_code": "EO-SAE40-1L", "description": "SAE 40 Engine Oil 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "EO-SAE40-4L", "description": "SAE 40 Engine Oil 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "EO-SAE40-20L", "description": "SAE 40 Engine Oil 20L", "category": "Engine Oil", "unit_size": "20L", "selling_price": 0},
+    {"product_code": "EO-10W30-1L", "description": "10W-30 Synthetic 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "EO-10W30-4L", "description": "10W-30 Synthetic 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "EO-10W40-1L", "description": "10W-40 Semi-Synthetic 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "EO-10W40-4L", "description": "10W-40 Semi-Synthetic 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "EO-15W40-1L", "description": "15W-40 Diesel Engine Oil 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "EO-15W40-4L", "description": "15W-40 Diesel Engine Oil 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "EO-15W40-20L", "description": "15W-40 Diesel Engine Oil 20L", "category": "Engine Oil", "unit_size": "20L", "selling_price": 0},
+    {"product_code": "EO-20W50-1L", "description": "20W-50 Engine Oil 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "EO-20W50-4L", "description": "20W-50 Engine Oil 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "EO-20W50-20L", "description": "20W-50 Engine Oil 20L", "category": "Engine Oil", "unit_size": "20L", "selling_price": 0},
+    {"product_code": "EO-5W30-1L", "description": "5W-30 Full Synthetic 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "EO-5W30-4L", "description": "5W-30 Full Synthetic 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "EO-5W40-1L", "description": "5W-40 Full Synthetic 1L", "category": "Engine Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "EO-5W40-4L", "description": "5W-40 Full Synthetic 4L", "category": "Engine Oil", "unit_size": "4L", "selling_price": 0},
     # Transmission / Gear Oils
-    {"product_code": "GO-80W90-1L", "description": "80W-90 Gear Oil 1L", "category": "Gear Oil", "unit_size": "1L", "selling_price": 500},
-    {"product_code": "GO-80W90-4L", "description": "80W-90 Gear Oil 4L", "category": "Gear Oil", "unit_size": "4L", "selling_price": 1800},
-    {"product_code": "GO-80W90-20L", "description": "80W-90 Gear Oil 20L", "category": "Gear Oil", "unit_size": "20L", "selling_price": 8500},
-    {"product_code": "GO-85W140-1L", "description": "85W-140 Gear Oil 1L", "category": "Gear Oil", "unit_size": "1L", "selling_price": 550},
-    {"product_code": "GO-85W140-4L", "description": "85W-140 Gear Oil 4L", "category": "Gear Oil", "unit_size": "4L", "selling_price": 2000},
-    {"product_code": "GO-75W90-1L", "description": "75W-90 Synthetic Gear Oil 1L", "category": "Gear Oil", "unit_size": "1L", "selling_price": 800},
-    {"product_code": "ATF-DEX3-1L", "description": "ATF Dexron III 1L", "category": "Gear Oil", "unit_size": "1L", "selling_price": 600},
-    {"product_code": "ATF-DEX3-4L", "description": "ATF Dexron III 4L", "category": "Gear Oil", "unit_size": "4L", "selling_price": 2200},
+    {"product_code": "GO-80W90-1L", "description": "80W-90 Gear Oil 1L", "category": "Gear Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "GO-80W90-4L", "description": "80W-90 Gear Oil 4L", "category": "Gear Oil", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "GO-80W90-20L", "description": "80W-90 Gear Oil 20L", "category": "Gear Oil", "unit_size": "20L", "selling_price": 0},
+    {"product_code": "GO-85W140-1L", "description": "85W-140 Gear Oil 1L", "category": "Gear Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "GO-85W140-4L", "description": "85W-140 Gear Oil 4L", "category": "Gear Oil", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "GO-75W90-1L", "description": "75W-90 Synthetic Gear Oil 1L", "category": "Gear Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "ATF-DEX3-1L", "description": "ATF Dexron III 1L", "category": "Gear Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "ATF-DEX3-4L", "description": "ATF Dexron III 4L", "category": "Gear Oil", "unit_size": "4L", "selling_price": 0},
     # Brake Fluid
-    {"product_code": "BF-DOT3-500ML", "description": "Brake Fluid DOT 3 500ml", "category": "Brake Fluid", "unit_size": "500ml", "selling_price": 350},
-    {"product_code": "BF-DOT3-1L", "description": "Brake Fluid DOT 3 1L", "category": "Brake Fluid", "unit_size": "1L", "selling_price": 600},
-    {"product_code": "BF-DOT4-500ML", "description": "Brake Fluid DOT 4 500ml", "category": "Brake Fluid", "unit_size": "500ml", "selling_price": 450},
-    {"product_code": "BF-DOT4-1L", "description": "Brake Fluid DOT 4 1L", "category": "Brake Fluid", "unit_size": "1L", "selling_price": 800},
+    {"product_code": "BF-DOT3-500ML", "description": "Brake Fluid DOT 3 500ml", "category": "Brake Fluid", "unit_size": "500ml", "selling_price": 0},
+    {"product_code": "BF-DOT3-1L", "description": "Brake Fluid DOT 3 1L", "category": "Brake Fluid", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "BF-DOT4-500ML", "description": "Brake Fluid DOT 4 500ml", "category": "Brake Fluid", "unit_size": "500ml", "selling_price": 0},
+    {"product_code": "BF-DOT4-1L", "description": "Brake Fluid DOT 4 1L", "category": "Brake Fluid", "unit_size": "1L", "selling_price": 0},
     # Hydraulic Oil
-    {"product_code": "HO-46-1L", "description": "Hydraulic Oil 46 1L", "category": "Hydraulic Oil", "unit_size": "1L", "selling_price": 450},
-    {"product_code": "HO-46-4L", "description": "Hydraulic Oil 46 4L", "category": "Hydraulic Oil", "unit_size": "4L", "selling_price": 1600},
-    {"product_code": "HO-46-20L", "description": "Hydraulic Oil 46 20L", "category": "Hydraulic Oil", "unit_size": "20L", "selling_price": 7500},
-    {"product_code": "HO-68-1L", "description": "Hydraulic Oil 68 1L", "category": "Hydraulic Oil", "unit_size": "1L", "selling_price": 470},
-    {"product_code": "HO-68-4L", "description": "Hydraulic Oil 68 4L", "category": "Hydraulic Oil", "unit_size": "4L", "selling_price": 1700},
-    {"product_code": "HO-68-20L", "description": "Hydraulic Oil 68 20L", "category": "Hydraulic Oil", "unit_size": "20L", "selling_price": 7800},
+    {"product_code": "HO-46-1L", "description": "Hydraulic Oil 46 1L", "category": "Hydraulic Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "HO-46-4L", "description": "Hydraulic Oil 46 4L", "category": "Hydraulic Oil", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "HO-46-20L", "description": "Hydraulic Oil 46 20L", "category": "Hydraulic Oil", "unit_size": "20L", "selling_price": 0},
+    {"product_code": "HO-68-1L", "description": "Hydraulic Oil 68 1L", "category": "Hydraulic Oil", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "HO-68-4L", "description": "Hydraulic Oil 68 4L", "category": "Hydraulic Oil", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "HO-68-20L", "description": "Hydraulic Oil 68 20L", "category": "Hydraulic Oil", "unit_size": "20L", "selling_price": 0},
     # Grease
-    {"product_code": "GR-MP2-500G", "description": "Multi-Purpose Grease EP2 500g", "category": "Grease", "unit_size": "500g", "selling_price": 400},
-    {"product_code": "GR-MP2-1KG", "description": "Multi-Purpose Grease EP2 1kg", "category": "Grease", "unit_size": "1kg", "selling_price": 700},
-    {"product_code": "GR-MP2-4KG", "description": "Multi-Purpose Grease EP2 4kg", "category": "Grease", "unit_size": "4kg", "selling_price": 2500},
-    {"product_code": "GR-MP2-20KG", "description": "Multi-Purpose Grease EP2 20kg", "category": "Grease", "unit_size": "20kg", "selling_price": 11000},
-    {"product_code": "GR-LI-500G", "description": "Lithium Grease 500g", "category": "Grease", "unit_size": "500g", "selling_price": 350},
-    {"product_code": "GR-LI-1KG", "description": "Lithium Grease 1kg", "category": "Grease", "unit_size": "1kg", "selling_price": 600},
+    {"product_code": "GR-MP2-500G", "description": "Multi-Purpose Grease EP2 500g", "category": "Grease", "unit_size": "500g", "selling_price": 0},
+    {"product_code": "GR-MP2-1KG", "description": "Multi-Purpose Grease EP2 1kg", "category": "Grease", "unit_size": "1kg", "selling_price": 0},
+    {"product_code": "GR-MP2-4KG", "description": "Multi-Purpose Grease EP2 4kg", "category": "Grease", "unit_size": "4kg", "selling_price": 0},
+    {"product_code": "GR-MP2-20KG", "description": "Multi-Purpose Grease EP2 20kg", "category": "Grease", "unit_size": "20kg", "selling_price": 0},
+    {"product_code": "GR-LI-500G", "description": "Lithium Grease 500g", "category": "Grease", "unit_size": "500g", "selling_price": 0},
+    {"product_code": "GR-LI-1KG", "description": "Lithium Grease 1kg", "category": "Grease", "unit_size": "1kg", "selling_price": 0},
     # Coolant / Antifreeze
-    {"product_code": "CL-GREEN-1L", "description": "Green Coolant 1L", "category": "Coolant", "unit_size": "1L", "selling_price": 350},
-    {"product_code": "CL-GREEN-4L", "description": "Green Coolant 4L", "category": "Coolant", "unit_size": "4L", "selling_price": 1200},
-    {"product_code": "CL-GREEN-20L", "description": "Green Coolant 20L", "category": "Coolant", "unit_size": "20L", "selling_price": 5500},
-    {"product_code": "CL-RED-1L", "description": "Red Coolant (Long Life) 1L", "category": "Coolant", "unit_size": "1L", "selling_price": 500},
-    {"product_code": "CL-RED-4L", "description": "Red Coolant (Long Life) 4L", "category": "Coolant", "unit_size": "4L", "selling_price": 1800},
+    {"product_code": "CL-GREEN-1L", "description": "Green Coolant 1L", "category": "Coolant", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "CL-GREEN-4L", "description": "Green Coolant 4L", "category": "Coolant", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "CL-GREEN-20L", "description": "Green Coolant 20L", "category": "Coolant", "unit_size": "20L", "selling_price": 0},
+    {"product_code": "CL-RED-1L", "description": "Red Coolant (Long Life) 1L", "category": "Coolant", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "CL-RED-4L", "description": "Red Coolant (Long Life) 4L", "category": "Coolant", "unit_size": "4L", "selling_price": 0},
     # Power Steering
-    {"product_code": "PS-FLUID-500ML", "description": "Power Steering Fluid 500ml", "category": "Power Steering", "unit_size": "500ml", "selling_price": 400},
-    {"product_code": "PS-FLUID-1L", "description": "Power Steering Fluid 1L", "category": "Power Steering", "unit_size": "1L", "selling_price": 700},
+    {"product_code": "PS-FLUID-500ML", "description": "Power Steering Fluid 500ml", "category": "Power Steering", "unit_size": "500ml", "selling_price": 0},
+    {"product_code": "PS-FLUID-1L", "description": "Power Steering Fluid 1L", "category": "Power Steering", "unit_size": "1L", "selling_price": 0},
     # 2-Stroke / Motorcycle
-    {"product_code": "2T-OIL-250ML", "description": "2-Stroke Oil 250ml", "category": "2-Stroke", "unit_size": "250ml", "selling_price": 200},
-    {"product_code": "2T-OIL-500ML", "description": "2-Stroke Oil 500ml", "category": "2-Stroke", "unit_size": "500ml", "selling_price": 350},
-    {"product_code": "2T-OIL-1L", "description": "2-Stroke Oil 1L", "category": "2-Stroke", "unit_size": "1L", "selling_price": 600},
-    {"product_code": "MC-10W40-1L", "description": "Motorcycle Oil 10W-40 1L", "category": "2-Stroke", "unit_size": "1L", "selling_price": 550},
-    {"product_code": "MC-20W50-1L", "description": "Motorcycle Oil 20W-50 1L", "category": "2-Stroke", "unit_size": "1L", "selling_price": 450},
+    {"product_code": "2T-OIL-250ML", "description": "2-Stroke Oil 250ml", "category": "2-Stroke", "unit_size": "250ml", "selling_price": 0},
+    {"product_code": "2T-OIL-500ML", "description": "2-Stroke Oil 500ml", "category": "2-Stroke", "unit_size": "500ml", "selling_price": 0},
+    {"product_code": "2T-OIL-1L", "description": "2-Stroke Oil 1L", "category": "2-Stroke", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "MC-10W40-1L", "description": "Motorcycle Oil 10W-40 1L", "category": "2-Stroke", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "MC-20W50-1L", "description": "Motorcycle Oil 20W-50 1L", "category": "2-Stroke", "unit_size": "1L", "selling_price": 0},
     # Industrial / Specialty
-    {"product_code": "TO-T220-1L", "description": "Transformer Oil 1L", "category": "Industrial", "unit_size": "1L", "selling_price": 500},
-    {"product_code": "TO-T220-20L", "description": "Transformer Oil 20L", "category": "Industrial", "unit_size": "20L", "selling_price": 9000},
-    {"product_code": "CO-100-1L", "description": "Compressor Oil 100 1L", "category": "Industrial", "unit_size": "1L", "selling_price": 550},
-    {"product_code": "CO-100-4L", "description": "Compressor Oil 100 4L", "category": "Industrial", "unit_size": "4L", "selling_price": 2000},
-    {"product_code": "CUT-OIL-1L", "description": "Cutting Oil 1L", "category": "Industrial", "unit_size": "1L", "selling_price": 600},
-    {"product_code": "CUT-OIL-4L", "description": "Cutting Oil 4L", "category": "Industrial", "unit_size": "4L", "selling_price": 2200},
-    {"product_code": "CH-OIL-1L", "description": "Chainsaw Oil 1L", "category": "Industrial", "unit_size": "1L", "selling_price": 500},
+    {"product_code": "TO-T220-1L", "description": "Transformer Oil 1L", "category": "Industrial", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "TO-T220-20L", "description": "Transformer Oil 20L", "category": "Industrial", "unit_size": "20L", "selling_price": 0},
+    {"product_code": "CO-100-1L", "description": "Compressor Oil 100 1L", "category": "Industrial", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "CO-100-4L", "description": "Compressor Oil 100 4L", "category": "Industrial", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "CUT-OIL-1L", "description": "Cutting Oil 1L", "category": "Industrial", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "CUT-OIL-4L", "description": "Cutting Oil 4L", "category": "Industrial", "unit_size": "4L", "selling_price": 0},
+    {"product_code": "CH-OIL-1L", "description": "Chainsaw Oil 1L", "category": "Industrial", "unit_size": "1L", "selling_price": 0},
     # Additives & Treatments
-    {"product_code": "AD-FLUSH-350ML", "description": "Engine Flush 350ml", "category": "Additives", "unit_size": "350ml", "selling_price": 450},
-    {"product_code": "AD-FUEL-350ML", "description": "Fuel Injector Cleaner 350ml", "category": "Additives", "unit_size": "350ml", "selling_price": 500},
-    {"product_code": "AD-OIL-350ML", "description": "Oil Treatment 350ml", "category": "Additives", "unit_size": "350ml", "selling_price": 550},
-    {"product_code": "AD-DIESEL-350ML", "description": "Diesel Treatment 350ml", "category": "Additives", "unit_size": "350ml", "selling_price": 500},
-    {"product_code": "AD-RAD-350ML", "description": "Radiator Flush 350ml", "category": "Additives", "unit_size": "350ml", "selling_price": 400},
-    {"product_code": "AD-STOP-350ML", "description": "Stop Leak 350ml", "category": "Additives", "unit_size": "350ml", "selling_price": 450},
+    {"product_code": "AD-FLUSH-350ML", "description": "Engine Flush 350ml", "category": "Additives", "unit_size": "350ml", "selling_price": 0},
+    {"product_code": "AD-FUEL-350ML", "description": "Fuel Injector Cleaner 350ml", "category": "Additives", "unit_size": "350ml", "selling_price": 0},
+    {"product_code": "AD-OIL-350ML", "description": "Oil Treatment 350ml", "category": "Additives", "unit_size": "350ml", "selling_price": 0},
+    {"product_code": "AD-DIESEL-350ML", "description": "Diesel Treatment 350ml", "category": "Additives", "unit_size": "350ml", "selling_price": 0},
+    {"product_code": "AD-RAD-350ML", "description": "Radiator Flush 350ml", "category": "Additives", "unit_size": "350ml", "selling_price": 0},
+    {"product_code": "AD-STOP-350ML", "description": "Stop Leak 350ml", "category": "Additives", "unit_size": "350ml", "selling_price": 0},
     # Car Care
-    {"product_code": "CC-WW-1L", "description": "Windshield Washer 1L", "category": "Car Care", "unit_size": "1L", "selling_price": 200},
-    {"product_code": "CC-WW-5L", "description": "Windshield Washer 5L", "category": "Car Care", "unit_size": "5L", "selling_price": 800},
-    {"product_code": "CC-DW-1L", "description": "Distilled Water 1L", "category": "Car Care", "unit_size": "1L", "selling_price": 100},
-    {"product_code": "CC-DW-5L", "description": "Distilled Water 5L", "category": "Car Care", "unit_size": "5L", "selling_price": 350},
-    {"product_code": "CC-BATT-1L", "description": "Battery Water 1L", "category": "Car Care", "unit_size": "1L", "selling_price": 100},
-    {"product_code": "CC-BATT-5L", "description": "Battery Water 5L", "category": "Car Care", "unit_size": "5L", "selling_price": 350},
-    {"product_code": "CC-WD40-330ML", "description": "WD-40 Spray 330ml", "category": "Car Care", "unit_size": "330ml", "selling_price": 650},
-    {"product_code": "CC-WD40-550ML", "description": "WD-40 Spray 550ml", "category": "Car Care", "unit_size": "550ml", "selling_price": 950},
+    {"product_code": "CC-WW-1L", "description": "Windshield Washer 1L", "category": "Car Care", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "CC-WW-5L", "description": "Windshield Washer 5L", "category": "Car Care", "unit_size": "5L", "selling_price": 0},
+    {"product_code": "CC-DW-1L", "description": "Distilled Water 1L", "category": "Car Care", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "CC-DW-5L", "description": "Distilled Water 5L", "category": "Car Care", "unit_size": "5L", "selling_price": 0},
+    {"product_code": "CC-BATT-1L", "description": "Battery Water 1L", "category": "Car Care", "unit_size": "1L", "selling_price": 0},
+    {"product_code": "CC-BATT-5L", "description": "Battery Water 5L", "category": "Car Care", "unit_size": "5L", "selling_price": 0},
+    {"product_code": "CC-WD40-330ML", "description": "WD-40 Spray 330ml", "category": "Car Care", "unit_size": "330ml", "selling_price": 0},
+    {"product_code": "CC-WD40-550ML", "description": "WD-40 Spray 550ml", "category": "Car Care", "unit_size": "550ml", "selling_price": 0},
     # Filters (commonly sold at fuel stations)
-    {"product_code": "FI-OIL-UNIV", "description": "Oil Filter Universal", "category": "Filters", "unit_size": "1pc", "selling_price": 350},
-    {"product_code": "FI-AIR-UNIV", "description": "Air Filter Universal", "category": "Filters", "unit_size": "1pc", "selling_price": 500},
-    {"product_code": "FI-FUEL-UNIV", "description": "Fuel Filter Universal", "category": "Filters", "unit_size": "1pc", "selling_price": 300},
-    {"product_code": "FI-OIL-TOYOTA", "description": "Oil Filter Toyota", "category": "Filters", "unit_size": "1pc", "selling_price": 450},
-    {"product_code": "FI-OIL-NISSAN", "description": "Oil Filter Nissan", "category": "Filters", "unit_size": "1pc", "selling_price": 400},
-    {"product_code": "FI-OIL-ISUZU", "description": "Oil Filter Isuzu", "category": "Filters", "unit_size": "1pc", "selling_price": 500},
-    {"product_code": "FI-FUEL-DIESEL", "description": "Fuel Filter Diesel Universal", "category": "Filters", "unit_size": "1pc", "selling_price": 400},
-    {"product_code": "FI-AIR-HEAVY", "description": "Air Filter Heavy Duty", "category": "Filters", "unit_size": "1pc", "selling_price": 800},
+    {"product_code": "FI-OIL-UNIV", "description": "Oil Filter Universal", "category": "Filters", "unit_size": "1pc", "selling_price": 0},
+    {"product_code": "FI-AIR-UNIV", "description": "Air Filter Universal", "category": "Filters", "unit_size": "1pc", "selling_price": 0},
+    {"product_code": "FI-FUEL-UNIV", "description": "Fuel Filter Universal", "category": "Filters", "unit_size": "1pc", "selling_price": 0},
+    {"product_code": "FI-OIL-TOYOTA", "description": "Oil Filter Toyota", "category": "Filters", "unit_size": "1pc", "selling_price": 0},
+    {"product_code": "FI-OIL-NISSAN", "description": "Oil Filter Nissan", "category": "Filters", "unit_size": "1pc", "selling_price": 0},
+    {"product_code": "FI-OIL-ISUZU", "description": "Oil Filter Isuzu", "category": "Filters", "unit_size": "1pc", "selling_price": 0},
+    {"product_code": "FI-FUEL-DIESEL", "description": "Fuel Filter Diesel Universal", "category": "Filters", "unit_size": "1pc", "selling_price": 0},
+    {"product_code": "FI-AIR-HEAVY", "description": "Air Filter Heavy Duty", "category": "Filters", "unit_size": "1pc", "selling_price": 0},
 ]
 
 
@@ -138,6 +138,10 @@ def save_lubricant_daily(db: dict, station_id: str):
 
 def load_product_catalog(station_id: str):
     return load_station_json(station_id, 'lubricant_products.json', default=DEFAULT_PRODUCTS)
+
+
+def save_product_catalog(station_id: str, catalog: list):
+    save_station_json(station_id, 'lubricant_products.json', catalog)
 
 
 # ===== ENDPOINTS =====
@@ -260,7 +264,13 @@ def submit_lubricant_entry(
     total_items = 0
 
     for row in entry_input.product_rows:
-        balance = row.opening_stock + row.additions - row.sold_or_drawn
+        available = row.opening_stock + row.additions
+        if row.sold_or_drawn > available:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Sold quantity ({row.sold_or_drawn}) exceeds available stock ({available}) for {row.description}"
+            )
+        balance = available - row.sold_or_drawn
         sales_value = row.selling_price * row.sold_or_drawn
 
         calculated_rows.append(LubricantDailyRow(
@@ -418,3 +428,27 @@ def bulk_transfer(
         "created_at": datetime.now().isoformat(),
         "message": f"Transfer of {total_items} items from Buffer to Island 3 recorded. Update daily entries to reflect changes.",
     }
+
+
+@router.get("/products/pricing")
+def get_product_pricing(ctx: dict = Depends(get_station_context)):
+    """Get lubricant product catalog with current prices."""
+    return load_product_catalog(ctx["station_id"])
+
+
+@router.put("/products/pricing")
+def update_product_pricing(items: list, ctx: dict = Depends(require_supervisor_or_owner)):
+    """Update lubricant product prices (supervisor/owner only)."""
+    station_id = ctx["station_id"]
+    catalog = load_product_catalog(station_id)
+    price_map = {item['product_code']: item['selling_price'] for item in items if 'product_code' in item and 'selling_price' in item}
+
+    for product in catalog:
+        if product['product_code'] in price_map:
+            new_price = price_map[product['product_code']]
+            if not isinstance(new_price, (int, float)) or new_price < 0:
+                raise HTTPException(status_code=400, detail=f"Invalid price for {product['product_code']}")
+            product['selling_price'] = new_price
+
+    save_product_catalog(station_id, catalog)
+    return {"status": "success", "message": "Product prices updated", "count": len(price_map)}

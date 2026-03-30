@@ -46,10 +46,18 @@ export default function LubricantsDaily() {
   const [success, setSuccess] = useState('')
   const [entries, setEntries] = useState<any[]>([])
 
+  // Pricing editor state
+  const [showPricingEditor, setShowPricingEditor] = useState(false)
+  const [editPrices, setEditPrices] = useState<Record<string, string>>({})
+  const [pricingSaving, setPricingSaving] = useState(false)
+
   useEffect(() => {
     const userData = localStorage.getItem('user')
     if (userData) setUser(JSON.parse(userData))
   }, [])
+
+  const canEditPricing = user?.role === 'supervisor' || user?.role === 'owner'
+  const pricesConfigured = productRows.length > 0 && productRows.some(r => r.selling_price > 0)
 
   // Fetch products for location
   useEffect(() => {
@@ -67,7 +75,7 @@ export default function LubricantsDaily() {
           .then(r => r.json())
           .then(prevData => {
             const balances = prevData.product_balances || {}
-            setProductRows(products.map((p: any) => ({
+            const rows = products.map((p: any) => ({
               product_code: p.product_code,
               description: p.description,
               category: p.category,
@@ -78,7 +86,11 @@ export default function LubricantsDaily() {
               sold_or_drawn: 0,
               balance: balances[p.product_code]?.balance ?? p.current_stock ?? 0,
               sales_value: 0,
-            })))
+            }))
+            setProductRows(rows)
+            const ep: Record<string, string> = {}
+            for (const p of products) ep[p.product_code] = String(p.selling_price || 0)
+            setEditPrices(ep)
           })
           .catch(() => {
             setProductRows(products.map((p: any) => ({
@@ -161,6 +173,31 @@ export default function LubricantsDaily() {
       else next.add(cat)
       return next
     })
+  }
+
+  const saveLubPricing = async () => {
+    setPricingSaving(true)
+    try {
+      const items = Object.entries(editPrices).map(([code, price]) => ({
+        product_code: code,
+        selling_price: parseFloat(price) || 0,
+      }))
+      const res = await fetch(`${BASE}/lubricants-daily/products/pricing`, {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(items),
+      })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Failed') }
+      setSuccess('Product prices updated')
+      setShowPricingEditor(false)
+      // Refresh product rows with new prices
+      setProductRows(prev => prev.map(r => ({
+        ...r,
+        selling_price: parseFloat(editPrices[r.product_code]) || r.selling_price,
+        sales_value: (parseFloat(editPrices[r.product_code]) || r.selling_price) * r.sold_or_drawn,
+      })))
+    } catch (err: any) { setError(err.message) }
+    finally { setPricingSaving(false) }
   }
 
   const handleSubmit = async () => {
@@ -313,6 +350,57 @@ export default function LubricantsDaily() {
         </div>
       </div>
 
+      {/* Price Guard Banner */}
+      {!pricesConfigured && (
+        <div className="mb-4 p-4 rounded-lg text-sm font-medium" style={{ backgroundColor: 'rgba(239,83,80,0.1)', color: 'var(--color-status-error)', border: '1px solid var(--color-status-error)' }}>
+          Lubricant prices not configured. {canEditPricing ? 'Set prices using the pricing editor below before recording sales.' : 'Contact the owner or supervisor to set prices before recording sales.'}
+        </div>
+      )}
+
+      {/* Pricing Editor */}
+      {canEditPricing && (
+        <div className="mb-4">
+          <button onClick={() => setShowPricingEditor(!showPricingEditor)}
+            className="text-sm font-medium px-3 py-1.5 rounded-btn border"
+            style={{ color: theme.primary, borderColor: theme.border, backgroundColor: theme.cardBg }}>
+            {showPricingEditor ? 'Hide' : 'Edit'} Product Prices
+          </button>
+          {showPricingEditor && (
+            <div className="mt-2 rounded-lg shadow p-4 max-h-96 overflow-y-auto" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+              {categories.map(cat => {
+                const catProducts = productRows.filter(r => r.category === cat)
+                if (catProducts.length === 0) return null
+                return (
+                  <div key={cat} className="mb-3">
+                    <p className="text-xs font-semibold mb-1.5" style={{ color: theme.textSecondary }}>{cat}</p>
+                    <div className="space-y-1">
+                      {catProducts.map(p => (
+                        <div key={p.product_code} className="flex items-center gap-2">
+                          <span className="text-xs flex-1 truncate" style={{ color: theme.textPrimary }}>{p.description}</span>
+                          <span className="text-xs shrink-0" style={{ color: theme.textSecondary }}>{p.unit_size}</span>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <span className="text-xs" style={{ color: theme.textSecondary }}>K</span>
+                            <input type="number" min={0} step={1}
+                              value={editPrices[p.product_code] || '0'}
+                              onChange={e => setEditPrices({ ...editPrices, [p.product_code]: e.target.value })}
+                              className="w-20 px-1.5 py-0.5 rounded border text-xs text-right" style={inputStyle} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+              <button onClick={saveLubPricing} disabled={pricingSaving}
+                className="mt-3 w-full py-2 rounded-lg font-semibold text-white text-sm disabled:opacity-50"
+                style={{ backgroundColor: theme.primary }}>
+                {pricingSaving ? 'Saving...' : 'Save All Prices'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Summary Bar */}
       <div className="rounded-lg shadow p-4 mb-6 flex flex-wrap gap-6"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
@@ -437,10 +525,10 @@ export default function LubricantsDaily() {
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={loading}
+            disabled={loading || !pricesConfigured}
             className="flex-1 py-3 rounded-lg font-semibold text-white text-sm disabled:opacity-50"
             style={{ backgroundColor: theme.primary }}>
-            {loading ? 'Submitting...' : `Submit ${location} Daily Entry`}
+            {loading ? 'Submitting...' : !pricesConfigured ? 'Set prices first' : `Submit ${location} Daily Entry`}
           </button>
         )}
       </div>

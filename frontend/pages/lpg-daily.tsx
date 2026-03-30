@@ -83,6 +83,11 @@ export default function LPGDaily() {
   const [pricingSaving, setPricingSaving] = useState(false)
   const [pricingMsg, setPricingMsg] = useState('')
 
+  // Accessories pricing editor state
+  const [showAccPricingEditor, setShowAccPricingEditor] = useState(false)
+  const [accEditPrices, setAccEditPrices] = useState<Record<string, string>>({})
+  const [accPricingSaving, setAccPricingSaving] = useState(false)
+
   const [showEmptyTracking, setShowEmptyTracking] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -90,6 +95,7 @@ export default function LPGDaily() {
   const [entries, setEntries] = useState<any[]>([])
 
   const canEditPricing = user?.role === 'supervisor' || user?.role === 'owner'
+  const lpgPricesConfigured = pricing.length > 0 && pricing.some((p: any) => p.price_refill > 0 || p.price_with_cylinder > 0)
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -146,28 +152,32 @@ export default function LPGDaily() {
 
   useEffect(() => { fetchPreviousShift() }, [fetchPreviousShift])
 
-  // Fetch previous day accessories
-  useEffect(() => {
-    fetch(`${BASE}/lpg-daily/accessories/previous-day?current_date=${date}`, {
-      headers: getAuthHeaders(),
-    })
-      .then(r => r.json())
-      .then(data => {
-        const defaults = data.default_products || []
-        const balances = data.product_balances || {}
-        setAccessoryRows(defaults.map((p: any) => ({
-          product_code: p.product_code,
-          description: p.description,
-          selling_price: p.selling_price,
-          opening_stock: balances[p.product_code]?.balance ?? 0,
-          additions: 0,
-          sold: 0,
-          balance: balances[p.product_code]?.balance ?? 0,
-          sales_value: 0,
-        })))
-      })
-      .catch(() => {})
+  // Fetch accessories pricing + previous day balances
+  const fetchAccessories = useCallback(() => {
+    Promise.all([
+      fetch(`${BASE}/lpg-daily/accessories/pricing`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : []),
+      fetch(`${BASE}/lpg-daily/accessories/previous-day?current_date=${date}`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : {} as any),
+    ]).then(([catalog, prevData]: [any[], any]) => {
+      const products = catalog.length > 0 ? catalog : (prevData.default_products || [])
+      const balances = prevData.product_balances || {}
+      setAccessoryRows(products.map((p: any) => ({
+        product_code: p.product_code,
+        description: p.description,
+        selling_price: p.selling_price,
+        opening_stock: balances[p.product_code]?.balance ?? 0,
+        additions: 0,
+        sold: 0,
+        balance: balances[p.product_code]?.balance ?? 0,
+        sales_value: 0,
+      })))
+      // Populate editor
+      const ep: Record<string, string> = {}
+      for (const p of products) ep[p.product_code] = String(p.selling_price || 0)
+      setAccEditPrices(ep)
+    }).catch(() => {})
   }, [date])
+
+  useEffect(() => { fetchAccessories() }, [fetchAccessories])
 
   // Fetch existing entries
   useEffect(() => {
@@ -377,6 +387,27 @@ export default function LPGDaily() {
       setPricingSaving(false)
     }
   }
+
+  const saveAccPricing = async () => {
+    setAccPricingSaving(true)
+    try {
+      const items = Object.entries(accEditPrices).map(([code, price]) => ({
+        product_code: code,
+        selling_price: parseFloat(price) || 0,
+      }))
+      const res = await fetch(`${BASE}/lpg-daily/accessories/pricing`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(items),
+      })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Failed') }
+      fetchAccessories()
+      setShowAccPricingEditor(false)
+    } catch (err: any) { setError(err.message) }
+    finally { setAccPricingSaving(false) }
+  }
+
+  const accPricesConfigured = accessoryRows.length > 0 && accessoryRows.some(r => r.selling_price > 0)
 
   const inputStyle = {
     backgroundColor: theme.cardBg,
@@ -782,6 +813,40 @@ export default function LPGDaily() {
         </div>
       </div>
 
+      {/* Accessories Pricing Editor */}
+      {canEditPricing && (
+        <div className="mb-4">
+          <button onClick={() => setShowAccPricingEditor(!showAccPricingEditor)}
+            className="text-sm font-medium px-3 py-1.5 rounded-btn border"
+            style={{ color: theme.primary, borderColor: theme.border, backgroundColor: theme.cardBg }}>
+            {showAccPricingEditor ? 'Hide' : 'Edit'} Accessory Prices
+          </button>
+          {showAccPricingEditor && (
+            <div className="mt-2 rounded-lg shadow p-4" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+              <div className="space-y-2">
+                {accessoryRows.map(row => (
+                  <div key={row.product_code} className="flex items-center gap-3">
+                    <span className="text-sm flex-1" style={{ color: theme.textPrimary }}>{row.description}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs" style={{ color: theme.textSecondary }}>K</span>
+                      <input type="number" min={0} step={1}
+                        value={accEditPrices[row.product_code] || '0'}
+                        onChange={e => setAccEditPrices({ ...accEditPrices, [row.product_code]: e.target.value })}
+                        className="w-24 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={saveAccPricing} disabled={accPricingSaving}
+                className="mt-3 w-full py-2 rounded-lg font-semibold text-white text-sm disabled:opacity-50"
+                style={{ backgroundColor: theme.primary }}>
+                {accPricingSaving ? 'Saving...' : 'Save Accessory Prices'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* LPG Accessories */}
       <div className="rounded-lg shadow mb-6 overflow-x-auto"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
@@ -856,9 +921,14 @@ export default function LPGDaily() {
           {success}
         </div>
       )}
+      {!lpgPricesConfigured && (
+        <div className="mb-4 p-4 rounded-lg text-sm font-medium" style={{ backgroundColor: 'rgba(239,83,80,0.1)', color: 'var(--color-status-error)', border: '1px solid var(--color-status-error)' }}>
+          LPG pricing not configured. {canEditPricing ? 'Set prices in the pricing editor above before recording sales.' : 'Contact the owner or supervisor to set prices before recording sales.'}
+        </div>
+      )}
       <button
         onClick={handleSubmit}
-        disabled={loading}
+        disabled={loading || !lpgPricesConfigured}
         className="w-full py-3 rounded-lg font-semibold text-white text-sm disabled:opacity-50"
         style={{ backgroundColor: theme.primary }}>
         {loading ? 'Submitting...' : 'Submit LPG Daily Entry'}

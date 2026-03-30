@@ -31,66 +31,8 @@ def _save_customers(customers: dict, station_id: str):
 
 
 def _initialize_default_customers(station_id: str) -> dict:
-    """
-    Initialize default diesel customer types if none exist for this station.
-    Based on original Excel columns: AR (Drive-In), AS (Volcano), AT (Hammington),
-    AU (Special Customer 3), AV (Special Customer 4).
-    """
-    customers = _load_customers(station_id)
-
-    if not customers:
-        default_customers = [
-            {
-                "customer_id": "CUST-DRIVE-IN",
-                "customer_name": "Drive-In Customers",
-                "customer_type": "Drive-In",
-                "default_price_per_liter": 26.98,
-                "is_active": True,
-                "created_at": datetime.now().isoformat(),
-                "notes": "Walk-in cash customers (Column AR)"
-            },
-            {
-                "customer_id": "CUST-VOLCANO",
-                "customer_name": "Volcano",
-                "customer_type": "Corporate",
-                "default_price_per_liter": 26.98,
-                "is_active": True,
-                "created_at": datetime.now().isoformat(),
-                "notes": "Corporate account - Volcano (Column AS)"
-            },
-            {
-                "customer_id": "CUST-HAMMINGTON",
-                "customer_name": "Hammington",
-                "customer_type": "Corporate",
-                "default_price_per_liter": 26.98,
-                "is_active": True,
-                "created_at": datetime.now().isoformat(),
-                "notes": "Corporate account - Hammington (Column AT)"
-            },
-            {
-                "customer_id": "CUST-SPECIAL-3",
-                "customer_name": "Special Customer 3",
-                "customer_type": "Corporate",
-                "default_price_per_liter": 26.98,
-                "is_active": True,
-                "created_at": datetime.now().isoformat(),
-                "notes": "Special customer account (Column AU)"
-            },
-            {
-                "customer_id": "CUST-SPECIAL-4",
-                "customer_name": "Special Customer 4",
-                "customer_type": "Corporate",
-                "default_price_per_liter": 26.98,
-                "is_active": True,
-                "created_at": datetime.now().isoformat(),
-                "notes": "Special customer account (Column AV)"
-            }
-        ]
-
-        customers = {c["customer_id"]: c for c in default_customers}
-        _save_customers(customers, station_id)
-
-    return customers
+    """Load customers for a station. Returns empty dict if none configured."""
+    return _load_customers(station_id)
 
 
 # ──────────────────────────────────────────────────────────

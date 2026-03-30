@@ -21,7 +21,7 @@ from ...models.models import (
     LPGAccessoriesDailyInput,
     LPGAccessoriesDailyOutput,
 )
-from ...api.v1.auth import get_current_user
+from ...api.v1.auth import get_current_user, require_supervisor_or_owner
 from .auth import get_station_context
 from ...database.station_files import load_station_json, save_station_json
 
@@ -33,23 +33,23 @@ LPG_SIZES = [3, 6, 9, 19, 45, 48]
 # Default pricing (used only when no saved pricing exists)
 DEFAULT_LPG_PRICING = {
     "prices": {
-        "3":  {"price_refill": 147, "price_full_cylinder": 477},
-        "6":  {"price_refill": 294, "price_full_cylinder": 844},
-        "9":  {"price_refill": 441, "price_full_cylinder": 1241},
-        "19": {"price_refill": 931, "price_full_cylinder": 2131},
-        "45": {"price_refill": 2205, "price_full_cylinder": 3905},
-        "48": {"price_refill": 2352, "price_full_cylinder": 4052},
+        "3":  {"price_refill": 0, "price_full_cylinder": 0},
+        "6":  {"price_refill": 0, "price_full_cylinder": 0},
+        "9":  {"price_refill": 0, "price_full_cylinder": 0},
+        "19": {"price_refill": 0, "price_full_cylinder": 0},
+        "45": {"price_refill": 0, "price_full_cylinder": 0},
+        "48": {"price_refill": 0, "price_full_cylinder": 0},
     }
 }
 
-# Default LPG accessories
+# Default LPG accessories (prices set to 0 — owner configures)
 DEFAULT_LPG_ACCESSORIES = [
-    {"product_code": "ACC-STOVE-1B", "description": "1-Burner Stove", "selling_price": 1500},
-    {"product_code": "ACC-STOVE-2B", "description": "2-Burner Stove", "selling_price": 3500},
-    {"product_code": "ACC-COOKTOP", "description": "Cooker Top", "selling_price": 5000},
-    {"product_code": "ACC-HOSE", "description": "Gas Hose", "selling_price": 600},
-    {"product_code": "ACC-REGULATOR", "description": "Gas Regulator", "selling_price": 1200},
-    {"product_code": "ACC-CLIP", "description": "Hose Clip", "selling_price": 150},
+    {"product_code": "ACC-STOVE-1B", "description": "1-Burner Stove", "selling_price": 0},
+    {"product_code": "ACC-STOVE-2B", "description": "2-Burner Stove", "selling_price": 0},
+    {"product_code": "ACC-COOKTOP", "description": "Cooker Top", "selling_price": 0},
+    {"product_code": "ACC-HOSE", "description": "Gas Hose", "selling_price": 0},
+    {"product_code": "ACC-REGULATOR", "description": "Gas Regulator", "selling_price": 0},
+    {"product_code": "ACC-CLIP", "description": "Hose Clip", "selling_price": 0},
 ]
 
 
@@ -77,6 +77,18 @@ def load_lpg_accessories(station_id: str) -> dict:
 
 def save_lpg_accessories(db: dict, station_id: str):
     save_station_json(station_id, 'lpg_accessories_daily.json', db)
+
+
+def load_accessories_catalog(station_id: str) -> list:
+    """Load accessories catalog with owner-configured prices merged over defaults."""
+    saved = load_station_json(station_id, 'lpg_accessories_pricing.json', default=None)
+    if saved:
+        return saved
+    return [dict(a) for a in DEFAULT_LPG_ACCESSORIES]
+
+
+def save_accessories_catalog(station_id: str, catalog: list):
+    save_station_json(station_id, 'lpg_accessories_pricing.json', catalog)
 
 
 def get_pricing_for_size(size_kg: int, lpg_pricing_db: dict) -> dict:
@@ -137,8 +149,8 @@ def update_lpg_pricing(
             raise HTTPException(status_code=400, detail=f"Prices for {size_key}kg must be an object")
         for field in ("price_refill", "price_full_cylinder"):
             val = size_prices.get(field)
-            if val is None or not isinstance(val, (int, float)) or val <= 0:
-                raise HTTPException(status_code=400, detail=f"{field} for {size_key}kg must be a positive number")
+            if val is None or not isinstance(val, (int, float)) or val < 0:
+                raise HTTPException(status_code=400, detail=f"{field} for {size_key}kg must be a non-negative number")
 
     lpg_pricing_db = {"prices": {str(k): v for k, v in prices.items()}}
     save_lpg_pricing(lpg_pricing_db, station_id)
@@ -418,7 +430,13 @@ def submit_accessories_entry(
     total_sales = 0.0
 
     for row in entry_input.product_rows:
-        balance = row.opening_stock + row.additions - row.sold
+        available = row.opening_stock + row.additions
+        if row.sold > available:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Sold quantity ({row.sold}) exceeds available stock ({available}) for {row.description}"
+            )
+        balance = available - row.sold
         sales_value = row.selling_price * row.sold
 
         calculated_rows.append(LPGAccessoryDailyRow(
@@ -488,9 +506,10 @@ def get_accessories_inventory(ctx: dict = Depends(get_station_context)):
             current_stock[row['product_code']] = row.get('balance', 0)
             opening_stock[row['product_code']] = row.get('opening_stock', 0)
 
-    # Merge stock into the default catalog
+    # Merge stock into the catalog (uses owner-configured prices)
+    catalog = load_accessories_catalog(station_id)
     result = []
-    for acc in DEFAULT_LPG_ACCESSORIES:
+    for acc in catalog:
         code = acc['product_code']
         result.append({
             "product_code": code,
@@ -502,3 +521,27 @@ def get_accessories_inventory(ctx: dict = Depends(get_station_context)):
         })
 
     return result
+
+
+@router.get("/accessories/pricing")
+def get_accessories_pricing(ctx: dict = Depends(get_station_context)):
+    """Get LPG accessories catalog with current prices."""
+    return load_accessories_catalog(ctx["station_id"])
+
+
+@router.put("/accessories/pricing")
+def update_accessories_pricing(items: list, ctx: dict = Depends(require_supervisor_or_owner)):
+    """Update LPG accessory prices (supervisor/owner only)."""
+    station_id = ctx["station_id"]
+    catalog = load_accessories_catalog(station_id)
+    price_map = {item['product_code']: item['selling_price'] for item in items if 'product_code' in item and 'selling_price' in item}
+
+    for acc in catalog:
+        if acc['product_code'] in price_map:
+            new_price = price_map[acc['product_code']]
+            if not isinstance(new_price, (int, float)) or new_price < 0:
+                raise HTTPException(status_code=400, detail=f"Invalid price for {acc['product_code']}")
+            acc['selling_price'] = new_price
+
+    save_accessories_catalog(station_id, catalog)
+    return {"status": "success", "message": "Accessory prices updated", "catalog": catalog}
