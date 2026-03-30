@@ -115,15 +115,6 @@ def startup():
     logger.info("[startup] Step 3: Loading stations...")
     load_stations()
 
-    # Migrate legacy station name
-    from app.database.stations_registry import save_stations
-    st001 = stations_registry.STATIONS.get("ST001")
-    if st001 and st001.get("name") == "Luanshya Station":
-        st001["name"] = "My Station"
-        st001["location"] = ""
-        save_stations()
-        logger.info("[migrate] Renamed default station from 'Luanshya Station' to 'My Station'")
-
     # Step 4: Initialize storage and seed defaults for all stations
     logger.info("[startup] Step 4: Seeding station defaults...")
     for station_id in list(stations_registry.STATIONS.keys()):
@@ -131,6 +122,23 @@ def startup():
         seed_station_defaults(storage)
         logger.info(f"[startup] Applied defaults/migrations for station {station_id}")
         check_and_close_stale_shifts(storage, station_id)
+
+    # Sync station name from business name in system_settings
+    from app.database.stations_registry import save_stations
+    st001 = stations_registry.STATIONS.get("ST001")
+    if st001:
+        st001_storage = get_station_storage("ST001")
+        sys_settings = st001_storage.get("system_settings", {})
+        biz_name = sys_settings.get("business_name", "")
+        biz_location = sys_settings.get("station_location", "")
+        current_name = st001.get("name", "")
+        # Sync if station still has a placeholder name and business name is set
+        if current_name in ("Luanshya Station", "My Station") and biz_name and biz_name != "Fuel Management System":
+            st001["name"] = biz_name
+            if biz_location:
+                st001["location"] = biz_location
+            save_stations()
+            logger.info(f"[migrate] Synced station name to business name: '{biz_name}'")
 
     # Step 5: Persist seeded data to DB if available
     if is_db_active():
