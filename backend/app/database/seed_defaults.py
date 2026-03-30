@@ -8,14 +8,17 @@ from datetime import datetime
 def seed_station_defaults(storage: dict):
     """
     Populate a station's storage dict with default island layout and settings.
-    Tanks, accounts, accessories, and lubricants must be configured
-    by the owner through the UI.
+    Tanks, accounts, accessories, and lubricants are configured by the owner
+    through the setup wizard or respective UI pages.
     """
     _seed_islands(storage)
     _migrate_islands_add_display_fields(storage)
     _migrate_islands_default_active(storage)
     _migrate_islands_assign_product_types(storage)
     _seed_settings(storage)
+    # NOTE: _seed_tanks, _seed_accounts, _seed_lpg_accessories, _seed_lubricants
+    # are no longer called. Tanks are created via the setup wizard.
+    # Accounts/LPG/lubricants are added by the owner via their respective pages.
 
 
 def _seed_islands(storage: dict):

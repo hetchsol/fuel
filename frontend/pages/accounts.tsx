@@ -422,7 +422,7 @@ export default function Accounts() {
       <div className="bg-action-primary-light border border-action-primary rounded-lg p-4">
         <h3 className="text-sm font-semibold text-action-primary mb-2">Credit Account Management</h3>
         <ul className="text-sm text-action-primary space-y-1">
-          <li>• <strong>14 Pre-configured Accounts</strong> from Luanshya Station (POS, Police, ZACODE, etc.)</li>
+          <li>• <strong>Credit Accounts</strong> — Add your customers and set credit limits</li>
           <li>• <strong>Credit Limit Enforcement</strong> - System prevents sales exceeding credit limits</li>
           <li>• <strong>Real-time Balance Tracking</strong> - Balances update automatically with each credit sale</li>
           <li>• <strong>Account Types</strong>: Corporate, Institution, Individual, POS</li>
