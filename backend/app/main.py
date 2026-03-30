@@ -46,6 +46,16 @@ def _seed_default_users():
 
     logger.info(f"[seed] Seeded {len(default_users)} default users")
 
+
+def _migrate_owner_name():
+    """One-time migration: rename legacy owner 'Kanyembo Ndhlovu' to 'Business Owner'."""
+    from app.database.db import db_get_all_users, db_update_user
+    for user in db_get_all_users():
+        if user["full_name"] == "Kanyembo Ndhlovu" and user["role"] == "owner":
+            db_update_user(user["username"], {"full_name": "Business Owner"})
+            logger.info(f"[migrate] Renamed owner '{user['username']}' to 'Business Owner'")
+
+
 ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
 
 app = FastAPI(title="Fuel Management API (Prototype)", version="0.1.0")
@@ -71,6 +81,7 @@ def startup():
     if db_ok:
         logger.info("[startup] PostgreSQL initialized successfully")
         _seed_default_users()
+        _migrate_owner_name()
         from app.database.db import db_cleanup_expired_sessions
         db_cleanup_expired_sessions()
     else:

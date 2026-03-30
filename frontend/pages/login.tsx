@@ -136,6 +136,7 @@ export default function Login() {
 
       // Redirect to setup wizard if first-time owner login
       if (data.needs_setup) {
+        document.cookie = `needsSetup=1; path=/; SameSite=Lax${secure}`
         router.push('/setup')
       } else {
         const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/'

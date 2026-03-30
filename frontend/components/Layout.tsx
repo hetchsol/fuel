@@ -75,6 +75,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           .then(r => r.ok ? r.json() : null)
           .then(sys => {
             if (sys && !sys.setup_completed) {
+              // Set cookie so middleware enforces on subsequent navigations
+              const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+              document.cookie = `needsSetup=1; path=/; SameSite=Lax${secure}`
               router.push('/setup')
             }
           })

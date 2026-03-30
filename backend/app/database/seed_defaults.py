@@ -182,6 +182,7 @@ def _seed_settings(storage: dict):
             "license_expiry_date": LICENSE_EXPIRY_DATE,
             "software_version": SOFTWARE_VERSION,
             "station_location": STATION_LOCATION,
+            "setup_completed": False,
         }
         storage['validation_thresholds'] = {
             "pass_threshold": 0.5,

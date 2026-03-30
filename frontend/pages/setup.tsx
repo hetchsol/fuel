@@ -45,24 +45,33 @@ export default function SetupWizard() {
     const parsed = JSON.parse(userData)
     setUser(parsed)
 
-    // If not an owner or setup already done (name changed), redirect to dashboard
+    // If not an owner, redirect to dashboard
     if (parsed.role !== 'owner') {
       router.push('/')
       return
     }
 
-    // Load existing settings
-    loadSettings()
+    // Load existing settings and check if setup is already done
+    loadSettings().then(setupDone => {
+      if (setupDone) {
+        // Setup already completed — clear stale cookie and go to dashboard
+        const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+        document.cookie = `needsSetup=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${secure}`
+        router.push('/')
+      }
+    })
   }, [])
 
-  const loadSettings = async () => {
+  const loadSettings = async (): Promise<boolean> => {
     try {
       const [sysRes, fuelRes] = await Promise.all([
         authFetch(`${BASE}/settings/system`),
         authFetch(`${BASE}/settings/fuel`),
       ])
+      let setupDone = false
       if (sysRes.ok) {
         const sys = await sysRes.json()
+        setupDone = !!sys.setup_completed
         if (sys.business_name && sys.business_name !== 'Fuel Management System') setBusinessName(sys.business_name)
         if (sys.station_location) setStationLocation(sys.station_location)
         if (sys.contact_email) setContactEmail(sys.contact_email)
@@ -73,7 +82,10 @@ export default function SetupWizard() {
         if (fuel.diesel_price_per_liter) setDieselPrice(fuel.diesel_price_per_liter)
         if (fuel.petrol_price_per_liter) setPetrolPrice(fuel.petrol_price_per_liter)
       }
-    } catch {}
+      return setupDone
+    } catch {
+      return false
+    }
   }
 
   const currentIndex = STEPS.indexOf(step)
@@ -207,6 +219,9 @@ export default function SetupWizard() {
           setup_completed: true,
         }),
       })
+      // Clear the needsSetup cookie so middleware stops redirecting
+      const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+      document.cookie = `needsSetup=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${secure}`
       router.push('/')
     } catch {
       router.push('/')
