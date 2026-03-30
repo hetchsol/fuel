@@ -10,7 +10,7 @@ from ...models.models import UserLogin, User, UserRole
 from ...database.storage import get_station_storage
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
-from ...database.db import DATABASE_URL
+from ...database.db import DATABASE_URL, is_db_active
 import hashlib
 import secrets
 import string
@@ -25,7 +25,10 @@ DEFAULT_STATION_ID = os.getenv("DEFAULT_STATION_ID", "ST001")
 
 router = APIRouter()
 
-_USE_DB = bool(DATABASE_URL)
+
+def _USE_DB():
+    """Check if DB is available — evaluated at call time, not import time."""
+    return is_db_active()
 
 # ──────────────────────────────────────────────────────────
 # Password hashing helpers
@@ -33,7 +36,7 @@ _USE_DB = bool(DATABASE_URL)
 
 def _hash_password(password: str) -> str:
     """Hash a password. Uses bcrypt in DB mode, SHA-256 in fallback."""
-    if _USE_DB:
+    if _USE_DB():
         import bcrypt
         return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     return hashlib.sha256(password.encode()).hexdigest()
@@ -41,7 +44,7 @@ def _hash_password(password: str) -> str:
 
 def _verify_password(password: str, hashed: str) -> bool:
     """Verify a password against its hash."""
-    if _USE_DB:
+    if _USE_DB():
         import bcrypt
         try:
             return bcrypt.checkpw(password.encode(), hashed.encode())
@@ -52,7 +55,7 @@ def _verify_password(password: str, hashed: str) -> bool:
 
 def _generate_token() -> str:
     """Generate a secure session token."""
-    if _USE_DB:
+    if _USE_DB():
         return secrets.token_hex(32)
     return None  # fallback builds token differently
 
@@ -90,7 +93,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
     if authorization.startswith("Bearer "):
         token = authorization.split(" ")[1]
 
-    if _USE_DB:
+    if _USE_DB():
         from ...database.db import db_get_session, db_get_user_by_username
         session = db_get_session(token)
         if not session:
@@ -188,7 +191,7 @@ def login(credentials: UserLogin):
     username = credentials.username
     password = credentials.password
 
-    if _USE_DB:
+    if _USE_DB():
         from ...database.db import db_get_user_by_username, db_create_session
         user = db_get_user_by_username(username)
         if not user or not _verify_password(password, user["password"]):
@@ -244,7 +247,7 @@ def login(credentials: UserLogin):
 @router.post("/logout")
 def logout(token: str):
     """Logout user and invalidate session."""
-    if _USE_DB:
+    if _USE_DB():
         from ...database.db import db_delete_session
         db_delete_session(token)
     else:
@@ -256,7 +259,7 @@ def logout(token: str):
 @router.get("/me")
 def get_user_info(token: str):
     """Get current logged-in user info."""
-    if _USE_DB:
+    if _USE_DB():
         from ...database.db import db_get_session, db_get_user_by_username
         session = db_get_session(token)
         if not session:
@@ -288,7 +291,7 @@ def get_user_info(token: str):
 @router.get("/users", dependencies=[Depends(require_owner)])
 def list_users():
     """List all users (Owner only)."""
-    if _USE_DB:
+    if _USE_DB():
         from ...database.db import db_get_all_users
         users = db_get_all_users()
         return [
@@ -324,7 +327,7 @@ def create_user(user_data: dict, current_user: dict = Depends(require_owner)):
     if not username or not password or not full_name:
         raise HTTPException(status_code=400, detail="Username, password, and full_name are required")
 
-    if _USE_DB:
+    if _USE_DB():
         from ...database.db import (
             db_get_user_by_username, db_create_user, db_count_users_by_prefix,
         )
@@ -382,7 +385,7 @@ def create_user(user_data: dict, current_user: dict = Depends(require_owner)):
 @router.put("/users/{username}")
 def update_user(username: str, user_data: dict, current_user: dict = Depends(require_owner)):
     """Update an existing user (Owner only)."""
-    if _USE_DB:
+    if _USE_DB():
         from ...database.db import db_get_user_by_username, db_update_user
         user = db_get_user_by_username(username)
         if not user:
@@ -466,7 +469,7 @@ def update_user(username: str, user_data: dict, current_user: dict = Depends(req
 @router.delete("/users/{username}")
 def delete_user(username: str, current_user: dict = Depends(require_owner)):
     """Delete a user (Owner only, cannot delete owner)."""
-    if _USE_DB:
+    if _USE_DB():
         from ...database.db import db_get_user_by_username, db_delete_user, db_delete_user_sessions
         user = db_get_user_by_username(username)
         if not user:
@@ -515,7 +518,7 @@ def delete_user(username: str, current_user: dict = Depends(require_owner)):
 @router.get("/staff", dependencies=[Depends(get_current_user)])
 def list_staff():
     """Get list of staff members for shift assignment."""
-    if _USE_DB:
+    if _USE_DB():
         from ...database.db import db_get_all_users
         users = db_get_all_users()
         return [
@@ -543,7 +546,7 @@ def list_staff():
 @router.patch("/users/{username}/toggle-status")
 def toggle_user_status(username: str, current_user: dict = Depends(require_owner)):
     """Enable or disable a user account (Owner only). Cannot disable owner accounts."""
-    if _USE_DB:
+    if _USE_DB():
         from ...database.db import db_get_user_by_username, db_update_user, db_delete_user_sessions
         user = db_get_user_by_username(username)
         if not user:
@@ -617,7 +620,7 @@ def reset_user_password(username: str, current_user: dict = Depends(require_owne
     new_password = ''.join(secrets.choice(alphabet) for _ in range(12))
     hashed = _hash_password(new_password)
 
-    if _USE_DB:
+    if _USE_DB():
         from ...database.db import db_get_user_by_username, db_update_user, db_delete_user_sessions
         user = db_get_user_by_username(username)
         if not user:

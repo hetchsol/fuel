@@ -17,11 +17,21 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Single connection (lazy-initialized)
 _conn = None
+_db_available = False  # Set to True only after successful init_db()
+
+
+def is_db_active() -> bool:
+    """Check if DB was successfully initialized at startup."""
+    return _db_available
 
 
 def _get_connection():
-    """Get a database connection, reconnecting if stale."""
+    """Get a database connection, reconnecting if stale. Returns None on failure."""
     global _conn
+    if not _db_available and _conn is None:
+        # DB was never initialized or failed — don't attempt connection
+        return None
+
     if _conn is not None and not _conn.closed:
         try:
             _conn.execute("SELECT 1")
@@ -40,7 +50,7 @@ def _get_connection():
         logger.info("[db] PostgreSQL connection established")
     except Exception as e:
         logger.error(f"[db] Failed to connect: {e}")
-        raise
+        return None
     return _conn
 
 
@@ -58,20 +68,33 @@ def is_db_available() -> bool:
 
 def init_db():
     """Create tables if they don't exist. Call once at startup."""
+    global _conn, _db_available
+
     if not DATABASE_URL:
         logger.info("[db] No DATABASE_URL set — using file-based storage")
         return False
 
-    conn = _get_connection()
+    # Attempt direct connection (bypass _get_connection guard since _db_available is False)
+    logger.info("[db] Connecting to PostgreSQL...")
     try:
-        conn.execute("""
+        import psycopg
+        _conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
+        logger.info("[db] PostgreSQL connection established")
+    except Exception as e:
+        logger.error(f"[db] Failed to connect: {e}")
+        _conn = None
+        _db_available = False
+        return False
+
+    try:
+        _conn.execute("""
             CREATE TABLE IF NOT EXISTS stations (
                 station_id TEXT PRIMARY KEY,
                 data JSONB NOT NULL DEFAULT '{}',
                 updated_at TIMESTAMP DEFAULT NOW()
             );
         """)
-        conn.execute("""
+        _conn.execute("""
             CREATE TABLE IF NOT EXISTS station_storage (
                 station_id TEXT NOT NULL,
                 data JSONB NOT NULL DEFAULT '{}',
@@ -79,7 +102,7 @@ def init_db():
                 PRIMARY KEY (station_id)
             );
         """)
-        conn.execute("""
+        _conn.execute("""
             CREATE TABLE IF NOT EXISTS station_files (
                 station_id TEXT NOT NULL,
                 filename TEXT NOT NULL,
@@ -88,7 +111,7 @@ def init_db():
                 PRIMARY KEY (station_id, filename)
             );
         """)
-        conn.execute("""
+        _conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id    TEXT PRIMARY KEY,
                 username   TEXT UNIQUE NOT NULL,
@@ -100,7 +123,7 @@ def init_db():
                 updated_at TIMESTAMP DEFAULT NOW()
             );
         """)
-        conn.execute("""
+        _conn.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 token      TEXT PRIMARY KEY,
                 user_id    TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -111,16 +134,18 @@ def init_db():
             );
         """)
         # Add is_active column if it doesn't exist (migration)
-        conn.execute("""
+        _conn.execute("""
             ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
         """)
-        conn.commit()
-        logger.info("[db] PostgreSQL schema initialized")
+        _conn.commit()
+        _db_available = True
+        logger.info("[db] PostgreSQL schema initialized — DB is active")
         return True
     except Exception as e:
-        conn.rollback()
+        _conn.rollback()
+        _db_available = False
         logger.error(f"[db] Schema init failed: {e}")
-        raise
+        return False
 
 
 def close_db():

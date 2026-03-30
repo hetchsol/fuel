@@ -19,9 +19,9 @@ STATIONS: Dict[str, dict] = {}
 def load_stations():
     """Load stations from DB (or JSON file fallback) into STATIONS dict"""
     global STATIONS
-    from .db import DATABASE_URL, db_load_stations
+    from .db import DATABASE_URL, db_load_stations, is_db_active
 
-    if DATABASE_URL:
+    if DATABASE_URL and is_db_active():
         try:
             STATIONS = db_load_stations()
             logger.info(f"[stations] Loaded {len(STATIONS)} stations from database")
@@ -58,9 +58,9 @@ def _load_from_file():
 
 def save_stations():
     """Save STATIONS dict to DB (or JSON file fallback)"""
-    from .db import DATABASE_URL, db_save_all_stations
+    from .db import DATABASE_URL, db_save_all_stations, is_db_active
 
-    if DATABASE_URL:
+    if DATABASE_URL and is_db_active():
         try:
             db_save_all_stations(STATIONS)
             return

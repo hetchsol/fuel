@@ -76,8 +76,8 @@ def get_station_storage(station_id: str) -> Dict[str, Any]:
     """
     if station_id not in STATIONS_STORAGE:
         # Try loading from DB first
-        from .db import DATABASE_URL, db_load_storage
-        if DATABASE_URL:
+        from .db import DATABASE_URL, db_load_storage, is_db_active
+        if DATABASE_URL and is_db_active():
             db_data = db_load_storage(station_id)
             if db_data:
                 logger.info(f"[storage] Loaded station {station_id} from database")
@@ -92,10 +92,10 @@ def get_station_storage(station_id: str) -> Dict[str, Any]:
 def save_station_storage(station_id: str):
     """
     Persist the in-memory storage dict for a station to PostgreSQL.
-    No-op if DATABASE_URL is not set.
+    No-op if DATABASE_URL is not set or DB is not active.
     """
-    from .db import DATABASE_URL, db_save_storage
-    if not DATABASE_URL:
+    from .db import DATABASE_URL, db_save_storage, is_db_active
+    if not DATABASE_URL or not is_db_active():
         return
     if station_id in STATIONS_STORAGE:
         db_save_storage(station_id, STATIONS_STORAGE[station_id])
@@ -103,8 +103,8 @@ def save_station_storage(station_id: str):
 
 def save_all_stations_storage():
     """Persist all stations' storage dicts to PostgreSQL."""
-    from .db import DATABASE_URL, db_save_storage
-    if not DATABASE_URL:
+    from .db import DATABASE_URL, db_save_storage, is_db_active
+    if not DATABASE_URL or not is_db_active():
         return
     for station_id, storage in STATIONS_STORAGE.items():
         db_save_storage(station_id, storage)

@@ -10,7 +10,7 @@ import app.database.stations_registry as stations_registry
 from app.database.station_files import migrate_existing_data
 from app.database.storage import get_station_storage, save_all_stations_storage
 from app.database.seed_defaults import seed_station_defaults
-from app.database.db import init_db, close_db, DATABASE_URL
+from app.database.db import init_db, close_db, is_db_active, DATABASE_URL
 from app.services.shift_auto_close import check_and_close_stale_shifts
 import app.database.storage as storage_module
 
@@ -63,54 +63,52 @@ app.include_router(router, prefix="/api/v1")
 
 @app.on_event("startup")
 def startup():
-    # Initialize PostgreSQL if DATABASE_URL is set
-    try:
-        db_ok = init_db()
-    except Exception as e:
-        logger.error(f"[startup] Database initialization failed: {e} — falling back to file storage")
-        db_ok = False
+    logger.info("[startup] Beginning startup sequence...")
+
+    # Step 1: Initialize PostgreSQL if DATABASE_URL is set
+    logger.info("[startup] Step 1: Database initialization...")
+    db_ok = init_db()
     if db_ok:
-        logger.info("[startup] PostgreSQL initialized")
-        # Seed default users and clean up expired sessions
+        logger.info("[startup] PostgreSQL initialized successfully")
         _seed_default_users()
         from app.database.db import db_cleanup_expired_sessions
         db_cleanup_expired_sessions()
     else:
-        logger.info("[startup] Using file-based storage (no DATABASE_URL)")
+        logger.info("[startup] Using file-based storage")
 
-    # Migrate flat files to station directories (file-mode only)
-    if not DATABASE_URL:
+    # Step 2: Migrate flat files to station directories (file-mode only)
+    if not is_db_active():
+        logger.info("[startup] Step 2: Migrating file data...")
         migrate_existing_data()
 
-    # Load station registry (seeds ST001 if empty)
+    # Step 3: Load station registry (seeds ST001 if empty)
+    logger.info("[startup] Step 3: Loading stations...")
     load_stations()
 
-    # Initialize storage and seed defaults for all stations
+    # Step 4: Initialize storage and seed defaults for all stations
+    logger.info("[startup] Step 4: Seeding station defaults...")
     for station_id in list(stations_registry.STATIONS.keys()):
         storage = get_station_storage(station_id)
-        # Only seed defaults if station hasn't been initialized yet
-        if not storage.get('islands'):
-            seed_station_defaults(storage)
-            logger.info(f"[startup] Seeded defaults for station {station_id}")
-        else:
-            # Run seed anyway to pick up settings defaults and island migrations
-            seed_station_defaults(storage)
-            logger.info(f"[startup] Station {station_id} already initialized — applied migrations")
+        seed_station_defaults(storage)
+        logger.info(f"[startup] Applied defaults/migrations for station {station_id}")
         check_and_close_stale_shifts(storage, station_id)
 
-    # Persist seeded data to DB if this is a fresh start
-    if DATABASE_URL:
+    # Step 5: Persist seeded data to DB if available
+    if is_db_active():
+        logger.info("[startup] Step 5: Persisting to database...")
         save_all_stations_storage()
 
     # Backward compat: global STORAGE points to ST001
     st001 = get_station_storage("ST001")
     storage_module.STORAGE = st001
 
+    logger.info("[startup] Startup complete!")
+
 
 @app.on_event("shutdown")
 def shutdown():
     # Flush all in-memory storage to DB before shutting down
-    if DATABASE_URL:
+    if is_db_active():
         save_all_stations_storage()
         logger.info("[shutdown] Storage flushed to database")
     close_db()
@@ -120,7 +118,7 @@ def shutdown():
 async def auto_flush_storage(request: Request, call_next):
     """After each mutating request, flush in-memory storage to PostgreSQL."""
     response = await call_next(request)
-    if DATABASE_URL and request.method in ("POST", "PUT", "PATCH", "DELETE"):
+    if is_db_active() and request.method in ("POST", "PUT", "PATCH", "DELETE"):
         try:
             save_all_stations_storage()
         except Exception as e:
@@ -130,4 +128,4 @@ async def auto_flush_storage(request: Request, call_next):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "storage": "postgresql" if DATABASE_URL else "file"}
+    return {"status": "ok", "storage": "postgresql" if is_db_active() else "file"}

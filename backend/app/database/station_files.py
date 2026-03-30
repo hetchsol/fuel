@@ -77,9 +77,9 @@ def load_station_json(station_id: str, filename: str, default: Any = None) -> An
     Load JSON data for a station.
     Uses PostgreSQL when DATABASE_URL is set, otherwise falls back to local files.
     """
-    from .db import DATABASE_URL, db_load_json
+    from .db import DATABASE_URL, db_load_json, is_db_active
 
-    if DATABASE_URL:
+    if DATABASE_URL and is_db_active():
         result = db_load_json(station_id, filename, default)
         return result if result is not None else (default if default is not None else None)
 
@@ -99,9 +99,9 @@ def save_station_json(station_id: str, filename: str, data: Any):
     Save JSON data for a station.
     Uses PostgreSQL when DATABASE_URL is set, otherwise falls back to local files.
     """
-    from .db import DATABASE_URL, db_save_json
+    from .db import DATABASE_URL, db_save_json, is_db_active
 
-    if DATABASE_URL:
+    if DATABASE_URL and is_db_active():
         db_save_json(station_id, filename, data)
         return
 
