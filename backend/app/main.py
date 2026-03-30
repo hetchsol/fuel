@@ -85,11 +85,13 @@ def startup():
     for station_id in list(stations_registry.STATIONS.keys()):
         storage = get_station_storage(station_id)
         # Only seed defaults if station hasn't been initialized yet
-        if not storage.get('tanks'):
+        if not storage.get('islands'):
             seed_station_defaults(storage)
             logger.info(f"[startup] Seeded defaults for station {station_id}")
         else:
-            logger.info(f"[startup] Station {station_id} already initialized — skipping seed")
+            # Run seed anyway to pick up settings defaults and island migrations
+            seed_station_defaults(storage)
+            logger.info(f"[startup] Station {station_id} already initialized — applied migrations")
         check_and_close_stale_shifts(storage, station_id)
 
     # Persist seeded data to DB if this is a fresh start

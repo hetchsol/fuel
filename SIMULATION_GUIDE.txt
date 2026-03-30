@@ -151,40 +151,55 @@ Click "Create User" for each.
 
 
 ================================================================================
-PHASE 3: INFRASTRUCTURE VERIFICATION
+PHASE 3: INFRASTRUCTURE SETUP
 ================================================================================
 
 Go to: Administration > Infrastructure
 
-The system pre-seeds 6 islands with nozzles and 2 tanks.
-Verify the following exists and is active:
+The system seeds 6 islands with nozzles automatically, but tanks must
+be created and assigned manually.
 
 ------------------------------------------------------------------------
-STEP 3.1: Verify Tanks (Infrastructure > Tank Management)
+STEP 3.1: Create Tanks (Infrastructure > Tank Management)
 ------------------------------------------------------------------------
+Click "Create Tank" for each:
 
-  TANK-DIESEL:   Diesel, Capacity: 20,000 L, Current Level: 15,000 L
-  TANK-PETROL:   Petrol, Capacity: 25,000 L, Current Level: 18,000 L
+  Tank 1:
+    Tank ID:        TANK-DIESEL
+    Fuel Type:      Diesel
+    Capacity (L):   20000
+    Initial Level:  15000
 
-If tanks don't exist, create them with the above values.
+  Tank 2:
+    Tank ID:        TANK-PETROL
+    Fuel Type:      Petrol
+    Capacity (L):   25000
+    Initial Level:  18000
 
 ------------------------------------------------------------------------
-STEP 3.2: Verify Islands (Infrastructure > Islands & Pumps)
+STEP 3.2: Configure Islands (Infrastructure > Islands & Pumps)
 ------------------------------------------------------------------------
+The system creates 6 default islands. For each island, configure:
 
-Verify each island is active, has correct product type, and tank assigned:
-
-  Island 1 (ISL-001): Diesel (LSD), Tank: TANK-DIESEL, Nozzles: 1A, 1B
-  Island 2 (ISL-002): Diesel (LSD), Tank: TANK-DIESEL, Nozzles: 2A, 2B
-  Island 3 (ISL-003): Diesel (LSD), Tank: TANK-DIESEL, Nozzles: 3A, 3B
-  Island 4 (ISL-004): Petrol (UNL), Tank: TANK-PETROL, Nozzles: 4A, 4B
-  Island 5 (ISL-005): Petrol (UNL), Tank: TANK-PETROL, Nozzles: 5A, 5B
-  Island 6 (ISL-006): Petrol (UNL), Tank: TANK-PETROL, Nozzles: 6A, 6B
+  Island 1 (ISL-001): Set Product Type = Diesel, Assigned Tank = TANK-DIESEL
+  Island 2 (ISL-002): Set Product Type = Diesel, Assigned Tank = TANK-DIESEL
+  Island 3 (ISL-003): Set Product Type = Diesel, Assigned Tank = TANK-DIESEL
+  Island 4 (ISL-004): Set Product Type = Petrol, Assigned Tank = TANK-PETROL
+  Island 5 (ISL-005): Set Product Type = Petrol, Assigned Tank = TANK-PETROL
+  Island 6 (ISL-006): Set Product Type = Petrol, Assigned Tank = TANK-PETROL
 
 For each island:
-  - Set Product Type dropdown to Diesel or Petrol as above
-  - Set Assigned Tank dropdown to the correct tank
+  - Select the Product Type from the dropdown
+  - Select the Assigned Tank from the dropdown
   - Ensure status is "Active"
+
+Each island comes with 2 nozzles (A and B) pre-created:
+  Island 1: LSD 1A, LSD 1B
+  Island 2: LSD 2A, LSD 2B
+  Island 3: LSD 3A, LSD 3B
+  Island 4: UNL 4A, UNL 4B
+  Island 5: UNL 5A, UNL 5B
+  Island 6: UNL 6A, UNL 6B
 
 
 ================================================================================

@@ -7,17 +7,14 @@ from datetime import datetime
 
 def seed_station_defaults(storage: dict):
     """
-    Populate a station's storage dict with default infrastructure data
-    if the relevant keys are empty.
+    Populate a station's storage dict with default island layout and settings.
+    Tanks, accounts, accessories, and lubricants must be configured
+    by the owner through the UI.
     """
     _seed_islands(storage)
     _migrate_islands_add_display_fields(storage)
     _migrate_islands_default_active(storage)
     _migrate_islands_assign_product_types(storage)
-    _seed_tanks(storage)
-    _seed_accounts(storage)
-    _seed_lpg_accessories(storage)
-    _seed_lubricants(storage)
     _seed_settings(storage)
 
 
