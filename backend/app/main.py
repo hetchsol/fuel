@@ -56,23 +56,6 @@ def _migrate_owner_name():
             logger.info(f"[migrate] Renamed owner '{user['username']}' to 'Business Owner'")
 
 
-def _ensure_owner_account():
-    """Ensure owner1 account exists with known password. Resets password if account exists."""
-    import bcrypt
-    from app.database.db import db_get_user_by_username, db_create_user, db_update_user
-
-    user = db_get_user_by_username("owner1")
-    hashed = bcrypt.hashpw("owner123".encode(), bcrypt.gensalt()).decode()
-
-    if user:
-        # Reset password to known default
-        db_update_user("owner1", {"password": hashed, "is_active": True})
-        logger.info("[migrate] Reset owner1 password and ensured account is active")
-    else:
-        # Create the account if it doesn't exist
-        db_create_user("O001", "owner1", hashed, "Business Owner", "owner", None)
-        logger.info("[migrate] Created missing owner1 account")
-
 
 ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
 
@@ -100,7 +83,6 @@ def startup():
         logger.info("[startup] PostgreSQL initialized successfully")
         _seed_default_users()
         _migrate_owner_name()
-        _ensure_owner_account()
         from app.database.db import db_cleanup_expired_sessions
         db_cleanup_expired_sessions()
     else:

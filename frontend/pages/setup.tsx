@@ -3,9 +3,9 @@ import { useRouter } from 'next/router'
 import { getHeaders, authFetch, BASE } from '../lib/api'
 import toast from 'react-hot-toast'
 
-type Step = 'welcome' | 'profile' | 'business' | 'tanks' | 'fuel' | 'operations' | 'complete'
+type Step = 'welcome' | 'profile' | 'business' | 'tanks' | 'fuel' | 'operations' | 'staff' | 'complete'
 
-const STEPS: Step[] = ['welcome', 'profile', 'business', 'tanks', 'fuel', 'operations', 'complete']
+const STEPS: Step[] = ['welcome', 'profile', 'business', 'tanks', 'fuel', 'operations', 'staff', 'complete']
 
 const STEP_LABELS: Record<Step, string> = {
   welcome: 'Welcome',
@@ -14,7 +14,15 @@ const STEP_LABELS: Record<Step, string> = {
   tanks: 'Tanks',
   fuel: 'Pricing & Tax',
   operations: 'Operations',
+  staff: 'Staff',
   complete: 'All Set',
+}
+
+interface CreatedUser {
+  user_id: string
+  username: string
+  full_name: string
+  role: string
 }
 
 interface TankRow {
@@ -66,6 +74,11 @@ export default function SetupWizard() {
   const [pctInvestigation, setPctInvestigation] = useState(2.0)
   const [cashMinor, setCashMinor] = useState(500)
   const [cashInvestigation, setCashInvestigation] = useState(2000)
+
+  // Staff
+  const [createdUsers, setCreatedUsers] = useState<CreatedUser[]>([])
+  const [staffForm, setStaffForm] = useState({ full_name: '', username: '', password: '', role: 'user' as 'user' | 'supervisor' })
+  const [addingUser, setAddingUser] = useState(false)
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -328,12 +341,54 @@ export default function SetupWizard() {
     finally { setSaving(false) }
   }
 
+  const addStaffUser = async () => {
+    const { full_name, username, password, role } = staffForm
+    if (!full_name.trim() || !username.trim() || !password.trim()) {
+      toast.error('Full name, username, and password are required')
+      return
+    }
+    if (password.length < 6) { toast.error('Password must be at least 6 characters'); return }
+
+    setAddingUser(true)
+    try {
+      const stationId = localStorage.getItem('stationId') || 'ST001'
+      const res = await authFetch(`${BASE}/auth/users`, {
+        method: 'POST',
+        body: JSON.stringify({ full_name: full_name.trim(), username: username.trim(), password, role, station_id: stationId }),
+      })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Failed to create user') }
+      const data = await res.json()
+      setCreatedUsers([...createdUsers, { user_id: data.user.user_id, username: data.user.username, full_name: data.user.full_name, role: data.user.role }])
+      setStaffForm({ full_name: '', username: '', password: '', role })
+      toast.success(`${role === 'supervisor' ? 'Supervisor' : 'Attendant'} "${full_name.trim()}" created`)
+    } catch (err: any) { toast.error(err.message) }
+    finally { setAddingUser(false) }
+  }
+
+  const removeStaffUser = async (username: string) => {
+    try {
+      const res = await authFetch(`${BASE}/auth/users/${username}`, { method: 'DELETE' })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Failed to remove user') }
+      setCreatedUsers(createdUsers.filter(u => u.username !== username))
+      toast.success('User removed')
+    } catch (err: any) { toast.error(err.message) }
+  }
+
+  const validateStaff = () => {
+    const attendants = createdUsers.filter(u => u.role === 'user')
+    const supervisors = createdUsers.filter(u => u.role === 'supervisor')
+    if (attendants.length === 0) { toast.error('Create at least one attendant'); return false }
+    if (supervisors.length === 0) { toast.error('Create at least one supervisor'); return false }
+    return true
+  }
+
   const handleNext = async () => {
     if (step === 'profile') { if (!(await saveProfile())) return }
     else if (step === 'business') { if (!(await saveBusiness())) return }
     else if (step === 'tanks') { if (!(await saveTanks())) return }
     else if (step === 'fuel') { if (!(await saveFuelAndTax())) return }
     else if (step === 'operations') { if (!(await saveOperations())) return }
+    else if (step === 'staff') { if (!validateStaff()) return }
     goNext()
   }
 
@@ -434,7 +489,7 @@ export default function SetupWizard() {
               <div className="bg-surface-card/50 border border-surface-border rounded-lg p-4 text-left space-y-2">
                 <p className="text-sm text-content-secondary">We'll help you configure:</p>
                 <ul className="text-sm text-content-primary space-y-1.5">
-                  {['Your name and login credentials', 'Business name and location', 'Fuel tanks and capacities', 'Fuel pricing and tax rates', 'Operational thresholds and tolerances'].map(item => (
+                  {['Your name and login credentials', 'Business name and location', 'Fuel tanks and capacities', 'Fuel pricing and tax rates', 'Operational thresholds and tolerances', 'Staff accounts (attendants & supervisors)'].map(item => (
                     <li key={item} className="flex items-center gap-2">
                       <svg className="w-4 h-4 text-status-success shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                       {item}
@@ -691,6 +746,79 @@ export default function SetupWizard() {
             </div>
           )}
 
+          {/* ── Staff ───────────────────────────────── */}
+          {step === 'staff' && (
+            <div className="space-y-4">
+              <StepHeader
+                icon={<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>}
+                iconBg="bg-status-success/20" iconColor="text-status-success"
+                title="Create Staff" subtitle="Add at least one attendant and one supervisor"
+              />
+
+              {/* Created users list */}
+              {createdUsers.length > 0 && (
+                <div className="space-y-1.5">
+                  {createdUsers.map(u => (
+                    <div key={u.username} className="flex items-center justify-between p-2.5 bg-surface-card/30 border border-surface-border rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-badge ${u.role === 'supervisor' ? 'bg-status-warning/20 text-status-warning' : 'bg-status-success/20 text-status-success'}`}>
+                          {u.role === 'supervisor' ? 'SUP' : 'ATT'}
+                        </span>
+                        <span className="text-sm text-content-primary">{u.full_name}</span>
+                        <span className="text-xs text-content-secondary">({u.username})</span>
+                      </div>
+                      <button onClick={() => removeStaffUser(u.username)} className="text-xs text-status-error hover:text-status-error/80">Remove</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add user form */}
+              <div className="p-3 bg-surface-card/30 border border-surface-border rounded-lg space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-content-secondary">Add</span>
+                  <select
+                    value={staffForm.role}
+                    onChange={e => setStaffForm({ ...staffForm, role: e.target.value as 'user' | 'supervisor' })}
+                    className={smallInputClass + ' !w-auto'}
+                  >
+                    <option value="user">Attendant</option>
+                    <option value="supervisor">Supervisor</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-xs text-content-secondary mb-1">Full Name</label>
+                    <input type="text" value={staffForm.full_name} onChange={e => setStaffForm({ ...staffForm, full_name: e.target.value })} placeholder="John Banda" className={smallInputClass} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-content-secondary mb-1">Username</label>
+                    <input type="text" value={staffForm.username} onChange={e => setStaffForm({ ...staffForm, username: e.target.value })} placeholder="jbanda" className={smallInputClass} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-content-secondary mb-1">Password</label>
+                    <input type="password" value={staffForm.password} onChange={e => setStaffForm({ ...staffForm, password: e.target.value })} placeholder="Min 6 chars" className={smallInputClass} />
+                  </div>
+                </div>
+                <button
+                  onClick={addStaffUser}
+                  disabled={addingUser}
+                  className="w-full px-3 py-2 bg-status-success/20 text-status-success text-sm font-medium rounded-btn hover:bg-status-success/30 disabled:opacity-50 transition-all border border-status-success/30"
+                >
+                  {addingUser ? 'Creating...' : `+ Add ${staffForm.role === 'supervisor' ? 'Supervisor' : 'Attendant'}`}
+                </button>
+              </div>
+
+              {/* Status summary */}
+              <div className="flex gap-3 text-xs text-content-secondary">
+                <span>Attendants: <strong className={createdUsers.filter(u => u.role === 'user').length > 0 ? 'text-status-success' : 'text-status-error'}>{createdUsers.filter(u => u.role === 'user').length}</strong></span>
+                <span>Supervisors: <strong className={createdUsers.filter(u => u.role === 'supervisor').length > 0 ? 'text-status-success' : 'text-status-error'}>{createdUsers.filter(u => u.role === 'supervisor').length}</strong></span>
+              </div>
+
+              <NavButtons />
+            </div>
+          )}
+
           {/* ── Complete ─────────────────────────────── */}
           {step === 'complete' && (
             <div className="text-center space-y-6">
@@ -711,18 +839,14 @@ export default function SetupWizard() {
                 <ul className="text-sm text-content-secondary space-y-2">
                   <li className="flex items-start gap-2">
                     <span className="text-action-primary font-bold mt-0.5">1.</span>
-                    <span><strong className="text-content-primary">Add staff</strong> &mdash; Create attendant and supervisor accounts in Users</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-action-primary font-bold mt-0.5">2.</span>
                     <span><strong className="text-content-primary">Review infrastructure</strong> &mdash; Check islands and nozzle assignments in Infrastructure</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-action-primary font-bold mt-0.5">3.</span>
+                    <span className="text-action-primary font-bold mt-0.5">2.</span>
                     <span><strong className="text-content-primary">Add credit accounts</strong> &mdash; Set up customer accounts for credit sales</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-action-primary font-bold mt-0.5">4.</span>
+                    <span className="text-action-primary font-bold mt-0.5">3.</span>
                     <span><strong className="text-content-primary">Start a shift</strong> &mdash; Create your first shift and begin operations</span>
                   </li>
                 </ul>
