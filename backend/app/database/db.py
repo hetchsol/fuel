@@ -36,7 +36,7 @@ def _get_connection():
 
     try:
         import psycopg
-        _conn = psycopg.connect(DATABASE_URL, autocommit=False)
+        _conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
         logger.info("[db] PostgreSQL connection established")
     except Exception as e:
         logger.error(f"[db] Failed to connect: {e}")

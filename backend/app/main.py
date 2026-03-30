@@ -64,7 +64,11 @@ app.include_router(router, prefix="/api/v1")
 @app.on_event("startup")
 def startup():
     # Initialize PostgreSQL if DATABASE_URL is set
-    db_ok = init_db()
+    try:
+        db_ok = init_db()
+    except Exception as e:
+        logger.error(f"[startup] Database initialization failed: {e} — falling back to file storage")
+        db_ok = False
     if db_ok:
         logger.info("[startup] PostgreSQL initialized")
         # Seed default users and clean up expired sessions
