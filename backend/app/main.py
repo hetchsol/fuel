@@ -37,15 +37,6 @@ def _seed_default_users():
 
     default_users = [
         ("O001", "owner1", "owner123", "Kanyembo Ndhlovu", "owner", None),
-        ("S001", "supervisor1", "super123", "Barbara Banda", "supervisor", "ST001"),
-        ("U001", "user1", "password123", "Fashon Sakala", "user", "ST001"),
-        ("STF001", "shaka", "shaka123", "Shaka", "user", "ST001"),
-        ("STF002", "trevor", "trevor123", "Trevor", "user", "ST001"),
-        ("STF003", "violet", "violet123", "Violet", "user", "ST001"),
-        ("STF004", "chileshe", "chileshe123", "Chileshe", "user", "ST001"),
-        ("STF005", "matthew", "matthew123", "Matthew", "user", "ST001"),
-        ("STF006", "mubanga", "mubanga123", "Mubanga", "user", "ST001"),
-        ("STF007", "prosper", "prosper123", "Prosper", "user", "ST001"),
     ]
 
     for user_id, username, password, full_name, role, station_id in default_users:

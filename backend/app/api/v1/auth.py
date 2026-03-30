@@ -62,24 +62,6 @@ def _generate_token() -> str:
 # ──────────────────────────────────────────────────────────
 
 users_db = {
-    "user1": {
-        "user_id": "U001",
-        "username": "user1",
-        "password": hashlib.sha256("password123".encode()).hexdigest(),
-        "full_name": "Fashon Sakala",
-        "role": UserRole.USER,
-        "station_id": "ST001",
-        "is_active": True,
-    },
-    "supervisor1": {
-        "user_id": "S001",
-        "username": "supervisor1",
-        "password": hashlib.sha256("super123".encode()).hexdigest(),
-        "full_name": "Barbara Banda",
-        "role": UserRole.SUPERVISOR,
-        "station_id": "ST001",
-        "is_active": True,
-    },
     "owner1": {
         "user_id": "O001",
         "username": "owner1",
@@ -89,69 +71,6 @@ users_db = {
         "station_id": None,
         "is_active": True,
     },
-    "shaka": {
-        "user_id": "STF001",
-        "username": "shaka",
-        "password": hashlib.sha256("shaka123".encode()).hexdigest(),
-        "full_name": "Shaka",
-        "role": UserRole.USER,
-        "station_id": "ST001",
-        "is_active": True,
-    },
-    "trevor": {
-        "user_id": "STF002",
-        "username": "trevor",
-        "password": hashlib.sha256("trevor123".encode()).hexdigest(),
-        "full_name": "Trevor",
-        "role": UserRole.USER,
-        "station_id": "ST001",
-        "is_active": True,
-    },
-    "violet": {
-        "user_id": "STF003",
-        "username": "violet",
-        "password": hashlib.sha256("violet123".encode()).hexdigest(),
-        "full_name": "Violet",
-        "role": UserRole.USER,
-        "station_id": "ST001",
-        "is_active": True,
-    },
-    "chileshe": {
-        "user_id": "STF004",
-        "username": "chileshe",
-        "password": hashlib.sha256("chileshe123".encode()).hexdigest(),
-        "full_name": "Chileshe",
-        "role": UserRole.USER,
-        "station_id": "ST001",
-        "is_active": True,
-    },
-    "matthew": {
-        "user_id": "STF005",
-        "username": "matthew",
-        "password": hashlib.sha256("matthew123".encode()).hexdigest(),
-        "full_name": "Matthew",
-        "role": UserRole.USER,
-        "station_id": "ST001",
-        "is_active": True,
-    },
-    "mubanga": {
-        "user_id": "STF006",
-        "username": "mubanga",
-        "password": hashlib.sha256("mubanga123".encode()).hexdigest(),
-        "full_name": "Mubanga",
-        "role": UserRole.USER,
-        "station_id": "ST001",
-        "is_active": True,
-    },
-    "prosper": {
-        "user_id": "STF007",
-        "username": "prosper",
-        "password": hashlib.sha256("prosper123".encode()).hexdigest(),
-        "full_name": "Prosper",
-        "role": UserRole.USER,
-        "station_id": "ST001",
-        "is_active": True,
-    }
 }
 
 # In-memory session storage (fallback only)

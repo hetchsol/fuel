@@ -249,28 +249,8 @@ export default function Login() {
           {/* Demo Credentials */}
           {process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && (
           <div className="mt-8 pt-6 border-t border-white/[0.06]">
-            <p className="text-xs text-content-secondary/60 mb-3 text-center font-medium uppercase tracking-wider">Demo Accounts</p>
+            <p className="text-xs text-content-secondary/60 mb-3 text-center font-medium uppercase tracking-wider">Default Account</p>
             <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('user1', 'password123')}
-                className="w-full px-4 py-2.5 bg-status-success/10 border border-status-success/20 text-status-success rounded-btn hover:bg-status-success/15 text-sm font-medium transition-all flex items-center gap-2 justify-center"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                User: user1 / password123
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('supervisor1', 'super123')}
-                className="w-full px-4 py-2.5 bg-status-warning/10 border border-status-warning/20 text-status-warning rounded-btn hover:bg-status-warning/15 text-sm font-medium transition-all flex items-center gap-2 justify-center"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-                Supervisor: supervisor1 / super123
-              </button>
               <button
                 type="button"
                 onClick={() => handleDemoLogin('owner1', 'owner123')}
