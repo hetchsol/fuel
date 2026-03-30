@@ -203,8 +203,13 @@ def login(credentials: UserLogin):
         expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
         db_create_session(token, user["user_id"], username, user["role"], expires_at)
 
-        # Check if setup wizard is needed (owner with default name)
-        needs_setup = (user["role"] == "owner" and user["full_name"] == "Business Owner")
+        # Check if setup wizard is needed (owner + setup not yet completed)
+        needs_setup = False
+        if user["role"] == "owner":
+            station_id = user.get("station_id") or DEFAULT_STATION_ID
+            storage = get_station_storage(station_id)
+            sys_settings = storage.get("system_settings", {})
+            needs_setup = not sys_settings.get("setup_completed", False)
 
         return {
             "access_token": token,
@@ -235,11 +240,16 @@ def login(credentials: UserLogin):
             "role": user_data["role"],
         }
 
-        # Check if setup wizard is needed (owner with default name)
-        full_name = user_data["full_name"]
-        if hasattr(full_name, 'value'):
-            full_name = full_name
-        needs_setup = (user_data.get("role") in [UserRole.OWNER, "owner"] and full_name == "Business Owner")
+        # Check if setup wizard is needed (owner + setup not yet completed)
+        needs_setup = False
+        role_val = user_data.get("role")
+        if hasattr(role_val, 'value'):
+            role_val = role_val.value
+        if role_val == "owner":
+            station_id = user_data.get("station_id") or DEFAULT_STATION_ID
+            storage = get_station_storage(station_id)
+            sys_settings = storage.get("system_settings", {})
+            needs_setup = not sys_settings.get("setup_completed", False)
 
         return {
             "access_token": session_token,

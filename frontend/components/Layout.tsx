@@ -68,6 +68,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       const parsed = JSON.parse(userData)
       setUser(parsed)
       setActiveStationId(localStorage.getItem('stationId') || parsed.station_id || 'ST001')
+
+      // Check if owner needs to complete setup wizard
+      if (parsed.role === 'owner' && router.pathname !== '/login' && router.pathname !== '/setup') {
+        authFetch(`${BASE}/settings/system`)
+          .then(r => r.ok ? r.json() : null)
+          .then(sys => {
+            if (sys && !sys.setup_completed) {
+              router.push('/setup')
+            }
+          })
+          .catch(() => {})
+      }
     } else if (router.pathname !== '/login' && router.pathname !== '/setup') {
       router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`)
     }
