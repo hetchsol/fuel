@@ -462,7 +462,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
-                  <div className="absolute left-0 mt-1 w-56 rounded-card hidden group-hover:block z-50 glass-card-static border border-surface-border overflow-hidden dropdown-enter">
+                  <div className="absolute left-0 pt-2 w-56 rounded-card invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-200 z-50">
+                  <div className="rounded-card glass-card-static border border-surface-border overflow-hidden dropdown-enter">
                     <div className="py-1">
                       {item.children.map((child: any) => (
                         child.disabled ? (
@@ -489,6 +490,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         )
                       ))}
                     </div>
+                  </div>
                   </div>
                 </div>
               ) : (
