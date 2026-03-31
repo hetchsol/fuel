@@ -537,9 +537,22 @@ def delete_user(username: str, current_user: dict = Depends(require_owner)):
     return {"message": f"User {username} deleted successfully"}
 
 
-@router.get("/staff", dependencies=[Depends(get_current_user)])
-def list_staff():
-    """Get list of staff members for shift assignment."""
+@router.get("/staff")
+def list_staff(current_user: dict = Depends(get_current_user)):
+    """Get list of staff members for shift assignment. Filtered by station for non-owners."""
+    caller_station = current_user.get("station_id")
+    caller_role = current_user.get("role")
+    if hasattr(caller_role, 'value'):
+        caller_role = caller_role.value
+    is_owner = caller_role == "owner"
+
+    def _matches_station(u: dict) -> bool:
+        if is_owner:
+            return True  # Owners see all staff
+        # Non-owners see only staff assigned to their station (or unassigned)
+        u_station = u.get("station_id")
+        return not u_station or u_station == caller_station
+
     if _USE_DB():
         from ...database.db import db_get_all_users
         users = db_get_all_users()
@@ -550,7 +563,8 @@ def list_staff():
                 "station_id": u.get("station_id"),
                 "is_active": u.get("is_active", True),
             }
-            for u in users if u["role"] in ["user", "supervisor"] and u.get("is_active", True)
+            for u in users
+            if u["role"] in ["user", "supervisor"] and u.get("is_active", True) and _matches_station(u)
         ]
     else:
         return [
@@ -561,7 +575,7 @@ def list_staff():
                 "is_active": user.get("is_active", True),
             }
             for user in users_db.values()
-            if user["role"] in ["user", "supervisor"] and user.get("is_active", True)
+            if user["role"] in ["user", "supervisor"] and user.get("is_active", True) and _matches_station(user)
         ]
 
 
