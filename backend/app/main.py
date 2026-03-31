@@ -99,7 +99,10 @@ def startup():
 
     # Step 4: Initialize storage and seed defaults for all stations
     logger.info("[startup] Step 4: Seeding station defaults...")
-    for station_id in list(stations_registry.STATIONS.keys()):
+    for station_id, station_meta in list(stations_registry.STATIONS.items()):
+        if station_meta.get("status") == "disabled":
+            logger.info(f"[startup] Skipping disabled station {station_id}")
+            continue
         storage = get_station_storage(station_id)
         seed_station_defaults(storage)
         logger.info(f"[startup] Applied defaults/migrations for station {station_id}")

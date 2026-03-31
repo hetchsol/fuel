@@ -13,6 +13,7 @@ class Station(BaseModel):
     station_id: str
     name: str
     location: Optional[str] = None
+    status: Optional[str] = "active"
     created_by: Optional[str] = None
     created_at: Optional[str] = None
 

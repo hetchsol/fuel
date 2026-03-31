@@ -465,3 +465,82 @@ def db_cleanup_expired_sessions():
     except Exception as e:
         conn.rollback()
         logger.error(f"[db] cleanup_expired_sessions failed: {e}")
+
+
+# ── Station deletion helpers ──────────────────────────────
+
+def db_delete_station(station_id: str):
+    """Delete a station from the stations table."""
+    conn = _get_connection()
+    if not conn:
+        return
+    try:
+        conn.execute("DELETE FROM stations WHERE station_id = %s", (station_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[db] delete_station failed: {e}")
+        raise
+
+
+def db_delete_station_storage(station_id: str):
+    """Delete station storage (JSONB blob) for a station."""
+    conn = _get_connection()
+    if not conn:
+        return
+    try:
+        conn.execute("DELETE FROM station_storage WHERE station_id = %s", (station_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[db] delete_station_storage failed: {e}")
+        raise
+
+
+def db_delete_station_files(station_id: str):
+    """Delete all per-station JSON files for a station."""
+    conn = _get_connection()
+    if not conn:
+        return
+    try:
+        conn.execute("DELETE FROM station_files WHERE station_id = %s", (station_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[db] delete_station_files failed: {e}")
+        raise
+
+
+def db_deactivate_station_users(station_id: str) -> int:
+    """Deactivate all users assigned to a station. Returns count."""
+    conn = _get_connection()
+    if not conn:
+        return 0
+    try:
+        result = conn.execute(
+            "UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE station_id = %s AND is_active = TRUE",
+            (station_id,)
+        )
+        conn.commit()
+        return result.rowcount
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[db] deactivate_station_users failed: {e}")
+        raise
+
+
+def db_reactivate_station_users(station_id: str) -> int:
+    """Reactivate all users assigned to a station. Returns count."""
+    conn = _get_connection()
+    if not conn:
+        return 0
+    try:
+        result = conn.execute(
+            "UPDATE users SET is_active = TRUE, updated_at = NOW() WHERE station_id = %s AND is_active = FALSE",
+            (station_id,)
+        )
+        conn.commit()
+        return result.rowcount
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[db] reactivate_station_users failed: {e}")

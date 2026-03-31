@@ -37,10 +37,16 @@ def load_stations():
             "station_id": "ST001",
             "name": "My Station",
             "location": "",
+            "status": "active",
             "created_by": "system",
             "created_at": datetime.now().isoformat(),
         }
         save_stations()
+
+    # Backfill status for existing stations missing it
+    for sid, sdata in STATIONS.items():
+        if "status" not in sdata:
+            sdata["status"] = "active"
 
 
 def _load_from_file():
@@ -89,6 +95,7 @@ def create_station(station_id: str, name: str, location: str = "", created_by: s
         "station_id": station_id,
         "name": name,
         "location": location,
+        "status": "active",
         "created_by": created_by,
         "created_at": datetime.now().isoformat(),
     }

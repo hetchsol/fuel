@@ -2,25 +2,41 @@
 Stations Management API
 Owner-only endpoints for creating and managing fuel stations.
 """
-from fastapi import APIRouter, HTTPException, Depends
-from typing import List
+import shutil
+import os
+import logging
+from fastapi import APIRouter, HTTPException, Depends, Query
+from typing import List, Optional
 from ...models.models import Station
 from ...database import stations_registry
 from ...database.stations_registry import (
     get_station, list_stations, save_stations,
     create_station as registry_create_station
 )
-from ...database.storage import get_station_storage
+from ...database.storage import get_station_storage, STATIONS_STORAGE
 from ...database.seed_defaults import seed_station_defaults
-from .auth import get_current_user
+from ...database.db import (
+    is_db_active,
+    db_delete_station, db_delete_station_storage, db_delete_station_files,
+    db_deactivate_station_users, db_reactivate_station_users,
+)
+from .auth import get_current_user, require_owner
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
 @router.get("/", response_model=List[Station])
-def get_all_stations(current_user: dict = Depends(get_current_user)):
-    """List all stations"""
-    return [Station(**s) for s in list_stations()]
+def get_all_stations(
+    current_user: dict = Depends(get_current_user),
+    include_disabled: Optional[bool] = Query(False),
+):
+    """List all stations. Pass include_disabled=true to see disabled stations."""
+    all_stations = list_stations()
+    if not include_disabled:
+        all_stations = [s for s in all_stations if s.get("status", "active") != "disabled"]
+    return [Station(**s) for s in all_stations]
 
 
 @router.get("/{station_id}", response_model=Station)
@@ -139,4 +155,91 @@ def seed_test_data(station_id: str, current_user: dict = Depends(get_current_use
         "message": f"Seeded {len(readings)} tank readings and {len(deliveries)} deliveries for station {station_id}",
         "readings": len(readings),
         "deliveries": len(deliveries),
+    }
+
+
+@router.patch("/{station_id}/toggle-status")
+def toggle_station_status(station_id: str, current_user: dict = Depends(require_owner)):
+    """Disable or re-enable a station (owner only)."""
+    if station_id not in stations_registry.STATIONS:
+        raise HTTPException(status_code=404, detail="Station not found")
+
+    station = stations_registry.STATIONS[station_id]
+    current_status = station.get("status", "active")
+    new_status = "disabled" if current_status == "active" else "active"
+
+    # Cannot disable the last active station
+    if new_status == "disabled":
+        active_count = sum(1 for s in stations_registry.STATIONS.values() if s.get("status", "active") == "active")
+        if active_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot disable the last active station")
+
+    station["status"] = new_status
+    save_stations()
+
+    # Deactivate/reactivate staff assigned to this station
+    staff_affected = 0
+    if is_db_active():
+        if new_status == "disabled":
+            staff_affected = db_deactivate_station_users(station_id)
+        else:
+            staff_affected = db_reactivate_station_users(station_id)
+
+    action = "disabled" if new_status == "disabled" else "enabled"
+    logger.info(f"[stations] Station {station_id} {action}. {staff_affected} staff affected.")
+
+    return {
+        "status": "success",
+        "message": f"Station {action}",
+        "station": Station(**station),
+        "staff_affected": staff_affected,
+    }
+
+
+@router.delete("/{station_id}")
+def delete_station(station_id: str, current_user: dict = Depends(require_owner)):
+    """Permanently delete a station and all its data (owner only)."""
+    if station_id not in stations_registry.STATIONS:
+        raise HTTPException(status_code=404, detail="Station not found")
+
+    # Cannot delete the last station
+    if len(stations_registry.STATIONS) <= 1:
+        raise HTTPException(status_code=400, detail="Cannot delete the last station")
+
+    # Check for active shifts
+    storage = get_station_storage(station_id)
+    active_shifts = [s for s in storage.get("shifts", {}).values()
+                     if s.get("status") in ("active", "open")]
+    if active_shifts:
+        raise HTTPException(status_code=400, detail=f"Station has {len(active_shifts)} active shift(s). Close all shifts before deleting.")
+
+    station_name = stations_registry.STATIONS[station_id].get("name", station_id)
+
+    # Deactivate assigned staff
+    staff_affected = 0
+    if is_db_active():
+        staff_affected = db_deactivate_station_users(station_id)
+
+    # Delete from PostgreSQL
+    if is_db_active():
+        db_delete_station_files(station_id)
+        db_delete_station_storage(station_id)
+        db_delete_station(station_id)
+
+    # Delete from in-memory
+    STATIONS_STORAGE.pop(station_id, None)
+    del stations_registry.STATIONS[station_id]
+    save_stations()
+
+    # Delete file system data
+    storage_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "storage", "stations", station_id)
+    if os.path.exists(storage_dir):
+        shutil.rmtree(storage_dir)
+
+    logger.info(f"[stations] Station {station_id} ({station_name}) permanently deleted. {staff_affected} staff deactivated.")
+
+    return {
+        "status": "success",
+        "message": f"Station '{station_name}' permanently deleted",
+        "staff_deactivated": staff_affected,
     }
