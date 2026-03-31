@@ -330,7 +330,7 @@ export default function SetupWizard() {
   const completeSetup = async () => {
     setSaving(true)
     try {
-      await authFetch(`${BASE}/settings/system`, {
+      const res = await authFetch(`${BASE}/settings/system`, {
         method: 'PUT',
         body: JSON.stringify({
           business_name: businessName.trim() || 'Fuel Management System',
@@ -342,10 +342,18 @@ export default function SetupWizard() {
           setup_completed: true,
         }),
       })
+      if (!res.ok) {
+        toast.error('Failed to save settings. Please try again.')
+        setSaving(false)
+        return
+      }
+      // Clear cookie and redirect — setup is done
       const secure = window.location.protocol === 'https:' ? '; Secure' : ''
       document.cookie = `needsSetup=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${secure}`
       router.push('/')
-    } catch { router.push('/') }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to complete setup. Please try again.')
+    }
     finally { setSaving(false) }
   }
 
