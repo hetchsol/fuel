@@ -58,6 +58,7 @@ export default function LubricantsDaily() {
 
   const canEditPricing = user?.role === 'supervisor' || user?.role === 'owner'
   const pricesConfigured = productRows.length > 0 && productRows.some(r => r.selling_price > 0)
+  const isFirstEntry = productRows.length > 0 && productRows.every(r => r.opening_stock === 0)
 
   // Fetch products for location
   useEffect(() => {
@@ -421,6 +422,13 @@ export default function LubricantsDaily() {
           </div>
         </div>
       </div>
+
+      {/* First-time stock banner */}
+      {isFirstEntry && (
+        <div className="mb-4 p-3 rounded-lg text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: 'var(--color-action-primary)', border: '1px solid var(--color-action-primary)' }}>
+          First time? Enter your current physical stock counts as Opening Stock below. These will carry forward automatically after each entry.
+        </div>
+      )}
 
       {/* Product Table grouped by category */}
       {Object.entries(groupedRows).map(([category, rows]) => (

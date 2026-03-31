@@ -408,6 +408,8 @@ export default function LPGDaily() {
   }
 
   const accPricesConfigured = accessoryRows.length > 0 && accessoryRows.some(r => r.selling_price > 0)
+  const isFirstCylinderEntry = cylinderRows.length > 0 && cylinderRows.every(r => r.opening_balance === 0)
+  const isFirstAccessoryEntry = accessoryRows.length > 0 && accessoryRows.every(r => r.opening_stock === 0)
 
   const inputStyle = {
     backgroundColor: theme.cardBg,
@@ -513,6 +515,13 @@ export default function LPGDaily() {
             className="w-full px-3 py-2 rounded border text-sm" style={inputStyle} />
         </div>
       </div>
+
+      {/* First-time stock banner */}
+      {isFirstCylinderEntry && (
+        <div className="mb-4 p-3 rounded-lg text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: 'var(--color-action-primary)', border: '1px solid var(--color-action-primary)' }}>
+          First time? Enter your current physical cylinder counts as Opening Stock below. These will carry forward automatically after each shift.
+        </div>
+      )}
 
       {/* Cylinder Sales Table */}
       <div className="rounded-lg shadow mb-6 overflow-x-auto"
@@ -844,6 +853,13 @@ export default function LPGDaily() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* First-time accessory stock banner */}
+      {isFirstAccessoryEntry && (
+        <div className="mb-4 p-3 rounded-lg text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: 'var(--color-action-primary)', border: '1px solid var(--color-action-primary)' }}>
+          First time? Enter your current accessory stock counts as Opening Stock below. These will carry forward automatically after each entry.
         </div>
       )}
 
