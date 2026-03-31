@@ -1,0 +1,434 @@
+================================================================================
+   NEXTSTOP FUEL MANAGEMENT SYSTEM - SIMULATION DATA
+   Pure data inputs for 3-shift simulation (no navigation instructions)
+================================================================================
+
+This file contains ONLY the data values to enter. For full step-by-step
+navigation instructions, see: SIMULATION_GUIDE.txt (in root folder).
+
+Prerequisite: Run reset_station.py first for a clean start.
+Login: owner1 / owner123 → completes setup wizard → then run shifts.
+
+
+================================================================================
+SETUP WIZARD DATA (entered during first-time setup)
+================================================================================
+
+STEP 2 - Profile:
+  Full Name:     Station Manager
+  Password:      (keep owner123 or set your own)
+
+STEP 3 - Business:
+  Business Name:  Kalulushi Next Stop Filling Station
+  Location:       Plot 123, Kitwe Road, Kalulushi
+  Email:          kalulushi@nextstop.com
+  Phone:          +260 212 620 100
+
+STEP 4 - Tanks:
+  TANK-DIESEL    Diesel    20000 L
+  TANK-PETROL    Petrol    25000 L
+
+STEP 5 - Pricing & Tax:
+  Diesel:     23.25 ZMW/L
+  Petrol:     26.61 ZMW/L
+  VAT:        16%
+  Fuel Levy:  0.90 ZMW/L
+
+STEP 6 - Operational Settings:
+  Diesel Loss:       0.3%        Petrol Loss:      0.5%
+  Nozzle Loss:       0.8 L
+  Pass Threshold:    0.5%        Warning:          1.0%
+  Low Stock:         25%         Critical:         10%
+  Vol Minor:         50 L        Vol Investigate:  200 L
+  Pct Minor:         0.5%        Pct Investigate:  2.0%
+  Cash Minor:        500 ZMW     Cash Investigate: 2000 ZMW
+
+STEP 7 - Staff:
+  Supervisor:
+    Herve Renard       renard       renard123
+
+  Attendants:
+    Christopher Katongo   katongo      katongo123
+    Kennedy Mweene        mweene       mweene123
+    Stophilla Sunzu       sunzu        sunzu123
+    Emmanuel Mayuka       mayuka       mayuka123
+
+
+================================================================================
+POST-WIZARD CONFIGURATION
+================================================================================
+
+LPG CYLINDER PRICING (set in LPG Daily Operations > Edit Prices):
+  3kg:   Refill  147    Full Cylinder  477
+  6kg:   Refill  294    Full Cylinder  844
+  9kg:   Refill  441    Full Cylinder  1241
+  19kg:  Refill  931    Full Cylinder  2131
+  45kg:  Refill  2205   Full Cylinder  3905
+  48kg:  Refill  2352   Full Cylinder  4052
+
+LPG ACCESSORY PRICING (set in LPG Daily Operations > Edit Accessory Prices):
+  1-Burner Stove:   1500
+  2-Burner Stove:   3500
+  Cooker Top:       5000
+  Gas Hose:          600
+  Gas Regulator:    1200
+  Hose Clip:         150
+
+LUBRICANT PRICING (set in Lubricants Daily > Edit Product Prices):
+  Engine Oil SAE 30 1L:       450     SAE 30 4L:        1600
+  Engine Oil 10W-30 1L:       750     10W-30 4L:        2800
+  Engine Oil 15W-40 1L:       550     15W-40 4L:        2000
+  Engine Oil 20W-50 1L:       500     20W-50 4L:        1800
+  Brake Fluid DOT 3 500ml:   350     DOT 3 1L:          600
+  Brake Fluid DOT 4 500ml:   450     DOT 4 1L:          800
+  Green Coolant 1L:           350     Green Coolant 4L:  1200
+  (set remaining products as needed — these are the ones used in simulation)
+
+CREDIT ACCOUNTS (add in Credit Accounts page):
+  Kafubu Corporation    Corporate    200000 ZMW limit
+
+
+================================================================================
+INFRASTRUCTURE VERIFICATION
+================================================================================
+
+Islands (auto-seeded, verify in Infrastructure):
+  ISL-001  Diesel  TANK-DIESEL   Nozzles: LSD 1A, LSD 1B
+  ISL-002  Diesel  TANK-DIESEL   Nozzles: LSD 2A, LSD 2B
+  ISL-003  Diesel  TANK-DIESEL   Nozzles: LSD 3A, LSD 3B
+  ISL-004  Petrol  TANK-PETROL   Nozzles: UNL 1A, UNL 1B
+  ISL-005  Petrol  TANK-PETROL   Nozzles: UNL 2A, UNL 2B
+  ISL-006  Petrol  TANK-PETROL   Nozzles: UNL 3A, UNL 3B
+
+
+================================================================================
+================================================================================
+SHIFT 1: DAY SHIFT — 2026-03-31 (CLEAN SHIFT)
+================================================================================
+================================================================================
+
+Scenario: Normal operations, no flags.
+
+Create shift: Date 2026-03-31, Type Day
+
+Attendant assignments:
+  Katongo → Island 1, Island 2 (LSD 1A, 1B, 2A, 2B)
+  Mweene  → Island 4, Island 5 (UNL 1A, 1B, 2A, 2B)
+
+Opening Tank Dips:
+  TANK-DIESEL:  19.10 cm
+  TANK-PETROL:  22.92 cm
+
+------------------------------------------------------------------------
+KATONGO — Diesel (login: katongo / katongo123)
+------------------------------------------------------------------------
+
+Nozzle readings:
+  LSD 1A:  Elec Open 200000.000  Elec Close 201245.500  Mech Open 270000  Mech Close 271245
+  LSD 1B:  Elec Open 205000.000  Elec Close 205890.200  Mech Open 275000  Mech Close 275890
+  LSD 2A:  Elec Open 430000.000  Elec Close 431520.800  Mech Open 430000  Mech Close 431521
+  LSD 2B:  Elec Open 610000.000  Elec Close 610670.300  Mech Open 610000  Mech Close 610670
+
+Volumes: 1245.5 + 890.2 + 1520.8 + 670.3 = 4326.800 L diesel
+
+LPG Cylinders:
+  9kg:  Opening Full 10, Sold Refill 2, Sold New 1, Closing Empty 3
+  19kg: Opening Full 5,  Sold Refill 1, Closing Empty 1
+
+LPG Accessories:
+  Gas Hose: Opening 8, Sold 1
+
+Lubricants:
+  10W-30 Synthetic 1L: Opening 12, Sold 1
+
+Cash Handed In: 102,198.00 ZMW
+
+Expected:
+  Fuel:   4326.800 x 23.25 = K100,598.10
+  LPG:    2x441 + 1x1241 + 1x931 = K3,054.00
+  Lube:   1x750 = K750.00
+  Acc:    1x600 = K600.00
+  Total:  K105,002.10
+  Cash:   K102,198.00
+  Diff:   -K2,804.10 (minor shortage)
+
+------------------------------------------------------------------------
+MWEENE — Petrol (login: mweene / mweene123)
+------------------------------------------------------------------------
+
+Nozzle readings:
+  UNL 1A:  Elec Open 150000.000  Elec Close 151320.400  Mech Open 150000  Mech Close 151320
+  UNL 1B:  Elec Open 160000.000  Elec Close 160780.100  Mech Open 160000  Mech Close 160780
+  UNL 2A:  Elec Open 300000.000  Elec Close 301100.600  Mech Open 300000  Mech Close 301101
+  UNL 2B:  Elec Open 320000.000  Elec Close 320450.200  Mech Open 320000  Mech Close 320450
+
+Volumes: 1320.4 + 780.1 + 1100.6 + 450.2 = 3651.300 L petrol
+
+LPG Cylinders:
+  6kg: Opening Full 15, Sold Refill 2, Closing Empty 2
+
+Cash Handed In: 97,700.00 ZMW
+
+Expected:
+  Fuel:   3651.300 x 26.61 = K97,140.09
+  LPG:    2x294 = K588.00
+  Total:  K97,728.09
+  Cash:   K97,700.00
+  Diff:   -K28.09 (negligible)
+
+------------------------------------------------------------------------
+SUPERVISOR REVIEW (login: renard / renard123)
+------------------------------------------------------------------------
+  Katongo: Approve — "Clean shift, minor cash variance noted"
+  Mweene:  Approve — "Within tolerance"
+
+Closing Tank Dips:
+  TANK-DIESEL:  13.59 cm
+  TANK-PETROL:  18.27 cm
+
+
+================================================================================
+================================================================================
+SHIFT 2: NIGHT SHIFT — 2026-03-31 (DELIVERY + NOZZLE LOSS FLAG)
+================================================================================
+================================================================================
+
+Scenario: Diesel delivery arrives. LSD 3A has 1.5L nozzle loss (> 0.8L).
+
+Create shift: Date 2026-03-31, Type Night
+
+Attendant assignments:
+  Sunzu   → Island 1, Island 3 (LSD 1A, 1B, 3A, 3B)
+  Mayuka  → Island 4, Island 6 (UNL 1A, 1B, 3A, 3B)
+
+Opening Tank Dips:
+  TANK-DIESEL:  13.59 cm
+  TANK-PETROL:  18.27 cm
+
+------------------------------------------------------------------------
+DIESEL DELIVERY (record in Fuel Operations > Deliveries)
+------------------------------------------------------------------------
+  Tank:             TANK-DIESEL
+  Date:             2026-03-31
+  Time:             21:30
+  Volume Before:    10673 L
+  Volume After:     20523 L
+  Supplier:         Puma Energy Zambia
+  Invoice Number:   PEZ-2026-4481
+  Expected Volume:  10000 L
+  Flowmeter:        9875 L
+  Temperature:      28.5 C
+
+Delivery Recon Result:
+  Invoice 10000 vs Flowmeter 9875 vs Tank Dip 9850
+  Status: VARIANCE_MINOR | Outlier: INVOICE
+
+------------------------------------------------------------------------
+SUNZU — Diesel (login: sunzu / sunzu123)
+------------------------------------------------------------------------
+
+Nozzle readings:
+  LSD 1A:  Elec Open 201245.500  Elec Close 201945.200  Mech Open 271245  Mech Close 271945
+  LSD 1B:  Elec Open 205890.200  Elec Close 206290.800  Mech Open 275890  Mech Close 276291
+  LSD 3A:  Elec Open 100000.000  Elec Close 100850.500  Mech Open 100000  Mech Close 100849  <<<< 1.5L LOSS
+  LSD 3B:  Elec Open 110000.000  Elec Close 110420.100  Mech Open 110000  Mech Close 110420
+
+Volumes: 699.7 + 400.6 + 850.5 + 420.1 = 2370.900 L diesel
+  LSD 3A flagged: 1.5L deviation exceeds 0.8L threshold
+
+LPG Cylinders:
+  9kg: Opening Full 7, Additions 5, Sold Refill 3, Closing Empty 3
+
+Cash Handed In: 56,500.00 ZMW
+Notes: "LSD 3A nozzle had meter discrepancy. Reported to supervisor."
+
+Expected:
+  Fuel:   2370.900 x 23.25 = K55,123.43
+  LPG:    3x441 = K1,323.00
+  Total:  K56,446.43
+  Cash:   K56,500.00
+  Diff:   +K53.57 (small surplus)
+
+------------------------------------------------------------------------
+MAYUKA — Petrol (login: mayuka / mayuka123)
+------------------------------------------------------------------------
+
+Nozzle readings:
+  UNL 1A:  Elec Open 151320.400  Elec Close 151720.900  Mech Open 151320  Mech Close 151721
+  UNL 1B:  Elec Open 160780.100  Elec Close 161030.300  Mech Open 160780  Mech Close 161030
+  UNL 3A:  Elec Open 80000.000   Elec Close 80380.200   Mech Open 80000   Mech Close 80380
+  UNL 3B:  Elec Open 85000.000   Elec Close 85210.500   Mech Open 85000   Mech Close 85211
+
+Volumes: 400.5 + 250.2 + 380.2 + 210.5 = 1241.400 L petrol
+
+Lubricants:
+  Brake Fluid DOT 3 1L: Opening 6, Sold 1
+
+Cash Handed In: 33,600.00 ZMW
+
+Expected:
+  Fuel:   1241.400 x 26.61 = K33,033.65
+  Lube:   1x600 = K600.00
+  Total:  K33,633.65
+  Cash:   K33,600.00
+  Diff:   -K33.65 (negligible)
+
+------------------------------------------------------------------------
+SUPERVISOR REVIEW (login: renard / renard123)
+------------------------------------------------------------------------
+  Sunzu:  Approve — "Nozzle 3A deviation noted. Calibration check scheduled."
+  Mayuka: Approve — "Clean night shift"
+
+Closing Tank Dips:
+  TANK-DIESEL:  23.10 cm
+  TANK-PETROL:  16.69 cm
+
+
+================================================================================
+================================================================================
+SHIFT 3: DAY SHIFT — 2026-04-01 (CASH SHORTAGE + CREDIT SALE + METER DEVIATION)
+================================================================================
+================================================================================
+
+Scenario: Cash shortage on Katongo. Credit sale to Kafubu Corp.
+Meter deviation on UNL 2B.
+
+Create shift: Date 2026-04-01, Type Day
+
+Attendant assignments:
+  Katongo → Island 2, Island 3 (LSD 2A, 2B, 3A, 3B)
+  Mweene  → Island 5, Island 6 (UNL 2A, 2B, 3A, 3B)
+
+Opening Tank Dips:
+  TANK-DIESEL:  23.10 cm
+  TANK-PETROL:  16.69 cm
+
+------------------------------------------------------------------------
+KATONGO — Diesel (login: katongo / katongo123)
+------------------------------------------------------------------------
+
+Nozzle readings:
+  LSD 2A:  Elec Open 431520.800  Elec Close 433280.500  Mech Open 431521  Mech Close 433281
+  LSD 2B:  Elec Open 610670.300  Elec Close 611890.700  Mech Open 610670  Mech Close 611891
+  LSD 3A:  Elec Open 100850.500  Elec Close 102100.300  Mech Open 100849  Mech Close 102100
+  LSD 3B:  Elec Open 110420.100  Elec Close 111350.600  Mech Open 110420  Mech Close 111351
+
+Volumes: 1759.7 + 1220.4 + 1249.8 + 930.5 = 5160.400 L diesel
+
+LPG Cylinders:
+  6kg:  Opening Full 13, Additions 10, Sold Refill 3, Sold New 2, Closing Empty 5
+  19kg: Opening Full 4, Sold Refill 2, Closing Empty 2
+
+LPG Accessories:
+  Cooker Top: Opening 4, Sold 1
+
+Lubricants:
+  15W-40 Diesel Engine Oil 1L: Opening 10, Sold 2
+  Green Coolant 1L: Opening 6, Sold 1
+
+Credit Sales:
+  Account: Kafubu Corporation
+  Fuel:    Diesel
+  Volume:  500 L
+
+Cash Handed In: 100,000.00 ZMW
+Notes: "Kafubu Corp collected 500L diesel on account. Busy day."
+
+Expected:
+  Fuel:    5160.400 x 23.25 = K119,979.30
+  LPG:     3x294 + 2x844 + 2x931 = K4,432.00
+  Lube:    2x550 + 1x350 = K1,450.00
+  Acc:     1x5000 = K5,000.00
+  Total:   K130,861.30
+  Credit:  500 x 23.25 = K11,625.00
+  Expect:  K119,236.30
+  Cash:    K100,000.00
+  Diff:    -K19,236.30  <<<< CASH SHORTAGE (auto-flagged)
+
+------------------------------------------------------------------------
+MWEENE — Petrol (login: mweene / mweene123)
+------------------------------------------------------------------------
+
+Nozzle readings:
+  UNL 2A:  Elec Open 301100.600  Elec Close 302650.900  Mech Open 301101  Mech Close 302651
+  UNL 2B:  Elec Open 320450.200  Elec Close 321250.800  Mech Open 320450  Mech Close 321245  <<<< 5.8L DEVIATION
+  UNL 3A:  Elec Open 80380.200   Elec Close 81580.500   Mech Open 80380   Mech Close 81581
+  UNL 3B:  Elec Open 85210.500   Elec Close 85910.300   Mech Open 85211   Mech Close 85910
+
+Volumes: 1550.3 + 800.6 + 1200.3 + 699.8 = 4251.000 L petrol
+  UNL 2B flagged: 5.8L deviation (0.72%) exceeds 0.5% threshold
+
+LPG Cylinders:
+  3kg: Opening Full 20, Sold Refill 3, Closing Empty 3
+
+Cash Handed In: 113,500.00 ZMW
+Notes: "UNL 2B mechanical meter slightly behind. May need recalibration."
+
+Expected:
+  Fuel:   4251.000 x 26.61 = K113,119.11
+  LPG:    3x147 = K441.00
+  Total:  K113,560.11
+  Cash:   K113,500.00
+  Diff:   -K60.11 (negligible)
+
+------------------------------------------------------------------------
+SUPERVISOR REVIEW (login: renard / renard123)
+------------------------------------------------------------------------
+  Katongo: Approve — "Cash shortage K19,236 noted. Investigation required."
+  Mweene:  Approve — "Meter deviation on UNL 2B. Service call logged."
+
+Closing Tank Dips:
+  TANK-DIESEL:  16.53 cm
+  TANK-PETROL:  11.28 cm
+
+
+================================================================================
+DAILY TANK READINGS
+================================================================================
+
+Enter in Daily Tank Reading page for each shift:
+
+DAY SHIFT 2026-03-31:
+  DIESEL:  Open 19.10  Close 13.59  Vol Open 15000  Vol Close 10673  Price 23.25  Cash 102198
+  PETROL:  Open 22.92  Close 18.27  Vol Open 18000  Vol Close 14349  Price 26.61  Cash 97700
+
+NIGHT SHIFT 2026-03-31:
+  DIESEL:  Open 13.59  Close 23.10  Vol Open 10673  Vol Close 18148  Price 23.25  Cash 56500
+    Delivery: Puma Energy, PEZ-2026-4481, 10000L invoice, 9875L flowmeter
+  PETROL:  Open 18.27  Close 16.69  Vol Open 14349  Vol Close 13108  Price 26.61  Cash 33600
+
+DAY SHIFT 2026-04-01:
+  DIESEL:  Open 23.10  Close 16.53  Vol Open 18148  Vol Close 12988  Price 23.25  Cash 100000
+  PETROL:  Open 16.69  Close 11.28  Vol Open 13108  Vol Close 8857   Price 26.61  Cash 113500
+
+
+================================================================================
+FLAG SUMMARY
+================================================================================
+
+| Shift | Flag                 | Source    | Details                        |
+|-------|----------------------|-----------|--------------------------------|
+| 1     | (clean)              | —         | Baseline, no flags             |
+| 2     | nozzle_loss_exceeded | LSD 3A   | 1.5L loss > 0.8L threshold     |
+| 2     | delivery_variance    | DIESEL    | Invoice vs Flowmeter 125L gap  |
+| 3     | cash_shortage        | Katongo   | ~K19,236 shortage              |
+| 3     | meter_deviation      | UNL 2B   | 0.72% > 0.5% threshold         |
+| 3     | credit_sale          | Kafubu    | 500L diesel on account         |
+
+
+================================================================================
+CREDENTIALS QUICK REFERENCE
+================================================================================
+
+| Role       | Name                | Username | Password    |
+|------------|---------------------|----------|-------------|
+| Owner      | Station Manager     | owner1   | owner123    |
+| Supervisor | Herve Renard        | renard   | renard123   |
+| Attendant  | Christopher Katongo | katongo  | katongo123  |
+| Attendant  | Kennedy Mweene      | mweene   | mweene123   |
+| Attendant  | Stophilla Sunzu     | sunzu    | sunzu123    |
+| Attendant  | Emmanuel Mayuka     | mayuka   | mayuka123   |
+
+================================================================================
+END OF SIMULATION DATA
+================================================================================
