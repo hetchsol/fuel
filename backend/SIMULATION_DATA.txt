@@ -102,12 +102,32 @@ Islands (auto-seeded, verify in Infrastructure):
 
 
 ================================================================================
+TANK LEVEL TRACKER (reference — tracks tank state across all shifts)
+================================================================================
+
+  TANK-DIESEL:
+    Start of Day 1:      15,000 L  (19.10 cm)
+    After Shift 1 sales: 10,673 L  (13.59 cm)   sold 4,327 L
+    + Delivery 1:        +9,850 L  → 20,523 L
+    + Delivery 3:        +4,930 L  → 25,453 L
+    After Shift 2 sales: 23,082 L  (29.39 cm)   sold 2,371 L
+    After Shift 3 sales: 17,922 L  (22.82 cm)   sold 5,160 L
+
+  TANK-PETROL:
+    Start of Day 1:      18,000 L  (22.92 cm)
+    After Shift 1 sales: 14,349 L  (18.27 cm)   sold 3,651 L
+    + Delivery 2:        +7,990 L  → 22,339 L
+    After Shift 2 sales: 21,098 L  (26.86 cm)   sold 1,241 L
+    After Shift 3 sales: 16,847 L  (21.45 cm)   sold 4,251 L
+
+
+================================================================================
 ================================================================================
 SHIFT 1: DAY SHIFT — 2026-03-31 (CLEAN SHIFT)
 ================================================================================
 ================================================================================
 
-Scenario: Normal operations, no flags.
+Scenario: Normal operations, no flags, no deliveries.
 
 Create shift: Date 2026-03-31, Type Day
 
@@ -116,8 +136,8 @@ Attendant assignments:
   Mweene  → Island 4, Island 5 (UNL 1A, 1B, 2A, 2B)
 
 Opening Tank Dips:
-  TANK-DIESEL:  19.10 cm
-  TANK-PETROL:  22.92 cm
+  TANK-DIESEL:  19.10 cm   (15,000 L)
+  TANK-PETROL:  22.92 cm   (18,000 L)
 
 ------------------------------------------------------------------------
 KATONGO — Diesel (login: katongo / katongo123)
@@ -129,7 +149,7 @@ Nozzle readings:
   LSD 2A:  Elec Open 430000.000  Elec Close 431520.800  Mech Open 430000  Mech Close 431521
   LSD 2B:  Elec Open 610000.000  Elec Close 610670.300  Mech Open 610000  Mech Close 610670
 
-Volumes: 1245.5 + 890.2 + 1520.8 + 670.3 = 4326.800 L diesel
+Volumes: 1245.5 + 890.2 + 1520.8 + 670.3 = 4,326.800 L diesel
 
 LPG Cylinders:
   9kg:  Opening Full 10, Sold Refill 2, Sold New 1, Closing Empty 3
@@ -144,7 +164,7 @@ Lubricants:
 Cash Handed In: 102,198.00 ZMW
 
 Expected:
-  Fuel:   4326.800 x 23.25 = K100,598.10
+  Fuel:   4,326.800 x 23.25 = K100,598.10
   LPG:    2x441 + 1x1241 + 1x931 = K3,054.00
   Lube:   1x750 = K750.00
   Acc:    1x600 = K600.00
@@ -162,7 +182,7 @@ Nozzle readings:
   UNL 2A:  Elec Open 300000.000  Elec Close 301100.600  Mech Open 300000  Mech Close 301101
   UNL 2B:  Elec Open 320000.000  Elec Close 320450.200  Mech Open 320000  Mech Close 320450
 
-Volumes: 1320.4 + 780.1 + 1100.6 + 450.2 = 3651.300 L petrol
+Volumes: 1320.4 + 780.1 + 1100.6 + 450.2 = 3,651.300 L petrol
 
 LPG Cylinders:
   6kg: Opening Full 15, Sold Refill 2, Closing Empty 2
@@ -170,7 +190,7 @@ LPG Cylinders:
 Cash Handed In: 97,700.00 ZMW
 
 Expected:
-  Fuel:   3651.300 x 26.61 = K97,140.09
+  Fuel:   3,651.300 x 26.61 = K97,140.09
   LPG:    2x294 = K588.00
   Total:  K97,728.09
   Cash:   K97,700.00
@@ -183,17 +203,18 @@ SUPERVISOR REVIEW (login: renard / renard123)
   Mweene:  Approve — "Within tolerance"
 
 Closing Tank Dips:
-  TANK-DIESEL:  13.59 cm
-  TANK-PETROL:  18.27 cm
+  TANK-DIESEL:  13.59 cm   (10,673 L)
+  TANK-PETROL:  18.27 cm   (14,349 L)
 
 
 ================================================================================
 ================================================================================
-SHIFT 2: NIGHT SHIFT — 2026-03-31 (DELIVERY + NOZZLE LOSS FLAG)
+SHIFT 2: NIGHT SHIFT — 2026-03-31 (3 DELIVERIES + NOZZLE LOSS FLAG)
 ================================================================================
 ================================================================================
 
-Scenario: Diesel delivery arrives. LSD 3A has 1.5L nozzle loss (> 0.8L).
+Scenario: 3 fuel deliveries during shift (2 diesel, 1 petrol) with
+different reconciliation outcomes. LSD 3A has 1.5L nozzle loss.
 
 Create shift: Date 2026-03-31, Type Night
 
@@ -202,26 +223,100 @@ Attendant assignments:
   Mayuka  → Island 4, Island 6 (UNL 1A, 1B, 3A, 3B)
 
 Opening Tank Dips:
-  TANK-DIESEL:  13.59 cm
-  TANK-PETROL:  18.27 cm
+  TANK-DIESEL:  13.59 cm   (10,673 L)
+  TANK-PETROL:  18.27 cm   (14,349 L)
 
 ------------------------------------------------------------------------
-DIESEL DELIVERY (record in Fuel Operations > Deliveries)
+DELIVERY 1: Puma Energy — Diesel (19:30) — VARIANCE_MINOR
+------------------------------------------------------------------------
+Record in Fuel Operations > Deliveries > "+ Record Delivery"
+
+  Tank:             TANK-DIESEL
+  Date:             2026-03-31
+  Time:             19:30
+  Volume Before:    10,673 L
+  Volume After:     20,523 L
+  Supplier:         Puma Energy Zambia
+  Invoice Number:   PEZ-2026-4481
+  Expected Volume:  10,000 L   (what the invoice says)
+  Flowmeter:        9,875 L    (what the gauge read)
+  Temperature:      28.5 C
+
+Three-Way Recon Result:
+  Invoice:    10,000 L
+  Flowmeter:   9,875 L
+  Tank Dip:    9,850 L  (20,523 - 10,673)
+
+  Invoice vs Flowmeter:  125 L  (1.25%)
+  Flowmeter vs Tank:      25 L  (0.25%)
+  Invoice vs Tank:       150 L  (1.50%)
+
+  Status:  VARIANCE_MINOR
+  Outlier: INVOICE (Flowmeter & Tank agree, Invoice is higher)
+  Meaning: Puma may have short-shipped ~125L
+
+------------------------------------------------------------------------
+DELIVERY 2: Oryx Energies — Petrol (20:45) — CLEAN
+------------------------------------------------------------------------
+  Tank:             TANK-PETROL
+  Date:             2026-03-31
+  Time:             20:45
+  Volume Before:    14,349 L
+  Volume After:     22,339 L
+  Supplier:         Oryx Energies Zambia
+  Invoice Number:   ORX-2026-7823
+  Expected Volume:  8,000 L
+  Flowmeter:        7,995 L
+  Temperature:      27.8 C
+
+Three-Way Recon Result:
+  Invoice:    8,000 L
+  Flowmeter:  7,995 L
+  Tank Dip:   7,990 L  (22,339 - 14,349)
+
+  Invoice vs Flowmeter:   5 L  (0.06%)
+  Flowmeter vs Tank:      5 L  (0.06%)
+  Invoice vs Tank:       10 L  (0.13%)
+
+  Status:  PASS
+  Meaning: All three measurements agree — clean delivery
+
+------------------------------------------------------------------------
+DELIVERY 3: TotalEnergies — Diesel (23:00) — VARIANCE (Tank Dip Outlier)
 ------------------------------------------------------------------------
   Tank:             TANK-DIESEL
   Date:             2026-03-31
-  Time:             21:30
-  Volume Before:    10673 L
-  Volume After:     20523 L
-  Supplier:         Puma Energy Zambia
-  Invoice Number:   PEZ-2026-4481
-  Expected Volume:  10000 L
-  Flowmeter:        9875 L
-  Temperature:      28.5 C
+  Time:             23:00
+  Volume Before:    18,500 L   (after Delivery 1 + some sales)
+  Volume After:     23,430 L
+  Supplier:         TotalEnergies Zambia
+  Invoice Number:   TEZ-2026-1195
+  Expected Volume:  5,000 L
+  Flowmeter:        4,985 L
+  Temperature:      26.2 C
 
-Delivery Recon Result:
-  Invoice 10000 vs Flowmeter 9875 vs Tank Dip 9850
-  Status: VARIANCE_MINOR | Outlier: INVOICE
+Three-Way Recon Result:
+  Invoice:    5,000 L
+  Flowmeter:  4,985 L
+  Tank Dip:   4,930 L  (23,430 - 18,500)
+
+  Invoice vs Flowmeter:   15 L  (0.30%)
+  Flowmeter vs Tank:      55 L  (1.10%)
+  Invoice vs Tank:        70 L  (1.40%)
+
+  Status:  VARIANCE_MINOR
+  Outlier: TANK_DIP (Invoice & Flowmeter agree, Tank shows less)
+  Meaning: Possible spillage during offload or dip reading error
+
+------------------------------------------------------------------------
+DELIVERY SUMMARY FOR SHIFT 2
+------------------------------------------------------------------------
+
+  | # | Supplier       | Fuel    | Invoice | Flowmeter | Tank Dip | Status         |
+  |---|----------------|---------|---------|-----------|----------|----------------|
+  | 1 | Puma Energy    | Diesel  | 10,000  |  9,875    |  9,850   | VARIANCE_MINOR |
+  | 2 | Oryx Energies  | Petrol  |  8,000  |  7,995    |  7,990   | PASS           |
+  | 3 | TotalEnergies  | Diesel  |  5,000  |  4,985    |  4,930   | VARIANCE_MINOR |
 
 ------------------------------------------------------------------------
 SUNZU — Diesel (login: sunzu / sunzu123)
@@ -233,7 +328,7 @@ Nozzle readings:
   LSD 3A:  Elec Open 100000.000  Elec Close 100850.500  Mech Open 100000  Mech Close 100849  <<<< 1.5L LOSS
   LSD 3B:  Elec Open 110000.000  Elec Close 110420.100  Mech Open 110000  Mech Close 110420
 
-Volumes: 699.7 + 400.6 + 850.5 + 420.1 = 2370.900 L diesel
+Volumes: 699.7 + 400.6 + 850.5 + 420.1 = 2,370.900 L diesel
   LSD 3A flagged: 1.5L deviation exceeds 0.8L threshold
 
 LPG Cylinders:
@@ -243,7 +338,7 @@ Cash Handed In: 56,500.00 ZMW
 Notes: "LSD 3A nozzle had meter discrepancy. Reported to supervisor."
 
 Expected:
-  Fuel:   2370.900 x 23.25 = K55,123.43
+  Fuel:   2,370.900 x 23.25 = K55,123.43
   LPG:    3x441 = K1,323.00
   Total:  K56,446.43
   Cash:   K56,500.00
@@ -259,7 +354,7 @@ Nozzle readings:
   UNL 3A:  Elec Open 80000.000   Elec Close 80380.200   Mech Open 80000   Mech Close 80380
   UNL 3B:  Elec Open 85000.000   Elec Close 85210.500   Mech Open 85000   Mech Close 85211
 
-Volumes: 400.5 + 250.2 + 380.2 + 210.5 = 1241.400 L petrol
+Volumes: 400.5 + 250.2 + 380.2 + 210.5 = 1,241.400 L petrol
 
 Lubricants:
   Brake Fluid DOT 3 1L: Opening 6, Sold 1
@@ -267,7 +362,7 @@ Lubricants:
 Cash Handed In: 33,600.00 ZMW
 
 Expected:
-  Fuel:   1241.400 x 26.61 = K33,033.65
+  Fuel:   1,241.400 x 26.61 = K33,033.65
   Lube:   1x600 = K600.00
   Total:  K33,633.65
   Cash:   K33,600.00
@@ -280,8 +375,8 @@ SUPERVISOR REVIEW (login: renard / renard123)
   Mayuka: Approve — "Clean night shift"
 
 Closing Tank Dips:
-  TANK-DIESEL:  23.10 cm
-  TANK-PETROL:  16.69 cm
+  TANK-DIESEL:  29.39 cm   (23,082 L)
+  TANK-PETROL:  26.86 cm   (21,098 L)
 
 
 ================================================================================
@@ -300,8 +395,8 @@ Attendant assignments:
   Mweene  → Island 5, Island 6 (UNL 2A, 2B, 3A, 3B)
 
 Opening Tank Dips:
-  TANK-DIESEL:  23.10 cm
-  TANK-PETROL:  16.69 cm
+  TANK-DIESEL:  29.39 cm   (23,082 L)
+  TANK-PETROL:  26.86 cm   (21,098 L)
 
 ------------------------------------------------------------------------
 KATONGO — Diesel (login: katongo / katongo123)
@@ -313,7 +408,7 @@ Nozzle readings:
   LSD 3A:  Elec Open 100850.500  Elec Close 102100.300  Mech Open 100849  Mech Close 102100
   LSD 3B:  Elec Open 110420.100  Elec Close 111350.600  Mech Open 110420  Mech Close 111351
 
-Volumes: 1759.7 + 1220.4 + 1249.8 + 930.5 = 5160.400 L diesel
+Volumes: 1759.7 + 1220.4 + 1249.8 + 930.5 = 5,160.400 L diesel
 
 LPG Cylinders:
   6kg:  Opening Full 13, Additions 10, Sold Refill 3, Sold New 2, Closing Empty 5
@@ -335,7 +430,7 @@ Cash Handed In: 100,000.00 ZMW
 Notes: "Kafubu Corp collected 500L diesel on account. Busy day."
 
 Expected:
-  Fuel:    5160.400 x 23.25 = K119,979.30
+  Fuel:    5,160.400 x 23.25 = K119,979.30
   LPG:     3x294 + 2x844 + 2x931 = K4,432.00
   Lube:    2x550 + 1x350 = K1,450.00
   Acc:     1x5000 = K5,000.00
@@ -355,7 +450,7 @@ Nozzle readings:
   UNL 3A:  Elec Open 80380.200   Elec Close 81580.500   Mech Open 80380   Mech Close 81581
   UNL 3B:  Elec Open 85210.500   Elec Close 85910.300   Mech Open 85211   Mech Close 85910
 
-Volumes: 1550.3 + 800.6 + 1200.3 + 699.8 = 4251.000 L petrol
+Volumes: 1550.3 + 800.6 + 1200.3 + 699.8 = 4,251.000 L petrol
   UNL 2B flagged: 5.8L deviation (0.72%) exceeds 0.5% threshold
 
 LPG Cylinders:
@@ -365,7 +460,7 @@ Cash Handed In: 113,500.00 ZMW
 Notes: "UNL 2B mechanical meter slightly behind. May need recalibration."
 
 Expected:
-  Fuel:   4251.000 x 26.61 = K113,119.11
+  Fuel:   4,251.000 x 26.61 = K113,119.11
   LPG:    3x147 = K441.00
   Total:  K113,560.11
   Cash:   K113,500.00
@@ -378,8 +473,8 @@ SUPERVISOR REVIEW (login: renard / renard123)
   Mweene:  Approve — "Meter deviation on UNL 2B. Service call logged."
 
 Closing Tank Dips:
-  TANK-DIESEL:  16.53 cm
-  TANK-PETROL:  11.28 cm
+  TANK-DIESEL:  22.82 cm   (17,922 L)
+  TANK-PETROL:  21.45 cm   (16,847 L)
 
 
 ================================================================================
@@ -391,29 +486,52 @@ Enter in Daily Tank Reading page for each shift:
 DAY SHIFT 2026-03-31:
   DIESEL:  Open 19.10  Close 13.59  Vol Open 15000  Vol Close 10673  Price 23.25  Cash 102198
   PETROL:  Open 22.92  Close 18.27  Vol Open 18000  Vol Close 14349  Price 26.61  Cash 97700
+  No deliveries.
 
 NIGHT SHIFT 2026-03-31:
-  DIESEL:  Open 13.59  Close 23.10  Vol Open 10673  Vol Close 18148  Price 23.25  Cash 56500
-    Delivery: Puma Energy, PEZ-2026-4481, 10000L invoice, 9875L flowmeter
-  PETROL:  Open 18.27  Close 16.69  Vol Open 14349  Vol Close 13108  Price 26.61  Cash 33600
+  DIESEL:  Open 13.59  Close 29.39  Vol Open 10673  Vol Close 23082  Price 23.25  Cash 56500
+    Delivery 1: Puma Energy,    PEZ-2026-4481, 10000L invoice, 9875L flowmeter
+    Delivery 3: TotalEnergies,  TEZ-2026-1195,  5000L invoice, 4985L flowmeter
+  PETROL:  Open 18.27  Close 26.86  Vol Open 14349  Vol Close 21098  Price 26.61  Cash 33600
+    Delivery 2: Oryx Energies,  ORX-2026-7823,  8000L invoice, 7995L flowmeter
 
 DAY SHIFT 2026-04-01:
-  DIESEL:  Open 23.10  Close 16.53  Vol Open 18148  Vol Close 12988  Price 23.25  Cash 100000
-  PETROL:  Open 16.69  Close 11.28  Vol Open 13108  Vol Close 8857   Price 26.61  Cash 113500
+  DIESEL:  Open 29.39  Close 22.82  Vol Open 23082  Vol Close 17922  Price 23.25  Cash 100000
+  PETROL:  Open 26.86  Close 21.45  Vol Open 21098  Vol Close 16847  Price 26.61  Cash 113500
+  No deliveries.
 
 
 ================================================================================
 FLAG SUMMARY
 ================================================================================
 
-| Shift | Flag                 | Source    | Details                        |
-|-------|----------------------|-----------|--------------------------------|
-| 1     | (clean)              | —         | Baseline, no flags             |
-| 2     | nozzle_loss_exceeded | LSD 3A   | 1.5L loss > 0.8L threshold     |
-| 2     | delivery_variance    | DIESEL    | Invoice vs Flowmeter 125L gap  |
-| 3     | cash_shortage        | Katongo   | ~K19,236 shortage              |
-| 3     | meter_deviation      | UNL 2B   | 0.72% > 0.5% threshold         |
-| 3     | credit_sale          | Kafubu    | 500L diesel on account         |
+| Shift | Flag                 | Source         | Details                        |
+|-------|----------------------|----------------|--------------------------------|
+| 1     | (clean)              | —              | Baseline, no flags             |
+| 2     | nozzle_loss_exceeded | LSD 3A         | 1.5L loss > 0.8L threshold     |
+| 2     | delivery_variance    | Puma (Diesel)  | Invoice 125L > Flowmeter       |
+| 2     | delivery_clean       | Oryx (Petrol)  | All 3 measurements agree       |
+| 2     | delivery_variance    | Total (Diesel) | Tank dip 55L < Flowmeter       |
+| 3     | cash_shortage        | Katongo        | K19,236 shortage               |
+| 3     | meter_deviation      | UNL 2B         | 0.72% > 0.5% threshold         |
+| 3     | credit_sale          | Kafubu Corp    | 500L diesel on account         |
+
+
+================================================================================
+DELIVERY RECONCILIATION SUMMARY
+================================================================================
+
+Three deliveries test all three reconciliation outcomes:
+
+| # | Supplier       | Fuel   | Invoice | Flowmeter | Tank Dip | Gap    | Status   | Outlier  |
+|---|----------------|--------|---------|-----------|----------|--------|----------|----------|
+| 1 | Puma Energy    | Diesel | 10,000  | 9,875     | 9,850    | 150 L  | VARIANCE | INVOICE  |
+| 2 | Oryx Energies  | Petrol |  8,000  | 7,995     | 7,990    |  10 L  | PASS     | —        |
+| 3 | TotalEnergies  | Diesel |  5,000  | 4,985     | 4,930    |  70 L  | VARIANCE | TANK_DIP |
+
+Delivery 1: Supplier invoice is the outlier — possible short-shipment
+Delivery 2: Clean — all three agree within tolerance
+Delivery 3: Tank dip is the outlier — possible spillage or dip error
 
 
 ================================================================================
