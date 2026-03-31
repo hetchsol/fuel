@@ -84,19 +84,32 @@ def reset_file_storage():
     logger.info("Log in as owner1 / owner123 to run the setup wizard.")
 
 
+def _normalize_db_url(url: str) -> str:
+    """Convert async/SQLAlchemy-style URLs to plain psycopg format."""
+    for prefix in ("postgresql+asyncpg://", "postgresql+psycopg2://", "postgres://"):
+        if url.startswith(prefix):
+            return "postgresql://" + url[len(prefix):]
+    return url
+
+
 def main():
     DATABASE_URL = os.getenv("DATABASE_URL")
 
     if not DATABASE_URL:
-        # Try loading from .env
+        # Try loading from .env — prefer DATABASE_URL_SYNC, fall back to DATABASE_URL
         env_path = os.path.join(os.path.dirname(__file__), '.env')
         if os.path.exists(env_path):
             with open(env_path) as f:
+                env_vars = {}
                 for line in f:
                     line = line.strip()
-                    if line.startswith('DATABASE_URL='):
-                        DATABASE_URL = line.split('=', 1)[1].strip().strip('"').strip("'")
-                        break
+                    if '=' in line and not line.startswith('#'):
+                        key, val = line.split('=', 1)
+                        env_vars[key.strip()] = val.strip().strip('"').strip("'")
+                DATABASE_URL = env_vars.get('DATABASE_URL_SYNC') or env_vars.get('DATABASE_URL')
+
+    if DATABASE_URL:
+        DATABASE_URL = _normalize_db_url(DATABASE_URL)
 
     if not DATABASE_URL:
         logger.info("No DATABASE_URL found. Clearing file-based storage instead...")
