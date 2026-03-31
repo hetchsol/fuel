@@ -85,8 +85,8 @@ export function middleware(request: NextRequest) {
   // Setup wizard enforcement — owners must complete setup before accessing any page
   const needsSetup = request.cookies.get('needsSetup')?.value === '1'
 
-  if (pathname === '/setup') {
-    // Only owners who need setup can access /setup
+  if (pathname === '/initializing' || pathname === '/setup') {
+    // Only owners who need setup can access /initializing and /setup
     if (role === 'owner' && needsSetup) {
       return NextResponse.next()
     }
@@ -95,8 +95,8 @@ export function middleware(request: NextRequest) {
   }
 
   if (needsSetup && role === 'owner') {
-    // Owner hasn't completed setup — force them to /setup
-    return NextResponse.redirect(new URL('/setup', request.url))
+    // Owner hasn't completed setup — force them to /initializing
+    return NextResponse.redirect(new URL('/initializing', request.url))
   }
 
   // Owner-only routes

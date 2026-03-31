@@ -134,10 +134,10 @@ export default function Login() {
       document.cookie = `accessToken=${data.access_token}; path=/; SameSite=Lax${secure}`
       document.cookie = `user=${encodeURIComponent(JSON.stringify(data.user))}; path=/; SameSite=Lax${secure}`
 
-      // Redirect to setup wizard if first-time owner login
+      // Redirect to initialization screen if first-time owner login
       if (data.needs_setup) {
         document.cookie = `needsSetup=1; path=/; SameSite=Lax${secure}`
-        router.push('/setup')
+        router.push('/initializing')
       } else {
         const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/'
         router.push(redirect)

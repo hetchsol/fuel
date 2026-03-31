@@ -70,7 +70,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       setActiveStationId(localStorage.getItem('stationId') || parsed.station_id || 'ST001')
 
       // Check if owner needs to complete setup wizard
-      if (parsed.role === 'owner' && router.pathname !== '/login' && router.pathname !== '/setup') {
+      if (parsed.role === 'owner' && router.pathname !== '/login' && router.pathname !== '/setup' && router.pathname !== '/initializing') {
         authFetch(`${BASE}/settings/system`)
           .then(r => r.ok ? r.json() : null)
           .then(sys => {
@@ -78,12 +78,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               // Set cookie so middleware enforces on subsequent navigations
               const secure = window.location.protocol === 'https:' ? '; Secure' : ''
               document.cookie = `needsSetup=1; path=/; SameSite=Lax${secure}`
-              router.push('/setup')
+              router.push('/initializing')
             }
           })
           .catch(() => {})
       }
-    } else if (router.pathname !== '/login' && router.pathname !== '/setup') {
+    } else if (router.pathname !== '/login' && router.pathname !== '/setup' && router.pathname !== '/initializing') {
       router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`)
     }
     setLoading(false)
