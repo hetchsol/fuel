@@ -85,12 +85,23 @@ export function middleware(request: NextRequest) {
   // Setup wizard enforcement — owners must complete setup before accessing any page
   const needsSetup = request.cookies.get('needsSetup')?.value === '1'
 
-  if (pathname === '/initializing' || pathname === '/setup') {
-    // Only owners who need setup can access /initializing and /setup
+  if (pathname === '/initializing') {
+    // Allow reverse initialization (logout animation) for any authenticated owner
+    const direction = request.nextUrl.searchParams.get('direction')
+    if (direction === 'reverse' && role === 'owner') {
+      return NextResponse.next()
+    }
+    // Forward initialization only for owners who need setup
     if (role === 'owner' && needsSetup) {
       return NextResponse.next()
     }
-    // Everyone else: redirect to dashboard
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  if (pathname === '/setup') {
+    if (role === 'owner' && needsSetup) {
+      return NextResponse.next()
+    }
     return NextResponse.redirect(new URL('/', request.url))
   }
 

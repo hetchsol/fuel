@@ -101,6 +101,14 @@ export default function SetupWizard() {
         router.push('/')
       }
     })
+
+    // Intercept browser back button — show reverse initialization
+    const handlePopState = () => {
+      router.replace('/initializing?direction=reverse')
+    }
+    window.history.pushState(null, '', window.location.href)
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
   const loadSettings = async (): Promise<boolean> => {
