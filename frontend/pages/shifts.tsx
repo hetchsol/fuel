@@ -254,6 +254,17 @@ export default function Shifts() {
     } catch (err: any) {
       console.error('Failed to fetch tank dip readings:', err)
     }
+
+    // Also fetch previous shift's closing dips for auto-populate
+    try {
+      const prevRes = await authFetch(`${BASE}/shifts/${activeShift.shift_id}/previous-dip-readings`)
+      if (prevRes.ok) {
+        const prevData = await prevRes.json()
+        if (prevData.found) {
+          setPreviousDipData(prevData)
+        }
+      }
+    } catch {}
   }
 
   const handleSubmitTankDipReading = async (e: React.FormEvent) => {
@@ -938,23 +949,14 @@ export default function Shifts() {
             {(currentUser?.role === 'supervisor' || currentUser?.role === 'owner') && (
               <button
                 onClick={() => {
-                  // Auto-populate opening dip from previous shift if form is empty
-                  if (!tankDipForm.opening_dip_cm) {
-                    authFetch(`${BASE}/shifts/${activeShift.shift_id}/previous-dip-readings`)
-                      .then(r => r.ok ? r.json() : { found: false })
-                      .then(data => {
-                        if (data.found && data.readings?.length > 0) {
-                          // Pre-select first tank and auto-fill opening
-                          const first = data.readings[0]
-                          setTankDipForm(prev => ({
-                            ...prev,
-                            tank_id: prev.tank_id || first.tank_id,
-                            opening_dip_cm: first.opening_dip_cm?.toFixed(1) || '',
-                          }))
-                          setPreviousDipData(data)
-                        }
-                      })
-                      .catch(() => {})
+                  // Auto-populate opening dip from previous shift data
+                  if (previousDipData?.found && previousDipData.readings?.length > 0) {
+                    const firstTank = previousDipData.readings[0]
+                    setTankDipForm(prev => ({
+                      ...prev,
+                      tank_id: prev.tank_id || firstTank.tank_id,
+                      opening_dip_cm: prev.opening_dip_cm || firstTank.opening_dip_cm?.toFixed(1) || '',
+                    }))
                   }
                   setShowTankDipModal(true)
                 }}
