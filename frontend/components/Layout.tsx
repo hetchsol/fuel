@@ -99,6 +99,35 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
   }, [user, router.pathname])
 
+  // Silent token refresh — check every 30 min, refresh if token > 20 hours old
+  useEffect(() => {
+    if (!user || router.pathname === '/login' || router.pathname === '/setup' || router.pathname === '/initializing') return
+    const tryRefresh = () => {
+      const tokenSetAt = localStorage.getItem('tokenSetAt')
+      if (!tokenSetAt) {
+        localStorage.setItem('tokenSetAt', String(Date.now()))
+        return
+      }
+      const ageHours = (Date.now() - parseInt(tokenSetAt)) / (1000 * 60 * 60)
+      if (ageHours > 20) {
+        authFetch(`${BASE}/auth/refresh`, { method: 'POST' })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data?.access_token) {
+              localStorage.setItem('accessToken', data.access_token)
+              localStorage.setItem('tokenSetAt', String(Date.now()))
+              const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+              document.cookie = `accessToken=${data.access_token}; path=/; SameSite=Strict${secure}`
+            }
+          })
+          .catch(() => {})
+      }
+    }
+    tryRefresh()
+    const interval = setInterval(tryRefresh, 30 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [user, router.pathname])
+
   // Poll unread notification count for supervisors/owners
   const isSupervisorOrOwner = user && (user.role === 'supervisor' || user.role === 'owner')
 

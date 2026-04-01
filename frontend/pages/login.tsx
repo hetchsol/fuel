@@ -129,6 +129,7 @@ export default function Login() {
       localStorage.setItem('accessToken', data.access_token)
       localStorage.setItem('user', JSON.stringify(data.user))
       localStorage.setItem('stationId', data.user.station_id || 'ST001')
+      localStorage.setItem('tokenSetAt', String(Date.now()))
 
       const secure = window.location.protocol === 'https:' ? '; Secure' : ''
       document.cookie = `accessToken=${data.access_token}; path=/; SameSite=Strict${secure}`

@@ -297,6 +297,35 @@ def logout(token: str):
     return {"message": "Logged out successfully"}
 
 
+@router.post("/refresh")
+def refresh_token(current_user: dict = Depends(get_current_user)):
+    """Issue a new session token, extending the session by 24 hours."""
+    username = current_user["username"]
+
+    if _USE_DB():
+        from ...database.db import db_get_user_by_username, db_create_session
+        user = db_get_user_by_username(username)
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        token = _generate_token()
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+        db_create_session(token, user["user_id"], username, user["role"], expires_at)
+
+        return {"access_token": token, "token_type": "bearer"}
+    else:
+        user_data = users_db.get(username)
+        if not user_data:
+            raise HTTPException(status_code=401, detail="User not found")
+        session_token = f"token-{username}-{user_data['user_id']}"
+        active_sessions[session_token] = {
+            "user_id": user_data["user_id"],
+            "username": username,
+            "role": user_data["role"],
+        }
+        return {"access_token": session_token, "token_type": "bearer"}
+
+
 @router.get("/me")
 def get_user_info(token: str):
     """Get current logged-in user info."""

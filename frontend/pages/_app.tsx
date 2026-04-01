@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import Layout from '../components/Layout'
+import ErrorBoundary from '../components/ErrorBoundary'
 import { ThemeProvider } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { Toaster } from 'react-hot-toast'
@@ -30,6 +31,7 @@ export default function App({ Component, pageProps }: AppProps) {
   }, [router])
 
   return (
+    <ErrorBoundary>
     <ThemeProvider>
       <Head>
         <title>NextStop</title>
@@ -77,5 +79,6 @@ export default function App({ Component, pageProps }: AppProps) {
         )}
       </Layout>
     </ThemeProvider>
+    </ErrorBoundary>
   )
 }

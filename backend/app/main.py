@@ -32,6 +32,16 @@ _handler.setFormatter(_JSONFormatter())
 logging.root.handlers = [_handler]
 logging.root.setLevel(logging.INFO)
 
+# ── Sentry error tracking (optional — set SENTRY_DSN env var to enable) ──
+_sentry_dsn = os.getenv("SENTRY_DSN")
+if _sentry_dsn:
+    try:
+        import sentry_sdk
+        sentry_sdk.init(dsn=_sentry_dsn, traces_sample_rate=0.1, environment=os.getenv("ENVIRONMENT", "production"))
+        logging.getLogger(__name__).info("[sentry] Error tracking enabled")
+    except ImportError:
+        logging.getLogger(__name__).warning("[sentry] sentry-sdk not installed — skipping")
+
 logger = logging.getLogger(__name__)
 
 
