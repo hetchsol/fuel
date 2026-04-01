@@ -5,7 +5,7 @@ Dual-mode:
   - DATABASE_URL set   → PostgreSQL-backed users + sessions (bcrypt, secure tokens, 24h expiry)
   - DATABASE_URL unset → in-memory fallback (local dev, unchanged behavior)
 """
-from fastapi import APIRouter, HTTPException, Header, Depends
+from fastapi import APIRouter, HTTPException, Header, Depends, Request
 from ...models.models import UserLogin, User, UserRole
 from ...database.storage import get_station_storage
 from ...services.audit_service import log_audit_event
@@ -16,12 +16,28 @@ import secrets
 import string
 import logging
 import os
+import time
 from typing import Optional
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_STATION_ID = os.getenv("DEFAULT_STATION_ID", "ST001")
+
+# ── Rate limiting ─────────────────────────────────────
+_login_attempts: dict = defaultdict(list)
+_RATE_LIMIT_MAX = 5
+_RATE_LIMIT_WINDOW = 60  # seconds
+
+
+def _check_rate_limit(ip: str):
+    """Block if more than 5 login attempts per minute from same IP."""
+    now = time.time()
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _RATE_LIMIT_WINDOW]
+    if len(_login_attempts[ip]) >= _RATE_LIMIT_MAX:
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please wait 60 seconds.")
+    _login_attempts[ip].append(now)
 
 router = APIRouter()
 
@@ -186,8 +202,11 @@ async def get_station_context(
 # ──────────────────────────────────────────────────────────
 
 @router.post("/login")
-def login(credentials: UserLogin):
+def login(credentials: UserLogin, request: Request):
     """Authenticate user and return role-based access token."""
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
+
     username = credentials.username
     password = credentials.password
 

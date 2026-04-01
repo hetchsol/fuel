@@ -7,10 +7,15 @@ When DATABASE_URL is set, storage is persisted to PostgreSQL.
 Otherwise it lives only in memory (original behavior).
 """
 from typing import Dict, List, Any, Optional
+from collections import defaultdict
 import copy
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
+
+# Per-station locks to prevent concurrent read-modify-write race conditions
+_storage_locks: Dict[str, threading.Lock] = defaultdict(threading.Lock)
 
 
 def _make_empty_storage() -> Dict[str, Any]:
@@ -73,8 +78,10 @@ def get_station_storage(station_id: str) -> Dict[str, Any]:
     """
     Get or create the storage dict for a station.
     On first access, attempts to load from PostgreSQL if DATABASE_URL is set.
+    Thread-safe via per-station locking.
     """
-    if station_id not in STATIONS_STORAGE:
+    with _storage_locks[station_id]:
+      if station_id not in STATIONS_STORAGE:
         # Try loading from DB first
         from .db import DATABASE_URL, db_load_storage, is_db_active
         if DATABASE_URL and is_db_active():
@@ -93,12 +100,14 @@ def save_station_storage(station_id: str):
     """
     Persist the in-memory storage dict for a station to PostgreSQL.
     No-op if DATABASE_URL is not set or DB is not active.
+    Thread-safe via per-station locking.
     """
     from .db import DATABASE_URL, db_save_storage, is_db_active
     if not DATABASE_URL or not is_db_active():
         return
-    if station_id in STATIONS_STORAGE:
-        db_save_storage(station_id, STATIONS_STORAGE[station_id])
+    with _storage_locks[station_id]:
+        if station_id in STATIONS_STORAGE:
+            db_save_storage(station_id, STATIONS_STORAGE[station_id])
 
 
 def save_all_stations_storage():
@@ -108,6 +117,35 @@ def save_all_stations_storage():
         return
     for station_id, storage in STATIONS_STORAGE.items():
         db_save_storage(station_id, storage)
+
+
+def archive_old_data(station_id: str, days: int = 90) -> dict:
+    """
+    Trim storage lists older than N days for a station.
+    Returns count of items removed per key. Owner-triggered only.
+    """
+    from datetime import datetime, timedelta
+
+    storage = get_station_storage(station_id)
+    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    removed = {}
+
+    archivable_keys = ['readings', 'reconciliations_data', 'tank_reconciliations_data',
+                        'delivery_history', 'lpg_sales', 'lubricant_sales',
+                        'credit_sales', 'accessories_sales']
+
+    with _storage_locks[station_id]:
+        for key in archivable_keys:
+            items = storage.get(key, [])
+            if not isinstance(items, list):
+                continue
+            before = len(items)
+            storage[key] = [i for i in items if (i.get('date') or i.get('created_at') or '') > cutoff]
+            after = len(storage[key])
+            if before > after:
+                removed[key] = before - after
+
+    return removed
 
 
 # ──────────────────────────────────────────────────────────

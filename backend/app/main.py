@@ -1,6 +1,8 @@
 
 import os
 import logging
+import json
+import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +15,22 @@ from app.database.seed_defaults import seed_station_defaults
 from app.database.db import init_db, close_db, is_db_active, DATABASE_URL
 from app.services.shift_auto_close import check_and_close_stale_shifts
 import app.database.storage as storage_module
+
+
+# ── Structured JSON logging ───────────────────────────
+class _JSONFormatter(logging.Formatter):
+    def format(self, record):
+        return json.dumps({
+            "time": self.formatTime(record),
+            "level": record.levelname,
+            "module": record.module,
+            "message": record.getMessage(),
+        })
+
+_handler = logging.StreamHandler()
+_handler.setFormatter(_JSONFormatter())
+logging.root.handlers = [_handler]
+logging.root.setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +86,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Global exception handler — unhandled errors return JSON, not HTML
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"[unhandled] {request.method} {request.url.path}: {exc}")
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 app.include_router(router, prefix="/api/v1")
 
@@ -146,18 +172,55 @@ def shutdown():
     close_db()
 
 
+_last_session_cleanup = time.time()
+
 @app.middleware("http")
 async def auto_flush_storage(request: Request, call_next):
-    """After each mutating request, flush in-memory storage to PostgreSQL."""
+    """After each mutating request, flush storage. Also logs request timing."""
+    global _last_session_cleanup
+    start = time.time()
     response = await call_next(request)
+    duration_ms = (time.time() - start) * 1000
+
+    # Log request (skip /health to avoid spam)
+    path = request.url.path
+    if path != "/health":
+        logger.info(f"{request.method} {path} -> {response.status_code} ({duration_ms:.0f}ms)")
+
+    # Flush storage on mutations
     if is_db_active() and request.method in ("POST", "PUT", "PATCH", "DELETE"):
         try:
             save_all_stations_storage()
         except Exception as e:
             logger.error(f"[flush] Failed to save storage: {e}")
+
+    # Periodic session cleanup (every hour)
+    if is_db_active() and time.time() - _last_session_cleanup > 3600:
+        try:
+            from app.database.db import db_cleanup_expired_sessions
+            db_cleanup_expired_sessions()
+            _last_session_cleanup = time.time()
+        except Exception:
+            pass
+
     return response
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "storage": "postgresql" if is_db_active() else "file"}
+    db_ok = False
+    if is_db_active():
+        try:
+            from app.database.db import _get_connection
+            conn = _get_connection()
+            if conn:
+                conn.execute("SELECT 1")
+                db_ok = True
+        except Exception:
+            pass
+    return {
+        "status": "ok" if db_ok or not DATABASE_URL else "degraded",
+        "storage": "postgresql" if db_ok else "file",
+        "version": "1.0.0",
+        "stations": len(stations_registry.STATIONS),
+    }

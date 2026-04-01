@@ -100,9 +100,10 @@ def record_sale(payload: SaleIn, ctx: dict = Depends(get_station_context)):
             if target_tank:
                 tank = tank_data[target_tank]
                 current_level = tank.get("current_level", 0)
-                tank["current_level"] = max(
-                    0, current_level - sale.get("average_volume", 0)
-                )
+                volume_sold = sale.get("average_volume", 0)
+                if current_level < volume_sold:
+                    sale["oversell_warning"] = True
+                tank["current_level"] = max(0, current_level - volume_sold)
                 tank["last_updated"] = datetime.now().isoformat()
                 sale["tank_id"] = target_tank
                 sale["tank_level_after"] = tank["current_level"]

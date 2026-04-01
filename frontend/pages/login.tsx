@@ -131,12 +131,12 @@ export default function Login() {
       localStorage.setItem('stationId', data.user.station_id || 'ST001')
 
       const secure = window.location.protocol === 'https:' ? '; Secure' : ''
-      document.cookie = `accessToken=${data.access_token}; path=/; SameSite=Lax${secure}`
-      document.cookie = `user=${encodeURIComponent(JSON.stringify(data.user))}; path=/; SameSite=Lax${secure}`
+      document.cookie = `accessToken=${data.access_token}; path=/; SameSite=Strict${secure}`
+      document.cookie = `user=${encodeURIComponent(JSON.stringify(data.user))}; path=/; SameSite=Strict${secure}`
 
       // Redirect to initialization screen if first-time owner login
       if (data.needs_setup) {
-        document.cookie = `needsSetup=1; path=/; SameSite=Lax${secure}`
+        document.cookie = `needsSetup=1; path=/; SameSite=Strict${secure}`
         router.push('/initializing')
       } else {
         const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/'
