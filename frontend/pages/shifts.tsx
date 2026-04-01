@@ -200,9 +200,16 @@ export default function Shifts() {
         // Filter only users with role='user' (attendants)
         const attendantsOnly = data.filter((u: any) => u.role === 'user')
         setAvailableStaff(attendantsOnly)
+        if (attendantsOnly.length === 0 && data.length === 0) {
+          setError('No staff found. Create attendants in Administration > Users first.')
+        }
+      } else {
+        console.error('Staff API returned', res.status)
+        setError('Failed to load staff list. Try refreshing the page.')
       }
     } catch (err: any) {
       console.error('Failed to load staff:', err)
+      setError('Failed to load staff list. Check your connection.')
     }
   }
 
