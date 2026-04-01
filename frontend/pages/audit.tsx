@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getHeaders, BASE } from '../lib/api'
+import { getHeaders, BASE, authFetch } from '../lib/api'
 
 const ACTION_OPTIONS = [
   '',
@@ -90,7 +90,7 @@ export default function AuditLogPage() {
       if (endDate) params.set('end_date', endDate)
       params.set('limit', String(currentLimit))
 
-      const res = await fetch(`${BASE}/audit/?${params.toString()}`, {
+      const res = await authFetch(`${BASE}/audit/?${params.toString()}`, {
         headers: getHeaders(),
       })
       if (!res.ok) throw new Error('Failed to fetch audit log')

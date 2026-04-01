@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 import Link from 'next/link'
 
 const BASE = '/api/v1'
@@ -49,7 +49,7 @@ export default function DailyCloseOff() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${BASE}/daily-close-off/summary?date=${selectedDate}`, {
+      const res = await authFetch(`${BASE}/daily-close-off/summary?date=${selectedDate}`, {
         headers: getHeaders(),
       })
       if (!res.ok) {
@@ -84,7 +84,7 @@ export default function DailyCloseOff() {
   const fetchHistory = async () => {
     setHistoryLoading(true)
     try {
-      const res = await fetch(`${BASE}/daily-close-off/history?limit=30`, {
+      const res = await authFetch(`${BASE}/daily-close-off/history?limit=30`, {
         headers: getHeaders(),
       })
       if (res.ok) setHistory(await res.json())
@@ -114,7 +114,7 @@ export default function DailyCloseOff() {
 
     setClosing(true)
     try {
-      const res = await fetch(`${BASE}/daily-close-off/close`, {
+      const res = await authFetch(`${BASE}/daily-close-off/close`, {
         method: 'POST',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({

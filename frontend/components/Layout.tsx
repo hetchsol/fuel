@@ -106,7 +106,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     if (router.pathname === '/login' || router.pathname === '/setup') return
     if (!isSupervisorOrOwner) return
     const fetchCount = () => {
-      fetch(`${BASE}/notifications/unread-count`, { headers: getHeaders() })
+      authFetch(`${BASE}/notifications/unread-count`, { headers: getHeaders() })
         .then(r => r.ok ? r.json() : { count: 0 })
         .then(data => setUnreadCount(data.count))
         .catch(() => {})
@@ -135,7 +135,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const openNotifDropdown = useCallback(() => {
     setShowNotifications(prev => !prev)
     if (!showNotifications) {
-      fetch(`${BASE}/notifications/?limit=20`, { headers: getHeaders() })
+      authFetch(`${BASE}/notifications/?limit=20`, { headers: getHeaders() })
         .then(r => r.ok ? r.json() : [])
         .then(data => setNotifications(data))
         .catch(() => {})
@@ -143,7 +143,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [showNotifications])
 
   const markNotifRead = useCallback((id: string) => {
-    fetch(`${BASE}/notifications/${id}/read`, { method: 'PATCH', headers: getHeaders() })
+    authFetch(`${BASE}/notifications/${id}/read`, { method: 'PATCH', headers: getHeaders() })
       .then(r => {
         if (r.ok) {
           setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
@@ -154,7 +154,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [])
 
   const markAllRead = useCallback(() => {
-    fetch(`${BASE}/notifications/mark-all-read`, { method: 'PATCH', headers: getHeaders() })
+    authFetch(`${BASE}/notifications/mark-all-read`, { method: 'PATCH', headers: getHeaders() })
       .then(r => {
         if (r.ok) {
           setNotifications(prev => prev.map(n => ({ ...n, read: true })))

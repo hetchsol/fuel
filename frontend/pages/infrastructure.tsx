@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -70,7 +70,7 @@ export default function Infrastructure() {
 
   const fetchTanks = async () => {
     try {
-      const res = await fetch(`${BASE}/tanks/levels`, {
+      const res = await authFetch(`${BASE}/tanks/levels`, {
         headers: getHeaders(),
       })
       if (res.ok) {
@@ -84,7 +84,7 @@ export default function Infrastructure() {
 
   const fetchIslands = async () => {
     try {
-      const res = await fetch(`${BASE}/islands/`, {
+      const res = await authFetch(`${BASE}/islands/`, {
         headers: getHeaders(),
       })
       if (res.ok) {
@@ -100,7 +100,7 @@ export default function Infrastructure() {
     setTankLoading(true)
     setMessage(null)
     try {
-      const res = await fetch(`${BASE}/tanks/create?tank_id=${encodeURIComponent(newTank.tank_id)}&fuel_type=${encodeURIComponent(newTank.fuel_type)}&capacity=${newTank.capacity}&initial_level=${newTank.initial_level}`, {
+      const res = await authFetch(`${BASE}/tanks/create?tank_id=${encodeURIComponent(newTank.tank_id)}&fuel_type=${encodeURIComponent(newTank.fuel_type)}&capacity=${newTank.capacity}&initial_level=${newTank.initial_level}`, {
         method: 'POST',
         headers: getHeaders(),
       })
@@ -131,7 +131,7 @@ export default function Infrastructure() {
     setTankLoading(true)
     setMessage(null)
     try {
-      const res = await fetch(`${BASE}/tanks/${tankId}`, {
+      const res = await authFetch(`${BASE}/tanks/${tankId}`, {
         method: 'DELETE',
         headers: getHeaders(),
       })
@@ -155,7 +155,7 @@ export default function Infrastructure() {
   const updateTankCapacity = async (tankId: string, capacity: number) => {
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/tanks/${tankId}/capacity?new_capacity=${capacity}`, {
+      const res = await authFetch(`${BASE}/tanks/${tankId}/capacity?new_capacity=${capacity}`, {
         method: 'PUT',
         headers: getHeaders(),
       })
@@ -179,7 +179,7 @@ export default function Infrastructure() {
   const updateProductType = async (islandId: string, productType: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/islands/${islandId}/product`, {
+      const res = await authFetch(`${BASE}/islands/${islandId}/product`, {
         method: 'PUT',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ product_type: productType }),
@@ -204,7 +204,7 @@ export default function Infrastructure() {
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/islands/${islandId}/status`, {
+      const res = await authFetch(`${BASE}/islands/${islandId}/status`, {
         method: 'PUT',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -231,7 +231,7 @@ export default function Infrastructure() {
   const assignTank = async (islandId: string, tankId: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/islands/${islandId}/pump-station/tank?tank_id=${encodeURIComponent(tankId)}`, {
+      const res = await authFetch(`${BASE}/islands/${islandId}/pump-station/tank?tank_id=${encodeURIComponent(tankId)}`, {
         method: 'PUT',
         headers: getHeaders(),
       })

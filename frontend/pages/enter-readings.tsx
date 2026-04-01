@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -141,7 +141,7 @@ export default function EnterReadings() {
 
   // Fetch meter discrepancy threshold on mount
   useEffect(() => {
-    fetch(`${BASE}/settings/validation-thresholds`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/settings/validation-thresholds`, { headers: getAuthHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data?.meter_discrepancy_threshold !== undefined) setMeterThreshold(data.meter_discrepancy_threshold) })
       .catch(() => {})
@@ -150,7 +150,7 @@ export default function EnterReadings() {
   // Fetch active shift on mount
   useEffect(() => {
     setLoading(true)
-    fetch(`${BASE}/enter-readings/my-shift`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/enter-readings/my-shift`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
         if (data.found) {
@@ -203,7 +203,7 @@ export default function EnterReadings() {
   // Fetch shifts list for supervisor dropdown
   useEffect(() => {
     if (isSupervisor) {
-      fetch(`${BASE}/shifts/`, { headers: getAuthHeaders() })
+      authFetch(`${BASE}/shifts/`, { headers: getAuthHeaders() })
         .then(r => r.json())
         .then(data => {
           const list = Array.isArray(data) ? data : Object.values(data)
@@ -214,7 +214,7 @@ export default function EnterReadings() {
   }, [isSupervisor])
 
   const fetchSummary = () => {
-    fetch(`${BASE}/enter-readings/my-summary`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/enter-readings/my-summary`, { headers: getAuthHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setSummary(data) })
       .catch(() => {})
@@ -231,7 +231,7 @@ export default function EnterReadings() {
         electronic_reading: parseFloat(openingElectronic[n.nozzle_id]) || 0,
         mechanical_reading: parseFloat(openingMechanical[n.nozzle_id]) || 0,
       }))
-      const res = await fetch(`${BASE}/enter-readings/submit`, {
+      const res = await authFetch(`${BASE}/enter-readings/submit`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -265,7 +265,7 @@ export default function EnterReadings() {
         mechanical_reading: parseFloat(closingMechanical[n.nozzle_id]) || 0,
         note: nozzleNotes[n.nozzle_id] || null,
       }))
-      const res = await fetch(`${BASE}/enter-readings/submit`, {
+      const res = await authFetch(`${BASE}/enter-readings/submit`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -294,7 +294,7 @@ export default function EnterReadings() {
     setReconError('')
     setShiftRecon(null)
     try {
-      const res = await fetch(`${BASE}/enter-readings/shift/${supervisorShiftId}/summary`, {
+      const res = await authFetch(`${BASE}/enter-readings/shift/${supervisorShiftId}/summary`, {
         headers: getAuthHeaders(),
       })
       if (!res.ok) {
@@ -838,7 +838,7 @@ function SupervisorSection({
 
   const fetchReviewQueue = async (shiftId: string) => {
     try {
-      const res = await fetch(`${BASE}/enter-readings/shift/${shiftId}/review-queue`, {
+      const res = await authFetch(`${BASE}/enter-readings/shift/${shiftId}/review-queue`, {
         headers: getAuthHeaders(),
       })
       if (res.ok) {
@@ -866,7 +866,7 @@ function SupervisorSection({
     setReviewErr('')
     setReviewMsg('')
     try {
-      const res = await fetch(`${BASE}/enter-readings/review`, {
+      const res = await authFetch(`${BASE}/enter-readings/review`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({

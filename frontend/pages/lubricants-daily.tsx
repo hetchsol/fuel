@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -62,7 +62,7 @@ export default function LubricantsDaily() {
 
   // Fetch products for location
   useEffect(() => {
-    fetch(`${BASE}/lubricants-daily/products/${encodeURIComponent(location)}`, {
+    authFetch(`${BASE}/lubricants-daily/products/${encodeURIComponent(location)}`, {
       headers: getAuthHeaders(),
     })
       .then(r => r.json())
@@ -70,7 +70,7 @@ export default function LubricantsDaily() {
         setCategories(data.categories || [])
         const products = data.products || []
         // Now fetch previous day to set opening stock
-        fetch(`${BASE}/lubricants-daily/previous-day?current_date=${date}&location=${encodeURIComponent(location)}`, {
+        authFetch(`${BASE}/lubricants-daily/previous-day?current_date=${date}&location=${encodeURIComponent(location)}`, {
           headers: getAuthHeaders(),
         })
           .then(r => r.json())
@@ -113,7 +113,7 @@ export default function LubricantsDaily() {
 
   // Fetch entries for display
   useEffect(() => {
-    fetch(`${BASE}/lubricants-daily/entries?date=${date}&location=${encodeURIComponent(location)}`, {
+    authFetch(`${BASE}/lubricants-daily/entries?date=${date}&location=${encodeURIComponent(location)}`, {
       headers: getAuthHeaders(),
     })
       .then(r => r.json())
@@ -183,7 +183,7 @@ export default function LubricantsDaily() {
         product_code: code,
         selling_price: parseFloat(price) || 0,
       }))
-      const res = await fetch(`${BASE}/lubricants-daily/products/pricing`, {
+      const res = await authFetch(`${BASE}/lubricants-daily/products/pricing`, {
         method: 'PUT',
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(items),
@@ -207,7 +207,7 @@ export default function LubricantsDaily() {
     setSuccess('')
 
     try {
-      const res = await fetch(`${BASE}/lubricants-daily/entry`, {
+      const res = await authFetch(`${BASE}/lubricants-daily/entry`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -255,7 +255,7 @@ export default function LubricantsDaily() {
     setSuccess('')
 
     try {
-      const res = await fetch(`${BASE}/lubricants-daily/transfer?date=${date}&recorded_by=${user?.user_id || 'unknown'}`, {
+      const res = await authFetch(`${BASE}/lubricants-daily/transfer?date=${date}&recorded_by=${user?.user_id || 'unknown'}`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(items),

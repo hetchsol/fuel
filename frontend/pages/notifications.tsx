@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getHeaders, BASE } from '../lib/api'
+import { getHeaders, BASE, authFetch } from '../lib/api'
 
 interface Notification {
   id: string
@@ -99,7 +99,7 @@ export default function NotificationsPage() {
       if (startDate) params.set('start_date', startDate)
       if (endDate) params.set('end_date', endDate)
 
-      const res = await fetch(`${BASE}/notifications/?${params.toString()}`, {
+      const res = await authFetch(`${BASE}/notifications/?${params.toString()}`, {
         headers: getHeaders(),
       })
       if (!res.ok) throw new Error('Failed to fetch notifications')
@@ -131,7 +131,7 @@ export default function NotificationsPage() {
   }
 
   const markRead = (id: string) => {
-    fetch(`${BASE}/notifications/${id}/read`, {
+    authFetch(`${BASE}/notifications/${id}/read`, {
       method: 'PATCH',
       headers: getHeaders(),
     }).then(r => {
@@ -144,7 +144,7 @@ export default function NotificationsPage() {
   }
 
   const markAllRead = () => {
-    fetch(`${BASE}/notifications/mark-all-read`, {
+    authFetch(`${BASE}/notifications/mark-all-read`, {
       method: 'PATCH',
       headers: getHeaders(),
     }).then(r => {

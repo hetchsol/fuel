@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -150,7 +150,7 @@ export default function MyShift() {
   // Fetch active shift first, then stock opening separately (so stock failure doesn't kill the page)
   useEffect(() => {
     setLoading(true)
-    fetch(`${BASE}/handover/my-shift`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/handover/my-shift`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(shiftData => {
         if (!shiftData.found) {
@@ -179,7 +179,7 @@ export default function MyShift() {
         setNozzleLossThreshold(shiftData.nozzle_allowable_loss_liters ?? 0.8)
 
         // Fetch credit accounts for line-item entry
-        fetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
+        authFetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
           .then(r => r.ok ? r.json() : { accounts: [], fuel_prices: { Diesel: 0, Petrol: 0 } })
           .then(data => {
             setCreditAccounts(data.accounts || [])
@@ -188,7 +188,7 @@ export default function MyShift() {
           .catch(() => {})
 
         // Fetch stock opening separately — failure returns empty defaults
-        fetch(`${BASE}/handover/stock-opening`, { headers: getAuthHeaders() })
+        authFetch(`${BASE}/handover/stock-opening`, { headers: getAuthHeaders() })
           .then(r => r.ok ? r.json() : Promise.reject())
           .catch(() => ({ lpg_cylinders: [], accessories: [], lubricants: [] }))
           .then(stockData => {
@@ -240,7 +240,7 @@ export default function MyShift() {
 
   // Fetch past handovers
   useEffect(() => {
-    fetch(`${BASE}/handover/entries`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/handover/entries`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => setPastHandovers(Array.isArray(data) ? data : []))
       .catch(() => {})
@@ -408,7 +408,7 @@ export default function MyShift() {
         })),
       }
 
-      const res = await fetch(`${BASE}/handover/submit`, {
+      const res = await authFetch(`${BASE}/handover/submit`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -1727,9 +1727,9 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
   useEffect(() => {
     const headers = { 'Content-Type': 'application/json', ...getHeaders() }
     Promise.all([
-      fetch(`${BASE}/shifts/`, { headers }).then(r => r.ok ? r.json() : []),
-      fetch(`${BASE}/auth/staff`, { headers }).then(r => r.ok ? r.json() : []),
-      fetch(`${BASE}/islands/?status=active`, { headers }).then(r => r.ok ? r.json() : []),
+      authFetch(`${BASE}/shifts/`, { headers }).then(r => r.ok ? r.json() : []),
+      authFetch(`${BASE}/auth/staff`, { headers }).then(r => r.ok ? r.json() : []),
+      authFetch(`${BASE}/islands/?status=active`, { headers }).then(r => r.ok ? r.json() : []),
     ])
       .then(([shifts, staff, islandsData]) => {
         setActiveShifts(Array.isArray(shifts) ? shifts.filter((s: any) => s.status === 'active') : [])

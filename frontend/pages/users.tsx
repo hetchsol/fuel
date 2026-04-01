@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -43,7 +43,7 @@ export default function UsersManagement() {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`${BASE}/auth/users`, {
+      const res = await authFetch(`${BASE}/auth/users`, {
         headers: getHeaders()
       })
       if (!res.ok) throw new Error('Failed to fetch users')
@@ -91,7 +91,7 @@ export default function UsersManagement() {
 
       const method = editingUser ? 'PUT' : 'POST'
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: {
           ...getHeaders(),
@@ -122,7 +122,7 @@ export default function UsersManagement() {
       onConfirm: async () => {
         setConfirmDialog(null)
         try {
-          const res = await fetch(`${BASE}/auth/users/${username}`, {
+          const res = await authFetch(`${BASE}/auth/users/${username}`, {
             method: 'DELETE',
             headers: getHeaders()
           })
@@ -149,7 +149,7 @@ export default function UsersManagement() {
       onConfirm: async () => {
         setConfirmDialog(null)
         try {
-          const res = await fetch(`${BASE}/auth/users/${user.username}/toggle-status`, {
+          const res = await authFetch(`${BASE}/auth/users/${user.username}/toggle-status`, {
             method: 'PATCH',
             headers: getHeaders()
           })
@@ -175,7 +175,7 @@ export default function UsersManagement() {
       onConfirm: async () => {
         setConfirmDialog(null)
         try {
-          const res = await fetch(`${BASE}/auth/users/${username}/reset-password`, {
+          const res = await authFetch(`${BASE}/auth/users/${username}/reset-password`, {
             method: 'POST',
             headers: getHeaders()
           })

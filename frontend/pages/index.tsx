@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import toast from 'react-hot-toast'
-import { getDaily, getFlags, getTankLevels, getHeaders } from '../lib/api'
+import { getDaily, getFlags, getTankLevels, getHeaders, authFetch } from '../lib/api'
 import TankCard from '../components/TankCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 
@@ -55,7 +55,7 @@ export default function Home() {
       const user = userData ? JSON.parse(userData).full_name : 'Unknown'
 
       const BASE = '/api/v1'
-      const res = await fetch(`${BASE}/tanks/dip-reading/${tankId}`, {
+      const res = await authFetch(`${BASE}/tanks/dip-reading/${tankId}`, {
         method: 'POST',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({

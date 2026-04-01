@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -20,7 +20,7 @@ export default function Inventory() {
 
   const fetchLPGAccessories = async () => {
     try {
-      const res = await fetch(`${BASE}/lpg-daily/accessories/inventory`, {
+      const res = await authFetch(`${BASE}/lpg-daily/accessories/inventory`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -34,7 +34,7 @@ export default function Inventory() {
 
   const fetchLubricants = async () => {
     try {
-      const res = await fetch(`${BASE}/lubricants-daily/products`, {
+      const res = await authFetch(`${BASE}/lubricants-daily/products`, {
         headers: getHeaders()
       })
       if (res.ok) {

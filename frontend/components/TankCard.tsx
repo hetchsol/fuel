@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAuthHeaders } from '../lib/headers'
+import { authFetch } from '../lib/api'
 import LoadingSpinner from './LoadingSpinner'
 
 interface TankCardProps {
@@ -153,9 +153,7 @@ const TankCard = ({
   const fetchDipReadings = async () => {
     try {
       const BASE = '/api/v1'
-      const res = await fetch(`${BASE}/tanks/dip-reading/${tankId}`, {
-        headers: getAuthHeaders()
-      })
+      const res = await authFetch(`${BASE}/tanks/dip-reading/${tankId}`)
       if (res.ok) {
         const data = await res.json()
         setSavedDips(data)

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -89,7 +89,7 @@ export default function Settings() {
 
   const loadSettings = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/fuel`, { headers: getHeaders() })
+      const res = await authFetch(`${BASE}/settings/fuel`, { headers: getHeaders() })
       if (res.ok) setSettings(await res.json())
     } catch (err) {
       console.error('Failed to load settings:', err)
@@ -98,7 +98,7 @@ export default function Settings() {
 
   const loadSystemSettings = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/system`, { headers: getHeaders() })
+      const res = await authFetch(`${BASE}/settings/system`, { headers: getHeaders() })
       if (res.ok) setSystemSettings(await res.json())
     } catch (err) {
       console.error('Failed to load system settings:', err)
@@ -107,7 +107,7 @@ export default function Settings() {
 
   const loadValidationThresholds = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/validation-thresholds`, { headers: getHeaders() })
+      const res = await authFetch(`${BASE}/settings/validation-thresholds`, { headers: getHeaders() })
       if (res.ok) setValidationThresholds(await res.json())
     } catch (err) {
       console.error('Failed to load validation thresholds:', err)
@@ -116,7 +116,7 @@ export default function Settings() {
 
   const loadEmailSettings = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/email`, { headers: getHeaders() })
+      const res = await authFetch(`${BASE}/settings/email`, { headers: getHeaders() })
       if (res.ok) setEmailSettings(await res.json())
     } catch (err) {
       console.error('Failed to load email settings:', err)
@@ -125,7 +125,7 @@ export default function Settings() {
 
   const loadTaxLevy = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/tax-levy`, { headers: getHeaders() })
+      const res = await authFetch(`${BASE}/settings/tax-levy`, { headers: getHeaders() })
       if (res.ok) setTaxLevy(await res.json())
     } catch (err) {
       console.error('Failed to load tax/levy settings:', err)
@@ -134,7 +134,7 @@ export default function Settings() {
 
   const loadStockAlerts = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/stock-alerts`, { headers: getHeaders() })
+      const res = await authFetch(`${BASE}/settings/stock-alerts`, { headers: getHeaders() })
       if (res.ok) setStockAlerts(await res.json())
     } catch (err) {
       console.error('Failed to load stock alert settings:', err)
@@ -143,7 +143,7 @@ export default function Settings() {
 
   const loadReconTolerances = async () => {
     try {
-      const res = await fetch(`${BASE}/settings/reconciliation-tolerances`, { headers: getHeaders() })
+      const res = await authFetch(`${BASE}/settings/reconciliation-tolerances`, { headers: getHeaders() })
       if (res.ok) setReconTolerances(await res.json())
     } catch (err) {
       console.error('Failed to load reconciliation tolerances:', err)
@@ -158,7 +158,7 @@ export default function Settings() {
     setError('')
     setMessage('')
     try {
-      const res = await fetch(`${BASE}/settings/fuel`, {
+      const res = await authFetch(`${BASE}/settings/fuel`, {
         method: 'PUT',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
@@ -180,7 +180,7 @@ export default function Settings() {
     setSystemError('')
     setSystemMessage('')
     try {
-      const res = await fetch(`${BASE}/settings/system`, {
+      const res = await authFetch(`${BASE}/settings/system`, {
         method: 'PUT',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(systemSettings),
@@ -201,7 +201,7 @@ export default function Settings() {
     setThresholdsMessage('')
     setThresholdsError('')
     try {
-      const res = await fetch(`${BASE}/settings/validation-thresholds`, {
+      const res = await authFetch(`${BASE}/settings/validation-thresholds`, {
         method: 'PUT',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(validationThresholds),
@@ -224,7 +224,7 @@ export default function Settings() {
     setEmailMessage('')
     setEmailError('')
     try {
-      const res = await fetch(`${BASE}/settings/email`, {
+      const res = await authFetch(`${BASE}/settings/email`, {
         method: 'PUT',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(emailSettings),
@@ -248,7 +248,7 @@ export default function Settings() {
     setEmailMessage('')
     setEmailError('')
     try {
-      const res = await fetch(`${BASE}/settings/email/test`, {
+      const res = await authFetch(`${BASE}/settings/email/test`, {
         method: 'POST',
         headers: getHeaders(),
       })
@@ -271,7 +271,7 @@ export default function Settings() {
     setTaxLevyMessage('')
     setTaxLevyError('')
     try {
-      const res = await fetch(`${BASE}/settings/tax-levy`, {
+      const res = await authFetch(`${BASE}/settings/tax-levy`, {
         method: 'PUT',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(taxLevy),
@@ -300,7 +300,7 @@ export default function Settings() {
       return
     }
     try {
-      const res = await fetch(`${BASE}/settings/stock-alerts`, {
+      const res = await authFetch(`${BASE}/settings/stock-alerts`, {
         method: 'PUT',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(stockAlerts),
@@ -339,7 +339,7 @@ export default function Settings() {
       return
     }
     try {
-      const res = await fetch(`${BASE}/settings/reconciliation-tolerances`, {
+      const res = await authFetch(`${BASE}/settings/reconciliation-tolerances`, {
         method: 'PUT',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(reconTolerances),

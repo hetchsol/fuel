@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
-import { getHeaders, downloadExport } from '../lib/api'
+import { getHeaders, downloadExport, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -22,7 +22,7 @@ export default function Reconciliation() {
   }, [router.query.date])
 
   useEffect(() => {
-    fetch(`${BASE}/settings/fuel`, { headers: getHeaders() })
+    authFetch(`${BASE}/settings/fuel`, { headers: getHeaders() })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data) {
@@ -39,7 +39,7 @@ export default function Reconciliation() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${BASE}/reconciliation/date/${selectedDate}`, {
+      const res = await authFetch(`${BASE}/reconciliation/date/${selectedDate}`, {
         headers: getHeaders()
       })
       if (!res.ok) {

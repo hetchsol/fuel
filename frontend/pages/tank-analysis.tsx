@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -50,7 +50,7 @@ export default function TankAnalysis() {
 
   const fetchRecentShifts = async () => {
     try {
-      const res = await fetch(`${BASE}/shifts/`, {
+      const res = await authFetch(`${BASE}/shifts/`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -66,7 +66,7 @@ export default function TankAnalysis() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${BASE}/reconciliation/shift/${shiftId}/tank-analysis`, {
+      const res = await authFetch(`${BASE}/reconciliation/shift/${shiftId}/tank-analysis`, {
         headers: getHeaders()
       })
       if (!res.ok) {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import useSWR from 'swr'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 import { useTanks } from '../hooks/useTanks'
 
 const BASE = '/api/v1'
@@ -127,19 +127,19 @@ export default function FuelOperations() {
 
   const { data: tankLevels, mutate: mutateLevels } = useSWR(
     activeTab === 'levels' ? 'tank-levels' : null,
-    () => fetch(`${BASE}/tanks/levels`, { headers: getHeaders() }).then(r => r.ok ? r.json() : []),
+    () => authFetch(`${BASE}/tanks/levels`, { headers: getHeaders() }).then(r => r.ok ? r.json() : []),
     { refreshInterval: 10000 }
   )
 
   const { data: todaySales } = useSWR(
     activeTab === 'levels' ? 'sales-today' : null,
-    () => fetch(`${BASE}/sales/date/${today}`, { headers: getHeaders() }).then(r => r.ok ? r.json() : []),
+    () => authFetch(`${BASE}/sales/date/${today}`, { headers: getHeaders() }).then(r => r.ok ? r.json() : []),
     { refreshInterval: 10000 }
   )
 
   const { data: levelsMovements, mutate: mutateLevelsMovements } = useSWR(
     activeTab === 'levels' ? `movements-${selectedTank}-${today}` : null,
-    () => fetch(`${BASE}/tanks/${selectedTank}/movements?date=${today}`, { headers: getHeaders() }).then(r => r.ok ? r.json() : null),
+    () => authFetch(`${BASE}/tanks/${selectedTank}/movements?date=${today}`, { headers: getHeaders() }).then(r => r.ok ? r.json() : null),
     { refreshInterval: 10000 }
   )
 
@@ -164,8 +164,8 @@ export default function FuelOperations() {
     setSummaryLoading(true)
     try {
       const [movementsRes, salesRes] = await Promise.all([
-        fetch(`${BASE}/tanks/${selectedTank}/movements?date=${selectedDate}`, { headers: getHeaders() }),
-        fetch(`${BASE}/sales/date/${selectedDate}`, { headers: getHeaders() })
+        authFetch(`${BASE}/tanks/${selectedTank}/movements?date=${selectedDate}`, { headers: getHeaders() }),
+        authFetch(`${BASE}/sales/date/${selectedDate}`, { headers: getHeaders() })
       ])
       if (movementsRes.ok) {
         setSummaryMovements(await movementsRes.json())
@@ -203,7 +203,7 @@ export default function FuelOperations() {
 
   const fetchReadings = async () => {
     try {
-      const res = await fetch(`${BASE}/tank-readings/readings/${selectedTank}`, {
+      const res = await authFetch(`${BASE}/tank-readings/readings/${selectedTank}`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -217,7 +217,7 @@ export default function FuelOperations() {
 
   const fetchDeliveries = async () => {
     try {
-      const res = await fetch(`${BASE}/tank-readings/deliveries/${selectedTank}`, {
+      const res = await authFetch(`${BASE}/tank-readings/deliveries/${selectedTank}`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -246,7 +246,7 @@ export default function FuelOperations() {
         notes: readingForm.notes || null
       }
 
-      const res = await fetch(`${BASE}/tank-readings/readings`, {
+      const res = await authFetch(`${BASE}/tank-readings/readings`, {
         method: 'POST',
         headers: {
           ...getHeaders(),
@@ -342,7 +342,7 @@ export default function FuelOperations() {
           notes: delivery.notes || null
         }
 
-        const res = await fetch(`${BASE}/tank-readings/deliveries`, {
+        const res = await authFetch(`${BASE}/tank-readings/deliveries`, {
           method: 'POST',
           headers: {
             ...getHeaders(),

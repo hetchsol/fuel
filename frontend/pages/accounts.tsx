@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -37,7 +37,7 @@ export default function Accounts() {
   const fetchAccounts = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/accounts/`, {
+      const res = await authFetch(`${BASE}/accounts/`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -108,7 +108,7 @@ export default function Accounts() {
         invoice_number: saleForm.notes || null
       }
 
-      const res = await fetch(`${BASE}/accounts/sales`, {
+      const res = await authFetch(`${BASE}/accounts/sales`, {
         method: 'POST',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

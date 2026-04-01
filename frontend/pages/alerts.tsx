@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getHeaders, BASE } from '../lib/api'
+import { getHeaders, BASE, authFetch } from '../lib/api'
 
 interface Anomaly {
   tank_id: string
@@ -48,7 +48,7 @@ export default function AlertsPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${BASE}/discrepancies?lookback_days=${days}`, {
+      const res = await authFetch(`${BASE}/discrepancies?lookback_days=${days}`, {
         headers: getHeaders(),
       })
       if (!res.ok) throw new Error('Failed to fetch anomaly data')

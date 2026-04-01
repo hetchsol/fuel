@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -124,7 +124,7 @@ export default function HandoverReview() {
     if (filterShift) params.append('shift_id', filterShift)
     const qs = params.toString() ? `?${params.toString()}` : ''
 
-    fetch(`${BASE}/handover/review-queue${qs}`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/handover/review-queue${qs}`, { headers: getAuthHeaders() })
       .then(r => {
         if (!r.ok) throw new Error('Failed to load review queue')
         return r.json()
@@ -154,7 +154,7 @@ export default function HandoverReview() {
     if (filterShift) params.append('shift_id', filterShift)
     const qs = params.toString() ? `?${params.toString()}` : ''
 
-    fetch(`${BASE}/handover/entries${qs}`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/handover/entries${qs}`, { headers: getAuthHeaders() })
       .then(r => r.ok ? r.json() : [])
       .then(data => setAllHandovers(data))
       .catch(() => {})
@@ -174,7 +174,7 @@ export default function HandoverReview() {
   const handleApprove = async (handoverId: string) => {
     setActionLoading(true)
     try {
-      const res = await fetch(`${BASE}/handover/review`, {
+      const res = await authFetch(`${BASE}/handover/review`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ handover_id: handoverId, action: 'approve' }),
@@ -196,7 +196,7 @@ export default function HandoverReview() {
     if (!returnModalId || !returnNote.trim()) return
     setActionLoading(true)
     try {
-      const res = await fetch(`${BASE}/handover/review`, {
+      const res = await authFetch(`${BASE}/handover/review`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ handover_id: returnModalId, action: 'return', supervisor_note: returnNote.trim() }),
@@ -220,7 +220,7 @@ export default function HandoverReview() {
     if (selectedIds.size === 0) return
     setActionLoading(true)
     try {
-      const res = await fetch(`${BASE}/handover/batch-approve`, {
+      const res = await authFetch(`${BASE}/handover/batch-approve`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ handover_ids: Array.from(selectedIds) }),

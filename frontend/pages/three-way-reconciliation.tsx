@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -72,7 +72,7 @@ export default function ThreeWayReconciliation() {
   const fetchDailySummary = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`${BASE}/reconciliation/three-way/daily-summary/${selectedDate}`, {
+      const response = await authFetch(`${BASE}/reconciliation/three-way/daily-summary/${selectedDate}`, {
         headers: getHeaders()
       })
       if (response.ok) {
@@ -84,7 +84,7 @@ export default function ThreeWayReconciliation() {
           const trends: Record<string, any> = {}
           await Promise.all(tankIds.map(async (tankId) => {
             try {
-              const tRes = await fetch(`${BASE}/reconciliation/three-way/patterns/${tankId}?days=30`, {
+              const tRes = await authFetch(`${BASE}/reconciliation/three-way/patterns/${tankId}?days=30`, {
                 headers: getHeaders()
               })
               if (tRes.ok) {
