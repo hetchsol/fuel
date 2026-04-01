@@ -1,0 +1,784 @@
+================================================================================
+   NEXTSTOP FUEL MANAGEMENT SYSTEM — DAILY OPERATIONS GUIDE
+   Complete shift lifecycle from start to close with simulation data
+================================================================================
+
+This guide walks through ONE COMPLETE DAY of operations exactly as it
+would happen in a real fuel station. Every screen, every field, every
+click, in chronological order.
+
+DATE:       2026-04-01
+STATION:    Kalulushi Next Stop Filling Station
+SHIFTS:     Day Shift (06:00-18:00), Night Shift (18:00-06:00)
+
+
+================================================================================
+ACCOUNTS REFERENCE
+================================================================================
+
+  Owner:       owner1 / owner123
+  Supervisor:  Herve Renard (renard / renard123)
+  Attendants:  Christopher Katongo (katongo / katongo123)
+               Kennedy Mweene (mweene / mweene123)
+               Stophilla Sunzu (sunzu / sunzu123)
+               Emmanuel Mayuka (mayuka / mayuka123)
+
+
+================================================================================
+STARTING STATE (before Day Shift begins)
+================================================================================
+
+  TANK-DIESEL:  15,000 L  (capacity 20,000 L)
+  TANK-PETROL:  18,000 L  (capacity 25,000 L)
+
+  Diesel Price:  23.25 ZMW/L
+  Petrol Price:  26.61 ZMW/L
+
+
+================================================================================
+================================================================================
+PART 1: PRE-SHIFT SETUP (Owner/Supervisor — before 06:00)
+================================================================================
+================================================================================
+
+WHO:  Herve Renard (supervisor) or owner
+WHEN: Before attendants arrive (05:30-06:00)
+
+
+------------------------------------------------------------------------
+STEP 1.1: Set LPG Pricing (if not already done)
+------------------------------------------------------------------------
+Login as: renard / renard123
+Go to: LPG Daily Operations
+
+Click "LPG Pricing Settings" to expand, then set:
+
+  3kg:   Refill  147    Full Cylinder  477
+  6kg:   Refill  294    Full Cylinder  844
+  9kg:   Refill  441    Full Cylinder  1241
+  19kg:  Refill  931    Full Cylinder  2131
+  45kg:  Refill  2205   Full Cylinder  3905
+  48kg:  Refill  2352   Full Cylinder  4052
+
+Click "Save Pricing"
+
+Click "Edit Accessory Prices" and set:
+
+  1-Burner Stove:   1500
+  2-Burner Stove:   3500
+  Cooker Top:       5000
+  Gas Hose:          600
+  Gas Regulator:    1200
+  Hose Clip:         150
+
+Click "Save Accessory Prices"
+
+
+------------------------------------------------------------------------
+STEP 1.2: Set Lubricant Pricing (if not already done)
+------------------------------------------------------------------------
+Go to: Lubricants Daily
+
+Click "Edit Product Prices" and set prices for products in use:
+
+  Engine Oil 10W-30 1L:   750
+  Engine Oil 15W-40 1L:   550
+  Brake Fluid DOT 3 1L:   600
+  Green Coolant 1L:        350
+
+Click "Save All Prices"
+
+
+------------------------------------------------------------------------
+STEP 1.3: Create Day Shift
+------------------------------------------------------------------------
+Go to: Shifts page
+Click "Create New Shift"
+
+  Date:        2026-04-01
+  Shift Type:  Day
+
+Assign attendants to islands:
+
+  Christopher Katongo:
+    Islands: Island 1, Island 2
+    Nozzles: LSD 1A, LSD 1B, LSD 2A, LSD 2B
+    (Diesel attendant — 4 nozzles)
+
+  Kennedy Mweene:
+    Islands: Island 4, Island 5
+    Nozzles: UNL 1A, UNL 1B, UNL 2A, UNL 2B
+    (Petrol attendant — 4 nozzles)
+
+Click "Create Shift"
+
+
+------------------------------------------------------------------------
+STEP 1.4: Record Opening Tank Dip Readings
+------------------------------------------------------------------------
+On the Shifts page, in the Tank Dip Readings section:
+
+  TANK-DIESEL:
+    Opening Dip:  19.10 cm
+
+  TANK-PETROL:
+    Opening Dip:  22.92 cm
+
+Click "Save" for each tank.
+
+
+================================================================================
+================================================================================
+PART 2: DAY SHIFT OPERATIONS (06:00 — 18:00)
+================================================================================
+================================================================================
+
+
+------------------------------------------------------------------------
+STEP 2.1: Attendant 1 — Christopher Katongo (Diesel)
+------------------------------------------------------------------------
+WHO:   Katongo
+WHEN:  Throughout the day, enters closing readings at shift end (17:30)
+
+Login as: katongo / katongo123
+Go to: My Shift
+
+The system shows Katongo's assigned nozzles with pre-filled opening
+readings. At shift end, he enters CLOSING readings:
+
+NOZZLE READINGS:
+
+  Nozzle LSD 1A:
+    Electronic Opening:   200000.000   (pre-filled from system)
+    Electronic Closing:   201245.500   (read from pump display)
+    Mechanical Opening:   270000       (pre-filled)
+    Mechanical Closing:   271245       (read from analog meter)
+
+  Nozzle LSD 1B:
+    Electronic Opening:   205000.000
+    Electronic Closing:   205890.200
+    Mechanical Opening:   275000
+    Mechanical Closing:   275890
+
+  Nozzle LSD 2A:
+    Electronic Opening:   430000.000
+    Electronic Closing:   431520.800
+    Mechanical Opening:   430000
+    Mechanical Closing:   431521
+
+  Nozzle LSD 2B:
+    Electronic Opening:   610000.000
+    Electronic Closing:   610670.300
+    Mechanical Opening:   610000
+    Mechanical Closing:   610670
+
+SYSTEM AUTO-CALCULATES:
+  LSD 1A:  Electronic Vol = 1,245.500 L  |  Mechanical Vol = 1,245 L  |  Dev = 0.5 L
+  LSD 1B:  Electronic Vol =   890.200 L  |  Mechanical Vol =   890 L  |  Dev = 0.2 L
+  LSD 2A:  Electronic Vol = 1,520.800 L  |  Mechanical Vol = 1,521 L  |  Dev = 0.2 L
+  LSD 2B:  Electronic Vol =   670.300 L  |  Mechanical Vol =   670 L  |  Dev = 0.3 L
+  TOTAL DIESEL SOLD:       4,326.800 L
+  All deviations < 0.8L threshold — NO FLAGS
+
+LPG SALES (enter in LPG section):
+  9kg cylinders:
+    Opening Full: 10
+    Sold Refill: 2
+    Sold With Cylinder: 1
+    Closing Empty: 3
+
+  19kg cylinders:
+    Opening Full: 5
+    Sold Refill: 1
+    Closing Empty: 1
+
+LPG ACCESSORIES (enter in Accessories section):
+  Gas Hose: Opening 8, Sold 1
+
+LUBRICANTS (enter in Lubricants section):
+  10W-30 Synthetic 1L: Opening 12, Sold 1
+
+Click "Review My Entries"
+
+REVIEW SCREEN SHOWS:
+  Fuel Revenue:     4,326.800 x 23.25 = K100,598.10
+  LPG Sales:        2x441 + 1x1241 + 1x931 = K3,054.00
+  Lubricant Sales:  1x750 = K750.00
+  Accessory Sales:  1x600 = K600.00
+  Total Expected:   K105,002.10
+  Credit Sales:     K0.00
+  Expected Cash:    K105,002.10
+
+Click "Confirm & Proceed to Cash Handover"
+
+CASH HANDOVER (Step 3):
+  Actual Cash Handed In:   102,198.00 ZMW
+  Notes:                   "Busy morning, 2 large fleet fill-ups"
+
+Click "Submit Shift Handover"
+
+SYSTEM FLAGS:
+  cash_shortage: K2,804.10 (Actual < Expected) — MINOR
+
+Katongo logs out.
+
+
+------------------------------------------------------------------------
+STEP 2.2: Attendant 2 — Kennedy Mweene (Petrol)
+------------------------------------------------------------------------
+WHO:   Mweene
+WHEN:  Enters closing readings at shift end (17:30)
+
+Login as: mweene / mweene123
+Go to: My Shift
+
+NOZZLE READINGS:
+
+  Nozzle UNL 1A:
+    Electronic Opening:   150000.000
+    Electronic Closing:   151320.400
+    Mechanical Opening:   150000
+    Mechanical Closing:   151320
+
+  Nozzle UNL 1B:
+    Electronic Opening:   160000.000
+    Electronic Closing:   160780.100
+    Mechanical Opening:   160000
+    Mechanical Closing:   160780
+
+  Nozzle UNL 2A:
+    Electronic Opening:   300000.000
+    Electronic Closing:   301100.600
+    Mechanical Opening:   300000
+    Mechanical Closing:   301101
+
+  Nozzle UNL 2B:
+    Electronic Opening:   320000.000
+    Electronic Closing:   320450.200
+    Mechanical Opening:   320000
+    Mechanical Closing:   320450
+
+SYSTEM AUTO-CALCULATES:
+  UNL 1A:  1,320.400 L  |  Dev = 0.4 L
+  UNL 1B:    780.100 L  |  Dev = 0.1 L
+  UNL 2A:  1,100.600 L  |  Dev = 0.4 L
+  UNL 2B:    450.200 L  |  Dev = 0.2 L
+  TOTAL PETROL SOLD:     3,651.300 L
+  All deviations < 0.8L — NO FLAGS
+
+LPG SALES:
+  6kg cylinders:
+    Opening Full: 15
+    Sold Refill: 2
+    Closing Empty: 2
+
+(No accessories or lubricant activity for Mweene)
+
+Click "Review My Entries"
+
+REVIEW SCREEN SHOWS:
+  Fuel Revenue:     3,651.300 x 26.61 = K97,140.09
+  LPG Sales:        2x294 = K588.00
+  Total Expected:   K97,728.09
+  Expected Cash:    K97,728.09
+
+Click "Confirm & Proceed to Cash Handover"
+
+CASH HANDOVER:
+  Actual Cash Handed In:   97,700.00 ZMW
+  Notes:                   (leave blank)
+
+Click "Submit Shift Handover"
+
+SYSTEM FLAGS: None — difference is K28.09 (negligible)
+
+Mweene logs out.
+
+
+================================================================================
+================================================================================
+PART 3: SUPERVISOR REVIEW (Supervisor — 17:45)
+================================================================================
+================================================================================
+
+WHO:   Herve Renard
+WHEN:  After both attendants have submitted (typically 17:45-18:00)
+
+Login as: renard / renard123
+Go to: Handover Review
+
+
+------------------------------------------------------------------------
+STEP 3.1: Review Katongo's Handover
+------------------------------------------------------------------------
+Find Katongo's entry — shows FLAGGED badge (cash shortage)
+
+Click to expand:
+  - See all 4 nozzle readings with volumes and deviations
+  - See financial summary: Expected K105,002 vs Actual K102,198
+  - Difference: -K2,804.10 (shortage)
+  - Attendant note: "Busy morning, 2 large fleet fill-ups"
+
+Decision: APPROVE (shortage is minor, within investigation tolerance)
+  Supervisor Note: "Minor shortage noted. Within K500 tolerance for
+                     busy day. Monitored."
+
+Click "Approve"
+
+
+------------------------------------------------------------------------
+STEP 3.2: Review Mweene's Handover
+------------------------------------------------------------------------
+Find Mweene's entry — shows CLEAN (no flags)
+
+Click to expand:
+  - All nozzle readings clean
+  - Expected K97,728 vs Actual K97,700
+  - Difference: -K28.09 (negligible)
+
+Decision: APPROVE
+  Supervisor Note: "Within tolerance"
+
+Click "Approve"
+
+
+------------------------------------------------------------------------
+STEP 3.3: Record Closing Tank Dip Readings
+------------------------------------------------------------------------
+Go to: Shifts page > Tank Dip Readings
+
+  TANK-DIESEL:
+    Closing Dip:  13.59 cm
+    (Tank went from 15,000L to ~10,673L — sold ~4,327L diesel)
+
+  TANK-PETROL:
+    Closing Dip:  18.27 cm
+    (Tank went from 18,000L to ~14,349L — sold ~3,651L petrol)
+
+
+================================================================================
+================================================================================
+PART 4: NIGHT SHIFT (18:00 — 06:00)
+================================================================================
+================================================================================
+
+
+------------------------------------------------------------------------
+STEP 4.1: Create Night Shift
+------------------------------------------------------------------------
+WHO: Renard (supervisor)
+
+Go to: Shifts > Create New Shift
+
+  Date:        2026-04-01
+  Shift Type:  Night
+
+Assign:
+  Stophilla Sunzu:
+    Islands: Island 1, Island 3 (LSD 1A, 1B, 3A, 3B)
+
+  Emmanuel Mayuka:
+    Islands: Island 4, Island 6 (UNL 1A, 1B, 3A, 3B)
+
+Click "Create Shift"
+
+
+------------------------------------------------------------------------
+STEP 4.2: Record Opening Dip Readings
+------------------------------------------------------------------------
+  TANK-DIESEL:  Opening Dip: 13.59 cm   (carries from day shift closing)
+  TANK-PETROL:  Opening Dip: 18.27 cm
+
+
+------------------------------------------------------------------------
+STEP 4.3: Fuel Delivery Arrives (21:30)
+------------------------------------------------------------------------
+WHO: Renard or owner
+Go to: Fuel Operations > Deliveries > "+ Record Delivery"
+
+  Tank:             TANK-DIESEL
+  Date:             2026-04-01
+  Time:             21:30
+  Volume Before:    10,673 L
+  Volume After:     20,523 L
+  Supplier:         Puma Energy Zambia
+  Invoice Number:   PEZ-2026-4481
+  Expected Volume:  10,000 L
+  Flowmeter:        9,875 L
+  Temperature:      28.5 C
+
+Click "Record Delivery"
+
+SYSTEM AUTO-CALCULATES (Three-Way Delivery Reconciliation):
+  Invoice:    10,000 L
+  Flowmeter:   9,875 L
+  Tank Dip:    9,850 L  (20,523 - 10,673)
+  Status:      VARIANCE_MINOR
+  Outlier:     INVOICE (flowmeter & tank agree)
+
+
+------------------------------------------------------------------------
+STEP 4.4: Attendant — Stophilla Sunzu (Diesel)
+------------------------------------------------------------------------
+Login as: sunzu / sunzu123
+Go to: My Shift
+
+NOZZLE READINGS:
+
+  LSD 1A:
+    Elec Open: 201245.500  Elec Close: 201945.200
+    Mech Open: 271245      Mech Close: 271945
+
+  LSD 1B:
+    Elec Open: 205890.200  Elec Close: 206290.800
+    Mech Open: 275890      Mech Close: 276291
+
+  LSD 3A:                              <<<< NOZZLE LOSS FLAG >>>>
+    Elec Open: 100000.000  Elec Close: 100850.500
+    Mech Open: 100000      Mech Close: 100849
+    (Deviation: 1.5L — EXCEEDS 0.8L threshold)
+
+  LSD 3B:
+    Elec Open: 110000.000  Elec Close: 110420.100
+    Mech Open: 110000      Mech Close: 110420
+
+SYSTEM AUTO-CALCULATES:
+  LSD 1A:    699.700 L  |  Dev = 0.0 L
+  LSD 1B:    400.600 L  |  Dev = 0.4 L
+  LSD 3A:    850.500 L  |  Dev = 1.5 L  <<<< FLAGGED
+  LSD 3B:    420.100 L  |  Dev = 0.1 L
+  TOTAL DIESEL SOLD:   2,370.900 L
+
+LPG SALES:
+  9kg:  Opening Full 7, Additions 5, Sold Refill 3, Closing Empty 3
+
+Click "Review My Entries"
+  — LSD 3A shows red flag for nozzle loss
+
+REVIEW SHOWS:
+  Fuel Revenue:   2,370.900 x 23.25 = K55,123.43
+  LPG Sales:      3x441 = K1,323.00
+  Total Expected: K56,446.43
+
+CASH HANDOVER:
+  Actual Cash:  56,500.00 ZMW
+  Notes:        "LSD 3A nozzle had meter discrepancy. Reported to
+                 supervisor. Suspect calibration drift."
+  (Notes REQUIRED because meter deviation is flagged)
+
+Click "Submit Shift Handover"
+
+SYSTEM FLAGS:
+  nozzle_loss_exceeded: LSD 3A (1.5L > 0.8L threshold)
+
+
+------------------------------------------------------------------------
+STEP 4.5: Attendant — Emmanuel Mayuka (Petrol)
+------------------------------------------------------------------------
+Login as: mayuka / mayuka123
+Go to: My Shift
+
+NOZZLE READINGS:
+
+  UNL 1A:
+    Elec Open: 151320.400  Elec Close: 151720.900
+    Mech Open: 151320      Mech Close: 151721
+
+  UNL 1B:
+    Elec Open: 160780.100  Elec Close: 161030.300
+    Mech Open: 160780      Mech Close: 161030
+
+  UNL 3A:
+    Elec Open: 80000.000   Elec Close: 80380.200
+    Mech Open: 80000       Mech Close: 80380
+
+  UNL 3B:
+    Elec Open: 85000.000   Elec Close: 85210.500
+    Mech Open: 85000       Mech Close: 85211
+
+SYSTEM AUTO-CALCULATES:
+  UNL 1A:    400.500 L  |  Dev = 0.4 L
+  UNL 1B:    250.200 L  |  Dev = 0.2 L
+  UNL 3A:    380.200 L  |  Dev = 0.2 L
+  UNL 3B:    210.500 L  |  Dev = 0.5 L
+  TOTAL PETROL SOLD:   1,241.400 L
+  All deviations < 0.8L — NO FLAGS
+
+LUBRICANTS:
+  Brake Fluid DOT 3 1L: Opening 6, Sold 1
+
+CASH HANDOVER:
+  Actual Cash:  33,600.00 ZMW
+  Notes:        (leave blank)
+
+Click "Submit Shift Handover"
+
+SYSTEM FLAGS: None
+  Expected: K33,633.65  |  Actual: K33,600  |  Diff: -K33.65 (negligible)
+
+
+------------------------------------------------------------------------
+STEP 4.6: Supervisor Reviews Night Shift
+------------------------------------------------------------------------
+Login as: renard / renard123
+Go to: Handover Review
+
+Review Sunzu:
+  — FLAGGED: nozzle_loss_exceeded on LSD 3A
+  Action: Approve
+  Note: "Nozzle 3A deviation 1.5L noted. Calibration check scheduled
+         for next maintenance window."
+
+Review Mayuka:
+  — CLEAN
+  Action: Approve
+  Note: "Clean night shift"
+
+
+------------------------------------------------------------------------
+STEP 4.7: Record Closing Dip Readings
+------------------------------------------------------------------------
+  TANK-DIESEL:  Closing Dip: 23.10 cm
+    (Started 10,673L + delivery 9,850L - sold 2,371L = ~18,152L)
+
+  TANK-PETROL:  Closing Dip: 16.69 cm
+    (Started 14,349L - sold 1,241L = ~13,108L)
+
+
+================================================================================
+================================================================================
+PART 5: DAILY TANK READINGS (Supervisor/Owner)
+================================================================================
+================================================================================
+
+WHO:   Renard or owner
+WHEN:  After all shifts are closed and reviewed
+Go to: Daily Tank Reading page
+
+This ties the tank dip readings to the nozzle readings to the cash.
+Enter one record per tank per shift.
+
+
+------------------------------------------------------------------------
+STEP 5.1: Day Shift Tank Readings
+------------------------------------------------------------------------
+
+TANK-DIESEL (Day Shift):
+  Date:              2026-04-01
+  Shift Type:        Day
+  Opening Dip (cm):  19.10
+  Closing Dip (cm):  13.59
+  Opening Volume:    15,000 L
+  Closing Volume:    10,673 L
+  Price Per Liter:   23.25
+  Actual Cash:       102,198
+  No deliveries.
+
+TANK-PETROL (Day Shift):
+  Date:              2026-04-01
+  Shift Type:        Day
+  Opening Dip (cm):  22.92
+  Closing Dip (cm):  18.27
+  Opening Volume:    18,000 L
+  Closing Volume:    14,349 L
+  Price Per Liter:   26.61
+  Actual Cash:       97,700
+  No deliveries.
+
+
+------------------------------------------------------------------------
+STEP 5.2: Night Shift Tank Readings
+------------------------------------------------------------------------
+
+TANK-DIESEL (Night Shift):
+  Date:              2026-04-01
+  Shift Type:        Night
+  Opening Dip (cm):  13.59
+  Closing Dip (cm):  23.10
+  Opening Volume:    10,673 L
+  Closing Volume:    18,152 L
+  Price Per Liter:   23.25
+  Actual Cash:       56,500
+  Delivery:
+    Time:            21:30
+    Supplier:        Puma Energy Zambia
+    Invoice:         PEZ-2026-4481
+    Volume Delivered: 10,000 L (invoice)
+    Flowmeter:       9,875 L
+
+TANK-PETROL (Night Shift):
+  Date:              2026-04-01
+  Shift Type:        Night
+  Opening Dip (cm):  18.27
+  Closing Dip (cm):  16.69
+  Opening Volume:    14,349 L
+  Closing Volume:    13,108 L
+  Price Per Liter:   26.61
+  Actual Cash:       33,600
+  No deliveries.
+
+
+================================================================================
+================================================================================
+PART 6: DAILY CLOSE-OFF (Owner only)
+================================================================================
+================================================================================
+
+WHO:   Owner (owner1)
+WHEN:  After all shifts approved (typically next morning 06:00)
+
+Login as: owner1 / owner123
+Go to: Daily Close-Off
+
+Select Date: 2026-04-01
+
+SYSTEM SHOWS:
+  Day Shift:
+    Katongo:  Expected K105,002  |  Actual K102,198  |  Diff: -K2,804
+    Mweene:   Expected K97,728   |  Actual K97,700   |  Diff: -K28
+  Night Shift:
+    Sunzu:    Expected K56,446   |  Actual K56,500   |  Diff: +K54
+    Mayuka:   Expected K33,634   |  Actual K33,600   |  Diff: -K34
+
+  DAILY TOTALS:
+    Total Expected Cash:   K292,810
+    Total Actual Cash:     K289,998
+    Net Variance:          -K2,812
+
+Enter:
+  Bank Deposit Amount:    289,998.00 ZMW
+  Deposit Reference:      NBZ-DEP-20260401-001
+  Owner Notes:            "Minor shortage from day shift (Katongo).
+                           Night shift balanced. Delivery received
+                           from Puma Energy."
+
+Click "Close Day"
+Confirm in dialog.
+
+
+================================================================================
+================================================================================
+PART 7: RECONCILIATION & REPORTS (Owner/Supervisor)
+================================================================================
+================================================================================
+
+
+------------------------------------------------------------------------
+STEP 7.1: Shift Reconciliation
+------------------------------------------------------------------------
+Go to: Reconciliation page
+Select Date: 2026-04-01
+
+VIEW:
+  Day Shift:   Minor shortage (K2,832 combined)
+  Night Shift: Balanced (+K20 combined)
+  Nozzle Loss: LSD 3A flagged (1.5L)
+  Overall:     MINOR_VARIANCE
+
+
+------------------------------------------------------------------------
+STEP 7.2: Three-Way Reconciliation
+------------------------------------------------------------------------
+Go to: Three-Way Reconciliation page
+Select Date: 2026-04-01
+
+VIEW for each tank:
+  TANK-DIESEL:
+    Physical (Tank Dip):    4,327 L sold (day) + 2,371 L (night) = 6,698 L
+    Operational (Nozzles):  4,327 L (day) + 2,371 L (night) = 6,698 L
+    Financial (Cash):       K102,198 + K56,500 = K158,698 ÷ K23.25 = 6,826 L equiv
+    Tank vs Nozzle:         0 L variance (PASS)
+    Nozzle vs Cash:         128 L variance (MINOR)
+
+  TANK-PETROL:
+    Physical:               3,651 L (day) + 1,241 L (night) = 4,892 L
+    Operational:            3,651 L + 1,241 L = 4,892 L
+    Financial:              K97,700 + K33,600 = K131,300 ÷ K26.61 = 4,934 L equiv
+    Tank vs Nozzle:         0 L variance (PASS)
+
+
+------------------------------------------------------------------------
+STEP 7.3: Delivery Reconciliation
+------------------------------------------------------------------------
+Go to: Fuel Operations > Deliveries
+
+Puma Energy delivery:
+  Invoice: 10,000 L vs Flowmeter: 9,875 L vs Tank Dip: 9,850 L
+  Status: VARIANCE_MINOR
+  Outlier: INVOICE (possible short-shipment of ~125L)
+
+
+------------------------------------------------------------------------
+STEP 7.4: Check Notifications
+------------------------------------------------------------------------
+Click bell icon in nav bar.
+
+Should show:
+  - "Handover submitted by Katongo" (with cash shortage flag)
+  - "Handover submitted by Mweene"
+  - "Handover submitted by Sunzu" (with nozzle loss flag)
+  - "Handover submitted by Mayuka"
+  - "Handover approved" x4
+  - "Delivery received: Puma Energy 10,000L diesel"
+  - "Daily close-off completed for 2026-04-01"
+
+
+================================================================================
+DAILY SUMMARY
+================================================================================
+
+  FUEL SOLD:
+    Diesel:  6,697.700 L  (Day 4,326.8 + Night 2,370.9)
+    Petrol:  4,892.700 L  (Day 3,651.3 + Night 1,241.4)
+
+  REVENUE:
+    Fuel:         K285,895.27
+    LPG:          K4,965.00
+    Lubricants:   K1,350.00
+    Accessories:  K600.00
+    TOTAL:        K292,810.27
+
+  CASH:
+    Expected:     K292,810.27
+    Actual:       K289,998.00
+    Variance:     -K2,812.27
+
+  DELIVERIES:
+    1x Puma Energy Diesel: 10,000L invoice / 9,875L flowmeter
+
+  FLAGS:
+    1x Cash shortage (Katongo, Day — K2,804)
+    1x Nozzle loss (LSD 3A, Night — 1.5L deviation)
+
+  CLOSING TANK LEVELS:
+    TANK-DIESEL:  ~18,152 L  (after delivery)
+    TANK-PETROL:  ~13,108 L
+
+
+================================================================================
+CHECKLIST — DID YOU CAPTURE EVERYTHING?
+================================================================================
+
+  [ ] Shift created with correct date, type, and attendant assignments
+  [ ] Opening tank dip readings recorded
+  [ ] Each attendant entered opening + closing nozzle readings
+  [ ] Electronic AND mechanical readings for every nozzle
+  [ ] LPG cylinder sales entered (opening, sold, closing counts)
+  [ ] LPG accessory sales entered (if any sold)
+  [ ] Lubricant sales entered (if any sold)
+  [ ] Credit sales recorded (if any on-account fuel)
+  [ ] Cash handed in amount entered by each attendant
+  [ ] Notes added for any flagged items (nozzle loss, shortage)
+  [ ] Handover submitted by each attendant
+  [ ] Supervisor reviewed and approved/returned each handover
+  [ ] Closing tank dip readings recorded
+  [ ] Fuel delivery recorded (if any arrived)
+  [ ] Daily tank readings entered (per tank per shift)
+  [ ] Daily close-off completed by owner
+  [ ] Bank deposit amount recorded
+  [ ] Reconciliation reviewed for variances
+  [ ] Notifications checked for alerts
+
+================================================================================
+END OF DAILY OPERATIONS GUIDE
+================================================================================
