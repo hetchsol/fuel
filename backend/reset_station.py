@@ -132,9 +132,11 @@ def main():
     logger.info("")
     logger.info("Connecting to database...")
 
+    # Use direct connection (strip pooler) and autocommit to avoid lock contention
+    direct_url = DATABASE_URL.replace("-pooler.", ".")
     try:
         import psycopg
-        conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
+        conn = psycopg.connect(direct_url, autocommit=True, connect_timeout=15)
     except Exception as e:
         logger.error(f"Failed to connect: {e}")
         sys.exit(1)
@@ -182,7 +184,6 @@ def main():
         )
         logger.info("       Station name reset to 'My Station'.")
 
-        conn.commit()
         logger.info("")
         logger.info("=" * 60)
         logger.info("  RESET COMPLETE")
@@ -195,9 +196,8 @@ def main():
         logger.info("")
 
     except Exception as e:
-        conn.rollback()
         logger.error(f"ERROR: {e}")
-        logger.error("No changes were made (rolled back).")
+        logger.error("Some changes may have been applied (autocommit mode).")
         sys.exit(1)
     finally:
         conn.close()
