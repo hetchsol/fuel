@@ -73,12 +73,11 @@ def init_db():
         logger.info("[db] No DATABASE_URL set — using file-based storage")
         return False
 
-    # Try connection pool first
-    # Attempt direct connection first (needed for schema init)
+    # Use autocommit for schema init to avoid lock contention with stale transactions
     logger.info("[db] Connecting to PostgreSQL...")
     try:
         import psycopg
-        _conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
+        _conn = psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=10)
         logger.info("[db] PostgreSQL connection established")
     except Exception as e:
         logger.error(f"[db] Failed to connect: {e}")
@@ -143,7 +142,11 @@ def init_db():
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)")
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_users_station ON users(station_id)")
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)")
-        _conn.commit()
+
+        # Switch to transactional mode for normal operations
+        _conn.close()
+        _conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
+
         _db_available = True
         logger.info("[db] PostgreSQL schema initialized — DB is active")
         return True
