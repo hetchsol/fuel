@@ -386,13 +386,20 @@ export default function Shifts() {
           ? [...(attendant.island_ids || []), islandId]
           : (attendant.island_ids || []).filter((id: string) => id !== islandId)
 
-        // Remove nozzles that don't belong to selected islands
-        const nozzle_ids = (attendant.nozzle_ids || []).filter((nozzleId: string) => {
-          return island_ids.some((iid: string) => {
-            const island = islandsData.find(i => i.island_id === iid)
-            return island?.pump_station?.nozzles?.some((n: any) => n.nozzle_id === nozzleId)
-          })
-        })
+        // Auto-add all nozzles when island is checked, remove when unchecked
+        let nozzle_ids = [...(attendant.nozzle_ids || [])]
+        const island = islandsData.find(i => i.island_id === islandId)
+        const islandNozzleIds = island?.pump_station?.nozzles?.map((n: any) => n.nozzle_id) || []
+
+        if (checked) {
+          // Add all nozzles from this island (avoid duplicates)
+          for (const nid of islandNozzleIds) {
+            if (!nozzle_ids.includes(nid)) nozzle_ids.push(nid)
+          }
+        } else {
+          // Remove nozzles belonging to the unchecked island
+          nozzle_ids = nozzle_ids.filter((nid: string) => !islandNozzleIds.includes(nid))
+        }
 
         return { ...attendant, island_ids, nozzle_ids }
       }
