@@ -15,9 +15,8 @@ logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Connection pool (lazy-initialized) with single-connection fallback
-_pool = None
-_conn = None  # Fallback single connection
+# Single connection (lazy-initialized, with reconnect on stale)
+_conn = None
 _db_available = False  # Set to True only after successful init_db()
 
 
@@ -27,20 +26,11 @@ def is_db_active() -> bool:
 
 
 def _get_connection():
-    """Get a database connection from pool or single fallback. Returns None on failure."""
-    global _conn, _pool
-    if not _db_available and _conn is None and _pool is None:
+    """Get a database connection, reconnecting if stale. Returns None on failure."""
+    global _conn
+    if not _db_available and _conn is None:
         return None
 
-    # Try pool first
-    if _pool is not None:
-        try:
-            conn = _pool.getconn(timeout=5)
-            return conn
-        except Exception as e:
-            logger.warning(f"[db] Pool getconn failed, trying single connection: {e}")
-
-    # Fallback: single connection
     if _conn is not None and not _conn.closed:
         try:
             _conn.execute("SELECT 1")
@@ -56,20 +46,11 @@ def _get_connection():
     try:
         import psycopg
         _conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
-        logger.info("[db] PostgreSQL connection established (single)")
+        logger.info("[db] PostgreSQL connection established")
     except Exception as e:
         logger.error(f"[db] Failed to connect: {e}")
         return None
     return _conn
-
-
-def _return_connection(conn):
-    """Return a connection to the pool if pooling is active."""
-    if _pool is not None and conn is not _conn:
-        try:
-            _pool.putconn(conn)
-        except Exception:
-            pass
 
 
 def is_db_available() -> bool:
@@ -86,24 +67,14 @@ def is_db_available() -> bool:
 
 def init_db():
     """Create tables if they don't exist. Call once at startup."""
-    global _conn, _pool, _db_available
+    global _conn, _db_available
 
     if not DATABASE_URL:
         logger.info("[db] No DATABASE_URL set — using file-based storage")
         return False
 
     # Try connection pool first
-    try:
-        from psycopg_pool import ConnectionPool
-        _pool = ConnectionPool(DATABASE_URL, min_size=2, max_size=10, open=True, timeout=10)
-        logger.info("[db] Connection pool initialized (min=2, max=10)")
-    except ImportError:
-        logger.info("[db] psycopg_pool not installed — using single connection")
-    except Exception as e:
-        logger.warning(f"[db] Pool init failed, falling back to single connection: {e}")
-        _pool = None
-
-    # Attempt direct connection (bypass _get_connection guard since _db_available is False)
+    # Attempt direct connection first (needed for schema init)
     logger.info("[db] Connecting to PostgreSQL...")
     try:
         import psycopg
@@ -184,15 +155,8 @@ def init_db():
 
 
 def close_db():
-    """Close pool and/or connection. Call on shutdown."""
-    global _conn, _pool
-    if _pool:
-        try:
-            _pool.close()
-            logger.info("[db] Connection pool closed")
-        except Exception:
-            pass
-        _pool = None
+    """Close the connection. Call on shutdown."""
+    global _conn
     if _conn and not _conn.closed:
         _conn.close()
         _conn = None
