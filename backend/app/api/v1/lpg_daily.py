@@ -530,7 +530,7 @@ def get_accessories_pricing(ctx: dict = Depends(get_station_context)):
 
 
 @router.put("/accessories/pricing")
-def update_accessories_pricing(items: list, ctx: dict = Depends(require_supervisor_or_owner)):
+def update_accessories_pricing(items: List[dict], ctx: dict = Depends(require_supervisor_or_owner)):
     """Update LPG accessory prices (supervisor/owner only)."""
     station_id = ctx["station_id"]
     catalog = load_accessories_catalog(station_id)

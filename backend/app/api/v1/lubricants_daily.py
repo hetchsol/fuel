@@ -437,7 +437,7 @@ def get_product_pricing(ctx: dict = Depends(get_station_context)):
 
 
 @router.put("/products/pricing")
-def update_product_pricing(items: list, ctx: dict = Depends(require_supervisor_or_owner)):
+def update_product_pricing(items: List[dict], ctx: dict = Depends(require_supervisor_or_owner)):
     """Update lubricant product prices (supervisor/owner only)."""
     station_id = ctx["station_id"]
     catalog = load_product_catalog(station_id)
