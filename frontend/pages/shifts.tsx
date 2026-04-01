@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { getHeaders } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -69,7 +69,7 @@ export default function Shifts() {
 
   const fetchActiveShift = async () => {
     try {
-      const res = await fetch(`${BASE}/shifts/current/active`, {
+      const res = await authFetch(`${BASE}/shifts/current/active`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -83,7 +83,7 @@ export default function Shifts() {
 
   const fetchAllShifts = async () => {
     try {
-      const res = await fetch(`${BASE}/shifts/`, {
+      const res = await authFetch(`${BASE}/shifts/`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -103,7 +103,7 @@ export default function Shifts() {
   const handleDeactivateShift = async (shiftId: string) => {
     if (!confirm('Deactivate this shift? Attendants will no longer see it as their active shift.')) return
     try {
-      const res = await fetch(`${BASE}/shifts/${shiftId}/deactivate`, {
+      const res = await authFetch(`${BASE}/shifts/${shiftId}/deactivate`, {
         method: 'PUT',
         headers: getHeaders()
       })
@@ -123,7 +123,7 @@ export default function Shifts() {
   const handleDeleteShift = async (shiftId: string) => {
     if (!confirm('Permanently delete this inactive shift? This cannot be undone.')) return
     try {
-      const res = await fetch(`${BASE}/shifts/${shiftId}`, {
+      const res = await authFetch(`${BASE}/shifts/${shiftId}`, {
         method: 'DELETE',
         headers: getHeaders()
       })
@@ -150,7 +150,7 @@ export default function Shifts() {
 
   const fetchNozzles = async () => {
     try {
-      const res = await fetch(`${BASE}/islands/?status=active`, {
+      const res = await authFetch(`${BASE}/islands/?status=active`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -176,7 +176,7 @@ export default function Shifts() {
 
   const fetchStaffList = async () => {
     try {
-      const res = await fetch(`${BASE}/auth/staff`, {
+      const res = await authFetch(`${BASE}/auth/staff`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -192,7 +192,7 @@ export default function Shifts() {
 
   const loadAvailableStaff = async () => {
     try {
-      const res = await fetch(`${BASE}/auth/staff`, {
+      const res = await authFetch(`${BASE}/auth/staff`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -215,7 +215,7 @@ export default function Shifts() {
 
   const loadIslandsData = async () => {
     try {
-      const res = await fetch(`${BASE}/islands/?status=active`, {
+      const res = await authFetch(`${BASE}/islands/?status=active`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -229,7 +229,7 @@ export default function Shifts() {
 
   const fetchTanks = async () => {
     try {
-      const res = await fetch(`${BASE}/tanks/levels`, {
+      const res = await authFetch(`${BASE}/tanks/levels`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -244,7 +244,7 @@ export default function Shifts() {
   const fetchTankDipReadings = async () => {
     if (!activeShift) return
     try {
-      const res = await fetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-readings`, {
+      const res = await authFetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-readings`, {
         headers: getHeaders()
       })
       if (res.ok) {
@@ -268,7 +268,7 @@ export default function Shifts() {
         closing_dip_cm: tankDipForm.closing_dip_cm ? parseFloat(tankDipForm.closing_dip_cm) : null
       }
 
-      const res = await fetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-reading`, {
+      const res = await authFetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-reading`, {
         method: 'POST',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -524,7 +524,7 @@ export default function Shifts() {
       }
 
       try {
-        const res = await fetch(`${BASE}/shifts/${editingShiftId}`, {
+        const res = await authFetch(`${BASE}/shifts/${editingShiftId}`, {
           method: 'PUT',
           headers: { ...getHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -562,7 +562,7 @@ export default function Shifts() {
       }
 
       try {
-        const res = await fetch(`${BASE}/shifts/`, {
+        const res = await authFetch(`${BASE}/shifts/`, {
           method: 'POST',
           headers: { ...getHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -928,7 +928,7 @@ export default function Shifts() {
                 onClick={() => {
                   // Auto-populate opening dip from previous shift if form is empty
                   if (!tankDipForm.opening_dip_cm) {
-                    fetch(`${BASE}/shifts/${activeShift.shift_id}/previous-dip-readings`, { headers: getHeaders() })
+                    authFetch(`${BASE}/shifts/${activeShift.shift_id}/previous-dip-readings`)
                       .then(r => r.ok ? r.json() : { found: false })
                       .then(data => {
                         if (data.found && data.readings?.length > 0) {
