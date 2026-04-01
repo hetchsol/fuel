@@ -1,0 +1,242 @@
+================================================================================
+3-SHIFT SIMULATION — ONE ATTENDANT PER SHIFT
+================================================================================
+
+STATION:    Kalulushi Next Stop Filling Station
+DIESEL:     23.25 ZMW/L    PETROL: 26.61 ZMW/L
+
+STAFF NEEDED:
+  Supervisor: Herve Renard (renard / renard123)
+  Attendant:  Christopher Katongo (katongo / katongo123)
+
+TANKS (configure in wizard):
+  TANK-DIESEL   Diesel   20,000 L capacity
+  TANK-PETROL   Petrol   25,000 L capacity
+
+KATONGO ASSIGNED TO:
+  Island 1 (LSD 1A, LSD 1B) — Diesel
+  Island 4 (UNL 1A, UNL 1B) — Petrol
+  (Same assignment all 3 shifts for simplicity)
+
+
+================================================================================
+SHIFT 1: DAY — 2026-04-01 (CLEAN)
+================================================================================
+
+CREATE SHIFT (as renard):
+  Date: 2026-04-01  |  Type: Day
+  Assign Katongo → Island 1 + Island 4 (4 nozzles)
+
+OPENING TANK DIPS (first shift — enter manually):
+  TANK-DIESEL:  Opening Dip: 19.10 cm
+  TANK-PETROL:  Opening Dip: 22.92 cm
+
+KATONGO'S READINGS (login: katongo / katongo123):
+
+  LSD 1A:
+    Elec Open: 200000.000    Elec Close: 201150.300
+    Mech Open: 200000        Mech Close: 201150
+
+  LSD 1B:
+    Elec Open: 205000.000    Elec Close: 205820.600
+    Mech Open: 205000        Mech Close: 205821
+
+  UNL 1A:
+    Elec Open: 150000.000    Elec Close: 150980.400
+    Mech Open: 150000        Mech Close: 150980
+
+  UNL 1B:
+    Elec Open: 160000.000    Elec Close: 160540.200
+    Mech Open: 160000        Mech Close: 160540
+
+VOLUMES (auto-calculated):
+  LSD 1A:  1,150.300 L diesel  |  Dev: 0.3 L
+  LSD 1B:    820.600 L diesel  |  Dev: 0.4 L
+  UNL 1A:    980.400 L petrol  |  Dev: 0.4 L
+  UNL 1B:    540.200 L petrol  |  Dev: 0.2 L
+  Total Diesel: 1,970.900 L
+  Total Petrol: 1,520.600 L
+  All deviations < 0.8L — NO FLAGS
+
+CASH HANDOVER:
+  Actual Cash: 86,350.00 ZMW
+
+EXPECTED (for reference):
+  Diesel: 1,970.900 x 23.25 = K45,823.43
+  Petrol: 1,520.600 x 26.61 = K40,463.17
+  Total Expected: K86,286.60
+  Difference: +K63.40 (small surplus — CLEAN)
+
+SUPERVISOR REVIEW (renard):
+  Approve — "Clean shift"
+
+CLOSING TANK DIPS:
+  TANK-DIESEL:  Closing Dip: 16.59 cm
+  TANK-PETROL:  Closing Dip: 20.98 cm
+
+
+================================================================================
+SHIFT 2: NIGHT — 2026-04-01 (NOZZLE LOSS FLAG)
+================================================================================
+
+CREATE SHIFT (as renard):
+  Date: 2026-04-01  |  Type: Night
+  Assign Katongo → Island 1 + Island 4
+
+OPENING TANK DIPS (should auto-fill from Shift 1 closing):
+  TANK-DIESEL:  Opening Dip: 16.59 cm  <- auto from Shift 1
+  TANK-PETROL:  Opening Dip: 20.98 cm  <- auto from Shift 1
+
+KATONGO'S READINGS:
+
+  LSD 1A:
+    Elec Open: 201150.300    Elec Close: 201750.800
+    Mech Open: 201150        Mech Close: 201751
+
+  LSD 1B:                                <<<< NOZZLE LOSS >>>>
+    Elec Open: 205820.600    Elec Close: 206320.100
+    Mech Open: 205821        Mech Close: 206318
+    (Deviation: 2.1L — EXCEEDS 0.8L threshold)
+
+  UNL 1A:
+    Elec Open: 150980.400    Elec Close: 151380.900
+    Mech Open: 150980        Mech Close: 151381
+
+  UNL 1B:
+    Elec Open: 160540.200    Elec Close: 160790.500
+    Mech Open: 160540        Mech Close: 160791
+
+VOLUMES:
+  LSD 1A:    600.500 L diesel  |  Dev: 0.2 L
+  LSD 1B:    499.500 L diesel  |  Dev: 2.1 L  <<<< FLAGGED
+  UNL 1A:    400.500 L petrol  |  Dev: 0.4 L
+  UNL 1B:    250.300 L petrol  |  Dev: 0.2 L
+  Total Diesel: 1,100.000 L
+  Total Petrol:   650.800 L
+
+CASH HANDOVER:
+  Actual Cash: 42,900.00 ZMW
+  Notes: "LSD 1B meter discrepancy noted. Mechanical reading
+          behind electronic. Reported to supervisor."
+
+EXPECTED:
+  Diesel: 1,100.000 x 23.25 = K25,575.00
+  Petrol:   650.800 x 26.61 = K17,317.79
+  Total Expected: K42,892.79
+  Difference: +K7.21 (negligible — but FLAGGED for nozzle loss)
+
+SUPERVISOR REVIEW (renard):
+  Approve — "Nozzle LSD 1B deviation 2.1L noted. Calibration
+             check scheduled for maintenance."
+
+CLOSING TANK DIPS:
+  TANK-DIESEL:  Closing Dip: 15.19 cm
+  TANK-PETROL:  Closing Dip: 20.15 cm
+
+
+================================================================================
+SHIFT 3: DAY — 2026-04-02 (CASH SHORTAGE)
+================================================================================
+
+CREATE SHIFT (as renard):
+  Date: 2026-04-02  |  Type: Day
+  Assign Katongo → Island 1 + Island 4
+
+OPENING TANK DIPS (should auto-fill from Shift 2 closing):
+  TANK-DIESEL:  Opening Dip: 15.19 cm  <- auto from Shift 2
+  TANK-PETROL:  Opening Dip: 20.15 cm  <- auto from Shift 2
+
+KATONGO'S READINGS:
+
+  LSD 1A:
+    Elec Open: 201750.800    Elec Close: 203200.500
+    Mech Open: 201751        Mech Close: 203201
+
+  LSD 1B:
+    Elec Open: 206320.100    Elec Close: 207450.700
+    Mech Open: 206318        Mech Close: 207451
+
+  UNL 1A:
+    Elec Open: 151380.900    Elec Close: 152680.200
+    Mech Open: 151381        Mech Close: 152680
+
+  UNL 1B:
+    Elec Open: 160790.500    Elec Close: 161590.900
+    Mech Open: 160791        Mech Close: 161591
+
+VOLUMES:
+  LSD 1A:  1,449.700 L diesel  |  Dev: 0.2 L
+  LSD 1B:  1,130.600 L diesel  |  Dev: 0.3 L
+  UNL 1A:  1,299.300 L petrol  |  Dev: 0.2 L
+  UNL 1B:    800.400 L petrol  |  Dev: 0.1 L
+  Total Diesel: 2,580.300 L
+  Total Petrol: 2,099.700 L
+  All deviations < 0.8L — no nozzle flags
+
+CASH HANDOVER:
+  Actual Cash: 100,000.00 ZMW
+  Notes: "Busy day. Large cash amount."
+
+EXPECTED:
+  Diesel: 2,580.300 x 23.25 = K59,991.98
+  Petrol: 2,099.700 x 26.61 = K55,873.02
+  Total Expected: K115,864.99
+  Difference: -K15,864.99  <<<< CASH SHORTAGE (auto-flagged)
+
+SUPERVISOR REVIEW (renard):
+  Approve — "Cash shortage K15,865 noted. Katongo to provide
+             explanation. Possible miscount or unreported credit."
+
+CLOSING TANK DIPS:
+  TANK-DIESEL:  Closing Dip: 11.90 cm
+  TANK-PETROL:  Closing Dip: 17.47 cm
+
+
+================================================================================
+TANK LEVEL TRACKER
+================================================================================
+
+  TANK-DIESEL (20,000L capacity):
+    Start:         15,000 L  (19.10 cm)
+    After Shift 1: 13,029 L  (16.59 cm)  sold 1,971 L
+    After Shift 2: 11,929 L  (15.19 cm)  sold 1,100 L
+    After Shift 3:  9,349 L  (11.90 cm)  sold 2,580 L
+    Total sold:     5,651 L
+
+  TANK-PETROL (25,000L capacity):
+    Start:         18,000 L  (22.92 cm)
+    After Shift 1: 16,479 L  (20.98 cm)  sold 1,521 L
+    After Shift 2: 15,829 L  (20.15 cm)  sold   651 L
+    After Shift 3: 13,729 L  (17.47 cm)  sold 2,100 L
+    Total sold:     4,271 L
+
+
+================================================================================
+SHIFT SUMMARY
+================================================================================
+
+| Shift | Date       | Type  | Diesel  | Petrol  | Expected  | Cash      | Diff      | Flags         |
+|-------|------------|-------|---------|---------|-----------|-----------|-----------|---------------|
+| 1     | 2026-04-01 | Day   | 1,971 L | 1,521 L | K86,287   | K86,350   | +K63      | Clean         |
+| 2     | 2026-04-01 | Night | 1,100 L |   651 L | K42,893   | K42,900   | +K7       | Nozzle LSD 1B |
+| 3     | 2026-04-02 | Day   | 2,580 L | 2,100 L | K115,865  | K100,000  | -K15,865  | Cash shortage |
+
+
+================================================================================
+NOZZLE READING CONTINUITY CHECK
+================================================================================
+
+Each shift's closing electronic reading = next shift's opening:
+
+  LSD 1A: 200000 -> 201150.3 -> 201750.8 -> 203200.5
+  LSD 1B: 205000 -> 205820.6 -> 206320.1 -> 207450.7
+  UNL 1A: 150000 -> 150980.4 -> 151380.9 -> 152680.2
+  UNL 1B: 160000 -> 160540.2 -> 160790.5 -> 161590.9
+
+Tank dip continuity:
+  DIESEL: 19.10 -> 16.59 -> 15.19 -> 11.90
+  PETROL: 22.92 -> 20.98 -> 20.15 -> 17.47
+
+================================================================================
+END OF SIMULATION
+================================================================================
