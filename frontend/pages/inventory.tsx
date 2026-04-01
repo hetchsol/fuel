@@ -7,6 +7,9 @@ const BASE = '/api/v1'
 export default function Inventory() {
   const [activeTab, setActiveTab] = useState<'tanks' | 'lpg' | 'lubricants'>('tanks')
 
+  // Tank State
+  const [tanks, setTanks] = useState<any[]>([])
+
   // LPG State
   const [lpgAccessories, setLpgAccessories] = useState<any[]>([])
   const [lubricants, setLubricants] = useState<any[]>([])
@@ -14,9 +17,21 @@ export default function Inventory() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    fetchTanks()
     fetchLPGAccessories()
     fetchLubricants()
   }, [])
+
+  const fetchTanks = async () => {
+    try {
+      const res = await authFetch(`${BASE}/tanks/levels`, { headers: getHeaders() })
+      if (res.ok) {
+        setTanks(await res.json())
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch tanks:', err)
+    }
+  }
 
   const fetchLPGAccessories = async () => {
     try {
@@ -115,72 +130,76 @@ export default function Inventory() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Diesel Tank */}
-            <div className="bg-gradient-to-br from-fuel-diesel-light to-indigo-50 rounded-lg shadow-lg p-6 border-2 border-fuel-diesel-border">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-2xl font-bold text-content-primary">Diesel Tank</h3>
-                <span className="px-3 py-1 bg-fuel-diesel-light text-fuel-diesel rounded-full text-sm font-semibold">
-                  Tank 1
-                </span>
+            {tanks.length === 0 && (
+              <div className="col-span-full text-center py-8 text-content-secondary">
+                No tanks configured. Add tanks in the setup wizard or Infrastructure page.
               </div>
-              <div className="space-y-4">
-                <div className="bg-surface-card rounded-lg p-4 border border-fuel-diesel-border">
-                  <p className="text-sm text-content-secondary">Current Level</p>
-                  <p className="text-3xl font-bold text-fuel-diesel">25,117 L</p>
-                  <p className="text-xs text-content-secondary mt-1">Dip: 155.4 cm</p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-surface-card rounded-lg p-3 border border-surface-border">
-                    <p className="text-xs text-content-secondary">Capacity</p>
-                    <p className="text-lg font-bold text-content-primary">30,000 L</p>
-                  </div>
-                  <div className="bg-surface-card rounded-lg p-3 border border-surface-border">
-                    <p className="text-xs text-content-secondary">% Full</p>
-                    <p className="text-lg font-bold text-content-primary">83.7%</p>
-                  </div>
-                </div>
-                <div className="bg-status-pending-light rounded-lg p-3 border border-status-warning">
-                  <p className="text-xs text-status-warning font-semibold">⚠️ Reorder at 20% (6,000L)</p>
-                </div>
-              </div>
-            </div>
+            )}
+            {tanks.map((tank: any, idx: number) => {
+              const isDiesel = tank.fuel_type === 'Diesel'
+              const pct = tank.percentage || (tank.capacity > 0 ? (tank.current_level / tank.capacity) * 100 : 0)
+              const isLow = pct <= 25
+              const isCritical = pct <= 10
+              const sameFuelTanks = tanks.filter((t: any) => t.fuel_type === tank.fuel_type)
+              const tankLabel = sameFuelTanks.length > 1
+                ? `${tank.fuel_type} Tank ${sameFuelTanks.indexOf(tank) + 1}`
+                : `${tank.fuel_type} Tank`
 
-            {/* Petrol Tank */}
-            <div className="bg-gradient-to-br from-fuel-petrol-light to-emerald-50 rounded-lg shadow-lg p-6 border-2 border-fuel-petrol-border">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-2xl font-bold text-content-primary">Petrol Tank</h3>
-                <span className="px-3 py-1 bg-fuel-petrol-light text-fuel-petrol rounded-full text-sm font-semibold">
-                  Tank 2
-                </span>
-              </div>
-              <div className="space-y-4">
-                <div className="bg-surface-card rounded-lg p-4 border border-fuel-petrol-border">
-                  <p className="text-sm text-content-secondary">Current Level</p>
-                  <p className="text-3xl font-bold text-status-success">26,887 L</p>
-                  <p className="text-xs text-content-secondary mt-1">Dip: 164.5 cm</p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-surface-card rounded-lg p-3 border border-surface-border">
-                    <p className="text-xs text-content-secondary">Capacity</p>
-                    <p className="text-lg font-bold text-content-primary">30,000 L</p>
+              return (
+                <div key={tank.tank_id} className={`bg-gradient-to-br ${isDiesel ? 'from-fuel-diesel-light to-indigo-50' : 'from-fuel-petrol-light to-emerald-50'} rounded-lg shadow-lg p-6 border-2 ${isDiesel ? 'border-fuel-diesel-border' : 'border-fuel-petrol-border'}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-2xl font-bold text-content-primary">{tankLabel}</h3>
+                    <span className={`px-3 py-1 ${isDiesel ? 'bg-fuel-diesel-light text-fuel-diesel' : 'bg-fuel-petrol-light text-fuel-petrol'} rounded-full text-sm font-semibold`}>
+                      {tank.tank_id}
+                    </span>
                   </div>
-                  <div className="bg-surface-card rounded-lg p-3 border border-surface-border">
-                    <p className="text-xs text-content-secondary">% Full</p>
-                    <p className="text-lg font-bold text-content-primary">89.6%</p>
+                  <div className="space-y-4">
+                    <div className={`bg-surface-card rounded-lg p-4 border ${isDiesel ? 'border-fuel-diesel-border' : 'border-fuel-petrol-border'}`}>
+                      <p className="text-sm text-content-secondary">Current Level</p>
+                      <p className={`text-3xl font-bold ${isCritical ? 'text-status-error' : isLow ? 'text-status-warning' : isDiesel ? 'text-fuel-diesel' : 'text-status-success'}`}>
+                        {tank.current_level.toLocaleString()} L
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-surface-card rounded-lg p-3 border border-surface-border">
+                        <p className="text-xs text-content-secondary">Capacity</p>
+                        <p className="text-lg font-bold text-content-primary">{tank.capacity.toLocaleString()} L</p>
+                      </div>
+                      <div className="bg-surface-card rounded-lg p-3 border border-surface-border">
+                        <p className="text-xs text-content-secondary">% Full</p>
+                        <p className="text-lg font-bold text-content-primary">{pct.toFixed(1)}%</p>
+                      </div>
+                    </div>
+                    <div className="bg-surface-card rounded-lg p-3 border border-surface-border">
+                      <p className="text-xs text-content-secondary">Available Space</p>
+                      <p className="text-sm font-bold text-content-primary">{(tank.capacity - tank.current_level).toLocaleString()} L</p>
+                    </div>
+                    {isCritical && (
+                      <div className="bg-status-error-light rounded-lg p-3 border border-status-error">
+                        <p className="text-xs text-status-error font-semibold">⚠️ Critical — Order fuel immediately</p>
+                      </div>
+                    )}
+                    {isLow && !isCritical && (
+                      <div className="bg-status-pending-light rounded-lg p-3 border border-status-warning">
+                        <p className="text-xs text-status-warning font-semibold">⚠️ Low stock — Reorder soon</p>
+                      </div>
+                    )}
+                    {!isLow && (
+                      <div className="bg-status-success-light rounded-lg p-3 border border-status-success">
+                        <p className="text-xs text-status-success font-semibold">Stock level good</p>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="bg-status-success-light rounded-lg p-3 border border-fuel-petrol-border">
-                  <p className="text-xs text-status-success font-semibold">✅ Stock Level Good</p>
-                </div>
-              </div>
-            </div>
+              )
+            })}
           </div>
 
           {/* Record Delivery Link */}
           <div className="mt-6 bg-action-primary-light border border-action-primary rounded-lg p-4 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-action-primary">Need to record a fuel delivery?</h3>
-              <p className="text-xs text-action-primary mt-1">Use the Stock Movement page to record deliveries and track fuel intake</p>
+              <p className="text-xs text-action-primary mt-1">Use the Fuel Operations page to record deliveries and track fuel intake</p>
             </div>
             <Link
               href="/fuel-operations"
