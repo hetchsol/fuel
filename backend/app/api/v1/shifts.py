@@ -80,7 +80,9 @@ def create_shift(shift: Shift, ctx: dict = Depends(get_station_context)):
     validate_create('shifts', shift.dict())
 
     if shift.shift_id in shifts_data:
-        raise HTTPException(status_code=400, detail="Shift already exists")
+        existing_status = shifts_data[shift.shift_id].get("status", "active")
+        if existing_status != "inactive":
+            raise HTTPException(status_code=400, detail="Shift already exists and is still active. Deactivate it first.")
 
     # Manually construct response to ensure all fields are included
     shift_dict = {
