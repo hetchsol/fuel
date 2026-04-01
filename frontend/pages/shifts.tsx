@@ -517,10 +517,14 @@ export default function Shifts() {
     }))
 
     if (editingShiftId) {
-      // Edit mode — PUT to update existing shift
+      // Edit mode — PUT to update existing shift (must include full shift object)
       const payload = {
+        shift_id: editingShiftId,
+        date: shiftForm.date,
+        shift_type: shiftForm.shift_type,
         attendants: selectedAttendants.map(a => a.full_name),
-        assignments
+        assignments,
+        status: 'active'
       }
 
       try {
@@ -532,7 +536,8 @@ export default function Shifts() {
 
         if (!res.ok) {
           const error = await res.json()
-          toast.error(`Error updating shift: ${error.detail || JSON.stringify(error)}`)
+          const msg = typeof error.detail === 'string' ? error.detail : Array.isArray(error.detail) ? error.detail.map((e: any) => e.msg || e).join(', ') : 'Unknown error'
+          toast.error(`Error updating shift: ${msg}`)
           console.error('Shift update error:', error)
           return
         }
