@@ -73,11 +73,13 @@ def init_db():
         logger.info("[db] No DATABASE_URL set — using file-based storage")
         return False
 
-    # Use autocommit for schema init to avoid lock contention with stale transactions
-    logger.info("[db] Connecting to PostgreSQL...")
+    # Use direct (non-pooler) connection for DDL — Neon/PgBouncer poolers
+    # don't support DDL or SET commands reliably in transaction mode
+    direct_url = DATABASE_URL.replace("-pooler.", ".")
+    logger.info("[db] Connecting to PostgreSQL (direct for DDL)...")
     try:
         import psycopg
-        _conn = psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=10)
+        _conn = psycopg.connect(direct_url, autocommit=True, connect_timeout=15)
         logger.info("[db] PostgreSQL connection established")
     except Exception as e:
         logger.error(f"[db] Failed to connect: {e}")
@@ -86,6 +88,7 @@ def init_db():
         return False
 
     try:
+        logger.info("[db] Creating tables...")
         _conn.execute("""
             CREATE TABLE IF NOT EXISTS stations (
                 station_id TEXT PRIMARY KEY,
@@ -132,20 +135,24 @@ def init_db():
                 expires_at TIMESTAMP NOT NULL
             );
         """)
+        logger.info("[db] Tables created")
+
         # Add is_active column if it doesn't exist (migration)
-        _conn.execute("""
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
-        """)
+        _conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE")
+        logger.info("[db] Migrations applied")
+
         # Performance indexes
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)")
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username)")
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)")
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_users_station ON users(station_id)")
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)")
+        logger.info("[db] Indexes created")
 
         # Switch to transactional mode for normal operations
         _conn.close()
         _conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
+        logger.info("[db] Switched to transactional mode")
 
         _db_available = True
         logger.info("[db] PostgreSQL schema initialized — DB is active")
