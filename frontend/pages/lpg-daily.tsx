@@ -58,7 +58,13 @@ export default function LPGDaily() {
   const [user, setUser] = useState<any>(null)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [shiftType, setShiftType] = useState('Day')
-  const [salesperson, setSalesperson] = useState('')
+  const [salesperson, setSalesperson] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const userData = localStorage.getItem('user')
+      if (userData) return JSON.parse(userData).full_name || ''
+    }
+    return ''
+  })
 
   const [pricing, setPricing] = useState<Pricing[]>([])
   const [cylinderRows, setCylinderRows] = useState<CylinderRow[]>(
