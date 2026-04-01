@@ -101,6 +101,7 @@ export default function LPGDaily() {
   const [entries, setEntries] = useState<any[]>([])
 
   const canEditPricing = user?.role === 'supervisor' || user?.role === 'owner'
+  const canManageStock = user?.role === 'supervisor' || user?.role === 'owner'
   const lpgPricesConfigured = pricing.length > 0 && pricing.some((p: any) => p.price_refill > 0 || p.price_with_cylinder > 0)
 
   useEffect(() => {
@@ -575,9 +576,13 @@ export default function LPGDaily() {
                       className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
                   </td>
                   <td className="px-3 py-2">
-                    <input type="number" min={0} value={row.receipts}
-                      onChange={e => updateCylinderField(row.size_kg, 'receipts', parseInt(e.target.value) || 0)}
-                      className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                    {canManageStock ? (
+                      <input type="number" min={0} value={row.receipts}
+                        onChange={e => updateCylinderField(row.size_kg, 'receipts', parseInt(e.target.value) || 0)}
+                        className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                    ) : (
+                      <span className="text-sm" style={{ color: theme.textSecondary }}>{row.receipts}</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right font-medium" style={{
                     color: row.traded_in > 0 ? 'var(--color-status-success)' : theme.textSecondary
@@ -697,7 +702,8 @@ export default function LPGDaily() {
         )}
       </div>
 
-      {/* Cylinder Trades (Upgrades/Downgrades) */}
+      {/* Cylinder Trades (Upgrades/Downgrades) — supervisor/owner only */}
+      {canManageStock && (
       <div className="rounded-lg shadow mb-6 overflow-hidden"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
         <div className="p-4 font-semibold text-sm flex justify-between items-center"
@@ -793,6 +799,7 @@ export default function LPGDaily() {
           </button>
         </div>
       </div>
+      )}
 
       {/* Cylinder Population */}
       <div className="rounded-lg shadow p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4"
@@ -904,9 +911,13 @@ export default function LPGDaily() {
                     className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
                 </td>
                 <td className="px-3 py-2">
-                  <input type="number" min={0} value={row.additions}
-                    onChange={e => updateAccessoryField(row.product_code, 'additions', parseInt(e.target.value) || 0)}
-                    className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                  {canManageStock ? (
+                    <input type="number" min={0} value={row.additions}
+                      onChange={e => updateAccessoryField(row.product_code, 'additions', parseInt(e.target.value) || 0)}
+                      className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                  ) : (
+                    <span className="text-sm" style={{ color: theme.textSecondary }}>{row.additions}</span>
+                  )}
                 </td>
                 <td className="px-3 py-2">
                   <input type="number" min={0} value={row.sold}

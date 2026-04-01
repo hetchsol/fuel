@@ -471,9 +471,13 @@ export default function LubricantsDaily() {
                           className="w-14 px-1 py-1 rounded border text-xs text-right" style={inputStyle} />
                       </td>
                       <td className="px-3 py-1">
-                        <input type="number" min={0} value={row.additions}
-                          onChange={e => updateField(row.product_code, 'additions', parseInt(e.target.value) || 0)}
-                          className="w-14 px-1 py-1 rounded border text-xs text-right" style={inputStyle} />
+                        {canEditPricing ? (
+                          <input type="number" min={0} value={row.additions}
+                            onChange={e => updateField(row.product_code, 'additions', parseInt(e.target.value) || 0)}
+                            className="w-14 px-1 py-1 rounded border text-xs text-right" style={inputStyle} />
+                        ) : (
+                          <span className="text-xs" style={{ color: theme.textSecondary }}>{row.additions}</span>
+                        )}
                       </td>
                       <td className="px-3 py-1">
                         <input type="number" min={0} value={row.sold_or_drawn}
