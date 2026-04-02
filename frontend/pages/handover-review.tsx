@@ -661,6 +661,7 @@ function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
 function SafeDepositSummary({ shiftId, attendantId, theme }: { shiftId: string; attendantId: string; theme: any }) {
   const [deposits, setDeposits] = useState<any[]>([])
   const [total, setTotal] = useState(0)
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     authFetch(`${BASE}/safe-deposits/${shiftId}`)
@@ -679,20 +680,25 @@ function SafeDepositSummary({ shiftId, attendantId, theme }: { shiftId: string; 
 
   return (
     <div>
-      <div className="text-xs font-medium uppercase mb-2" style={{ color: theme.textSecondary }}>
-        Safe Deposits ({deposits.length} deposit{deposits.length !== 1 ? 's' : ''} — K{total.toLocaleString()})
-      </div>
+      <button onClick={() => setExpanded(!expanded)} className="w-full text-left">
+        <div className="text-xs font-medium uppercase mb-1 flex justify-between" style={{ color: theme.textSecondary }}>
+          <span>Safe Deposits ({deposits.length} deposit{deposits.length !== 1 ? 's' : ''} — K{total.toLocaleString()})</span>
+          <span>{expanded ? '−' : '+'}</span>
+        </div>
+      </button>
+      {expanded && (
       <div className="space-y-1">
         {deposits.map((d: any) => (
           <div key={d.deposit_id} className="flex justify-between text-xs p-1.5 rounded"
             style={{ backgroundColor: theme.background }}>
             <span style={{ color: theme.textSecondary }}>
-              {new Date(d.timestamp).toLocaleTimeString()} {d.note && `— ${d.note}`}
+              {d.time || new Date(d.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})} {d.note && `— ${d.note}`}
             </span>
             <span className="font-semibold" style={{ color: theme.textPrimary }}>K{d.amount.toLocaleString()}</span>
           </div>
         ))}
       </div>
+      )}
     </div>
   )
 }

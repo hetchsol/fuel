@@ -1607,6 +1607,7 @@ export default function Shifts() {
 
 function ShiftDepositOverview({ shiftId }: { shiftId: string }) {
   const [data, setData] = useState<any>(null)
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     authFetch(`${BASE}/safe-deposits/${shiftId}`)
@@ -1617,9 +1618,22 @@ function ShiftDepositOverview({ shiftId }: { shiftId: string }) {
 
   if (!data || !data.attendants?.length) return null
 
+  const hasOverdue = data.attendants.some((a: any) => a.overdue)
+
   return (
-    <div className="mb-6 bg-surface-card rounded-lg shadow-lg p-6">
-      <h2 className="text-xl font-bold text-content-primary mb-4">Safe Deposits</h2>
+    <div className="mb-6 bg-surface-card rounded-lg shadow-lg overflow-hidden">
+      <button onClick={() => setExpanded(!expanded)}
+        className="w-full p-4 flex justify-between items-center text-left">
+        <h2 className="text-lg font-bold text-content-primary flex items-center gap-2">
+          Safe Deposits
+          {hasOverdue && <span className="text-[10px] px-1.5 py-0.5 rounded-badge bg-status-warning/20 text-status-warning font-semibold">OVERDUE</span>}
+        </h2>
+        <span className="text-sm text-content-secondary">
+          {data.total_deposits} deposit{data.total_deposits !== 1 ? 's' : ''} — K{data.total_amount.toLocaleString()} {expanded ? '−' : '+'}
+        </span>
+      </button>
+      {expanded && (
+      <div className="px-6 pb-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {data.attendants.map((att: any) => (
           <div key={att.attendant_id} className={`p-3 rounded-lg border ${att.overdue ? 'border-status-warning bg-status-warning/5' : 'border-surface-border'}`}>
@@ -1639,10 +1653,8 @@ function ShiftDepositOverview({ shiftId }: { shiftId: string }) {
           </div>
         ))}
       </div>
-      <div className="mt-3 pt-3 border-t border-surface-border flex justify-between text-sm">
-        <span className="text-content-secondary">{data.total_deposits} total deposit{data.total_deposits !== 1 ? 's' : ''}</span>
-        <span className="font-semibold text-content-primary">Total: K{data.total_amount.toLocaleString()}</span>
       </div>
+      )}
     </div>
   )
 }
