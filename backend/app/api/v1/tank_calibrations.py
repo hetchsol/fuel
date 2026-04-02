@@ -88,116 +88,95 @@ async def upload_calibration(
     ctx: dict = Depends(get_station_context),
 ):
     """Upload an Excel calibration chart for a tank (owner only)."""
-    # Inline owner check (avoids double dependency with UploadFile)
-    role = ctx.get("role", "")
-    role_str = role.value if hasattr(role, 'value') else str(role)
-    if role_str != "owner":
-        raise HTTPException(status_code=403, detail="Only owners can upload calibration data")
-
-    station_id = ctx["station_id"]
-    storage = ctx["storage"]
-
-    # Validate tank exists
-    tanks = storage.get('tanks', {})
-    if tank_id not in tanks:
-        raise HTTPException(status_code=404, detail=f"Tank {tank_id} not found. Available: {list(tanks.keys())}")
-
-    # Validate file type
-    if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail=f"File must be an Excel file (.xlsx). Got: {file.filename}")
-
-    # Parse Excel
     try:
+        # Inline owner check
+        role = ctx.get("role", "")
+        role_str = role.value if hasattr(role, 'value') else str(role)
+        if role_str != "owner":
+            raise HTTPException(status_code=403, detail="Only owners can upload calibration data")
+
+        station_id = ctx["station_id"]
+        storage = ctx["storage"]
+
+        # Validate tank exists
+        tanks = storage.get('tanks', {})
+        if tank_id not in tanks:
+            raise HTTPException(status_code=404, detail=f"Tank {tank_id} not found")
+
+        # Validate file type
+        if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
+            raise HTTPException(status_code=400, detail=f"File must be .xlsx. Got: {file.filename}")
+
+        # Parse Excel
         from openpyxl import load_workbook
         content = await file.read()
         wb = load_workbook(io.BytesIO(content), data_only=True)
         ws = wb.active
+
+        # Extract dip/volume pairs
+        chart = {}
+        for row in ws.iter_rows(min_row=1, max_col=2, values_only=True):
+            dip_val, vol_val = row
+            if dip_val is None or vol_val is None:
+                continue
+            if isinstance(dip_val, str) and not dip_val.replace('.', '').replace('-', '').isdigit():
+                continue
+            try:
+                dip = float(dip_val)
+                vol = float(vol_val)
+                if dip >= 0 and vol >= 0:
+                    chart[dip] = vol
+            except (ValueError, TypeError):
+                continue
+
+        if len(chart) < 5:
+            raise HTTPException(status_code=400, detail=f"Need at least 5 data points. Found {len(chart)}.")
+
+        # Build sorted chart
+        dips = sorted(chart.keys())
+        vols = [chart[d] for d in dips]
+        sorted_chart = {str(d): chart[d] for d in dips}
+
+        # Get tank capacity
+        tank = tanks[tank_id]
+        capacity = tank.get("capacity", max(vols) if vols else 50000)
+
+        # Save
+        calibrations = _load_calibrations(station_id)
+        calibrations[tank_id] = {
+            "tank_id": tank_id,
+            "chart": sorted_chart,
+            "uploaded_at": datetime.now().isoformat(),
+            "uploaded_by": ctx.get("username", "unknown"),
+            "point_count": len(sorted_chart),
+        }
+        _save_calibrations(station_id, calibrations)
+
+        # Register for immediate use
+        float_chart = {float(k): v for k, v in sorted_chart.items()}
+        register_tank_calibration(tank_id, float_chart, capacity=capacity)
+
+        log_audit_event(
+            station_id=station_id,
+            action="calibration_upload",
+            performed_by=ctx.get("username", "unknown"),
+            entity_type="tank_calibration",
+            entity_id=tank_id,
+            details={"point_count": len(sorted_chart)},
+        )
+
+        return {
+            "status": "success",
+            "message": f"Calibration uploaded: {len(sorted_chart)} data points for {tank_id}",
+            "tank_id": tank_id,
+            "point_count": len(sorted_chart),
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read Excel file: {str(e)}")
-
-    # Extract dip/volume pairs
-    chart = {}
-    errors = []
-    row_num = 0
-
-    for row in ws.iter_rows(min_row=1, max_col=2, values_only=True):
-        row_num += 1
-        dip_val, vol_val = row
-
-        # Skip empty rows, header rows, instruction rows
-        if dip_val is None or vol_val is None:
-            continue
-        if isinstance(dip_val, str) and not dip_val.replace('.', '').replace('-', '').isdigit():
-            continue
-
-        try:
-            dip = float(dip_val)
-            vol = float(vol_val)
-        except (ValueError, TypeError):
-            errors.append(f"Row {row_num}: invalid numeric values ({dip_val}, {vol_val})")
-            continue
-
-        if dip < 0:
-            errors.append(f"Row {row_num}: dip cannot be negative ({dip})")
-            continue
-        if vol < 0:
-            errors.append(f"Row {row_num}: volume cannot be negative ({vol})")
-            continue
-
-        chart[dip] = vol
-
-    if errors:
-        raise HTTPException(status_code=400, detail=f"Validation errors: {'; '.join(errors[:5])}")
-
-    if len(chart) < 5:
-        raise HTTPException(status_code=400, detail=f"At least 5 calibration points required. Found {len(chart)}.")
-
-    # Validate ascending order
-    dips = sorted(chart.keys())
-    vols = [chart[d] for d in dips]
-    for i in range(1, len(vols)):
-        if vols[i] < vols[i - 1]:
-            raise HTTPException(status_code=400, detail=f"Volume must increase with dip. At dip {dips[i]}cm, volume {vols[i]}L is less than previous {vols[i-1]}L")
-
-    # Build sorted chart
-    sorted_chart = {str(d): chart[d] for d in dips}
-
-    # Get tank info for registration
-    tank = tanks[tank_id]
-    capacity = tank.get("capacity", max(vols) if vols else 50000)
-
-    # Save to station file
-    calibrations = _load_calibrations(station_id)
-    calibrations[tank_id] = {
-        "tank_id": tank_id,
-        "chart": sorted_chart,
-        "uploaded_at": datetime.now().isoformat(),
-        "uploaded_by": ctx["username"],
-        "point_count": len(sorted_chart),
-    }
-    _save_calibrations(station_id, calibrations)
-
-    # Register for immediate use
-    float_chart = {float(k): v for k, v in sorted_chart.items()}
-    register_tank_calibration(tank_id, float_chart, capacity=capacity)
-
-    log_audit_event(
-        station_id=station_id,
-        action="calibration_upload",
-        performed_by=ctx["username"],
-        entity_type="tank_calibration",
-        entity_id=tank_id,
-        details={"point_count": len(sorted_chart), "max_dip": dips[-1], "max_volume": vols[-1]},
-    )
-
-    return {
-        "status": "success",
-        "message": f"Calibration uploaded for {tank_id}: {len(sorted_chart)} data points",
-        "tank_id": tank_id,
-        "point_count": len(sorted_chart),
-        "max_dip_cm": dips[-1],
-        "max_volume_l": vols[-1],
-    }
+        logger.error(f"[calibration] Upload failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
 @router.get("/{tank_id}")
