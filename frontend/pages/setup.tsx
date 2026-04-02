@@ -376,7 +376,7 @@ export default function SetupWizard() {
       const data = await res.json()
       setCreatedUsers([...createdUsers, { user_id: data.user.user_id, username: data.user.username, full_name: data.user.full_name, role: data.user.role }])
       setStaffForm({ full_name: '', username: '', password: '', role })
-      toast.success(`${role === 'supervisor' ? 'Supervisor' : 'Attendant'} "${full_name.trim()}" created`)
+      toast.success(`${role === 'supervisor' ? 'Supervisor' : role === 'manager' ? 'Manager' : 'Attendant'} "${full_name.trim()}" created`)
     } catch (err: any) { toast.error(err.message) }
     finally { setAddingUser(false) }
   }
@@ -777,8 +777,8 @@ export default function SetupWizard() {
                   {createdUsers.map(u => (
                     <div key={u.username} className="flex items-center justify-between p-2.5 bg-surface-card/30 border border-surface-border rounded-lg">
                       <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-badge ${u.role === 'supervisor' ? 'bg-status-warning/20 text-status-warning' : 'bg-status-success/20 text-status-success'}`}>
-                          {u.role === 'supervisor' ? 'SUP' : 'ATT'}
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-badge ${u.role === 'manager' ? 'bg-action-primary/20 text-action-primary' : u.role === 'supervisor' ? 'bg-status-warning/20 text-status-warning' : 'bg-status-success/20 text-status-success'}`}>
+                          {u.role === 'manager' ? 'MGR' : u.role === 'supervisor' ? 'SUP' : 'ATT'}
                         </span>
                         <span className="text-sm text-content-primary">{u.full_name}</span>
                         <span className="text-xs text-content-secondary">({u.username})</span>
@@ -822,7 +822,7 @@ export default function SetupWizard() {
                   disabled={addingUser}
                   className="w-full px-3 py-2 bg-status-success/20 text-status-success text-sm font-medium rounded-btn hover:bg-status-success/30 disabled:opacity-50 transition-all border border-status-success/30"
                 >
-                  {addingUser ? 'Creating...' : `+ Add ${staffForm.role === 'supervisor' ? 'Supervisor' : 'Attendant'}`}
+                  {addingUser ? 'Creating...' : `+ Add ${staffForm.role === 'manager' ? 'Manager' : staffForm.role === 'supervisor' ? 'Supervisor' : 'Attendant'}`}
                 </button>
               </div>
 

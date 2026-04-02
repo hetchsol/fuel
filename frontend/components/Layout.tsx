@@ -446,8 +446,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <div className="text-right">
                     <p className="text-sm font-medium text-white leading-tight">{user.full_name}</p>
                     <p className="text-[11px] text-white/60 leading-tight">
-                      {user.role === 'user' && 'User'}
+                      {user.role === 'user' && 'Attendant'}
                       {user.role === 'supervisor' && 'Supervisor'}
+                      {user.role === 'manager' && 'Manager'}
                       {user.role === 'owner' && 'Owner'}
                     </p>
                   </div>
@@ -613,8 +614,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <div>
                   <p className="text-sm font-medium text-content-primary">{user.full_name}</p>
                   <p className="text-xs text-content-secondary">
-                    {user.role === 'user' && 'User'}
+                    {user.role === 'user' && 'Attendant'}
                     {user.role === 'supervisor' && 'Supervisor'}
+                    {user.role === 'manager' && 'Manager'}
                     {user.role === 'owner' && 'Owner'}
                   </p>
                 </div>
