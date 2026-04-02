@@ -9,10 +9,13 @@ import { NextRequest, NextResponse } from 'next/server'
  * After deploying, existing users must log in once to establish cookies.
  */
 
-// Routes that require owner role
-const OWNER_ROUTES = ['/settings', '/users', '/stations', '/infrastructure', '/audit']
+// Routes that require owner role only
+const OWNER_ROUTES = ['/stations', '/infrastructure']
 
-// Routes that require supervisor or owner role
+// Routes that require manager or owner role
+const MANAGER_ROUTES = ['/settings', '/users', '/audit', '/daily-close-off']
+
+// Routes that require supervisor, manager, or owner role
 const SUPERVISOR_ROUTES = [
   '/daily-tank-reading',
   '/fuel-operations',
@@ -117,8 +120,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(homeUrl)
   }
 
-  // Supervisor/owner routes
-  if (SUPERVISOR_ROUTES.includes(pathname) && !['supervisor', 'owner'].includes(role)) {
+  // Manager/owner routes
+  if (MANAGER_ROUTES.includes(pathname) && !['manager', 'owner'].includes(role)) {
+    const homeUrl = new URL('/', request.url)
+    homeUrl.searchParams.set('unauthorized', '1')
+    return NextResponse.redirect(homeUrl)
+  }
+
+  // Supervisor/manager/owner routes
+  if (SUPERVISOR_ROUTES.includes(pathname) && !['supervisor', 'manager', 'owner'].includes(role)) {
     const homeUrl = new URL('/', request.url)
     homeUrl.searchParams.set('unauthorized', '1')
     return NextResponse.redirect(homeUrl)

@@ -129,7 +129,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [user, router.pathname])
 
   // Poll unread notification count for supervisors/owners
-  const isSupervisorOrOwner = user && (user.role === 'supervisor' || user.role === 'owner')
+  const isSupervisorOrAbove = user && ['supervisor', 'manager', 'owner'].includes(user.role)
+  const isManagerOrAbove = user && ['manager', 'owner'].includes(user.role)
+  const isSupervisorOrOwner = isSupervisorOrAbove  // backward compat alias
 
   useEffect(() => {
     if (router.pathname === '/login' || router.pathname === '/setup') return
@@ -287,14 +289,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     },
     {
       label: 'Administration',
-      roles: ['owner'],
+      roles: ['manager', 'owner'],
       children: [
-        { path: '/daily-close-off', label: 'Daily Close-Off', roles: ['owner'] },
+        { path: '/daily-close-off', label: 'Daily Close-Off', roles: ['manager', 'owner'] },
         { path: '/stations', label: 'Stations', roles: ['owner'] },
         { path: '/infrastructure', label: 'Infrastructure', roles: ['owner'] },
-        { path: '/settings', label: 'Settings', roles: ['owner'] },
-        { path: '/users', label: 'Users', roles: ['owner'] },
-        { path: '/audit', label: 'Audit Log', roles: ['owner'] },
+        { path: '/settings', label: 'Settings', roles: ['manager', 'owner'] },
+        { path: '/users', label: 'Users', roles: ['manager', 'owner'] },
+        { path: '/audit', label: 'Audit Log', roles: ['manager', 'owner'] },
       ]
     },
   ]

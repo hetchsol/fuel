@@ -330,7 +330,7 @@ export default function Shifts() {
       return nozzles.filter(n => currentUserAssignment.nozzle_ids.includes(n.nozzle_id))
     }
     // Supervisors/owners without an assignment can see all nozzles
-    if (currentUser?.role === 'supervisor' || currentUser?.role === 'owner') {
+    if (currentUser?.role === 'supervisor' || currentUser?.role === 'manager' || currentUser?.role === 'owner') {
       return nozzles
     }
     // Regular user with no assignment — no nozzles
@@ -338,7 +338,7 @@ export default function Shifts() {
   })()
 
   // Shift management handlers
-  const canManageShifts = currentUser?.role === 'supervisor' || currentUser?.role === 'owner'
+  const canManageShifts = currentUser?.role === 'supervisor' || currentUser?.role === 'manager' || currentUser?.role === 'owner'
 
   const openShiftModal = () => {
     loadAvailableStaff()
@@ -946,7 +946,7 @@ export default function Shifts() {
         <div className="mb-6 bg-surface-card rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-content-primary">Tank Dip Readings</h2>
-            {(currentUser?.role === 'supervisor' || currentUser?.role === 'owner') && (
+            {(currentUser?.role === 'supervisor' || currentUser?.role === 'manager' || currentUser?.role === 'owner') && (
               <button
                 onClick={() => {
                   // Auto-populate opening dip from previous shift data

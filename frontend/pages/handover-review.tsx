@@ -110,7 +110,7 @@ export default function HandoverReview() {
     const userData = localStorage.getItem('user')
     if (userData) {
       const user = JSON.parse(userData)
-      if (user.role !== 'supervisor' && user.role !== 'owner') {
+      if (user.role !== 'supervisor' && user.role !== 'manager' && user.role !== 'owner') {
         router.push('/')
       }
     } else {

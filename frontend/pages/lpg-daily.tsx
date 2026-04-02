@@ -100,8 +100,8 @@ export default function LPGDaily() {
   const [success, setSuccess] = useState('')
   const [entries, setEntries] = useState<any[]>([])
 
-  const canEditPricing = user?.role === 'supervisor' || user?.role === 'owner'
-  const canManageStock = user?.role === 'supervisor' || user?.role === 'owner'
+  const canEditPricing = user?.role === 'supervisor' || user?.role === 'manager' || user?.role === 'owner'
+  const canManageStock = user?.role === 'supervisor' || user?.role === 'manager' || user?.role === 'owner'
   const lpgPricesConfigured = pricing.length > 0 && pricing.some((p: any) => p.price_refill > 0 || p.price_with_cylinder > 0)
 
   useEffect(() => {

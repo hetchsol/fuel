@@ -36,8 +36,14 @@ export default function UsersManagement() {
   })
   const [resetPasswordResult, setResetPasswordResult] = useState<{ username: string; password: string } | null>(null)
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(null)
+  const [currentUserRole, setCurrentUserRole] = useState<string>('')
 
   useEffect(() => {
+    const userData = localStorage.getItem('user')
+    if (userData) {
+      const parsed = JSON.parse(userData)
+      setCurrentUserRole(parsed.role || '')
+    }
     fetchUsers()
   }, [])
 
@@ -268,7 +274,7 @@ export default function UsersManagement() {
               </tr>
             </thead>
             <tbody className="bg-surface-card divide-y divide-surface-border">
-              {users.map((user) => (
+              {users.filter(u => currentUserRole === 'manager' ? !['manager', 'owner'].includes(u.role) : true).map((user) => (
                 <tr key={user.user_id} className={`hover:bg-surface-bg ${user.is_active === false ? 'opacity-60' : ''}`}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-content-primary">
                     {user.user_id}
@@ -417,7 +423,8 @@ export default function UsersManagement() {
                   >
                     <option value="user">User (Staff)</option>
                     <option value="supervisor">Supervisor</option>
-                    <option value="owner">Owner</option>
+                    {currentUserRole !== 'manager' && <option value="manager">Manager</option>}
+                    {currentUserRole !== 'manager' && <option value="owner">Owner</option>}
                   </select>
                 </div>
 

@@ -44,7 +44,7 @@ export default function Home() {
     refreshInterval: 30000,
   })
 
-  const canEditDipReadings = userRole === 'supervisor' || userRole === 'owner'
+  const canEditDipReadings = userRole === 'supervisor' || userRole === 'manager' || userRole === 'owner'
 
   const allTanks = tanks || []
 

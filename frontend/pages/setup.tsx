@@ -77,7 +77,7 @@ export default function SetupWizard() {
 
   // Staff
   const [createdUsers, setCreatedUsers] = useState<CreatedUser[]>([])
-  const [staffForm, setStaffForm] = useState({ full_name: '', username: '', password: '', role: 'user' as 'user' | 'supervisor' })
+  const [staffForm, setStaffForm] = useState({ full_name: '', username: '', password: '', role: 'user' as 'user' | 'supervisor' | 'manager' })
   const [addingUser, setAddingUser] = useState(false)
 
   useEffect(() => {
@@ -795,11 +795,12 @@ export default function SetupWizard() {
                   <span className="text-xs font-semibold text-content-secondary">Add</span>
                   <select
                     value={staffForm.role}
-                    onChange={e => setStaffForm({ ...staffForm, role: e.target.value as 'user' | 'supervisor' })}
+                    onChange={e => setStaffForm({ ...staffForm, role: e.target.value as 'user' | 'supervisor' | 'manager' })}
                     className={smallInputClass + ' !w-auto'}
                   >
                     <option value="user">Attendant</option>
                     <option value="supervisor">Supervisor</option>
+                    <option value="manager">Manager</option>
                   </select>
                 </div>
                 <div className="grid grid-cols-3 gap-2">

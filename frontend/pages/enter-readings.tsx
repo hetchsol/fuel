@@ -137,7 +137,7 @@ export default function EnterReadings() {
     if (userData) setUser(JSON.parse(userData))
   }, [])
 
-  const isSupervisor = user && (user.role === 'supervisor' || user.role === 'owner')
+  const isSupervisor = user && (user.role === 'supervisor' || user.role === 'manager' || user.role === 'owner')
 
   // Fetch meter discrepancy threshold on mount
   useEffect(() => {

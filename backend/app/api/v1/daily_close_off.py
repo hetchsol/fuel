@@ -8,7 +8,7 @@ from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel
 
-from .auth import get_station_context, require_owner
+from .auth import get_station_context, require_manager_or_owner
 from ...database.station_files import load_station_json, save_station_json
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
@@ -62,7 +62,7 @@ def _aggregate_handovers(handovers: list) -> dict:
 
 
 # ── GET /summary ──────────────────────────────────────────────
-@router.get("/summary", dependencies=[Depends(require_owner)])
+@router.get("/summary", dependencies=[Depends(require_manager_or_owner)])
 async def get_close_off_summary(
     date: str = Query(..., description="Date in YYYY-MM-DD format"),
     ctx: dict = Depends(get_station_context),
@@ -144,7 +144,7 @@ class CloseOffInput(BaseModel):
     owner_notes: Optional[str] = ""
 
 
-@router.post("/close", dependencies=[Depends(require_owner)])
+@router.post("/close", dependencies=[Depends(require_manager_or_owner)])
 async def close_day(
     data: CloseOffInput,
     ctx: dict = Depends(get_station_context),
@@ -271,7 +271,7 @@ async def close_day(
 
 
 # ── GET /history ──────────────────────────────────────────────
-@router.get("/history", dependencies=[Depends(require_owner)])
+@router.get("/history", dependencies=[Depends(require_manager_or_owner)])
 async def get_close_off_history(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,

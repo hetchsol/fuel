@@ -56,7 +56,7 @@ export default function LubricantsDaily() {
     if (userData) setUser(JSON.parse(userData))
   }, [])
 
-  const canEditPricing = user?.role === 'supervisor' || user?.role === 'owner'
+  const canEditPricing = user?.role === 'supervisor' || user?.role === 'manager' || user?.role === 'owner'
   const pricesConfigured = productRows.length > 0 && productRows.some(r => r.selling_price > 0)
   const isFirstEntry = productRows.length > 0 && productRows.every(r => r.opening_stock === 0)
 

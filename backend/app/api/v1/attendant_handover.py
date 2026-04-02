@@ -968,10 +968,10 @@ async def reopen_handover(
     from ...models.models import UserRole
     role = ctx["role"]
     role_str = role.value if isinstance(role, UserRole) else str(role)
-    if role_str not in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]:
+    if role_str not in [UserRole.SUPERVISOR.value, UserRole.MANAGER.value, UserRole.OWNER.value]:
         raise HTTPException(
             status_code=403,
-            detail="Access forbidden. This endpoint is restricted to supervisors and owners only."
+            detail="Access forbidden. This endpoint is restricted to supervisors, managers, and owners."
         )
 
     station_id = ctx["station_id"]
@@ -1008,7 +1008,7 @@ async def get_review_queue(
     """
     role = ctx["role"]
     role_str = role.value if isinstance(role, UserRole) else str(role)
-    if role_str not in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]:
+    if role_str not in [UserRole.SUPERVISOR.value, UserRole.MANAGER.value, UserRole.OWNER.value]:
         raise HTTPException(status_code=403, detail="Access forbidden. Supervisors and owners only.")
 
     station_id = ctx["station_id"]
@@ -1052,7 +1052,7 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
     """
     role = ctx["role"]
     role_str = role.value if isinstance(role, UserRole) else str(role)
-    if role_str not in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]:
+    if role_str not in [UserRole.SUPERVISOR.value, UserRole.MANAGER.value, UserRole.OWNER.value]:
         raise HTTPException(status_code=403, detail="Access forbidden. Supervisors and owners only.")
 
     if data.action not in ("approve", "return"):
@@ -1144,7 +1144,7 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
     """
     role = ctx["role"]
     role_str = role.value if isinstance(role, UserRole) else str(role)
-    if role_str not in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]:
+    if role_str not in [UserRole.SUPERVISOR.value, UserRole.MANAGER.value, UserRole.OWNER.value]:
         raise HTTPException(status_code=403, detail="Access forbidden. Supervisors and owners only.")
 
     handover_ids = data.get("handover_ids", [])

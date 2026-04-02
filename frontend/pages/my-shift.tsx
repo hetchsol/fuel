@@ -465,7 +465,7 @@ export default function MyShift() {
   }
 
   if (shiftFound === false) {
-    const isOwnerOrSupervisor = !isAttendant && (userRole === 'owner' || userRole === 'supervisor')
+    const isOwnerOrSupervisor = !isAttendant && (userRole === 'owner' || userRole === 'manager' || userRole === 'supervisor')
 
     if (isOwnerOrSupervisor) {
       return <SupervisorDashboard theme={theme} pastHandovers={pastHandovers} />

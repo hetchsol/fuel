@@ -74,6 +74,19 @@ export default function Settings() {
   const [reconError, setReconError] = useState('')
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('system')
+  const [currentUserRole, setCurrentUserRole] = useState<string>('')
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user')
+    if (userData) {
+      const parsed = JSON.parse(userData)
+      setCurrentUserRole(parsed.role || '')
+      // Managers cannot see system/email tabs, default to fuel
+      if (parsed.role === 'manager') {
+        setActiveTab('fuel')
+      }
+    }
+  }, [])
 
   useEffect(() => {
     loadSettings()
@@ -385,7 +398,7 @@ export default function Settings() {
 
   // ── Tab config ───────────────────────────────────────────
 
-  const tabs: { id: SettingsTab; label: string }[] = [
+  const allTabs: { id: SettingsTab; label: string }[] = [
     { id: 'system', label: 'System Information' },
     { id: 'fuel', label: 'Fuel Settings' },
     { id: 'tax-levy', label: 'Tax & Levy' },
@@ -394,6 +407,10 @@ export default function Settings() {
     { id: 'recon-tolerances', label: 'Reconciliation' },
     { id: 'email', label: 'Email Notifications' },
   ]
+  const managerHiddenTabs: SettingsTab[] = ['system', 'email']
+  const tabs = currentUserRole === 'manager'
+    ? allTabs.filter(t => !managerHiddenTabs.includes(t.id))
+    : allTabs
 
   // ── Render ───────────────────────────────────────────────
 

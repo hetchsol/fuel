@@ -39,7 +39,7 @@ export default function DailyCloseOff() {
     }
     const user = JSON.parse(userData)
     setUserRole(user.role || '')
-    if (user.role !== 'owner') {
+    if (!['manager', 'owner'].includes(user.role)) {
       router.push('/')
     }
   }, [router])
@@ -77,7 +77,7 @@ export default function DailyCloseOff() {
   }, [selectedDate])
 
   useEffect(() => {
-    if (userRole === 'owner') fetchSummary()
+    if (userRole === 'owner' || userRole === 'manager') fetchSummary()
   }, [fetchSummary, userRole])
 
   // Fetch history
@@ -138,7 +138,7 @@ export default function DailyCloseOff() {
     }
   }
 
-  if (userRole !== 'owner') return null
+  if (!['manager', 'owner'].includes(userRole)) return null
 
   const isClosed = summary?.already_closed
   const record = summary?.close_off_record

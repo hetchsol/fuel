@@ -1,5 +1,13 @@
 export const BASE = '/api/v1';
 
+// Role hierarchy helpers
+export function isSupervisorOrAbove(role: string): boolean {
+  return ['supervisor', 'manager', 'owner'].includes(role)
+}
+export function isManagerOrAbove(role: string): boolean {
+  return ['manager', 'owner'].includes(role)
+}
+
 export function getHeaders(): Record<string, string> {
   if (typeof window === 'undefined') return {}
   const token = localStorage.getItem('accessToken')

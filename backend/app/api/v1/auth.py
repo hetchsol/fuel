@@ -162,13 +162,25 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
 
 
 async def require_supervisor_or_owner(current_user: dict = Depends(get_current_user)):
-    """Restrict access to supervisors and owners only."""
+    """Restrict access to supervisors, managers, and owners."""
     role = current_user["role"]
     role_str = role.value if isinstance(role, UserRole) else str(role)
-    if role_str not in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]:
+    if role_str not in [UserRole.SUPERVISOR.value, UserRole.MANAGER.value, UserRole.OWNER.value]:
         raise HTTPException(
             status_code=403,
-            detail="Access forbidden. This endpoint is restricted to supervisors and owners only."
+            detail="Access forbidden. This endpoint is restricted to supervisors, managers, and owners."
+        )
+    return current_user
+
+
+async def require_manager_or_owner(current_user: dict = Depends(get_current_user)):
+    """Restrict access to managers and owners only."""
+    role = current_user["role"]
+    role_str = role.value if isinstance(role, UserRole) else str(role)
+    if role_str not in [UserRole.MANAGER.value, UserRole.OWNER.value]:
+        raise HTTPException(
+            status_code=403,
+            detail="Access forbidden. This endpoint is restricted to managers and owners only."
         )
     return current_user
 
@@ -358,9 +370,16 @@ def get_user_info(token: str):
         }
 
 
-@router.get("/users", dependencies=[Depends(require_owner)])
-def list_users():
-    """List all users (Owner only)."""
+@router.get("/users", dependencies=[Depends(require_manager_or_owner)])
+def list_users(current_user: dict = Depends(get_current_user)):
+    """List all users (Manager/Owner). Managers see only attendants and supervisors."""
+    caller_role = current_user.get("role", "")
+    if hasattr(caller_role, 'value'):
+        caller_role = caller_role.value
+    is_manager = caller_role == "manager"
+    # Managers can only see users with role user/supervisor
+    visible_roles = ["user", "supervisor"] if is_manager else None
+
     if _USE_DB():
         from ...database.db import db_get_all_users
         users = db_get_all_users()
@@ -372,6 +391,7 @@ def list_users():
                 "is_active": u.get("is_active", True),
             }
             for u in users
+            if not visible_roles or u["role"] in visible_roles
         ]
     else:
         return [
@@ -382,12 +402,13 @@ def list_users():
                 "is_active": user.get("is_active", True),
             }
             for user in users_db.values()
+            if not visible_roles or user["role"] in visible_roles
         ]
 
 
 @router.post("/users")
-def create_user(user_data: dict, current_user: dict = Depends(require_owner)):
-    """Create a new user (Owner only)."""
+def create_user(user_data: dict, current_user: dict = Depends(require_manager_or_owner)):
+    """Create a new user (Manager/Owner). Managers can only create attendants and supervisors."""
     username = user_data.get("username")
     password = user_data.get("password")
     full_name = user_data.get("full_name")
@@ -396,6 +417,13 @@ def create_user(user_data: dict, current_user: dict = Depends(require_owner)):
 
     if not username or not password or not full_name:
         raise HTTPException(status_code=400, detail="Username, password, and full_name are required")
+
+    # Managers can only create attendants and supervisors
+    caller_role = current_user.get("role", "")
+    if hasattr(caller_role, 'value'):
+        caller_role = caller_role.value
+    if caller_role == "manager" and role not in ["user", "supervisor"]:
+        raise HTTPException(status_code=403, detail="Managers can only create attendant and supervisor accounts")
 
     if _USE_DB():
         from ...database.db import (
@@ -453,8 +481,23 @@ def create_user(user_data: dict, current_user: dict = Depends(require_owner)):
 
 
 @router.put("/users/{username}")
-def update_user(username: str, user_data: dict, current_user: dict = Depends(require_owner)):
-    """Update an existing user (Owner only)."""
+def update_user(username: str, user_data: dict, current_user: dict = Depends(require_manager_or_owner)):
+    """Update an existing user (Manager/Owner). Managers can only modify attendants and supervisors."""
+    # Manager privilege guard
+    caller_role = current_user.get("role", "")
+    if hasattr(caller_role, 'value'): caller_role = caller_role.value
+    if caller_role == "manager":
+        # Check target user's role
+        if _USE_DB():
+            from ...database.db import db_get_user_by_username
+            target = db_get_user_by_username(username)
+        else:
+            target = users_db.get(username)
+        if target and target.get("role") in ["manager", "owner"]:
+            raise HTTPException(status_code=403, detail="Managers cannot modify manager or owner accounts")
+        if "role" in user_data and user_data["role"] not in ["user", "supervisor"]:
+            raise HTTPException(status_code=403, detail="Managers can only assign attendant or supervisor roles")
+
     if _USE_DB():
         from ...database.db import db_get_user_by_username, db_update_user
         user = db_get_user_by_username(username)
@@ -537,8 +580,12 @@ def update_user(username: str, user_data: dict, current_user: dict = Depends(req
 
 
 @router.delete("/users/{username}")
-def delete_user(username: str, current_user: dict = Depends(require_owner)):
-    """Delete a user (Owner only, cannot delete owner)."""
+def delete_user(username: str, current_user: dict = Depends(require_manager_or_owner)):
+    """Delete a user (Manager/Owner). Managers cannot delete managers or owners."""
+    # Manager privilege guard
+    caller_role = current_user.get("role", "")
+    if hasattr(caller_role, 'value'): caller_role = caller_role.value
+
     if _USE_DB():
         from ...database.db import db_get_user_by_username, db_delete_user, db_delete_user_sessions
         user = db_get_user_by_username(username)
@@ -546,6 +593,8 @@ def delete_user(username: str, current_user: dict = Depends(require_owner)):
             raise HTTPException(status_code=404, detail="User not found")
         if user["role"] == "owner":
             raise HTTPException(status_code=403, detail="Cannot delete owner account")
+        if caller_role == "manager" and user["role"] in ["manager", "owner"]:
+            raise HTTPException(status_code=403, detail="Managers cannot delete manager or owner accounts")
 
         deleted_user_id = user["user_id"]
         db_delete_user_sessions(username)
@@ -628,8 +677,11 @@ def list_staff(current_user: dict = Depends(get_current_user)):
 
 
 @router.patch("/users/{username}/toggle-status")
-def toggle_user_status(username: str, current_user: dict = Depends(require_owner)):
-    """Enable or disable a user account (Owner only). Cannot disable owner accounts."""
+def toggle_user_status(username: str, current_user: dict = Depends(require_manager_or_owner)):
+    """Enable or disable a user account. Cannot disable owner/manager accounts (unless owner)."""
+    caller_role = current_user.get("role", "")
+    if hasattr(caller_role, 'value'): caller_role = caller_role.value
+
     if _USE_DB():
         from ...database.db import db_get_user_by_username, db_update_user, db_delete_user_sessions
         user = db_get_user_by_username(username)
@@ -637,6 +689,8 @@ def toggle_user_status(username: str, current_user: dict = Depends(require_owner
             raise HTTPException(status_code=404, detail="User not found")
         if user["role"] == "owner":
             raise HTTPException(status_code=403, detail="Cannot disable owner accounts")
+        if caller_role == "manager" and user["role"] in ["manager", "owner"]:
+            raise HTTPException(status_code=403, detail="Managers cannot modify manager or owner accounts")
 
         new_status = not user.get("is_active", True)
         db_update_user(username, {"is_active": new_status})
@@ -697,8 +751,20 @@ def toggle_user_status(username: str, current_user: dict = Depends(require_owner
 
 
 @router.post("/users/{username}/reset-password")
-def reset_user_password(username: str, current_user: dict = Depends(require_owner)):
-    """Reset a user's password to a random 12-character string (Owner only)."""
+def reset_user_password(username: str, current_user: dict = Depends(require_manager_or_owner)):
+    """Reset a user's password (Manager/Owner). Managers can only reset attendant/supervisor passwords."""
+    caller_role = current_user.get("role", "")
+    if hasattr(caller_role, 'value'): caller_role = caller_role.value
+    # Check target user role for manager guard
+    if caller_role == "manager":
+        if _USE_DB():
+            from ...database.db import db_get_user_by_username
+            target = db_get_user_by_username(username)
+        else:
+            target = users_db.get(username)
+        if target and target.get("role") in ["manager", "owner"]:
+            raise HTTPException(status_code=403, detail="Managers cannot reset manager or owner passwords")
+
     # Generate random 12-char password
     alphabet = string.ascii_letters + string.digits
     new_password = ''.join(secrets.choice(alphabet) for _ in range(12))

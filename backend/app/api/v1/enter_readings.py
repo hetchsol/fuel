@@ -42,7 +42,7 @@ def _get_assigned_nozzle_ids(assignment: dict, islands_data: dict) -> list:
 
 def _is_supervisor_or_owner(role) -> bool:
     role_str = role.value if isinstance(role, UserRole) else str(role)
-    return role_str in [UserRole.SUPERVISOR.value, UserRole.OWNER.value]
+    return role_str in [UserRole.SUPERVISOR.value, UserRole.MANAGER.value, UserRole.OWNER.value]
 
 
 def _get_meter_discrepancy_threshold(storage: dict) -> float:
@@ -945,8 +945,8 @@ async def review_readings(data: SupervisorReviewInput, ctx: dict = Depends(get_s
     user_id = ctx["user_id"]
     user_name = ctx["full_name"]
     role_str = role.value if isinstance(role, UserRole) else str(role)
-    if role_str != UserRole.SUPERVISOR.value:
-        raise HTTPException(status_code=403, detail="Only supervisors can review readings")
+    if role_str not in [UserRole.SUPERVISOR.value, UserRole.MANAGER.value, UserRole.OWNER.value]:
+        raise HTTPException(status_code=403, detail="Only supervisors, managers, and owners can review readings")
 
     if data.action not in ("approve", "return"):
         raise HTTPException(status_code=400, detail="Action must be 'approve' or 'return'")
