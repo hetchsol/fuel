@@ -34,8 +34,8 @@ def _save_calibrations(station_id: str, data: dict):
 
 
 @router.get("/template")
-def download_template(current_user: dict = Depends(get_current_user)):
-    """Download an Excel template for tank calibration data."""
+def download_template():
+    """Download an Excel template for tank calibration data. No auth required — just a blank template."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment
 
