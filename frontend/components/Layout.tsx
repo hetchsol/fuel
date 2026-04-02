@@ -5,6 +5,20 @@ import { useTheme } from '../contexts/ThemeContext'
 import { authFetch, BASE, getHeaders } from '../lib/api'
 import Footer from './Footer'
 
+function LiveClock() {
+  const [time, setTime] = useState('')
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date()
+      setTime(now.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }))
+    }
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => clearInterval(interval)
+  }, [])
+  return <p className="text-[10px] text-white/40 leading-tight font-mono">{time}</p>
+}
+
 /* ── Nav Icons (inline SVGs) ──────────────────────────── */
 const icons: Record<string, React.ReactNode> = {
   Dashboard: (
@@ -451,6 +465,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       {user.role === 'manager' && 'Manager'}
                       {user.role === 'owner' && 'Owner'}
                     </p>
+                    <LiveClock />
                   </div>
                 </div>
 
