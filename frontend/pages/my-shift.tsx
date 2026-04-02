@@ -143,6 +143,17 @@ export default function MyShift() {
   const [depositOverdue, setDepositOverdue] = useState(false)
   const [showDeposits, setShowDeposits] = useState(true)
 
+  // Collapsible sections
+  const [showShiftInfo, setShowShiftInfo] = useState(true)
+  const [showNozzles, setShowNozzles] = useState(true)
+  const [showLpg, setShowLpg] = useState(false)
+  const [showLubs, setShowLubs] = useState(false)
+  const [showAccessories, setShowAccessories] = useState(false)
+
+  // On This Shift (supervisor/manager overview)
+  const [showOnThisShift, setShowOnThisShift] = useState(true)
+  const [shiftDeposits, setShiftDeposits] = useState<any>(null)
+
   // UI state
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -486,6 +497,16 @@ export default function MyShift() {
 
   useEffect(() => { fetchMyDeposits() }, [shiftInfo?.shift_id])
 
+  // Fetch all attendants' deposits for "On This Shift" (supervisor/manager)
+  const fetchShiftDeposits = () => {
+    if (!shiftInfo?.shift_id || isAttendant) return
+    authFetch(`${BASE}/safe-deposits/${shiftInfo.shift_id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setShiftDeposits(data))
+      .catch(() => {})
+  }
+  useEffect(() => { fetchShiftDeposits() }, [shiftInfo?.shift_id, isAttendant])
+
   const handleRecordDeposit = async () => {
     const amt = parseFloat(depositAmount)
     if (!amt || amt <= 0) return
@@ -586,13 +607,18 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* Shift Info Card — always visible */}
-      <div className="rounded-lg shadow p-4 mb-6"
+      {/* Shift Info Card — collapsible */}
+      <div className="rounded-lg shadow mb-6 overflow-hidden"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <h2 className="text-sm font-semibold mb-3 uppercase tracking-wide" style={{ color: theme.textSecondary }}>
-          Shift Information
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <button onClick={() => setShowShiftInfo(!showShiftInfo)}
+          className="w-full p-4 flex justify-between items-center text-left">
+          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: theme.textSecondary }}>
+            Shift Information
+          </h2>
+          <span className="text-xs" style={{ color: theme.textSecondary }}>{showShiftInfo ? '−' : '+'}</span>
+        </button>
+        {showShiftInfo && (
+        <div className="px-4 pb-4 grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <div className="text-xs" style={{ color: theme.textSecondary }}>Shift ID</div>
             <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>{shiftInfo?.shift_id}</div>
@@ -626,7 +652,70 @@ export default function MyShift() {
             </div>
           </div>
         </div>
+        )}
       </div>
+
+      {/* On This Shift — supervisor/manager view of all attendants + deposits */}
+      {!isAttendant && shiftFound && shiftInfo && (
+        <div className="rounded-lg shadow mb-6 overflow-hidden"
+          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+          <button onClick={() => setShowOnThisShift(!showOnThisShift)}
+            className="w-full p-4 flex justify-between items-center text-left">
+            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: theme.textSecondary }}>
+              On This Shift
+            </h2>
+            <span className="text-xs" style={{ color: theme.textSecondary }}>
+              {shiftInfo.assignments?.length || 0} attendant{(shiftInfo.assignments?.length || 0) !== 1 ? 's' : ''} {showOnThisShift ? '−' : '+'}
+            </span>
+          </button>
+          {showOnThisShift && (
+            <div className="px-4 pb-4 space-y-3">
+              {/* Attendant list */}
+              {(shiftInfo.assignments || [])
+                .sort((a: any, b: any) => (a.attendant_id || '').localeCompare(b.attendant_id || ''))
+                .map((assignment: any) => {
+                  const attDeposits = shiftDeposits?.attendants?.find((a: any) => a.attendant_id === assignment.attendant_id)
+                  return (
+                    <div key={assignment.attendant_id} className="p-3 rounded-lg border"
+                      style={{ borderColor: attDeposits?.overdue ? 'var(--color-status-warning)' : theme.border }}>
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="text-sm font-semibold" style={{ color: theme.textPrimary }}>{assignment.attendant_name}</span>
+                          <span className="text-xs ml-2" style={{ color: theme.textSecondary }}>{assignment.attendant_id}</span>
+                          {attDeposits?.overdue && (
+                            <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-badge bg-status-warning/20 text-status-warning font-semibold">OVERDUE</span>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs" style={{ color: theme.textSecondary }}>
+                            Islands: {assignment.island_ids?.join(', ') || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Deposit summary */}
+                      <div className="mt-2 flex justify-between items-center text-xs" style={{ color: theme.textSecondary }}>
+                        <span>
+                          Safe Deposits: <strong style={{ color: theme.textPrimary }}>{attDeposits?.count || 0}</strong> deposit{(attDeposits?.count || 0) !== 1 ? 's' : ''}
+                        </span>
+                        <span className="font-semibold" style={{ color: theme.textPrimary }}>
+                          Total: K{(attDeposits?.total || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      {attDeposits?.last_deposit_time && (
+                        <div className="text-xs mt-1" style={{ color: theme.textSecondary }}>
+                          Last deposit: {attDeposits.deposits?.[attDeposits.deposits.length - 1]?.time || new Date(attDeposits.last_deposit_time).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              {(!shiftInfo.assignments || shiftInfo.assignments.length === 0) && (
+                <div className="text-sm text-center py-4" style={{ color: theme.textSecondary }}>No attendants assigned to this shift</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Step Indicator — visible before submission */}
       {!handoverResult && (
@@ -769,13 +858,17 @@ export default function MyShift() {
 
       {currentStep === 1 && !handoverResult && (
         <>
-          {/* Nozzle Readings Table — no Price/L or Revenue columns */}
-          <div className="rounded-lg shadow mb-6 overflow-x-auto"
+          {/* Nozzle Readings Table — collapsible */}
+          <div className="rounded-lg shadow mb-6 overflow-hidden"
             style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-            <div className="p-4 font-semibold text-sm"
-              style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
-              Nozzle Readings
-            </div>
+            <button onClick={() => setShowNozzles(!showNozzles)}
+              className="w-full p-4 flex justify-between items-center text-left font-semibold text-sm"
+              style={{ color: theme.textPrimary }}>
+              <span>Nozzle Readings</span>
+              <span className="text-xs font-normal" style={{ color: theme.textSecondary }}>{nozzleRows.length} nozzle{nozzleRows.length !== 1 ? 's' : ''} {showNozzles ? '−' : '+'}</span>
+            </button>
+            {showNozzles && (
+            <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
@@ -930,14 +1023,20 @@ export default function MyShift() {
               </tfoot>
             </table>
           </div>
+          )}
+          </div>
 
-          {/* LPG Cylinders — no Value column */}
-          <div className="rounded-lg shadow mb-6 overflow-x-auto"
+          {/* LPG Cylinders — collapsible */}
+          <div className="rounded-lg shadow mb-6 overflow-hidden"
             style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-            <div className="p-4 font-semibold text-sm"
-              style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
-              LPG Cylinders
-            </div>
+            <button onClick={() => setShowLpg(!showLpg)}
+              className="w-full p-4 flex justify-between items-center text-left font-semibold text-sm"
+              style={{ color: theme.textPrimary }}>
+              <span>LPG Cylinders</span>
+              <span className="text-xs font-normal" style={{ color: theme.textSecondary }}>{showLpg ? '−' : '+'}</span>
+            </button>
+            {showLpg && (
+            <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
@@ -1005,15 +1104,21 @@ export default function MyShift() {
               </tbody>
             </table>
           </div>
+          )}
+          </div>
 
-          {/* Accessories — no Value column, no @price */}
+          {/* Accessories — collapsible */}
           {accessoryRows.length > 0 && (
-            <div className="rounded-lg shadow mb-6 overflow-x-auto"
+            <div className="rounded-lg shadow mb-6 overflow-hidden"
               style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-              <div className="p-4 font-semibold text-sm"
-                style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
-                LPG Accessories
-              </div>
+              <button onClick={() => setShowAccessories(!showAccessories)}
+                className="w-full p-4 flex justify-between items-center text-left font-semibold text-sm"
+                style={{ color: theme.textPrimary }}>
+                <span>LPG Accessories</span>
+                <span className="text-xs font-normal" style={{ color: theme.textSecondary }}>{accessoryRows.length} items {showAccessories ? '−' : '+'}</span>
+              </button>
+              {showAccessories && (
+              <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
@@ -1052,18 +1157,24 @@ export default function MyShift() {
                   })}
                 </tbody>
               </table>
+              </div>
+              )}
             </div>
           )}
 
-          {/* Lubricants — no Value column, no @price */}
+          {/* Lubricants — collapsible */}
           {lubricantRows.length > 0 && (
-            <div className="rounded-lg shadow mb-6 overflow-x-auto"
+            <div className="rounded-lg shadow mb-6 overflow-hidden"
               style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-              <div className="p-4 flex items-center justify-between"
-                style={{ borderBottomColor: theme.border, borderBottomWidth: 1 }}>
-                <span className="font-semibold text-sm" style={{ color: theme.textPrimary }}>
-                  Lubricants
-                </span>
+              <button onClick={() => setShowLubs(!showLubs)}
+                className="w-full p-4 flex justify-between items-center text-left font-semibold text-sm"
+                style={{ color: theme.textPrimary }}>
+                <span>Lubricants</span>
+                <span className="text-xs font-normal" style={{ color: theme.textSecondary }}>{lubricantRows.length} products {showLubs ? '−' : '+'}</span>
+              </button>
+              {showLubs && (
+              <div>
+              <div className="px-4 pb-2 flex justify-end">
                 <input
                   type="text"
                   value={lubSearch}
@@ -1122,6 +1233,8 @@ export default function MyShift() {
                   )}
                 </tbody>
               </table>
+              </div>
+              )}
             </div>
           )}
 
