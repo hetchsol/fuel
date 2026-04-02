@@ -76,6 +76,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Mobile nav
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
+  // Deposit overdue alert
+  const [depositOverdue, setDepositOverdue] = useState(false)
+
   useEffect(() => {
     const userData = localStorage.getItem('user')
     if (userData) {
@@ -160,6 +163,39 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     const interval = setInterval(fetchCount, 60000)
     return () => clearInterval(interval)
   }, [isSupervisorOrOwner, router.pathname])
+
+  // Periodic deposit overdue check — every 5 minutes for all roles
+  useEffect(() => {
+    if (!user || router.pathname === '/login' || router.pathname === '/setup' || router.pathname === '/initializing') return
+    const checkDeposits = () => {
+      // Get active shift first
+      authFetch(`${BASE}/shifts/current/active`)
+        .then(r => r.ok ? r.json() : null)
+        .then(shift => {
+          if (!shift?.shift_id) { setDepositOverdue(false); return }
+          if (user.role === 'user') {
+            // Attendant: check own deposits
+            authFetch(`${BASE}/safe-deposits/${shift.shift_id}/my-deposits`)
+              .then(r => r.ok ? r.json() : { overdue: false })
+              .then(data => setDepositOverdue(data.overdue || false))
+              .catch(() => {})
+          } else {
+            // Supervisor/Manager/Owner: check all attendants
+            authFetch(`${BASE}/safe-deposits/${shift.shift_id}`)
+              .then(r => r.ok ? r.json() : { attendants: [] })
+              .then(data => {
+                const anyOverdue = (data.attendants || []).some((a: any) => a.overdue)
+                setDepositOverdue(anyOverdue)
+              })
+              .catch(() => {})
+          }
+        })
+        .catch(() => {})
+    }
+    checkDeposits()
+    const interval = setInterval(checkDeposits, 5 * 60 * 1000) // Every 5 minutes
+    return () => clearInterval(interval)
+  }, [user, router.pathname])
 
   // Click outside to close notification dropdown
   useEffect(() => {
@@ -394,9 +430,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                       </svg>
-                      {unreadCount > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-status-error rounded-full ring-2 ring-action-primary/50">
-                          {unreadCount > 99 ? '99+' : unreadCount}
+                      {(unreadCount > 0 || depositOverdue) && (
+                        <span className={`absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white rounded-full ring-2 ring-action-primary/50 ${depositOverdue ? 'bg-status-warning animate-pulse' : 'bg-status-error'}`}>
+                          {unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : '!'}
                         </span>
                       )}
                     </button>
@@ -466,6 +502,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       {user.role === 'owner' && 'Owner'}
                     </p>
                     <LiveClock />
+                    {depositOverdue && (
+                      <p className="text-[10px] text-status-warning font-semibold animate-pulse leading-tight">Safe deposit overdue</p>
+                    )}
                   </div>
                 </div>
 
