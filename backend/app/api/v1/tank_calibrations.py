@@ -86,20 +86,25 @@ async def upload_calibration(
     file: UploadFile = File(...),
     tank_id: str = Query(...),
     ctx: dict = Depends(get_station_context),
-    _owner: dict = Depends(require_owner),
 ):
     """Upload an Excel calibration chart for a tank (owner only)."""
+    # Inline owner check (avoids double dependency with UploadFile)
+    role = ctx.get("role", "")
+    role_str = role.value if hasattr(role, 'value') else str(role)
+    if role_str != "owner":
+        raise HTTPException(status_code=403, detail="Only owners can upload calibration data")
+
     station_id = ctx["station_id"]
     storage = ctx["storage"]
 
     # Validate tank exists
     tanks = storage.get('tanks', {})
     if tank_id not in tanks:
-        raise HTTPException(status_code=404, detail=f"Tank {tank_id} not found")
+        raise HTTPException(status_code=404, detail=f"Tank {tank_id} not found. Available: {list(tanks.keys())}")
 
     # Validate file type
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="File must be an Excel file (.xlsx)")
+    if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail=f"File must be an Excel file (.xlsx). Got: {file.filename}")
 
     # Parse Excel
     try:
