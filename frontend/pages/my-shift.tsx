@@ -26,6 +26,7 @@ interface NozzleRow {
   price_per_liter: number
   display_label?: string | null
   fuel_type_abbrev?: string | null
+  deviation_note: string
 }
 
 // Stock count row types
@@ -186,6 +187,7 @@ export default function MyShift() {
             price_per_liter: n.price_per_liter,
             display_label: n.display_label,
             fuel_type_abbrev: n.fuel_type_abbrev,
+            deviation_note: '',
           }))
         )
         setMeterThreshold(shiftData.meter_discrepancy_threshold ?? 0.5)
@@ -345,8 +347,13 @@ export default function MyShift() {
   const lpgSplitValid = lpgComputations.every(c => c.totalSold === 0 || c.splitValid)
   const hasDeviationFlags = nozzleComputations.some(c => c.flagged)
   const hasLossFlags = nozzleComputations.some(c => c.lossExceedsThreshold)
+  // All flagged nozzles must have a deviation note before proceeding
+  const allDeviationNotesProvided = nozzleRows.every((row, i) => {
+    const comp = nozzleComputations[i]
+    return !comp?.flagged && !comp?.lossExceedsThreshold || row.deviation_note.trim() !== ''
+  })
 
-  const canProceedToReview = allClosingsEntered && allValid && allMechEntered && allMechValid && lpgSplitValid
+  const canProceedToReview = allClosingsEntered && allValid && allMechEntered && allMechValid && lpgSplitValid && allDeviationNotesProvided
   const canSubmit = currentStep === 3 && allClosingsEntered && allValid && allMechEntered && allMechValid
     && lpgSplitValid && actualCash !== '' && !submitting
     && (!hasDeviationFlags || notes.trim() !== '')
@@ -786,7 +793,8 @@ export default function MyShift() {
                   const mechCloseVal = parseFloat(row.mechanical_closing)
                   const mechError = row.mechanical_closing !== '' && !isNaN(mechCloseVal) && mechCloseVal < row.mechanical_opening
                   return (
-                    <tr key={row.nozzle_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <React.Fragment key={row.nozzle_id}>
+                    <tr className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                       <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>
                         {row.fuel_type_abbrev && row.display_label
                           ? `${row.fuel_type_abbrev} ${row.display_label}`
@@ -879,6 +887,34 @@ export default function MyShift() {
                           : '-'}
                       </td>
                     </tr>
+                    {/* Inline deviation warning + mandatory note */}
+                    {(comp.flagged || comp.lossExceedsThreshold) && comp.mechValid && row.closing_reading !== '' && (
+                      <tr style={{ backgroundColor: 'rgba(239,83,80,0.05)' }}>
+                        <td colSpan={8} className="px-3 py-2">
+                          <div className="flex items-start gap-3">
+                            <div className="text-xs font-semibold text-status-error whitespace-nowrap pt-1">
+                              {comp.lossExceedsThreshold
+                                ? `Loss: ${comp.deviationL.toFixed(1)}L exceeds ${nozzleLossThreshold}L`
+                                : `Deviation: ${comp.deviationPct.toFixed(2)}% exceeds ${meterThreshold}%`}
+                            </div>
+                            <div className="flex-1">
+                              <input
+                                type="text"
+                                value={row.deviation_note}
+                                onChange={e => setNozzleRows(prev => prev.map(r => r.nozzle_id === row.nozzle_id ? { ...r, deviation_note: e.target.value } : r))}
+                                placeholder="Explain deviation (required to proceed)"
+                                className="w-full px-2 py-1 rounded border text-xs"
+                                style={{
+                                  ...inputStyle,
+                                  borderColor: row.deviation_note.trim() ? theme.border : 'var(--color-status-error)',
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   )
                 })}
               </tbody>
@@ -1096,7 +1132,7 @@ export default function MyShift() {
               disabled={!canProceedToReview}
               className="px-6 py-3 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: canProceedToReview ? theme.primary : '#9ca3af' }}>
-              {canProceedToReview ? 'Review My Entries \u2192' : 'Complete all readings to continue'}
+              {canProceedToReview ? 'Review My Entries \u2192' : !allDeviationNotesProvided ? 'Explain all deviations to continue' : 'Complete all readings to continue'}
             </button>
           </div>
         </>
