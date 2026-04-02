@@ -168,29 +168,37 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user || router.pathname === '/login' || router.pathname === '/setup' || router.pathname === '/initializing') return
     const checkDeposits = () => {
-      // Get active shift first
-      authFetch(`${BASE}/shifts/current/active`)
-        .then(r => r.ok ? r.json() : null)
-        .then(shift => {
-          if (!shift?.shift_id) { setDepositOverdue(false); return }
-          if (user.role === 'user') {
-            // Attendant: check own deposits
-            authFetch(`${BASE}/safe-deposits/${shift.shift_id}/my-deposits`)
+      if (user.role === 'user') {
+        // Attendant: find their assigned shift via my-shift, then check deposits
+        authFetch(`${BASE}/handover/my-shift`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (!data?.found || !data?.shift?.shift_id) { setDepositOverdue(false); return }
+            authFetch(`${BASE}/safe-deposits/${data.shift.shift_id}/my-deposits`)
               .then(r => r.ok ? r.json() : { overdue: false })
-              .then(data => setDepositOverdue(data.overdue || false))
+              .then(depData => setDepositOverdue(depData.overdue || false))
               .catch(() => {})
-          } else {
-            // Supervisor/Manager/Owner: check all attendants
-            authFetch(`${BASE}/safe-deposits/${shift.shift_id}`)
+          })
+          .catch(() => {})
+      } else {
+        // Supervisor/Manager/Owner: check all active shifts for any overdue deposits
+        authFetch(`${BASE}/shifts/`)
+          .then(r => r.ok ? r.json() : [])
+          .then(shifts => {
+            const activeShifts = (shifts || []).filter((s: any) => s.status === 'active')
+            if (activeShifts.length === 0) { setDepositOverdue(false); return }
+            // Check the most recent active shift
+            const latest = activeShifts[activeShifts.length - 1]
+            authFetch(`${BASE}/safe-deposits/${latest.shift_id}`)
               .then(r => r.ok ? r.json() : { attendants: [] })
-              .then(data => {
-                const anyOverdue = (data.attendants || []).some((a: any) => a.overdue)
+              .then(depData => {
+                const anyOverdue = (depData.attendants || []).some((a: any) => a.overdue)
                 setDepositOverdue(anyOverdue)
               })
               .catch(() => {})
-          }
-        })
-        .catch(() => {})
+          })
+          .catch(() => {})
+      }
     }
     checkDeposits()
     const interval = setInterval(checkDeposits, 5 * 60 * 1000) // Every 5 minutes
