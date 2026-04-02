@@ -941,6 +941,9 @@ export default function Shifts() {
         </div>
       )}
 
+      {/* Safe Deposit Overview */}
+      {activeShift && canManageShifts && <ShiftDepositOverview shiftId={activeShift.shift_id} />}
+
       {/* Tank Dip Readings Section */}
       {activeShift && (
         <div className="mb-6 bg-surface-card rounded-lg shadow-lg p-6">
@@ -1598,6 +1601,48 @@ export default function Shifts() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function ShiftDepositOverview({ shiftId }: { shiftId: string }) {
+  const [data, setData] = useState<any>(null)
+
+  useEffect(() => {
+    authFetch(`${BASE}/safe-deposits/${shiftId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setData(d))
+      .catch(() => {})
+  }, [shiftId])
+
+  if (!data || !data.attendants?.length) return null
+
+  return (
+    <div className="mb-6 bg-surface-card rounded-lg shadow-lg p-6">
+      <h2 className="text-xl font-bold text-content-primary mb-4">Safe Deposits</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {data.attendants.map((att: any) => (
+          <div key={att.attendant_id} className={`p-3 rounded-lg border ${att.overdue ? 'border-status-warning bg-status-warning/5' : 'border-surface-border'}`}>
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-sm font-medium text-content-primary">{att.attendant_name}</span>
+              {att.overdue && <span className="text-[10px] px-1.5 py-0.5 rounded-badge bg-status-warning/20 text-status-warning font-semibold">OVERDUE</span>}
+            </div>
+            <div className="flex justify-between text-xs text-content-secondary">
+              <span>{att.count} deposit{att.count !== 1 ? 's' : ''}</span>
+              <span className="font-semibold text-content-primary">K{att.total.toLocaleString()}</span>
+            </div>
+            {att.last_deposit_time && (
+              <div className="text-xs text-content-secondary mt-1">
+                Last: {new Date(att.last_deposit_time).toLocaleTimeString()}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 pt-3 border-t border-surface-border flex justify-between text-sm">
+        <span className="text-content-secondary">{data.total_deposits} total deposit{data.total_deposits !== 1 ? 's' : ''}</span>
+        <span className="font-semibold text-content-primary">Total: K{data.total_amount.toLocaleString()}</span>
+      </div>
     </div>
   )
 }

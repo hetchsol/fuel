@@ -129,6 +129,19 @@ export default function MyShift() {
   const [fuelPrices, setFuelPrices] = useState<{Diesel: number, Petrol: number}>({Diesel: 0, Petrol: 0})
   const [creditItems, setCreditItems] = useState<{account_id: string, account_name: string, fuel_type: string, volume: string, price_per_liter: number, amount: number}[]>([])
 
+  // Safe deposit state
+  const [depositAmount, setDepositAmount] = useState('')
+  const [depositTime, setDepositTime] = useState(() => {
+    const now = new Date()
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  })
+  const [depositNote, setDepositNote] = useState('')
+  const [depositSaving, setDepositSaving] = useState(false)
+  const [myDeposits, setMyDeposits] = useState<any[]>([])
+  const [depositTotal, setDepositTotal] = useState(0)
+  const [depositOverdue, setDepositOverdue] = useState(false)
+  const [showDeposits, setShowDeposits] = useState(true)
+
   // UI state
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -451,6 +464,42 @@ export default function MyShift() {
     }
   }
 
+  // Safe deposit functions
+  const fetchMyDeposits = () => {
+    if (!shiftInfo?.shift_id) return
+    authFetch(`${BASE}/safe-deposits/${shiftInfo.shift_id}/my-deposits`, { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : { deposits: [], count: 0, total: 0, overdue: false })
+      .then(data => {
+        setMyDeposits(data.deposits || [])
+        setDepositTotal(data.total || 0)
+        setDepositOverdue(data.overdue || false)
+      })
+      .catch(() => {})
+  }
+
+  useEffect(() => { fetchMyDeposits() }, [shiftInfo?.shift_id])
+
+  const handleRecordDeposit = async () => {
+    const amt = parseFloat(depositAmount)
+    if (!amt || amt <= 0) return
+    setDepositSaving(true)
+    try {
+      const res = await authFetch(`${BASE}/safe-deposits/`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shift_id: shiftInfo.shift_id, amount: amt, time: depositTime, note: depositNote }),
+      })
+      if (res.ok) {
+        setDepositAmount('')
+        setDepositNote('')
+        const now = new Date()
+        setDepositTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`)
+        fetchMyDeposits()
+      }
+    } catch {}
+    finally { setDepositSaving(false) }
+  }
+
   const inputStyle = {
     backgroundColor: theme.cardBg,
     color: theme.textPrimary,
@@ -639,6 +688,78 @@ export default function MyShift() {
       {/* STEP 1: Enter Readings & Stock Counts         */}
       {/* Financial columns (Price, Revenue, Value) hidden */}
       {/* ============================================= */}
+      {/* Safe Deposits — visible on all steps during active shift */}
+      {shiftFound && !handoverResult && (
+        <div className="rounded-lg shadow mb-6 overflow-hidden"
+          style={{ backgroundColor: theme.cardBg, borderColor: depositOverdue ? 'var(--color-status-warning)' : theme.border, borderWidth: depositOverdue ? 2 : 1 }}>
+          <button
+            onClick={() => setShowDeposits(!showDeposits)}
+            className="w-full p-3 flex justify-between items-center text-sm font-medium"
+            style={{ color: theme.textPrimary }}>
+            <span className="flex items-center gap-2">
+              Safe Deposits
+              {depositOverdue && <span className="text-[10px] px-1.5 py-0.5 rounded-badge bg-status-warning/20 text-status-warning font-semibold">OVERDUE</span>}
+            </span>
+            <span className="text-xs" style={{ color: theme.textSecondary }}>
+              {myDeposits.length} deposit{myDeposits.length !== 1 ? 's' : ''} — K{depositTotal.toLocaleString()} {showDeposits ? '−' : '+'}
+            </span>
+          </button>
+          {showDeposits && (
+            <div className="p-3 space-y-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+              {/* Deposit form */}
+              <div className="flex gap-2 items-end flex-wrap">
+                <div className="w-28">
+                  <label className="block text-xs text-content-secondary mb-1">Time</label>
+                  <input type="time" value={depositTime}
+                    onChange={e => setDepositTime(e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded border" style={inputStyle} />
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <label className="block text-xs text-content-secondary mb-1">Amount (ZMW)</label>
+                  <input type="number" min={0} step={1} value={depositAmount}
+                    onChange={e => setDepositAmount(e.target.value)}
+                    placeholder="e.g. 1500"
+                    className="w-full px-3 py-2 text-sm rounded border" style={inputStyle} />
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <label className="block text-xs text-content-secondary mb-1">Note (optional)</label>
+                  <input type="text" value={depositNote}
+                    onChange={e => setDepositNote(e.target.value)}
+                    placeholder="e.g. Fleet fill-up"
+                    className="w-full px-3 py-2 text-sm rounded border" style={inputStyle} />
+                </div>
+                <button onClick={handleRecordDeposit} disabled={depositSaving || !depositAmount || !depositTime}
+                  className="px-4 py-2 rounded text-sm font-medium text-white disabled:opacity-50"
+                  style={{ backgroundColor: theme.primary }}>
+                  {depositSaving ? '...' : 'Deposit'}
+                </button>
+              </div>
+
+              {/* Deposit history */}
+              {myDeposits.length > 0 && (
+                <div className="space-y-1">
+                  {myDeposits.map((d: any, i: number) => (
+                    <div key={d.deposit_id} className="flex justify-between items-center text-xs p-1.5 rounded"
+                      style={{ backgroundColor: theme.background }}>
+                      <span style={{ color: theme.textSecondary }}>
+                        {d.time || new Date(d.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})} {d.note && `— ${d.note}`}
+                      </span>
+                      <span className="font-semibold" style={{ color: theme.textPrimary }}>K{d.amount.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {depositOverdue && (
+                <div className="p-2 rounded text-xs font-medium" style={{ backgroundColor: 'rgba(255,193,7,0.1)', color: 'var(--color-status-warning)' }}>
+                  You have not made a deposit in over 1 hour. Please deposit accumulated cash into the safe.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {currentStep === 1 && !handoverResult && (
         <>
           {/* Nozzle Readings Table — no Price/L or Revenue columns */}
