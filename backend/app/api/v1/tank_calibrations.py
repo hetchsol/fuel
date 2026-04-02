@@ -83,9 +83,10 @@ def download_template():
 
 @router.post("/upload")
 async def upload_calibration(
-    tank_id: str = Query(...),
     file: UploadFile = File(...),
-    ctx: dict = Depends(require_owner),
+    tank_id: str = Query(...),
+    ctx: dict = Depends(get_station_context),
+    _owner: dict = Depends(require_owner),
 ):
     """Upload an Excel calibration chart for a tank (owner only)."""
     station_id = ctx["station_id"]
