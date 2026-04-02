@@ -466,9 +466,13 @@ export default function LubricantsDaily() {
                         {row.selling_price.toLocaleString()}
                       </td>
                       <td className="px-3 py-1">
-                        <input type="number" min={0} value={row.opening_stock}
-                          onChange={e => updateField(row.product_code, 'opening_stock', parseInt(e.target.value) || 0)}
-                          className="w-14 px-1 py-1 rounded border text-xs text-right" style={inputStyle} />
+                        {canEditPricing ? (
+                          <input type="number" min={0} value={row.opening_stock}
+                            onChange={e => updateField(row.product_code, 'opening_stock', parseInt(e.target.value) || 0)}
+                            className="w-14 px-1 py-1 rounded border text-xs text-right" style={inputStyle} />
+                        ) : (
+                          <span className="text-xs" style={{ color: theme.textPrimary }}>{row.opening_stock}</span>
+                        )}
                       </td>
                       <td className="px-3 py-1">
                         {canEditPricing ? (

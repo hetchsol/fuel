@@ -571,9 +571,13 @@ export default function LPGDaily() {
                     </span>}
                   </td>
                   <td className="px-3 py-2">
-                    <input type="number" min={0} value={row.opening_balance}
-                      onChange={e => updateCylinderField(row.size_kg, 'opening_balance', parseInt(e.target.value) || 0)}
-                      className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                    {canManageStock ? (
+                      <input type="number" min={0} value={row.opening_balance}
+                        onChange={e => updateCylinderField(row.size_kg, 'opening_balance', parseInt(e.target.value) || 0)}
+                        className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                    ) : (
+                      <span className="text-sm font-medium" style={{ color: theme.textPrimary }}>{row.opening_balance}</span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     {canManageStock ? (
@@ -685,9 +689,13 @@ export default function LPGDaily() {
                   <tr key={row.size_kg} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                     <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{row.size_kg} kg</td>
                     <td className="px-3 py-2">
-                      <input type="number" min={0} value={row.opening_empty}
-                        onChange={e => updateCylinderField(row.size_kg, 'opening_empty', parseInt(e.target.value) || 0)}
-                        className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                      {canManageStock ? (
+                        <input type="number" min={0} value={row.opening_empty}
+                          onChange={e => updateCylinderField(row.size_kg, 'opening_empty', parseInt(e.target.value) || 0)}
+                          className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                      ) : (
+                        <span className="text-sm" style={{ color: theme.textPrimary }}>{row.opening_empty}</span>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <input type="number" min={0} value={row.closing_empty}
@@ -906,9 +914,13 @@ export default function LPGDaily() {
                   {row.selling_price.toLocaleString()}
                 </td>
                 <td className="px-3 py-2">
-                  <input type="number" min={0} value={row.opening_stock}
-                    onChange={e => updateAccessoryField(row.product_code, 'opening_stock', parseInt(e.target.value) || 0)}
-                    className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                  {canManageStock ? (
+                    <input type="number" min={0} value={row.opening_stock}
+                      onChange={e => updateAccessoryField(row.product_code, 'opening_stock', parseInt(e.target.value) || 0)}
+                      className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                  ) : (
+                    <span className="text-sm" style={{ color: theme.textPrimary }}>{row.opening_stock}</span>
+                  )}
                 </td>
                 <td className="px-3 py-2">
                   {canManageStock ? (
