@@ -3,7 +3,7 @@ import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
-type SettingsTab = 'system' | 'fuel' | 'tax-levy' | 'validation' | 'stock-alerts' | 'recon-tolerances' | 'email'
+type SettingsTab = 'system' | 'fuel' | 'tax-levy' | 'validation' | 'stock-alerts' | 'recon-tolerances' | 'email' | 'tank-calibration'
 
 export default function Settings() {
   const [settings, setSettings] = useState({
@@ -406,8 +406,9 @@ export default function Settings() {
     { id: 'stock-alerts', label: 'Stock Alerts' },
     { id: 'recon-tolerances', label: 'Reconciliation' },
     { id: 'email', label: 'Email Notifications' },
+    { id: 'tank-calibration', label: 'Tank Calibration' },
   ]
-  const managerHiddenTabs: SettingsTab[] = ['system', 'email']
+  const managerHiddenTabs: SettingsTab[] = ['system', 'email', 'tank-calibration']
   const tabs = currentUserRole === 'manager'
     ? allTabs.filter(t => !managerHiddenTabs.includes(t.id))
     : allTabs
@@ -1219,6 +1220,168 @@ export default function Settings() {
               </ul>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Tank Calibration ─────────────────────────────── */}
+      {activeTab === 'tank-calibration' && (
+        <TankCalibrationTab />
+      )}
+    </div>
+  )
+}
+
+function TankCalibrationTab() {
+  const [tanks, setTanks] = useState<any[]>([])
+  const [selectedTank, setSelectedTank] = useState('')
+  const [calibration, setCalibration] = useState<any>(null)
+  const [uploading, setUploading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    authFetch(`${BASE}/tanks/levels`).then(r => r.ok ? r.json() : []).then(setTanks).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!selectedTank) { setCalibration(null); return }
+    authFetch(`${BASE}/settings/tank-calibration/${selectedTank}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(setCalibration)
+      .catch(() => {})
+  }, [selectedTank])
+
+  const handleDownloadTemplate = () => {
+    window.open(`${BASE}/settings/tank-calibration/template`, '_blank')
+  }
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !selectedTank) return
+    setUploading(true)
+    setError('')
+    setMessage('')
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const token = localStorage.getItem('accessToken')
+      const stationId = localStorage.getItem('stationId')
+      const res = await fetch(`${BASE}/settings/tank-calibration/upload?tank_id=${selectedTank}`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(stationId ? { 'X-Station-Id': stationId } : {}),
+        },
+        body: formData,
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Upload failed')
+      setMessage(data.message)
+      // Refresh calibration
+      const calRes = await authFetch(`${BASE}/settings/tank-calibration/${selectedTank}`)
+      if (calRes.ok) setCalibration(await calRes.json())
+    } catch (err: any) { setError(err.message) }
+    finally { setUploading(false); e.target.value = '' }
+  }
+
+  const handleClear = async () => {
+    if (!selectedTank || !confirm('Clear calibration? Tank will revert to system default.')) return
+    setError('')
+    setMessage('')
+    try {
+      const res = await authFetch(`${BASE}/settings/tank-calibration/${selectedTank}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Failed to clear')
+      setMessage(data.message)
+      setCalibration(null)
+    } catch (err: any) { setError(err.message) }
+  }
+
+  const chartEntries = calibration?.found && calibration?.chart
+    ? Object.entries(calibration.chart).map(([dip, vol]) => ({ dip: parseFloat(dip), vol: vol as number })).sort((a, b) => a.dip - b.dip)
+    : []
+
+  return (
+    <div className="glass-card p-6 space-y-6">
+      <div>
+        <h2 className="text-lg font-bold text-content-primary mb-1">Tank Calibration</h2>
+        <p className="text-sm text-content-secondary">Upload manufacturer calibration charts (dip cm → volume L) per tank</p>
+      </div>
+
+      {/* Tank selector */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-content-secondary mb-1">Select Tank</label>
+          <select value={selectedTank} onChange={e => setSelectedTank(e.target.value)}
+            className="w-full px-3 py-2 border border-surface-border rounded-input focus:outline-none focus:ring-2 focus:ring-action-primary">
+            <option value="">-- Select a tank --</option>
+            {tanks.map((t: any) => (
+              <option key={t.tank_id} value={t.tank_id}>{t.tank_id} ({t.fuel_type} — {t.capacity?.toLocaleString()}L)</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-end gap-3">
+          <button onClick={handleDownloadTemplate}
+            className="px-4 py-2 border border-surface-border text-content-secondary rounded-btn hover:bg-surface-card/50 text-sm font-medium">
+            Download Template
+          </button>
+          {selectedTank && (
+            <label className="px-4 py-2 bg-action-primary text-white rounded-btn hover:bg-action-primary-hover text-sm font-medium cursor-pointer">
+              {uploading ? 'Uploading...' : 'Upload Excel'}
+              <input type="file" accept=".xlsx,.xls" onChange={handleUpload} className="hidden" disabled={uploading} />
+            </label>
+          )}
+        </div>
+      </div>
+
+      {error && <div className="p-3 bg-status-error-light border border-status-error/30 rounded-btn text-sm text-status-error">{error}</div>}
+      {message && <div className="p-3 bg-status-success-light border border-status-success/30 rounded-btn text-sm text-status-success">{message}</div>}
+
+      {/* Current calibration display */}
+      {selectedTank && calibration?.found && (
+        <div>
+          <div className="flex justify-between items-center mb-3">
+            <div>
+              <h3 className="text-sm font-semibold text-content-primary">Current Calibration — {selectedTank}</h3>
+              <p className="text-xs text-content-secondary">
+                {calibration.point_count} data points — Uploaded {new Date(calibration.uploaded_at).toLocaleDateString()} by {calibration.uploaded_by}
+              </p>
+            </div>
+            <button onClick={handleClear}
+              className="px-3 py-1.5 text-xs font-medium text-status-error border border-status-error/30 rounded-btn hover:bg-status-error-light">
+              Clear Calibration
+            </button>
+          </div>
+          <div className="max-h-64 overflow-y-auto border border-surface-border rounded-lg">
+            <table className="min-w-full text-sm">
+              <thead className="sticky top-0 bg-surface-bg">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-content-secondary uppercase">Dip (cm)</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-content-secondary uppercase">Volume (L)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chartEntries.map((entry, i) => (
+                  <tr key={i} className="border-t border-surface-border">
+                    <td className="px-4 py-1.5 text-content-primary">{entry.dip}</td>
+                    <td className="px-4 py-1.5 text-right text-content-primary">{entry.vol.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {selectedTank && calibration && !calibration.found && (
+        <div className="p-4 bg-surface-bg border border-surface-border rounded-lg text-sm text-content-secondary text-center">
+          No custom calibration uploaded for {selectedTank}. Using system default.
+        </div>
+      )}
+
+      {!selectedTank && (
+        <div className="p-4 bg-surface-bg border border-surface-border rounded-lg text-sm text-content-secondary text-center">
+          Select a tank above to view or upload its calibration chart.
         </div>
       )}
     </div>

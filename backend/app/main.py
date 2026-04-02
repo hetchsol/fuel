@@ -144,6 +144,10 @@ def startup():
         logger.info(f"[startup] Applied defaults/migrations for station {station_id}")
         check_and_close_stale_shifts(storage, station_id)
 
+        # Load saved tank calibrations
+        from app.api.v1.tank_calibrations import load_saved_calibrations
+        load_saved_calibrations(station_id)
+
     # Sync station name from business name in system_settings
     from app.database.stations_registry import save_stations
     st001 = stations_registry.STATIONS.get("ST001")
