@@ -717,73 +717,6 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* Step Indicator — visible to attendants only, before submission, with active shift */}
-      {isAttendant && shiftFound && !handoverResult && (
-        <div className="rounded-lg shadow p-4 mb-6 flex items-center justify-center"
-          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-          {/* Step 1 */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-              style={{
-                backgroundColor: currentStep === 1 ? theme.primary : currentStep > 1 ? 'var(--color-status-success)' : 'transparent',
-                color: currentStep >= 1 ? '#fff' : theme.textSecondary,
-                borderWidth: 2,
-                borderColor: currentStep === 1 ? theme.primary : currentStep > 1 ? 'var(--color-status-success)' : theme.border,
-              }}>
-              {currentStep > 1 ? '\u2713' : '1'}
-            </div>
-            <span className="text-sm font-medium hidden sm:inline"
-              style={{ color: currentStep === 1 ? theme.textPrimary : theme.textSecondary }}>
-              Enter Data
-            </span>
-          </div>
-
-          <div className="w-8 sm:w-16 h-0.5 mx-1 sm:mx-3"
-            style={{ backgroundColor: currentStep > 1 ? theme.primary : theme.border }} />
-
-          {/* Step 2 */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-              style={{
-                backgroundColor: currentStep === 2 ? theme.primary : currentStep > 2 ? 'var(--color-status-success)' : 'transparent',
-                color: currentStep >= 2 ? '#fff' : theme.textSecondary,
-                borderWidth: 2,
-                borderColor: currentStep === 2 ? theme.primary : currentStep > 2 ? 'var(--color-status-success)' : theme.border,
-              }}>
-              {currentStep > 2 ? '\u2713' : '2'}
-            </div>
-            <span className="text-sm font-medium hidden sm:inline"
-              style={{ color: currentStep === 2 ? theme.textPrimary : theme.textSecondary }}>
-              Review
-            </span>
-          </div>
-
-          <div className="w-8 sm:w-16 h-0.5 mx-1 sm:mx-3"
-            style={{ backgroundColor: currentStep > 2 ? theme.primary : theme.border }} />
-
-          {/* Step 3 */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-              style={{
-                backgroundColor: currentStep === 3 ? theme.primary : 'transparent',
-                color: currentStep === 3 ? '#fff' : theme.textSecondary,
-                borderWidth: 2,
-                borderColor: currentStep === 3 ? theme.primary : theme.border,
-              }}>
-              3
-            </div>
-            <span className="text-sm font-medium hidden sm:inline"
-              style={{ color: currentStep === 3 ? theme.textPrimary : theme.textSecondary }}>
-              Cash Handover
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================= */}
-      {/* STEP 1: Enter Readings & Stock Counts         */}
-      {/* Financial columns (Price, Revenue, Value) hidden */}
-      {/* ============================================= */}
       {/* Safe Deposits — visible on all steps during active shift */}
       {shiftFound && !handoverResult && (
         <div className="rounded-lg shadow mb-6 overflow-hidden"
@@ -856,6 +789,73 @@ export default function MyShift() {
         </div>
       )}
 
+      {/* Step Indicator — visible to attendants only, before submission, with active shift */}
+      {isAttendant && shiftFound && !handoverResult && (
+        <div className="rounded-lg shadow p-4 mb-6 flex items-center justify-center"
+          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+          {/* Step 1 */}
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+              style={{
+                backgroundColor: currentStep === 1 ? theme.primary : currentStep > 1 ? 'var(--color-status-success)' : 'transparent',
+                color: currentStep >= 1 ? '#fff' : theme.textSecondary,
+                borderWidth: 2,
+                borderColor: currentStep === 1 ? theme.primary : currentStep > 1 ? 'var(--color-status-success)' : theme.border,
+              }}>
+              {currentStep > 1 ? '\u2713' : '1'}
+            </div>
+            <span className="text-sm font-medium hidden sm:inline"
+              style={{ color: currentStep === 1 ? theme.textPrimary : theme.textSecondary }}>
+              Enter Data
+            </span>
+          </div>
+
+          <div className="w-8 sm:w-16 h-0.5 mx-1 sm:mx-3"
+            style={{ backgroundColor: currentStep > 1 ? theme.primary : theme.border }} />
+
+          {/* Step 2 */}
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+              style={{
+                backgroundColor: currentStep === 2 ? theme.primary : currentStep > 2 ? 'var(--color-status-success)' : 'transparent',
+                color: currentStep >= 2 ? '#fff' : theme.textSecondary,
+                borderWidth: 2,
+                borderColor: currentStep === 2 ? theme.primary : currentStep > 2 ? 'var(--color-status-success)' : theme.border,
+              }}>
+              {currentStep > 2 ? '\u2713' : '2'}
+            </div>
+            <span className="text-sm font-medium hidden sm:inline"
+              style={{ color: currentStep === 2 ? theme.textPrimary : theme.textSecondary }}>
+              Review
+            </span>
+          </div>
+
+          <div className="w-8 sm:w-16 h-0.5 mx-1 sm:mx-3"
+            style={{ backgroundColor: currentStep > 2 ? theme.primary : theme.border }} />
+
+          {/* Step 3 */}
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+              style={{
+                backgroundColor: currentStep === 3 ? theme.primary : 'transparent',
+                color: currentStep === 3 ? '#fff' : theme.textSecondary,
+                borderWidth: 2,
+                borderColor: currentStep === 3 ? theme.primary : theme.border,
+              }}>
+              3
+            </div>
+            <span className="text-sm font-medium hidden sm:inline"
+              style={{ color: currentStep === 3 ? theme.textPrimary : theme.textSecondary }}>
+              Cash Handover
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================= */}
+      {/* STEP 1: Enter Readings & Stock Counts         */}
+      {/* Financial columns (Price, Revenue, Value) hidden */}
+      {/* ============================================= */}
       {currentStep === 1 && !handoverResult && (
         <>
           {/* Nozzle Readings Table — collapsible */}
