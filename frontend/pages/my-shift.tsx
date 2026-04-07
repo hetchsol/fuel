@@ -1993,6 +1993,8 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
   const [allStaff, setAllStaff] = useState<any[]>([])
   const [islands, setIslands] = useState<any[]>([])
   const [dashLoading, setDashLoading] = useState(true)
+  const [shiftDeposits, setShiftDeposits] = useState<Record<string, any>>({})
+  const [expandedDeposits, setExpandedDeposits] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const headers = { 'Content-Type': 'application/json', ...getHeaders() }
@@ -2002,9 +2004,19 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
       authFetch(`${BASE}/islands/?status=active`, { headers }).then(r => r.ok ? r.json() : []),
     ])
       .then(([shifts, staff, islandsData]) => {
-        setActiveShifts(Array.isArray(shifts) ? shifts.filter((s: any) => s.status === 'active') : [])
+        const active = Array.isArray(shifts) ? shifts.filter((s: any) => s.status === 'active') : []
+        setActiveShifts(active)
         setAllStaff(Array.isArray(staff) ? staff : [])
         setIslands(Array.isArray(islandsData) ? islandsData : [])
+        // Fetch deposits for each active shift
+        active.forEach(shift => {
+          authFetch(`${BASE}/safe-deposits/${shift.shift_id}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              if (data) setShiftDeposits(prev => ({ ...prev, [shift.shift_id]: data }))
+            })
+            .catch(() => {})
+        })
       })
       .catch(() => {})
       .finally(() => setDashLoading(false))
@@ -2141,6 +2153,45 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
                           </div>
                         </div>
                       )}
+
+                      {/* Individual Safe Deposits */}
+                      {(() => {
+                        const deposits = shiftDeposits[shift.shift_id]
+                        const attDep = deposits?.attendants?.find((a: any) => a.attendant_id === assignment.attendant_id)
+                        if (!attDep) return (
+                          <div className="mt-3 pt-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                            <p className="text-xs" style={{ color: theme.textSecondary }}>Safe Deposits: 0</p>
+                          </div>
+                        )
+                        const depKey = `${shift.shift_id}-${assignment.attendant_id}`
+                        return (
+                          <div className="mt-3 pt-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                            <button onClick={() => setExpandedDeposits(prev => ({ ...prev, [depKey]: !prev[depKey] }))}
+                              className="w-full flex justify-between items-center text-left">
+                              <span className="text-xs flex items-center gap-1" style={{ color: theme.textSecondary }}>
+                                Safe Deposits: <strong style={{ color: theme.textPrimary }}>{attDep.count}</strong>
+                                {attDep.overdue && <span className="text-[10px] px-1 py-0.5 rounded-badge bg-status-warning/20 text-status-warning font-semibold">OVERDUE</span>}
+                              </span>
+                              <span className="text-xs font-semibold" style={{ color: theme.textPrimary }}>
+                                K{attDep.total.toLocaleString()} {expandedDeposits[depKey] ? '−' : '+'}
+                              </span>
+                            </button>
+                            {expandedDeposits[depKey] && attDep.deposits?.length > 0 && (
+                              <div className="mt-2 space-y-1">
+                                {attDep.deposits.map((d: any) => (
+                                  <div key={d.deposit_id} className="flex justify-between text-xs p-1.5 rounded"
+                                    style={{ backgroundColor: theme.cardBg }}>
+                                    <span style={{ color: theme.textSecondary }}>
+                                      {d.time || new Date(d.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})} {d.note && `— ${d.note}`}
+                                    </span>
+                                    <span className="font-semibold" style={{ color: theme.textPrimary }}>K{d.amount.toLocaleString()}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </div>
                   ))}
                 </div>
