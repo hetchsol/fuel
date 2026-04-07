@@ -717,8 +717,8 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* Step Indicator — visible before submission */}
-      {!handoverResult && (
+      {/* Step Indicator — visible to attendants only, before submission, with active shift */}
+      {isAttendant && shiftFound && !handoverResult && (
         <div className="rounded-lg shadow p-4 mb-6 flex items-center justify-center"
           style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
           {/* Step 1 */}
