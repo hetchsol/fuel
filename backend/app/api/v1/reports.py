@@ -105,12 +105,21 @@ def get_all_staff_names(
     if start_date and end_date:
         data = service.filter_by_date_range(start_date, end_date, data)
 
-    # Extract unique staff names
+    # Extract unique staff names from readings
     staff_names = set()
     for record in data:
         name = record.get('staff_name') or record.get('attendant') or record.get('user')
         if name and name != 'Unknown':
             staff_names.add(name)
+
+    # Fallback: if no readings data, get from configured users
+    if not staff_names:
+        from ...database.db import db_get_all_users, is_db_active
+        if is_db_active():
+            users = db_get_all_users()
+            for u in users:
+                if u.get("role") in ["user", "supervisor"] and u.get("is_active", True):
+                    staff_names.add(u["full_name"])
 
     return {
         "staff_names": sorted(list(staff_names)),
@@ -189,12 +198,23 @@ def get_all_nozzle_ids(
     if start_date and end_date:
         data = service.filter_by_date_range(start_date, end_date, data)
 
-    # Extract unique nozzle IDs
+    # Extract unique nozzle IDs from readings
     nozzle_ids = set()
     for record in data:
         nozzle_id = record.get('nozzle_id')
         if nozzle_id:
             nozzle_ids.add(nozzle_id)
+
+    # Fallback: if no readings data, get from configured islands
+    if not nozzle_ids:
+        islands = storage.get('islands', {})
+        for island in islands.values():
+            ps = island.get('pump_station')
+            if ps:
+                for nozzle in ps.get('nozzles', []):
+                    nid = nozzle.get('nozzle_id')
+                    if nid:
+                        nozzle_ids.add(nid)
 
     return {
         "nozzle_ids": sorted(list(nozzle_ids)),
@@ -274,19 +294,23 @@ def get_all_island_ids(
     if start_date and end_date:
         data = service.filter_by_date_range(start_date, end_date, data)
 
-    # Extract unique island IDs
+    # Extract unique island IDs from readings
     island_ids = set()
     for record in data:
         island_id = record.get('island_id')
         if island_id:
             island_ids.add(island_id)
-        # Also extract from nozzle_id if it starts with ISLAND
         nozzle_id = record.get('nozzle_id', '')
         if 'ISLAND' in nozzle_id.upper():
-            # Extract island part (e.g., "ISLAND-1" from "ISLAND-1-ULP-001")
             parts = nozzle_id.split('-')
             if len(parts) >= 2:
                 island_ids.add(f"{parts[0]}-{parts[1]}")
+
+    # Fallback: if no readings data, get from configured islands
+    if not island_ids:
+        islands = storage.get('islands', {})
+        for isl_id in islands:
+            island_ids.add(isl_id)
 
     return {
         "island_ids": sorted(list(island_ids)),
