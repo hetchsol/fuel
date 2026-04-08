@@ -48,17 +48,20 @@ export default function DailyTankReading() {
     return getFuelColorSet(isDiesel ? 'diesel' : 'petrol').light
   }
 
-  // Available attendants list
-  const attendantsList = [
-    'Shaka',
-    'Trevor',
-    'Violet',
-    'Joseph',
-    'Mary',
-    'Patrick',
-    'Elizabeth',
-    'John'
-  ]
+  // Available attendants list — fetched from configured staff
+  const [attendantsList, setAttendantsList] = useState<string[]>([])
+
+  useEffect(() => {
+    authFetch(`${BASE}/auth/staff`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        const names = (Array.isArray(data) ? data : [])
+          .filter((s: any) => s.role === 'user' && s.is_active)
+          .map((s: any) => s.full_name)
+        setAttendantsList(names)
+      })
+      .catch(() => {})
+  }, [])
 
   // Form state matching Excel structure
   const [formData, setFormData] = useState({
