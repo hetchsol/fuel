@@ -24,9 +24,14 @@ export default function Footer() {
           </div>
 
           {/* Copyright */}
-          <p className="text-xs text-content-secondary/40">
-            &copy; {new Date().getFullYear()} NextStop. All rights reserved.
-          </p>
+          <div className="text-right">
+            <p className="text-xs text-content-secondary/40">
+              &copy; {new Date().getFullYear()} NextStop. All rights reserved.
+            </p>
+            <p className="text-[10px] text-content-secondary/30 mt-0.5">
+              Developed by Hetch Solutions
+            </p>
+          </div>
         </div>
       </div>
     </footer>
