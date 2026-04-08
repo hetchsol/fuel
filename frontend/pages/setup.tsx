@@ -883,7 +883,7 @@ export default function SetupWizard() {
         <p className="mt-6 text-center text-xs text-white/30">
           Powered by NextStop Fuel Management v1.0
         </p>
-        <p className="mt-1 text-center text-[10px] text-white/20">
+        <p className="mt-1 text-center text-[10px] text-white/10">
           Developed by Hetch Solutions
         </p>
       </div>

@@ -28,7 +28,7 @@ export default function Footer() {
             <p className="text-xs text-content-secondary/40">
               &copy; {new Date().getFullYear()} NextStop. All rights reserved.
             </p>
-            <p className="text-[10px] text-content-secondary/50 mt-0.5">
+            <p className="text-[10px] text-content-secondary/20 mt-0.5">
               Developed by Hetch Solutions
             </p>
           </div>
