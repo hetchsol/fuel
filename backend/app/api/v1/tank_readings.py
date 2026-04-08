@@ -746,14 +746,44 @@ def get_tank_readings(
         if r['tank_id'] == tank_id
     ]
 
+    # Fallback: if no tank_readings entries, build from shift dip readings
+    if not readings:
+        storage = ctx["storage"]
+        shifts_data = storage.get('shifts', {})
+        for shift_id, shift in shifts_data.items():
+            for dip in shift.get('tank_dip_readings', []):
+                if dip.get('tank_id') != tank_id:
+                    continue
+                reading_entry = {
+                    "reading_id": f"DIP-{shift_id}-{tank_id}",
+                    "tank_id": tank_id,
+                    "date": shift.get("date", ""),
+                    "shift_type": shift.get("shift_type", ""),
+                    "shift_id": shift_id,
+                    "opening_dip_cm": dip.get("opening_dip_cm"),
+                    "closing_dip_cm": dip.get("closing_dip_cm"),
+                    "opening_volume_liters": dip.get("opening_volume_liters"),
+                    "closing_volume_liters": dip.get("closing_volume_liters"),
+                    "recorded_by": dip.get("recorded_by", ""),
+                    "recorded_at": dip.get("recorded_at", ""),
+                    "created_at": dip.get("recorded_at", ""),
+                    "source": "shift_dip",
+                }
+                # Calculate basic volume movement
+                if reading_entry["opening_volume_liters"] and reading_entry["closing_volume_liters"]:
+                    reading_entry["tank_volume_movement"] = round(
+                        reading_entry["closing_volume_liters"] - reading_entry["opening_volume_liters"], 2
+                    )
+                readings.append(reading_entry)
+
     # Filter by date range if provided
     if start_date:
-        readings = [r for r in readings if r['date'] >= start_date]
+        readings = [r for r in readings if r.get('date', '') >= start_date]
     if end_date:
-        readings = [r for r in readings if r['date'] <= end_date]
+        readings = [r for r in readings if r.get('date', '') <= end_date]
 
     # Sort by date (newest first)
-    readings.sort(key=lambda x: x['date'], reverse=True)
+    readings.sort(key=lambda x: x.get('date', ''), reverse=True)
 
     # Return JSONResponse to ensure all fields are included
     return JSONResponse(content=jsonable_encoder(readings))
