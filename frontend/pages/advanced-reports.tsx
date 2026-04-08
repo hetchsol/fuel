@@ -219,7 +219,7 @@ export default function AdvancedReports() {
       {/* Report Type Selection */}
       <div className="bg-surface-card rounded-lg shadow p-6 mb-6">
         <h2 className="text-lg font-semibold text-content-primary mb-4">Select Report Type</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
           {reportTypes.map((type) => (
             <button
               key={type.value}
@@ -486,7 +486,7 @@ export default function AdvancedReports() {
           {reportData.summary && (
             <div className="mb-6">
               <h3 className="text-md font-semibold text-content-primary mb-3">Summary</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
                 {Object.entries(reportData.summary).map(([key, value]: [string, any]) => (
                   <div key={key} className="bg-action-primary-light rounded-lg p-4 border border-action-primary">
                     <p className="text-xs text-content-secondary mb-1">

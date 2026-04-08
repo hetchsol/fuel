@@ -468,7 +468,7 @@ export default function LPGDaily() {
                               ...prev,
                               [size]: { ...prev[size], price_refill: e.target.value }
                             }))}
-                            className="w-32 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                            className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right" style={inputStyle} />
                         </td>
                         <td className="px-3 py-2">
                           <input type="number" min={0} step="1"
@@ -477,7 +477,7 @@ export default function LPGDaily() {
                               ...prev,
                               [size]: { ...prev[size], price_full_cylinder: e.target.value }
                             }))}
-                            className="w-32 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                            className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right" style={inputStyle} />
                         </td>
                       </tr>
                     ))}

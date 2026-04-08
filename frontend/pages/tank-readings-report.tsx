@@ -272,7 +272,7 @@ export default function TankReadingsReport() {
 
         {/* Tab Navigation */}
         <div className="mb-6 border-b border-surface-border">
-          <nav className="-mb-px flex space-x-8">
+          <nav className="-mb-px flex flex-wrap gap-2 sm:gap-8 overflow-x-auto">
             <button
               onClick={() => setActiveTab('readings')}
               className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${

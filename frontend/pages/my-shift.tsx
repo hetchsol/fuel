@@ -736,21 +736,21 @@ export default function MyShift() {
           {showDeposits && (
             <div className="p-3 space-y-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
               {/* Deposit form */}
-              <div className="flex gap-2 items-end flex-wrap">
-                <div className="w-28">
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-end flex-wrap">
+                <div className="w-full sm:w-28">
                   <label className="block text-xs text-content-secondary mb-1">Time</label>
                   <input type="time" value={depositTime}
                     onChange={e => setDepositTime(e.target.value)}
                     className="w-full px-3 py-2 text-sm rounded border" style={inputStyle} />
                 </div>
-                <div className="flex-1 min-w-[120px]">
+                <div className="flex-1 min-w-0">
                   <label className="block text-xs text-content-secondary mb-1">Amount (ZMW)</label>
                   <input type="number" min={0} step={1} value={depositAmount}
                     onChange={e => setDepositAmount(e.target.value)}
                     placeholder="e.g. 1500"
                     className="w-full px-3 py-2 text-sm rounded border" style={inputStyle} />
                 </div>
-                <div className="flex-1 min-w-[120px]">
+                <div className="flex-1 min-w-0">
                   <label className="block text-xs text-content-secondary mb-1">Note (optional)</label>
                   <input type="text" value={depositNote}
                     onChange={e => setDepositNote(e.target.value)}
@@ -758,7 +758,7 @@ export default function MyShift() {
                     className="w-full px-3 py-2 text-sm rounded border" style={inputStyle} />
                 </div>
                 <button onClick={handleRecordDeposit} disabled={depositSaving || !depositAmount || !depositTime}
-                  className="px-4 py-2 rounded text-sm font-medium text-white disabled:opacity-50"
+                  className="w-full sm:w-auto px-4 py-2 rounded text-sm font-medium text-white disabled:opacity-50"
                   style={{ backgroundColor: theme.primary }}>
                   {depositSaving ? '...' : 'Deposit'}
                 </button>
@@ -909,7 +909,7 @@ export default function MyShift() {
                           value={row.opening_reading || ''}
                           onChange={e => updateOpeningReading(row.nozzle_id, e.target.value)}
                           placeholder="Elect. open"
-                          className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
+                          className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right font-mono"
                           style={inputStyle}
                         />
                       </td>
@@ -920,7 +920,7 @@ export default function MyShift() {
                           value={row.closing_reading}
                           onChange={e => updateClosingReading(row.nozzle_id, e.target.value)}
                           placeholder="Elect. close"
-                          className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
+                          className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right font-mono"
                           style={{
                             ...inputStyle,
                             borderColor: hasError ? 'var(--color-status-error)' : theme.border,
@@ -944,7 +944,7 @@ export default function MyShift() {
                           value={row.mechanical_opening || ''}
                           onChange={e => updateMechOpening(row.nozzle_id, e.target.value)}
                           placeholder="Mech open"
-                          className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
+                          className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right font-mono"
                           style={inputStyle}
                         />
                       </td>
@@ -955,7 +955,7 @@ export default function MyShift() {
                           value={row.mechanical_closing}
                           onChange={e => updateMechClosing(row.nozzle_id, e.target.value)}
                           placeholder="Mech close"
-                          className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
+                          className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right font-mono"
                           style={{
                             ...inputStyle,
                             borderColor: mechError ? 'var(--color-status-error)' : theme.border,

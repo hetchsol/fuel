@@ -299,7 +299,7 @@ export default function HandoverReview() {
         <div>
           <label className="text-xs font-medium block mb-1" style={{ color: theme.textSecondary }}>Shift ID</label>
           <input type="text" placeholder="e.g. SH-..." value={filterShift} onChange={e => setFilterShift(e.target.value)}
-            className="px-2 py-1 text-sm rounded border w-40"
+            className="px-2 py-1 text-sm rounded border w-full sm:w-40"
             style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
         </div>
         <div className="flex-1" />

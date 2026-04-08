@@ -426,7 +426,7 @@ export default function Settings() {
 
       {/* Tab Navigation */}
       <div className="mb-6 border-b border-surface-border">
-        <nav className="-mb-px flex">
+        <nav className="-mb-px flex flex-wrap gap-1 sm:gap-0 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}

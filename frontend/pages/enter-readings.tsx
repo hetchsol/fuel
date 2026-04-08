@@ -561,7 +561,7 @@ export default function EnterReadings() {
                         value={closingElectronic[n.nozzle_id] || ''}
                         onChange={e => setClosingElectronic(prev => ({ ...prev, [n.nozzle_id]: e.target.value }))}
                         placeholder="Electronic"
-                        className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
+                        className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right font-mono"
                         style={{ ...inputStyle, borderColor: elecErr ? 'var(--color-status-error)' : theme.border }} />
                       {elecErr && <div className="text-xs" style={{ color: 'var(--color-status-error)' }}>Must be &ge; opening</div>}
                     </td>
@@ -570,7 +570,7 @@ export default function EnterReadings() {
                         value={closingMechanical[n.nozzle_id] || ''}
                         onChange={e => setClosingMechanical(prev => ({ ...prev, [n.nozzle_id]: e.target.value }))}
                         placeholder="Mechanical"
-                        className="w-32 px-2 py-1 rounded border text-sm text-right font-mono"
+                        className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right font-mono"
                         style={{ ...inputStyle, borderColor: mechErr ? 'var(--color-status-error)' : theme.border }} />
                       {mechErr && <div className="text-xs" style={{ color: 'var(--color-status-error)' }}>Must be &ge; opening</div>}
                     </td>
@@ -591,7 +591,7 @@ export default function EnterReadings() {
                         onChange={e => setNozzleNotes(prev => ({ ...prev, [n.nozzle_id]: e.target.value }))}
                         placeholder={noteRequired ? 'Required: explain discrepancy' : 'Optional note'}
                         rows={2}
-                        className="w-40 px-2 py-1 rounded border text-xs"
+                        className="w-full sm:w-40 px-1 sm:px-2 py-1 rounded border text-xs"
                         style={{
                           ...inputStyle,
                           borderColor: noteRequired && !noteValue.trim() ? 'var(--color-status-error)' : theme.border,
