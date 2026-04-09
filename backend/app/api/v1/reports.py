@@ -18,12 +18,20 @@ router = APIRouter()
 def _build_reporting_service(storage: dict, station_id: str = "") -> ReportingService:
     """Build a ReportingService from station storage data"""
     recons = _get_reconciliations(station_id, storage) if station_id else storage.get('reconciliations_data', [])
+    # Get fuel prices for revenue computation
+    settings = storage.get('settings', {})
+    fuel_prices = {}
+    if settings.get('petrol_price_per_liter'):
+        fuel_prices['Petrol'] = settings['petrol_price_per_liter']
+    if settings.get('diesel_price_per_liter'):
+        fuel_prices['Diesel'] = settings['diesel_price_per_liter']
     return ReportingService(
         sales_data=storage.get('readings', []),
         readings_data=storage.get('readings', []),
         shifts_data=list(storage.get('shifts', {}).values()),
         reconciliations_data=recons,
         islands_data=storage.get('islands', {}),
+        fuel_prices=fuel_prices,
     )
 
 

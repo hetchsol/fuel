@@ -19,6 +19,7 @@ class ReportingService:
         shifts_data: List[Dict[str, Any]],
         reconciliations_data: List[Dict[str, Any]],
         islands_data: Optional[Dict[str, Any]] = None,
+        fuel_prices: Optional[Dict[str, float]] = None,
     ):
         """
         Initialize reporting service with all data sources
@@ -29,12 +30,30 @@ class ReportingService:
             shifts_data: All shift records
             reconciliations_data: All reconciliation records
             islands_data: Islands dict keyed by island_id (for nozzle fuel type lookup)
+            fuel_prices: Dict of fuel_type -> price_per_liter (e.g. {'Diesel': 23.25, 'Petrol': 26.61})
         """
-        self.sales_data = sales_data
-        self.readings_data = readings_data
+        self.fuel_prices = fuel_prices or {}
+        # Enrich readings with total_amount if missing
+        self.sales_data = self._enrich_with_revenue(sales_data)
+        self.readings_data = self._enrich_with_revenue(readings_data)
         self.shifts_data = shifts_data
         self.reconciliations_data = reconciliations_data
         self.islands_data = islands_data or {}
+
+    def _enrich_with_revenue(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Add total_amount to records that have volume + fuel_type but no total_amount"""
+        if not self.fuel_prices:
+            return data
+        enriched = []
+        for record in data:
+            if record.get('total_amount') or record.get('total_amount') == 0:
+                enriched.append(record)
+            else:
+                vol = record.get('volume', 0) or 0
+                fuel = record.get('fuel_type', '')
+                price = self.fuel_prices.get(fuel, 0)
+                enriched.append({**record, 'total_amount': round(vol * price, 2)})
+        return enriched
 
     def filter_by_staff(
         self,
