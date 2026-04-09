@@ -1,10 +1,12 @@
 import { authFetch, BASE, getHeaders, downloadExport } from '../lib/api'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { useTanks } from '../hooks/useTanks'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 interface ValidatedReading {
   reading_id: string
@@ -243,17 +245,65 @@ export default function TankReadingsReport() {
     fail: validatedReadings.filter(r => r.validation_status === 'FAIL').length
   }
 
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    const data = activeTab === 'validated' ? filteredValidatedReadings : readings
+    if (!data.length) return null
+    if (activeTab === 'validated') {
+      return {
+        title: 'Validated Tank Readings',
+        filename: `tank_readings_validated_${new Date().toISOString().slice(0,10)}`,
+        summaryCards: [
+          { label: 'Total', value: validatedStats.total },
+          { label: 'Pass', value: validatedStats.pass },
+          { label: 'Warning', value: validatedStats.warning },
+          { label: 'Fail', value: validatedStats.fail },
+        ],
+        columns: [
+          { header: 'Date', key: 'date' },
+          { header: 'Shift', key: 'shift_id' },
+          { header: 'Tank', key: 'tank_id' },
+          { header: 'Fuel Type', key: 'fuel_type' },
+          { header: 'Opening Dip', key: 'opening_dip', format: 'number' },
+          { header: 'Closing Dip', key: 'closing_dip', format: 'number' },
+          { header: 'Opening Vol (L)', key: 'opening_volume', format: 'number' },
+          { header: 'Closing Vol (L)', key: 'closing_volume', format: 'number' },
+          { header: 'Variance %', key: 'variance_percent', format: 'percent' },
+          { header: 'Status', key: 'validation_status' },
+        ],
+        data: filteredValidatedReadings,
+      }
+    }
+    return {
+      title: 'Tank Readings History',
+      filename: `tank_readings_${new Date().toISOString().slice(0,10)}`,
+      columns: [
+        { header: 'Date', key: 'date' },
+        { header: 'Tank', key: 'tank_id' },
+        { header: 'Fuel Type', key: 'fuel_type' },
+        { header: 'Source', key: 'source' },
+        { header: 'Dip (cm)', key: 'dip_cm', format: 'number' },
+        { header: 'Volume (L)', key: 'volume_liters', format: 'number' },
+      ],
+      data: readings,
+    }
+  }, [activeTab, readings, filteredValidatedReadings, validatedStats])
+
   return (
     <div className="min-h-screen p-6 transition-colors duration-300" style={{ backgroundColor: theme.background }}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold transition-colors duration-300" style={{ color: theme.textPrimary }}>
-            Tank Readings & Monitor
-          </h1>
-          <p className="mt-2 transition-colors duration-300" style={{ color: theme.textSecondary }}>
-            View tank readings history and validated readings monitor
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-3xl font-bold transition-colors duration-300" style={{ color: theme.textPrimary }}>
+                Tank Readings & Monitor
+              </h1>
+              <p className="mt-2 transition-colors duration-300" style={{ color: theme.textSecondary }}>
+                View tank readings history and validated readings monitor
+              </p>
+            </div>
+            <ExportButtons getConfig={getExportConfig} />
+          </div>
         </div>
 
         {/* Related Pages */}

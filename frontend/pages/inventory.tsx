@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { getHeaders, authFetch } from '../lib/api'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 const BASE = '/api/v1'
 
@@ -78,11 +80,63 @@ export default function Inventory() {
     return 'bg-surface-bg text-content-primary border-surface-border'
   }
 
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    if (activeTab === 'tanks' && tanks.length) {
+      return {
+        title: 'Inventory — Fuel Tanks',
+        filename: `inventory_tanks_${new Date().toISOString().slice(0,10)}`,
+        columns: [
+          { header: 'Tank ID', key: 'tank_id' },
+          { header: 'Fuel Type', key: 'fuel_type' },
+          { header: 'Capacity (L)', key: 'capacity', format: 'number' },
+          { header: 'Current Level (L)', key: 'current_level', format: 'number' },
+          { header: '% Full', key: 'percent_full', format: 'percent' },
+        ],
+        data: tanks,
+      }
+    }
+    if (activeTab === 'lpg' && lpgAccessories.length) {
+      return {
+        title: 'Inventory — LPG & Accessories',
+        filename: `inventory_lpg_${new Date().toISOString().slice(0,10)}`,
+        columns: [
+          { header: 'Product Code', key: 'product_code' },
+          { header: 'Description', key: 'description' },
+          { header: 'Unit Price', key: 'unit_price', format: 'currency' },
+          { header: 'Opening Stock', key: 'opening_stock', format: 'number' },
+          { header: 'Current Stock', key: 'current_stock', format: 'number' },
+        ],
+        data: lpgAccessories,
+      }
+    }
+    if (activeTab === 'lubricants' && lubricants.length) {
+      return {
+        title: 'Inventory — Lubricants',
+        filename: `inventory_lubricants_${new Date().toISOString().slice(0,10)}`,
+        columns: [
+          { header: 'Product Code', key: 'product_code' },
+          { header: 'Description', key: 'description' },
+          { header: 'Category', key: 'category' },
+          { header: 'Location', key: 'location' },
+          { header: 'Unit Price', key: 'unit_price', format: 'currency' },
+          { header: 'Current Stock', key: 'current_stock', format: 'number' },
+        ],
+        data: lubricants,
+      }
+    }
+    return null
+  }, [activeTab, tanks, lpgAccessories, lubricants])
+
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-content-primary">Inventory Management</h1>
-        <p className="mt-2 text-sm text-content-secondary">LPG Gas, Accessories, and Lubricants</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-bold text-content-primary">Inventory Management</h1>
+            <p className="mt-2 text-sm text-content-secondary">LPG Gas, Accessories, and Lubricants</p>
+          </div>
+          <ExportButtons getConfig={getExportConfig} />
+        </div>
       </div>
 
       {/* Tab Navigation */}

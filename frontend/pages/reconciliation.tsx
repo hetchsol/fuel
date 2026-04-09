@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { getHeaders, downloadExport, authFetch } from '../lib/api'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 const BASE = '/api/v1'
 
@@ -63,6 +65,46 @@ export default function Reconciliation() {
     return shiftType === 'Day' ? '☀️' : '🌙'
   }
 
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    if (!reconciliations.length) return null
+    return {
+      title: 'Shift Reconciliation',
+      subtitle: `Date: ${selectedDate}`,
+      filename: `reconciliation_${selectedDate}`,
+      summaryCards: [
+        { label: 'Total Shifts', value: reconciliations.length },
+      ],
+      columns: [
+        { header: 'Shift', key: 'shift_type' },
+        { header: 'Date', key: 'date' },
+        { header: 'Petrol Revenue', key: 'petrol_revenue', format: 'currency' },
+        { header: 'Diesel Revenue', key: 'diesel_revenue', format: 'currency' },
+        { header: 'LPG Revenue', key: 'lpg_revenue', format: 'currency' },
+        { header: 'Lubricants', key: 'lubricant_revenue', format: 'currency' },
+        { header: 'Accessories', key: 'accessory_revenue', format: 'currency' },
+        { header: 'Total Expected', key: 'total_expected', format: 'currency' },
+        { header: 'Credit Sales', key: 'credit_sales', format: 'currency' },
+        { header: 'Expected Cash', key: 'expected_cash', format: 'currency' },
+        { header: 'Actual Cash', key: 'actual_cash', format: 'currency' },
+        { header: 'Difference', key: 'cash_difference', format: 'currency' },
+      ],
+      data: reconciliations.map((r: any) => ({
+        shift_type: r.shift_type || r.shift_id,
+        date: r.date || selectedDate,
+        petrol_revenue: r.petrol_revenue || 0,
+        diesel_revenue: r.diesel_revenue || 0,
+        lpg_revenue: r.lpg_revenue || 0,
+        lubricant_revenue: r.lubricant_revenue || 0,
+        accessory_revenue: r.accessory_revenue || 0,
+        total_expected: r.total_expected || 0,
+        credit_sales: r.credit_sales || 0,
+        expected_cash: r.expected_cash || 0,
+        actual_cash: r.actual_cash || 0,
+        cash_difference: r.cash_difference || r.difference || 0,
+      })),
+    }
+  }, [reconciliations, selectedDate])
+
   return (
     <div>
       <div className="mb-8">
@@ -105,6 +147,7 @@ export default function Reconciliation() {
               >
                 Excel
               </button>
+              <ExportButtons getConfig={getExportConfig} />
             </>
           )}
         </div>

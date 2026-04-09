@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { getHeaders, authFetch } from '../lib/api'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 const BASE = '/api/v1'
 
@@ -105,13 +107,49 @@ export default function TankAnalysis() {
     }
   }
 
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    if (!reconciliation?.tanks) return null
+    return {
+      title: 'Tank Volume Movement Analysis',
+      subtitle: `Shift: ${selectedShift}`,
+      filename: `tank_analysis_${selectedShift.replace(/\s/g,'_')}`,
+      columns: [
+        { header: 'Tank', key: 'tank_id' },
+        { header: 'Fuel Type', key: 'fuel_type' },
+        { header: 'Opening Vol (L)', key: 'opening_volume', format: 'number' },
+        { header: 'Closing Vol (L)', key: 'closing_volume', format: 'number' },
+        { header: 'Tank Movement (L)', key: 'tank_movement', format: 'number' },
+        { header: 'Electronic Sales (L)', key: 'electronic_sales', format: 'number' },
+        { header: 'Mechanical Sales (L)', key: 'mechanical_sales', format: 'number' },
+        { header: 'Variance (L)', key: 'variance', format: 'number' },
+        { header: 'Status', key: 'status' },
+      ],
+      data: reconciliation.tanks.map((t: any) => ({
+        tank_id: t.tank_id,
+        fuel_type: t.fuel_type,
+        opening_volume: t.opening_volume || t.opening_dip_volume || 0,
+        closing_volume: t.closing_volume || t.closing_dip_volume || 0,
+        tank_movement: t.tank_movement || t.dip_movement || 0,
+        electronic_sales: t.electronic_sales || t.electronic_volume || 0,
+        mechanical_sales: t.mechanical_sales || t.mechanical_volume || 0,
+        variance: t.variance || t.discrepancy || 0,
+        status: t.status || t.severity || '',
+      })),
+    }
+  }, [reconciliation, selectedShift])
+
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-content-primary">Tank Volume Movement Analysis</h1>
-        <p className="mt-2 text-sm text-content-secondary">
-          Compare actual tank volume movement with electronic/mechanical sales to identify discrepancies
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-bold text-content-primary">Tank Volume Movement Analysis</h1>
+            <p className="mt-2 text-sm text-content-secondary">
+              Compare actual tank volume movement with electronic/mechanical sales to identify discrepancies
+            </p>
+          </div>
+          {reconciliation && <ExportButtons getConfig={getExportConfig} />}
+        </div>
       </div>
 
       {/* Shift Selector */}

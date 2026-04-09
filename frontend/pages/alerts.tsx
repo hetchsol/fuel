@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getHeaders, BASE, authFetch } from '../lib/api'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 interface Anomaly {
   tank_id: string
@@ -75,6 +77,31 @@ export default function AlertsPage() {
     if (grouped[a.severity]) grouped[a.severity].push(a)
   }
 
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    if (!anomalies.length) return null
+    return {
+      title: 'Anomaly Alerts',
+      subtitle: `${anomalies.length} anomalies — Last ${lookbackDays} days`,
+      filename: `anomaly_alerts_${new Date().toISOString().slice(0,10)}`,
+      summaryCards: [
+        { label: 'Critical', value: criticalCount },
+        { label: 'Warning', value: warningCount },
+        { label: 'Info', value: infoCount },
+      ],
+      columns: [
+        { header: 'Severity', key: 'severity' },
+        { header: 'Tank', key: 'tank_id' },
+        { header: 'Fuel Type', key: 'fuel_type' },
+        { header: 'Type', key: 'type' },
+        { header: 'Date', key: 'date' },
+        { header: 'Description', key: 'description' },
+        { header: 'Value', key: 'value', format: 'number' },
+        { header: 'Threshold', key: 'threshold', format: 'number' },
+      ],
+      data: anomalies,
+    }
+  }, [anomalies, lookbackDays, criticalCount, warningCount, infoCount])
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
@@ -94,6 +121,7 @@ export default function AlertsPage() {
               {days}d
             </button>
           ))}
+          <ExportButtons getConfig={getExportConfig} />
         </div>
       </div>
 

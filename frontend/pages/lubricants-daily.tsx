@@ -1,6 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import { getHeaders, authFetch } from '../lib/api'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 const BASE = '/api/v1'
 
@@ -285,13 +287,42 @@ export default function LubricantsDaily() {
 
   const actionLabel = location === 'Island 3' ? 'Sold' : 'Drawn'
 
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    if (!productRows.length) return null
+    return {
+      title: `Lubricants Daily — ${location}`,
+      filename: `lubricants_daily_${location.replace(/\s/g,'_')}_${new Date().toISOString().slice(0,10)}`,
+      summaryCards: [
+        { label: 'Total Items Moved', value: totalItemsMoved },
+        { label: 'Total Sales Value', value: `ZMW ${totalSalesValue.toLocaleString()}` },
+      ],
+      columns: [
+        { header: 'Product Code', key: 'product_code' },
+        { header: 'Description', key: 'description' },
+        { header: 'Category', key: 'category' },
+        { header: 'Opening Stock', key: 'opening_stock', format: 'number' },
+        { header: 'Additions', key: 'additions', format: 'number' },
+        { header: actionLabel, key: 'sold_or_drawn', format: 'number' },
+        { header: 'Closing Stock', key: 'closing_stock', format: 'number' },
+        { header: 'Selling Price', key: 'selling_price', format: 'currency' },
+        { header: 'Sales Value', key: 'sales_value', format: 'currency' },
+      ],
+      data: productRows,
+    }
+  }, [productRows, location, actionLabel, totalItemsMoved, totalSalesValue])
+
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Lubricants Daily</h1>
-        <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
-          Daily stock movement for Island 3 (sales) and Buffer (warehouse)
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Lubricants Daily</h1>
+            <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
+              Daily stock movement for Island 3 (sales) and Buffer (warehouse)
+            </p>
+          </div>
+          <ExportButtons getConfig={getExportConfig} />
+        </div>
       </div>
 
       {/* Controls */}

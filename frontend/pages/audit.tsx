@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getHeaders, BASE, authFetch } from '../lib/api'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 const ACTION_OPTIONS = [
   '',
@@ -119,9 +121,37 @@ export default function AuditLogPage() {
     fetchEntries(newLimit)
   }
 
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    if (!entries.length) return null
+    return {
+      title: 'Audit Log',
+      subtitle: `${entries.length} entries`,
+      filename: `audit_log_${new Date().toISOString().slice(0,10)}`,
+      columns: [
+        { header: 'Timestamp', key: 'timestamp' },
+        { header: 'Action', key: 'action' },
+        { header: 'Entity Type', key: 'entity_type' },
+        { header: 'Entity ID', key: 'entity_id' },
+        { header: 'Performed By', key: 'performed_by' },
+        { header: 'Details', key: 'details' },
+      ],
+      data: entries.map((e: any) => ({
+        timestamp: e.timestamp || '',
+        action: e.action || '',
+        entity_type: e.entity_type || '',
+        entity_id: e.entity_id || '',
+        performed_by: e.performed_by || e.user || '',
+        details: typeof e.details === 'object' ? JSON.stringify(e.details) : (e.details || ''),
+      })),
+    }
+  }, [entries])
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-content-primary mb-6">Audit Log</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-content-primary">Audit Log</h1>
+        <ExportButtons getConfig={getExportConfig} />
+      </div>
 
       {/* Filter bar */}
       <div className="bg-surface-card rounded-lg shadow p-4 mb-6">

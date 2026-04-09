@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { getHeaders, authFetch } from '../lib/api'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 const BASE = '/api/v1'
 
@@ -149,13 +151,54 @@ export default function ThreeWayReconciliation() {
     }
   }
 
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    if (!dailySummary?.all_shifts) return null
+    return {
+      title: 'Three-Way Reconciliation',
+      subtitle: `Date: ${dailySummary.date} — Status: ${dailySummary.overall_status}`,
+      filename: `three_way_recon_${dailySummary.date}`,
+      summaryCards: [
+        { label: 'Total Shifts', value: dailySummary.total_shifts },
+        { label: 'Balanced', value: dailySummary.balanced_shifts },
+        { label: 'Variances', value: dailySummary.variance_shifts },
+        { label: 'Critical', value: dailySummary.critical_shifts },
+        { label: 'Status', value: dailySummary.overall_status },
+      ],
+      columns: [
+        { header: 'Shift', key: 'shift_type' },
+        { header: 'Status', key: 'status' },
+        { header: 'Tank Movement (L)', key: 'tank_movement', format: 'number' },
+        { header: 'Nozzle Sales (L)', key: 'nozzle_sales', format: 'number' },
+        { header: 'Tank vs Nozzle %', key: 'tank_nozzle_var', format: 'percent' },
+        { header: 'Expected Cash', key: 'expected_cash', format: 'currency' },
+        { header: 'Actual Cash', key: 'actual_cash', format: 'currency' },
+        { header: 'Cash Variance', key: 'cash_variance', format: 'currency' },
+      ],
+      data: dailySummary.all_shifts.map((s: any) => ({
+        shift_type: s.shift_type || s.shift_id,
+        status: s.status || s.reconciliation_status || '',
+        tank_movement: s.physical?.tank_movement_liters || s.tank_movement_liters || 0,
+        nozzle_sales: s.operational?.nozzle_sales_liters || s.nozzle_sales_liters || 0,
+        tank_nozzle_var: s.variances?.tank_vs_nozzle_percent || s.tank_vs_nozzle_percent || 0,
+        expected_cash: s.financial?.expected_cash || s.expected_cash || 0,
+        actual_cash: s.financial?.actual_cash || s.actual_cash || 0,
+        cash_variance: s.financial?.cash_variance || s.cash_variance || 0,
+      })),
+    }
+  }, [dailySummary])
+
   return (
     <div className="min-h-screen bg-surface-bg p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-content-primary mb-2">Three-Way Reconciliation</h1>
-          <p className="text-content-secondary">Tank Movement = Nozzle Sales = Cash in Hand</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-3xl font-bold text-content-primary mb-2">Three-Way Reconciliation</h1>
+              <p className="text-content-secondary">Tank Movement = Nozzle Sales = Cash in Hand</p>
+            </div>
+            {dailySummary && <ExportButtons getConfig={getExportConfig} />}
+          </div>
         </div>
 
         {/* Date Selector */}

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import { getHeaders, authFetch } from '../lib/api'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 const BASE = '/api/v1'
 const LPG_SIZES = [3, 6, 9, 19, 45, 48]
@@ -424,13 +426,38 @@ export default function LPGDaily() {
     borderColor: theme.border,
   }
 
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    if (!cylinderRows.length) return null
+    return {
+      title: 'LPG Daily Operations',
+      filename: `lpg_daily_${new Date().toISOString().slice(0,10)}`,
+      columns: [
+        { header: 'Size (kg)', key: 'size_kg', format: 'number' },
+        { header: 'Opening Balance', key: 'opening_balance', format: 'number' },
+        { header: 'Receipts', key: 'receipts', format: 'number' },
+        { header: 'Sold (Refill)', key: 'sold_refill', format: 'number' },
+        { header: 'Sold (With Cylinder)', key: 'sold_with_cylinder', format: 'number' },
+        { header: 'Closing Balance', key: 'balance', format: 'number' },
+        { header: 'Value (Refill)', key: 'value_refill', format: 'currency' },
+        { header: 'Value (With Cylinder)', key: 'value_with_cylinder', format: 'currency' },
+        { header: 'Total Value', key: 'total_value', format: 'currency' },
+      ],
+      data: cylinderRows,
+    }
+  }, [cylinderRows])
+
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>LPG Daily Operations</h1>
-        <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
-          Shift-level cylinder sales and accessories tracking
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>LPG Daily Operations</h1>
+            <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
+              Shift-level cylinder sales and accessories tracking
+            </p>
+          </div>
+          <ExportButtons getConfig={getExportConfig} />
+        </div>
       </div>
 
       {/* Pricing Settings (editable by supervisor/owner) */}

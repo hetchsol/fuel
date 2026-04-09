@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import useSWR from 'swr'
 import { getHeaders, authFetch } from '../lib/api'
 import { useTanks } from '../hooks/useTanks'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 const BASE = '/api/v1'
 
@@ -381,13 +383,55 @@ export default function FuelOperations() {
     }
   }
 
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    if (deliveries.length > 0) {
+      return {
+        title: 'Fuel Operations — Deliveries',
+        filename: `fuel_operations_${new Date().toISOString().slice(0,10)}`,
+        columns: [
+          { header: 'Date', key: 'date' },
+          { header: 'Tank', key: 'tank_id' },
+          { header: 'Supplier', key: 'supplier' },
+          { header: 'Invoice', key: 'invoice_number' },
+          { header: 'Expected (L)', key: 'expected_volume', format: 'number' },
+          { header: 'Flowmeter (L)', key: 'flowmeter_volume', format: 'number' },
+          { header: 'Actual (L)', key: 'actual_volume', format: 'number' },
+          { header: 'Variance (L)', key: 'variance', format: 'number' },
+        ],
+        data: deliveries,
+      }
+    }
+    if (readings.length > 0) {
+      return {
+        title: 'Fuel Operations — Readings',
+        filename: `fuel_readings_${new Date().toISOString().slice(0,10)}`,
+        columns: [
+          { header: 'Date', key: 'date' },
+          { header: 'Shift', key: 'shift_type' },
+          { header: 'Tank', key: 'tank_id' },
+          { header: 'Opening Dip', key: 'opening_dip_cm', format: 'number' },
+          { header: 'Closing Dip', key: 'closing_dip_cm', format: 'number' },
+          { header: 'Opening Vol (L)', key: 'opening_volume_liters', format: 'number' },
+          { header: 'Closing Vol (L)', key: 'closing_volume_liters', format: 'number' },
+        ],
+        data: readings,
+      }
+    }
+    return null
+  }, [deliveries, readings])
+
   return (
     <div className="min-h-screen bg-surface-bg p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-content-primary">Fuel Operations</h1>
-          <p className="text-content-secondary mt-1">Real-time tank levels, readings, deliveries, and movement summary</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-3xl font-bold text-content-primary">Fuel Operations</h1>
+              <p className="text-content-secondary mt-1">Real-time tank levels, readings, deliveries, and movement summary</p>
+            </div>
+            <ExportButtons getConfig={getExportConfig} />
+          </div>
         </div>
 
         {/* Tank Selector */}

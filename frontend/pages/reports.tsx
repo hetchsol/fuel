@@ -1,8 +1,10 @@
 import { authFetch, BASE, getHeaders, downloadExport } from '../lib/api'
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import DateRangePicker from '../components/DateRangePicker';
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 interface Product {
     product_type: string;
@@ -162,6 +164,27 @@ export default function Reports() {
         return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
+    const getExportConfig = useCallback((): ExportConfig | null => {
+        if (!reportData?.products) return null
+        return {
+            title: 'Sales Report',
+            subtitle: `${reportData.period?.start_date || ''} to ${reportData.period?.end_date || ''}`,
+            filename: `sales_report_${startDate}_${endDate}`,
+            summaryCards: [
+                { label: 'Total Transactions', value: reportData.summary?.total_transactions || 0 },
+                { label: 'Total Revenue', value: `ZMW ${formatNumber(reportData.summary?.total_revenue || 0)}` },
+                { label: 'Total Volume', value: `${formatNumber(reportData.summary?.total_volume || 0)} L` },
+            ],
+            columns: [
+                { header: 'Product', key: 'product_type' },
+                { header: 'Transactions', key: 'transactions', format: 'number' },
+                { header: 'Volume', key: 'volume', format: 'number' },
+                { header: 'Revenue', key: 'revenue', format: 'currency' },
+            ],
+            data: reportData.products,
+        }
+    }, [reportData, startDate, endDate])
+
     return (
         <div>
             <div>
@@ -240,6 +263,7 @@ export default function Reports() {
                             >
                                 Excel
                             </button>
+                            <ExportButtons getConfig={getExportConfig} className="ml-2" />
                         </>
                     )}
                 </div>

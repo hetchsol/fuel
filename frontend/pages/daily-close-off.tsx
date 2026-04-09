@@ -4,6 +4,8 @@ import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getHeaders, authFetch } from '../lib/api'
 import Link from 'next/link'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 const BASE = '/api/v1'
 
@@ -150,6 +152,33 @@ export default function DailyCloseOff() {
 
   const canClose = !isClosed && hasApproved && !hasUnapproved && bankDeposit && !isNaN(parseFloat(bankDeposit))
 
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    if (!summary?.approved_handovers?.length) return null
+    return {
+      title: 'Daily Close-Off Report',
+      subtitle: `Date: ${selectedDate} — ${isClosed ? 'Closed' : 'Open'}`,
+      filename: `daily_close_off_${selectedDate}`,
+      summaryCards: [
+        { label: 'Total Revenue', value: `ZMW ${(totals.total_revenue || 0).toLocaleString()}` },
+        { label: 'Expected Cash', value: `ZMW ${(totals.total_expected_cash || 0).toLocaleString()}` },
+        { label: 'Actual Cash', value: `ZMW ${(totals.total_actual_cash || 0).toLocaleString()}` },
+        { label: 'Shifts', value: totals.shift_count || 0 },
+      ],
+      columns: [
+        { header: 'Attendant', key: 'attendant_name' },
+        { header: 'Shift', key: 'shift_type' },
+        { header: 'Fuel Revenue', key: 'fuel_revenue', format: 'currency' },
+        { header: 'LPG Sales', key: 'lpg_sales', format: 'currency' },
+        { header: 'Lubricants', key: 'lubricant_sales', format: 'currency' },
+        { header: 'Accessories', key: 'accessory_sales', format: 'currency' },
+        { header: 'Expected Cash', key: 'expected_cash', format: 'currency' },
+        { header: 'Actual Cash', key: 'actual_cash', format: 'currency' },
+        { header: 'Difference', key: 'difference', format: 'currency' },
+      ],
+      data: summary.approved_handovers,
+    }
+  }, [summary, selectedDate, isClosed, totals])
+
   return (
     <div>
       {/* Header */}
@@ -161,6 +190,7 @@ export default function DailyCloseOff() {
           </div>
 
           <div className="flex items-center gap-3">
+            <ExportButtons getConfig={getExportConfig} />
             <input
               type="date"
               value={selectedDate}

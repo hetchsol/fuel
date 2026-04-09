@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { getStaffList, getNozzleList, getIslandList, getProductList, getHeaders } from '../lib/api'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 const BASE = '/api/v1'
 
@@ -8,6 +10,7 @@ export default function AdvancedReports() {
   const [reportType, setReportType] = useState('custom')
   const [loading, setLoading] = useState(false)
   const [reportData, setReportData] = useState<any>(null)
+  const [drillDown, setDrillDown] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   // Filter states
@@ -201,6 +204,116 @@ export default function AdvancedReports() {
   const formatCurrency = (amount: number) => {
     return `ZMW ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
+
+  // Build export config from current report data
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    if (!reportData) return null
+
+    const reportLabel = reportTypes.find(r => r.value === reportType)?.label || 'Report'
+
+    // Nozzle shift breakdown
+    if (reportData.shift_breakdown) {
+      return {
+        title: `Nozzle Report — ${reportData.nozzle_id || ''}`,
+        subtitle: `${reportData.fuel_type || ''} | ${reportData.period?.start_date || 'All'} to ${reportData.period?.end_date || 'All'}`,
+        filename: `nozzle_report_${reportData.nozzle_id || 'all'}_${new Date().toISOString().slice(0,10)}`,
+        summaryCards: [
+          { label: 'Total Volume', value: `${reportData.summary?.total_volume?.toLocaleString()} L` },
+          { label: 'Electronic Opening', value: reportData.summary?.electronic_opening?.toLocaleString() || '' },
+          { label: 'Electronic Closing', value: reportData.summary?.electronic_closing?.toLocaleString() || '' },
+          { label: 'Overall Deviation', value: `${reportData.summary?.overall_deviation} L` },
+        ],
+        columns: [
+          { header: 'Date', key: 'date' },
+          { header: 'Shift', key: 'shift_type' },
+          { header: 'Attendant', key: 'staff_name' },
+          { header: 'Elec Open', key: 'electronic_opening', format: 'number' },
+          { header: 'Elec Close', key: 'electronic_closing', format: 'number' },
+          { header: 'Mech Open', key: 'mechanical_opening', format: 'number' },
+          { header: 'Mech Close', key: 'mechanical_closing', format: 'number' },
+          { header: 'Volume (L)', key: 'volume_sold', format: 'number' },
+          { header: 'Deviation (L)', key: 'deviation_liters', format: 'number' },
+        ],
+        data: reportData.shift_breakdown,
+      }
+    }
+
+    // Product breakdown
+    if (reportData.product_breakdown) {
+      const rows = Object.entries(reportData.product_breakdown).map(([product, d]: [string, any]) => ({
+        product, transactions: d.transactions || d.count || 0, revenue: d.revenue || 0, volume: d.volume || 0,
+      }))
+      return {
+        title: reportLabel,
+        subtitle: `${reportData.period?.start_date || reportData.date || 'All'} to ${reportData.period?.end_date || reportData.date || 'All'}`,
+        filename: `${reportType}_report_${new Date().toISOString().slice(0,10)}`,
+        summaryCards: reportData.summary ? Object.entries(reportData.summary).map(([k, v]) => ({
+          label: k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          value: typeof v === 'number' ? (k.includes('revenue') ? formatCurrency(v) : v.toLocaleString()) : String(v),
+        })) : [],
+        columns: [
+          { header: 'Product', key: 'product' },
+          { header: 'Transactions', key: 'transactions', format: 'number' },
+          { header: 'Revenue', key: 'revenue', format: 'currency' },
+          { header: 'Volume', key: 'volume', format: 'number' },
+        ],
+        data: rows,
+      }
+    }
+
+    // Generic data table (custom filter, staff, etc.)
+    if (reportData.data && Array.isArray(reportData.data) && reportData.data.length > 0) {
+      const sample = reportData.data[0]
+      const cols: ExportConfig['columns'] = []
+      const keyMap: Record<string, string> = {
+        date: 'Date', shift_id: 'Shift', shift_type: 'Shift Type', staff_name: 'Staff',
+        nozzle_id: 'Nozzle', fuel_type: 'Fuel Type', volume: 'Volume (L)',
+        electronic_opening: 'Elec Open', electronic_closing: 'Elec Close',
+        mechanical_opening: 'Mech Open', mechanical_closing: 'Mech Close',
+      }
+      for (const key of Object.keys(sample)) {
+        if (['island_id'].includes(key) && !keyMap[key]) continue
+        cols.push({
+          header: keyMap[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          key,
+          format: typeof sample[key] === 'number' ? (key.includes('revenue') || key.includes('amount') ? 'currency' : 'number') : 'text',
+        })
+      }
+      return {
+        title: reportLabel,
+        subtitle: reportData.filters_applied ? `Filters: ${Object.entries(reportData.filters_applied).map(([k,v]) => `${k}=${v}`).join(', ')}` : '',
+        filename: `${reportType}_report_${new Date().toISOString().slice(0,10)}`,
+        summaryCards: reportData.summary ? Object.entries(reportData.summary).map(([k, v]) => ({
+          label: k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          value: typeof v === 'number' ? (k.includes('revenue') ? formatCurrency(v) : v.toLocaleString()) : String(v),
+        })) : [],
+        columns: cols,
+        data: reportData.data,
+      }
+    }
+
+    // Daily/monthly summary with only summary cards
+    if (reportData.summary) {
+      const rows = reportData.summary ? [reportData.summary] : []
+      const cols = Object.keys(reportData.summary || {}).map(k => ({
+        header: k.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+        key: k,
+        format: (typeof (reportData.summary as any)?.[k] === 'number' && k.includes('revenue') ? 'currency' : 'number') as 'currency' | 'number',
+      }))
+      return {
+        title: reportLabel,
+        filename: `${reportType}_report_${new Date().toISOString().slice(0,10)}`,
+        summaryCards: Object.entries(reportData.summary).map(([k, v]) => ({
+          label: k.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+          value: typeof v === 'number' ? (k.includes('revenue') ? formatCurrency(v) : v.toLocaleString()) : String(v),
+        })),
+        columns: cols,
+        data: rows,
+      }
+    }
+
+    return null
+  }, [reportData, reportType])
 
   return (
     <div>
@@ -533,28 +646,87 @@ export default function AdvancedReports() {
       {/* Results */}
       {reportData && (
         <div className="bg-surface-card rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-content-primary mb-4">Report Results</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
+            <h2 className="text-lg font-semibold text-content-primary">Report Results</h2>
+            <ExportButtons getConfig={getExportConfig} />
+          </div>
 
-          {/* Summary section */}
+          {/* Summary section — clickable cards */}
           {reportData.summary && (
             <div className="mb-6">
               <h3 className="text-md font-semibold text-content-primary mb-3">Summary</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
-                {Object.entries(reportData.summary).map(([key, value]: [string, any]) => (
-                  <div key={key} className="bg-action-primary-light rounded-lg p-4 border border-action-primary">
-                    <p className="text-xs text-content-secondary mb-1">
-                      {key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-                    </p>
-                    <p className="text-xl font-bold text-action-primary">
-                      {typeof value === 'number' && key.includes('revenue')
-                        ? formatCurrency(value)
-                        : typeof value === 'number'
-                        ? value.toLocaleString()
-                        : value}
-                    </p>
-                  </div>
-                ))}
+                {Object.entries(reportData.summary).map(([key, value]: [string, any]) => {
+                  const isClickable = typeof value === 'number' && (reportData.data || reportData.readings || reportData.shift_breakdown)
+                  return (
+                    <div
+                      key={key}
+                      onClick={() => isClickable && setDrillDown(drillDown === key ? null : key)}
+                      className={`bg-action-primary-light rounded-lg p-4 border transition-all ${
+                        drillDown === key ? 'border-action-primary ring-2 ring-action-primary/30' : 'border-action-primary'
+                      } ${isClickable ? 'cursor-pointer hover:ring-2 hover:ring-action-primary/20' : ''}`}
+                    >
+                      <p className="text-xs text-content-secondary mb-1">
+                        {key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                      </p>
+                      <p className="text-xl font-bold text-action-primary">
+                        {typeof value === 'number' && key.includes('revenue')
+                          ? formatCurrency(value)
+                          : typeof value === 'number'
+                          ? value.toLocaleString()
+                          : typeof value === 'boolean'
+                          ? (value ? 'Yes' : 'No')
+                          : value}
+                      </p>
+                      {isClickable && (
+                        <p className="text-[10px] text-content-secondary/60 mt-1">Click to view details</p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
+
+              {/* Drill-down detail table */}
+              {drillDown && (reportData.data || reportData.readings || reportData.shift_breakdown) && (() => {
+                const rows = reportData.shift_breakdown || reportData.data || reportData.readings || []
+                if (!rows.length) return null
+                const relevantKeys = ['date', 'shift_type', 'shift_id', 'staff_name', 'nozzle_id', 'fuel_type', 'volume', 'volume_sold', 'electronic_opening', 'electronic_closing', 'mechanical_opening', 'mechanical_closing', 'deviation_liters']
+                const displayKeys = relevantKeys.filter(k => rows[0]?.[k] !== undefined)
+                return (
+                  <div className="mt-4 bg-surface-bg rounded-lg p-4 border border-surface-border">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-semibold text-content-primary">
+                        Detailed Breakdown — {drillDown.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </h4>
+                      <button onClick={() => setDrillDown(null)} className="text-xs text-content-secondary hover:text-content-primary">Close</button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-surface-border text-xs">
+                        <thead>
+                          <tr>
+                            {displayKeys.map(k => (
+                              <th key={k} className="px-3 py-2 text-left font-medium text-content-secondary uppercase">
+                                {k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-surface-border">
+                          {rows.map((row: any, i: number) => (
+                            <tr key={i} className="hover:bg-surface-card">
+                              {displayKeys.map(k => (
+                                <td key={k} className="px-3 py-2 text-content-primary whitespace-nowrap font-mono">
+                                  {typeof row[k] === 'number' ? row[k].toLocaleString() : row[k] || '—'}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           )}
 
