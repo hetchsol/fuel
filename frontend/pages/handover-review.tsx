@@ -498,6 +498,7 @@ export default function HandoverReview() {
 
 
 function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
+  const [expandedStock, setExpandedStock] = useState<string | null>(null)
   return (
     <div className="p-4 space-y-4">
       {/* Previous supervisor review */}
@@ -564,17 +565,27 @@ function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
       {/* Financial summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Fuel Revenue', value: h.fuel_revenue },
-          { label: 'LPG Sales', value: h.lpg_sales },
-          { label: 'Lubricant Sales', value: h.lubricant_sales },
-          { label: 'Accessory Sales', value: h.accessory_sales },
-          { label: 'Total Expected', value: h.total_expected },
-          { label: 'Credit Sales', value: h.credit_sales },
-          { label: 'Expected Cash', value: h.expected_cash },
-          { label: 'Actual Cash', value: h.actual_cash },
+          { label: 'Fuel Revenue', value: h.fuel_revenue, drillKey: '' },
+          { label: 'LPG Sales', value: h.lpg_sales, drillKey: 'lpg' },
+          { label: 'Lubricant Sales', value: h.lubricant_sales, drillKey: 'lubricants' },
+          { label: 'Accessory Sales', value: h.accessory_sales, drillKey: 'accessories' },
+          { label: 'Total Expected', value: h.total_expected, drillKey: '' },
+          { label: 'Credit Sales', value: h.credit_sales, drillKey: '' },
+          { label: 'Expected Cash', value: h.expected_cash, drillKey: '' },
+          { label: 'Actual Cash', value: h.actual_cash, drillKey: '' },
         ].map(item => (
-          <div key={item.label}>
-            <div className="text-[10px] uppercase" style={{ color: theme.textSecondary }}>{item.label}</div>
+          <div key={item.label}
+            onClick={() => {
+              if (item.drillKey && h.stock_snapshot) {
+                setExpandedStock(prev => prev === item.drillKey ? null : item.drillKey)
+              }
+            }}
+            className={item.drillKey && h.stock_snapshot ? 'cursor-pointer hover:ring-1 hover:ring-action-primary/30 rounded-lg p-1 -m-1 transition-all' : ''}
+            style={expandedStock === item.drillKey ? { outline: '2px solid var(--color-action-primary)', borderRadius: 8 } : {}}>
+            <div className="text-[10px] uppercase" style={{ color: theme.textSecondary }}>
+              {item.label}
+              {item.drillKey && h.stock_snapshot && <span className="ml-1 text-action-primary">▾</span>}
+            </div>
             <div className="text-sm font-mono font-medium" style={{ color: theme.textPrimary }}>
               K{item.value.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
@@ -588,6 +599,108 @@ function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
           </div>
         </div>
       </div>
+
+      {/* Stock drill-down panels */}
+      {expandedStock === 'lpg' && h.stock_snapshot?.lpg_cylinders && (
+        <div className="mt-3 rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
+          <div className="text-xs font-semibold uppercase mb-2" style={{ color: theme.textSecondary }}>LPG Cylinder Breakdown</div>
+          <table className="min-w-full text-xs">
+            <thead>
+              <tr>
+                {['Size', 'Refills', 'New Cyl', 'Damaged', 'Variance', 'Revenue'].map(col => (
+                  <th key={col} className="px-2 py-1 text-center font-medium uppercase" style={{ color: theme.textSecondary }}>{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {h.stock_snapshot.lpg_cylinders
+                .filter((r: any) => (r.total_sold || r.sold_refill + r.sold_with_cylinder) > 0 || (r.damaged || 0) > 0 || (r.variance || 0) !== 0)
+                .map((r: any) => (
+                <tr key={r.size_kg} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                  <td className="px-2 py-1 text-center font-medium" style={{ color: theme.textPrimary }}>{r.size_kg}kg</td>
+                  <td className="px-2 py-1 text-center font-mono" style={{ color: theme.textPrimary }}>
+                    {r.sold_refill || 0}{r.refill_price ? ` × K${r.refill_price}` : ''}
+                  </td>
+                  <td className="px-2 py-1 text-center font-mono" style={{ color: theme.textPrimary }}>
+                    {r.sold_with_cylinder || 0}{r.price_with_cylinder ? ` × K${r.price_with_cylinder}` : ''}
+                  </td>
+                  <td className="px-2 py-1 text-center font-mono" style={{ color: (r.damaged || 0) > 0 ? 'var(--color-status-warning)' : theme.textSecondary }}>
+                    {r.damaged || 0}
+                  </td>
+                  <td className="px-2 py-1 text-center font-mono" style={{ color: (r.variance || 0) !== 0 ? 'var(--color-status-error)' : theme.textSecondary }}>
+                    {r.variance || 0}{r.variance_note ? ` (${r.variance_note})` : ''}
+                  </td>
+                  <td className="px-2 py-1 text-center font-mono font-medium" style={{ color: theme.primary }}>
+                    K{(r.sales_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {expandedStock === 'accessories' && h.stock_snapshot?.accessories && (
+        <div className="mt-3 rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
+          <div className="text-xs font-semibold uppercase mb-2" style={{ color: theme.textSecondary }}>Accessories Breakdown</div>
+          <table className="min-w-full text-xs">
+            <thead>
+              <tr>
+                {['Product', 'Sold', 'Damaged', 'Unit Price', 'Revenue', 'Variance'].map(col => (
+                  <th key={col} className="px-2 py-1 text-left font-medium uppercase" style={{ color: theme.textSecondary }}>{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {h.stock_snapshot.accessories
+                .filter((r: any) => (r.sold || 0) > 0 || (r.damaged || 0) > 0 || (r.variance || 0) !== 0)
+                .map((r: any) => (
+                <tr key={r.product_code} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                  <td className="px-2 py-1 font-medium" style={{ color: theme.textPrimary }}>{r.description}</td>
+                  <td className="px-2 py-1 font-mono" style={{ color: theme.textPrimary }}>{r.sold || 0}</td>
+                  <td className="px-2 py-1 font-mono" style={{ color: (r.damaged || 0) > 0 ? 'var(--color-status-warning)' : theme.textSecondary }}>{r.damaged || 0}</td>
+                  <td className="px-2 py-1 font-mono" style={{ color: theme.textSecondary }}>K{(r.unit_price || 0).toLocaleString()}</td>
+                  <td className="px-2 py-1 font-mono font-medium" style={{ color: theme.primary }}>K{(r.sales_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td className="px-2 py-1 font-mono" style={{ color: (r.variance || 0) !== 0 ? 'var(--color-status-error)' : theme.textSecondary }}>
+                    {r.variance || 0}{r.variance_note ? ` (${r.variance_note})` : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {expandedStock === 'lubricants' && h.stock_snapshot?.lubricants && (
+        <div className="mt-3 rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
+          <div className="text-xs font-semibold uppercase mb-2" style={{ color: theme.textSecondary }}>Lubricants Breakdown</div>
+          <table className="min-w-full text-xs">
+            <thead>
+              <tr>
+                {['Product', 'Sold', 'Damaged', 'Unit Price', 'Revenue', 'Variance'].map(col => (
+                  <th key={col} className="px-2 py-1 text-left font-medium uppercase" style={{ color: theme.textSecondary }}>{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {h.stock_snapshot.lubricants
+                .filter((r: any) => (r.sold || 0) > 0 || (r.damaged || 0) > 0 || (r.variance || 0) !== 0)
+                .map((r: any) => (
+                <tr key={r.product_code} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                  <td className="px-2 py-1 font-medium" style={{ color: theme.textPrimary }}>{r.description}</td>
+                  <td className="px-2 py-1 font-mono" style={{ color: theme.textPrimary }}>{r.sold || 0}</td>
+                  <td className="px-2 py-1 font-mono" style={{ color: (r.damaged || 0) > 0 ? 'var(--color-status-warning)' : theme.textSecondary }}>{r.damaged || 0}</td>
+                  <td className="px-2 py-1 font-mono" style={{ color: theme.textSecondary }}>K{(r.unit_price || 0).toLocaleString()}</td>
+                  <td className="px-2 py-1 font-mono font-medium" style={{ color: theme.primary }}>K{(r.sales_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td className="px-2 py-1 font-mono" style={{ color: (r.variance || 0) !== 0 ? 'var(--color-status-error)' : theme.textSecondary }}>
+                    {r.variance || 0}{r.variance_note ? ` (${r.variance_note})` : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Credit Sale Details */}
       {h.credit_sale_details && h.credit_sale_details.length > 0 && (

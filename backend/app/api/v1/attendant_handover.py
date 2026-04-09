@@ -439,26 +439,29 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     lubricant_sales = data.lubricant_sales
     accessory_sales = data.accessory_sales
     enriched_snapshot = None
+    stock_variance_flags = []
 
     if data.stock_snapshot:
         lpg_pricing_db = load_lpg_pricing(station_id)
 
-        # LPG cylinders: total_sold = opening_full + additions - closing_full
-        # Attendant splits into sold_refill + sold_with_cylinder (priced differently)
+        # LPG cylinders: attendant enters sold_refill + sold_with_cylinder directly
+        # Variance = expected_closing - actual_closing
         lpg_sales = 0.0
         enriched_lpg = []
+        stock_variance_flags = []
         for row in data.stock_snapshot.lpg_cylinders:
-            total_sold = max(0, row.opening_full + row.additions - row.closing_full)
+            total_sold = row.sold_refill + row.sold_with_cylinder
+            damaged = getattr(row, 'damaged', 0)
+            expected_closing = row.opening_full - total_sold - damaged
+            variance = expected_closing - row.closing_full
             pricing = get_pricing_for_size(row.size_kg, lpg_pricing_db)
-            # Fallback: if split not provided but total_sold > 0, assume all refill
-            if row.sold_refill + row.sold_with_cylinder == 0 and total_sold > 0:
-                value_refill = round(total_sold * pricing["price_refill"], 2)
-                value_with_cyl = 0.0
-            else:
-                value_refill = round(row.sold_refill * pricing["price_refill"], 2)
-                value_with_cyl = round(row.sold_with_cylinder * pricing["price_with_cylinder"], 2)
+            value_refill = round(row.sold_refill * pricing["price_refill"], 2)
+            value_with_cyl = round(row.sold_with_cylinder * pricing["price_with_cylinder"], 2)
             sales_value = round(value_refill + value_with_cyl, 2)
             lpg_sales += sales_value
+            variance_note = getattr(row, 'variance_note', None) or None
+            if variance != 0 and not variance_note:
+                stock_variance_flags.append(f"LPG {row.size_kg}kg: variance {variance}")
             enriched_lpg.append({
                 "size_kg": row.size_kg,
                 "opening_full": row.opening_full,
@@ -469,6 +472,10 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
                 "total_sold": total_sold,
                 "sold_refill": row.sold_refill,
                 "sold_with_cylinder": row.sold_with_cylinder,
+                "damaged": damaged,
+                "expected_closing": expected_closing,
+                "variance": variance,
+                "variance_note": variance_note,
                 "refill_price": pricing["price_refill"],
                 "price_with_cylinder": pricing["price_with_cylinder"],
                 "value_refill": value_refill,
@@ -477,10 +484,9 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
             })
         lpg_sales = round(lpg_sales, 2)
 
-        # Accessories: sold = opening_stock + additions - closing_stock
+        # Accessories: attendant enters sold directly
         accessory_sales = 0.0
         enriched_acc = []
-        # Build price lookup from stock-opening data or catalog
         acc_catalog = storage.get("lpg_accessories", {})
         acc_price_map = {}
         for code, item in acc_catalog.items():
@@ -490,40 +496,60 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
                 acc_price_map[item["product_code"]] = item.get("selling_price", 0)
 
         for row in data.stock_snapshot.accessories:
-            sold = max(0, row.opening_stock + row.additions - row.closing_stock)
+            sold = getattr(row, 'sold', 0) or max(0, row.opening_stock + row.additions - row.closing_stock)
+            damaged = getattr(row, 'damaged', 0)
+            expected_closing = row.opening_stock - sold - damaged
+            variance = expected_closing - row.closing_stock
             unit_price = acc_price_map.get(row.product_code, 0)
             sales_value = round(sold * unit_price, 2)
             accessory_sales += sales_value
+            variance_note = getattr(row, 'variance_note', None) or None
+            if variance != 0 and not variance_note:
+                stock_variance_flags.append(f"Accessory {row.product_code}: variance {variance}")
             enriched_acc.append({
                 "product_code": row.product_code,
                 "description": row.description,
                 "opening_stock": row.opening_stock,
                 "additions": row.additions,
-                "closing_stock": row.closing_stock,
                 "sold": sold,
+                "damaged": damaged,
+                "closing_stock": row.closing_stock,
+                "expected_closing": expected_closing,
+                "variance": variance,
+                "variance_note": variance_note,
                 "unit_price": unit_price,
                 "sales_value": sales_value,
             })
         accessory_sales = round(accessory_sales, 2)
 
-        # Lubricants: sold = opening_stock + additions - closing_stock
+        # Lubricants: attendant enters sold directly
         lubricant_sales = 0.0
         enriched_lub = []
         lub_catalog = load_lubricant_catalog(station_id)
         lub_price_map = {p["product_code"]: p.get("selling_price", 0) for p in lub_catalog}
 
         for row in data.stock_snapshot.lubricants:
-            sold = max(0, row.opening_stock + row.additions - row.closing_stock)
+            sold = getattr(row, 'sold', 0) or max(0, row.opening_stock + row.additions - row.closing_stock)
+            damaged = getattr(row, 'damaged', 0)
+            expected_closing = row.opening_stock - sold - damaged
+            variance = expected_closing - row.closing_stock
             unit_price = lub_price_map.get(row.product_code, 0)
             sales_value = round(sold * unit_price, 2)
             lubricant_sales += sales_value
+            variance_note = getattr(row, 'variance_note', None) or None
+            if variance != 0 and not variance_note:
+                stock_variance_flags.append(f"Lubricant {row.product_code}: variance {variance}")
             enriched_lub.append({
                 "product_code": row.product_code,
                 "description": row.description,
                 "opening_stock": row.opening_stock,
                 "additions": row.additions,
-                "closing_stock": row.closing_stock,
                 "sold": sold,
+                "damaged": damaged,
+                "closing_stock": row.closing_stock,
+                "expected_closing": expected_closing,
+                "variance": variance,
+                "variance_note": variance_note,
                 "unit_price": unit_price,
                 "sales_value": sales_value,
             })
@@ -617,6 +643,8 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
         for ns in nozzle_summaries
     ):
         auto_flag_reasons.append("nozzle_loss_exceeded")
+    if data.stock_snapshot and stock_variance_flags:
+        auto_flag_reasons.append("stock_variance_unexplained")
     review_status = "flagged" if auto_flag_reasons else "submitted"
 
     # Generate handover ID

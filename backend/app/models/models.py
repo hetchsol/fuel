@@ -800,25 +800,39 @@ class LPGStockLineItem(BaseModel):
     size_kg: int
     opening_full: int = 0
     opening_empty: int = 0
-    additions: int = 0
+    additions: int = 0            # kept for backward compat; attendant sends 0
     closing_full: int = 0
     closing_empty: int = 0
-    sold_refill: int = 0          # attendant splits total sold into refill vs with-cylinder
-    sold_with_cylinder: int = 0   # priced differently (gas + deposit)
+    sold_refill: int = 0          # attendant enters directly
+    sold_with_cylinder: int = 0   # attendant enters directly
+    damaged: int = 0              # known damaged/lost cylinders
+    variance_note: Optional[str] = None   # mandatory if variance != 0
+    opening_confirmed: bool = True
+    opening_dispute_note: Optional[str] = None
 
 class AccessoryStockLineItem(BaseModel):
     product_code: str
     description: str
     opening_stock: int = 0
-    additions: int = 0
+    additions: int = 0            # kept for backward compat; attendant sends 0
+    sold: int = 0                 # attendant enters directly
+    damaged: int = 0
     closing_stock: int = 0
+    variance_note: Optional[str] = None
+    opening_confirmed: bool = True
+    opening_dispute_note: Optional[str] = None
 
 class LubricantStockLineItem(BaseModel):
     product_code: str
     description: str
     opening_stock: int = 0
-    additions: int = 0
+    additions: int = 0            # kept for backward compat; attendant sends 0
+    sold: int = 0                 # attendant enters directly
+    damaged: int = 0
     closing_stock: int = 0
+    variance_note: Optional[str] = None
+    opening_confirmed: bool = True
+    opening_dispute_note: Optional[str] = None
 
 class ShiftStockSnapshot(BaseModel):
     lpg_cylinders: List[LPGStockLineItem] = []

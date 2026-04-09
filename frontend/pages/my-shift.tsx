@@ -34,11 +34,12 @@ interface LPGCylinderRow {
   size_kg: number
   opening_full: number
   opening_empty: number
-  additions: string
-  closing_full: string
-  closing_empty: string
   sold_refill: string
   sold_with_cylinder: string
+  damaged: string
+  closing_full: string
+  closing_empty: string
+  variance_note: string
   refill_price: number
   price_with_cylinder: number
 }
@@ -47,8 +48,10 @@ interface AccessoryRow {
   product_code: string
   description: string
   opening_stock: number
-  additions: string
+  sold: string
+  damaged: string
   closing_stock: string
+  variance_note: string
   unit_price: number
 }
 
@@ -57,8 +60,10 @@ interface LubricantRow {
   description: string
   category: string
   opening_stock: number
-  additions: string
+  sold: string
+  damaged: string
   closing_stock: string
+  variance_note: string
   unit_price: number
 }
 
@@ -149,6 +154,9 @@ export default function MyShift() {
   const [showLpg, setShowLpg] = useState(false)
   const [showLubs, setShowLubs] = useState(false)
   const [showAccessories, setShowAccessories] = useState(false)
+  const [lpgNoSales, setLpgNoSales] = useState(false)
+  const [accNoSales, setAccNoSales] = useState(false)
+  const [lubNoSales, setLubNoSales] = useState(false)
 
   // On This Shift (supervisor/manager overview)
   const [showOnThisShift, setShowOnThisShift] = useState(true)
@@ -223,11 +231,12 @@ export default function MyShift() {
                 size_kg: c.size_kg,
                 opening_full: c.opening_full || 0,
                 opening_empty: c.opening_empty || 0,
-                additions: '',
-                closing_full: '',
-                closing_empty: '',
                 sold_refill: '',
                 sold_with_cylinder: '',
+                damaged: '',
+                closing_full: '',
+                closing_empty: '',
+                variance_note: '',
                 refill_price: c.refill_price || 0,
                 price_with_cylinder: c.price_with_cylinder || 0,
               }))
@@ -238,8 +247,10 @@ export default function MyShift() {
                 product_code: a.product_code,
                 description: a.description,
                 opening_stock: a.opening_stock || 0,
-                additions: '',
+                sold: '',
+                damaged: '',
                 closing_stock: '',
+                variance_note: '',
                 unit_price: a.unit_price || 0,
               }))
             )
@@ -250,8 +261,10 @@ export default function MyShift() {
                 description: l.description,
                 category: l.category || '',
                 opening_stock: l.opening_stock || 0,
-                additions: '',
+                sold: '',
+                damaged: '',
                 closing_stock: '',
+                variance_note: '',
                 unit_price: l.unit_price || 0,
               }))
             )
@@ -311,34 +324,45 @@ export default function MyShift() {
 
   // --- LPG cylinder computations ---
   const lpgComputations = lpgRows.map(row => {
-    const additions = parseInt(row.additions) || 0
-    const closingFull = parseInt(row.closing_full) || 0
-    const totalSold = Math.max(0, row.opening_full + additions - closingFull)
     const refill = parseInt(row.sold_refill) || 0
     const withCyl = parseInt(row.sold_with_cylinder) || 0
-    const splitValid = refill + withCyl === totalSold
+    const damaged = parseInt(row.damaged) || 0
+    const totalSold = refill + withCyl
+    const closingFull = parseInt(row.closing_full) || 0
+    const expectedClosing = row.opening_full - totalSold - damaged
+    const variance = row.closing_full !== '' ? expectedClosing - closingFull : 0
+    const hasVariance = row.closing_full !== '' && variance !== 0
+    const soldExceedsOpening = totalSold + damaged > row.opening_full
     const value = refill * row.refill_price + withCyl * row.price_with_cylinder
-    return { totalSold, refill, withCyl, splitValid, value, additions, closingFull }
+    return { totalSold, refill, withCyl, damaged, expectedClosing, closingFull, variance, hasVariance, soldExceedsOpening, value }
   })
   const lpgTotal = lpgComputations.reduce((s, c) => s + c.value, 0)
 
   // --- Accessory computations ---
   const accComputations = accessoryRows.map(row => {
-    const additions = parseInt(row.additions) || 0
+    const sold = parseInt(row.sold) || 0
+    const damaged = parseInt(row.damaged) || 0
     const closing = parseInt(row.closing_stock) || 0
-    const sold = Math.max(0, row.opening_stock + additions - closing)
+    const expectedClosing = row.opening_stock - sold - damaged
+    const variance = row.closing_stock !== '' ? expectedClosing - closing : 0
+    const hasVariance = row.closing_stock !== '' && variance !== 0
+    const soldExceedsOpening = sold + damaged > row.opening_stock
     const value = sold * row.unit_price
-    return { sold, value, additions, closing }
+    return { sold, damaged, expectedClosing, closing, variance, hasVariance, soldExceedsOpening, value }
   })
   const accessoryTotal = accComputations.reduce((s, c) => s + c.value, 0)
 
   // --- Lubricant computations ---
   const lubComputations = lubricantRows.map(row => {
-    const additions = parseInt(row.additions) || 0
+    const sold = parseInt(row.sold) || 0
+    const damaged = parseInt(row.damaged) || 0
     const closing = parseInt(row.closing_stock) || 0
-    const sold = Math.max(0, row.opening_stock + additions - closing)
+    const expectedClosing = row.opening_stock - sold - damaged
+    const variance = row.closing_stock !== '' ? expectedClosing - closing : 0
+    const hasVariance = row.closing_stock !== '' && variance !== 0
+    const soldExceedsOpening = sold + damaged > row.opening_stock
     const value = sold * row.unit_price
-    return { sold, value, additions, closing }
+    return { sold, damaged, expectedClosing, closing, variance, hasVariance, soldExceedsOpening, value }
   })
   const lubricantTotal = lubComputations.reduce((s, c) => s + c.value, 0)
 
@@ -354,8 +378,13 @@ export default function MyShift() {
   const allValid = nozzleComputations.every(c => c.valid || c.volume === 0)
   const allMechEntered = nozzleRows.every(r => r.mechanical_closing !== '')
   const allMechValid = nozzleComputations.every(c => c.mechValid !== false)
-  // LPG split validation: for rows where total sold > 0, refill + with_cylinder must equal total
-  const lpgSplitValid = lpgComputations.every(c => c.totalSold === 0 || c.splitValid)
+  // Stock variance validation: all variances must have notes
+  const allStockVarianceNotesProvided = [
+    ...lpgComputations.map((c, i) => !c.hasVariance || lpgRows[i].variance_note.trim() !== ''),
+    ...accComputations.map((c, i) => !c.hasVariance || accessoryRows[i].variance_note.trim() !== ''),
+    ...lubComputations.map((c, i) => !c.hasVariance || lubricantRows[i].variance_note.trim() !== ''),
+  ].every(Boolean)
+  const noStockOutViolations = [...lpgComputations, ...accComputations, ...lubComputations].every(c => !c.soldExceedsOpening)
   const hasDeviationFlags = nozzleComputations.some(c => c.flagged)
   const hasLossFlags = nozzleComputations.some(c => c.lossExceedsThreshold)
   // All flagged nozzles must have a deviation note before proceeding
@@ -364,9 +393,9 @@ export default function MyShift() {
     return !comp?.flagged && !comp?.lossExceedsThreshold || row.deviation_note.trim() !== ''
   })
 
-  const canProceedToReview = allClosingsEntered && allValid && allMechEntered && allMechValid && lpgSplitValid && allDeviationNotesProvided
+  const canProceedToReview = allClosingsEntered && allValid && allMechEntered && allMechValid && allStockVarianceNotesProvided && noStockOutViolations && allDeviationNotesProvided
   const canSubmit = currentStep === 3 && allClosingsEntered && allValid && allMechEntered && allMechValid
-    && lpgSplitValid && actualCash !== '' && !submitting
+    && allStockVarianceNotesProvided && noStockOutViolations && actualCash !== '' && !submitting
     && (!hasDeviationFlags || notes.trim() !== '')
 
   const updateClosingReading = (nozzleId: string, value: string) => {
@@ -413,30 +442,41 @@ export default function MyShift() {
 
     try {
       const stockSnapshot = {
-        lpg_cylinders: lpgRows.map((row, idx) => ({
+        lpg_cylinders: lpgRows.map((row) => ({
           size_kg: row.size_kg,
           opening_full: row.opening_full,
           opening_empty: row.opening_empty,
-          additions: parseInt(row.additions) || 0,
+          additions: 0,
           closing_full: parseInt(row.closing_full) || 0,
           closing_empty: parseInt(row.closing_empty) || 0,
           sold_refill: parseInt(row.sold_refill) || 0,
           sold_with_cylinder: parseInt(row.sold_with_cylinder) || 0,
+          damaged: parseInt(row.damaged) || 0,
+          variance_note: row.variance_note || null,
         })),
-        accessories: accessoryRows.map((row, idx) => ({
+        accessories: accessoryRows.map((row) => ({
           product_code: row.product_code,
           description: row.description,
           opening_stock: row.opening_stock,
-          additions: parseInt(row.additions) || 0,
+          additions: 0,
+          sold: parseInt(row.sold) || 0,
+          damaged: parseInt(row.damaged) || 0,
           closing_stock: parseInt(row.closing_stock) || 0,
+          variance_note: row.variance_note || null,
         })),
-        lubricants: lubricantRows.map((row, idx) => ({
+        lubricants: lubricantRows.map((row) => ({
           product_code: row.product_code,
           description: row.description,
           opening_stock: row.opening_stock,
-          additions: parseInt(row.additions) || 0,
+          additions: 0,
+          sold: parseInt(row.sold) || 0,
+          damaged: parseInt(row.damaged) || 0,
           closing_stock: parseInt(row.closing_stock) || 0,
+          variance_note: row.variance_note || null,
         })),
+        lpg_no_sales: lpgNoSales,
+        acc_no_sales: accNoSales,
+        lub_no_sales: lubNoSales,
       }
 
       const res = await authFetch(`${BASE}/handover/submit`, {
@@ -1036,11 +1076,18 @@ export default function MyShift() {
               <span className="text-xs font-normal" style={{ color: theme.textSecondary }}>{showLpg ? '−' : '+'}</span>
             </button>
             {showLpg && (
+            <div>
+            {lpgNoSales ? (
+              <div className="p-4 flex items-center gap-2">
+                <span className="text-sm font-medium" style={{ color: 'var(--color-status-success)' }}>No LPG sales this shift ✓</span>
+                <button onClick={() => setLpgNoSales(false)} className="text-xs underline" style={{ color: theme.textSecondary }}>Undo</button>
+              </div>
+            ) : (
             <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
-                  {['Size', 'Open Full', 'Open Empty', 'Additions', 'Close Full', 'Close Empty', 'Sold', 'Refill', 'With Cyl'].map(h => (
+                  {['Size', 'Opening', 'Refills Sold', 'New Cyl Sold', 'Damaged', 'Closing', 'Expected', 'Variance'].map(h => (
                     <th key={h} className="px-2 py-2 text-center text-xs font-medium uppercase whitespace-nowrap"
                       style={{ color: theme.textSecondary }}>{h}</th>
                   ))}
@@ -1049,62 +1096,88 @@ export default function MyShift() {
               <tbody>
                 {lpgRows.map((row, idx) => {
                   const comp = lpgComputations[idx]
-                  const splitError = comp.totalSold > 0 && !comp.splitValid && (row.sold_refill !== '' || row.sold_with_cylinder !== '')
                   return (
-                    <tr key={row.size_kg} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <React.Fragment key={row.size_kg}>
+                    <tr className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                       <td className="px-2 py-1 text-center font-medium whitespace-nowrap" style={{ color: theme.textPrimary }}>
                         {row.size_kg}kg
                       </td>
                       <td className="px-2 py-1 text-center font-mono" style={{ color: theme.textSecondary }}>
                         {row.opening_full}
                       </td>
-                      <td className="px-2 py-1 text-center font-mono" style={{ color: theme.textSecondary }}>
-                        {row.opening_empty}
+                      <td className="px-2 py-1">
+                        <input type="number" min={0} max={row.opening_full} step={1}
+                          value={row.sold_refill} onChange={e => updateLpgRow(idx, 'sold_refill', e.target.value)}
+                          placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
+                          style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
+                      </td>
+                      <td className="px-2 py-1">
+                        <input type="number" min={0} max={row.opening_full} step={1}
+                          value={row.sold_with_cylinder} onChange={e => updateLpgRow(idx, 'sold_with_cylinder', e.target.value)}
+                          placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
+                          style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
                       </td>
                       <td className="px-2 py-1">
                         <input type="number" min={0} step={1}
-                          value={row.additions} onChange={e => updateLpgRow(idx, 'additions', e.target.value)}
-                          placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
+                          value={row.damaged} onChange={e => updateLpgRow(idx, 'damaged', e.target.value)}
+                          placeholder="0" className="w-14 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
                       </td>
                       <td className="px-2 py-1">
                         <input type="number" min={0} step={1}
                           value={row.closing_full} onChange={e => updateLpgRow(idx, 'closing_full', e.target.value)}
                           placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
                       </td>
-                      <td className="px-2 py-1">
-                        <input type="number" min={0} step={1}
-                          value={row.closing_empty} onChange={e => updateLpgRow(idx, 'closing_empty', e.target.value)}
-                          placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
+                      <td className="px-2 py-1 text-center font-mono text-xs" style={{ color: theme.textSecondary }}>
+                        {comp.expectedClosing}
                       </td>
-                      <td className="px-2 py-1 text-center font-mono font-medium" style={{ color: theme.textPrimary }}>
-                        {comp.totalSold}
-                      </td>
-                      <td className="px-2 py-1">
-                        <input type="number" min={0} step={1}
-                          value={row.sold_refill} onChange={e => updateLpgRow(idx, 'sold_refill', e.target.value)}
-                          placeholder="0"
-                          className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
-                          style={{ ...inputStyle, borderColor: splitError ? 'var(--color-status-error)' : theme.border }} />
-                      </td>
-                      <td className="px-2 py-1">
-                        <input type="number" min={0} step={1}
-                          value={row.sold_with_cylinder} onChange={e => updateLpgRow(idx, 'sold_with_cylinder', e.target.value)}
-                          placeholder="0"
-                          className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
-                          style={{ ...inputStyle, borderColor: splitError ? 'var(--color-status-error)' : theme.border }} />
-                        {splitError && (
-                          <div className="text-xs mt-0.5 whitespace-nowrap" style={{ color: 'var(--color-status-error)' }}>
-                            Must sum to {comp.totalSold}
-                          </div>
-                        )}
+                      <td className={`px-2 py-1 text-center font-mono font-medium ${comp.hasVariance ? 'text-status-error' : ''}`}
+                        style={{ color: comp.hasVariance ? 'var(--color-status-error)' : theme.textSecondary }}>
+                        {row.closing_full !== '' ? comp.variance : '—'}
                       </td>
                     </tr>
+                    {comp.soldExceedsOpening && (
+                      <tr><td colSpan={8} className="px-4 py-1 text-xs" style={{ color: 'var(--color-status-error)' }}>
+                        Cannot sell more than opening stock ({row.opening_full})
+                      </td></tr>
+                    )}
+                    {comp.hasVariance && (
+                      <tr style={{ backgroundColor: 'var(--color-status-error-light)' }}>
+                        <td colSpan={8} className="px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium" style={{ color: 'var(--color-status-error)' }}>
+                              Variance: {comp.variance} — explain:
+                            </span>
+                            <input type="text" value={row.variance_note}
+                              onChange={e => updateLpgRow(idx, 'variance_note', e.target.value)}
+                              placeholder="e.g. 1 cylinder damaged, miscount..."
+                              className="flex-1 px-2 py-1 rounded border text-xs"
+                              style={{ ...inputStyle, borderColor: row.variance_note.trim() ? theme.border : 'var(--color-status-error)' }} />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   )
                 })}
               </tbody>
             </table>
-          </div>
-          )}
+            <div className="px-4 py-2 text-right text-sm font-semibold" style={{ color: theme.primary, borderTopColor: theme.border, borderTopWidth: 1 }}>
+              LPG Revenue: ZMW {lpgTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+            {lpgComputations.every(c => c.totalSold === 0 && (parseInt(lpgRows[lpgComputations.indexOf(c)]?.damaged || '0') || 0) === 0) && (
+              <div className="px-4 pb-3">
+                <button onClick={() => {
+                  setLpgNoSales(true)
+                  setLpgRows(prev => prev.map(r => ({ ...r, closing_full: String(r.opening_full), closing_empty: String(r.opening_empty) })))
+                }} className="text-xs px-3 py-1 rounded border" style={{ color: theme.textSecondary, borderColor: theme.border }}>
+                  Confirm No Sales This Shift
+                </button>
+              </div>
+            )}
+            </div>
+            )}
+            </div>
+            )}
           </div>
 
           {/* Accessories — collapsible */}
@@ -1118,11 +1191,18 @@ export default function MyShift() {
                 <span className="text-xs font-normal" style={{ color: theme.textSecondary }}>{accessoryRows.length} items {showAccessories ? '−' : '+'}</span>
               </button>
               {showAccessories && (
+              <div>
+              {accNoSales ? (
+                <div className="p-4 flex items-center gap-2">
+                  <span className="text-sm font-medium" style={{ color: 'var(--color-status-success)' }}>No accessory sales this shift ✓</span>
+                  <button onClick={() => setAccNoSales(false)} className="text-xs underline" style={{ color: theme.textSecondary }}>Undo</button>
+                </div>
+              ) : (
               <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
-                    {['Product', 'Opening', 'Additions', 'Closing', 'Sold'].map(h => (
+                    {['Product', 'Opening', 'Sold', 'Damaged', 'Closing', 'Expected', 'Variance'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
                         style={{ color: theme.textSecondary }}>{h}</th>
                     ))}
@@ -1132,7 +1212,8 @@ export default function MyShift() {
                   {accessoryRows.map((row, idx) => {
                     const comp = accComputations[idx]
                     return (
-                      <tr key={row.product_code} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                      <React.Fragment key={row.product_code}>
+                      <tr className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                         <td className="px-3 py-1" style={{ color: theme.textPrimary }}>
                           <div className="font-medium text-sm">{row.description}</div>
                         </td>
@@ -1140,23 +1221,63 @@ export default function MyShift() {
                           {row.opening_stock}
                         </td>
                         <td className="px-3 py-1">
+                          <input type="number" min={0} max={row.opening_stock} step={1}
+                            value={row.sold} onChange={e => updateAccRow(idx, 'sold', e.target.value)}
+                            placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
+                            style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
+                        </td>
+                        <td className="px-3 py-1">
                           <input type="number" min={0} step={1}
-                            value={row.additions} onChange={e => updateAccRow(idx, 'additions', e.target.value)}
-                            placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
+                            value={row.damaged} onChange={e => updateAccRow(idx, 'damaged', e.target.value)}
+                            placeholder="0" className="w-14 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
                         </td>
                         <td className="px-3 py-1">
                           <input type="number" min={0} step={1}
                             value={row.closing_stock} onChange={e => updateAccRow(idx, 'closing_stock', e.target.value)}
                             placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
                         </td>
-                        <td className="px-3 py-1 text-center font-mono font-medium" style={{ color: theme.textPrimary }}>
-                          {comp.sold}
+                        <td className="px-3 py-1 text-center font-mono text-xs" style={{ color: theme.textSecondary }}>
+                          {comp.expectedClosing}
+                        </td>
+                        <td className={`px-3 py-1 text-center font-mono font-medium`}
+                          style={{ color: comp.hasVariance ? 'var(--color-status-error)' : theme.textSecondary }}>
+                          {row.closing_stock !== '' ? comp.variance : '—'}
                         </td>
                       </tr>
+                      {comp.hasVariance && (
+                        <tr style={{ backgroundColor: 'var(--color-status-error-light)' }}>
+                          <td colSpan={7} className="px-4 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium" style={{ color: 'var(--color-status-error)' }}>Variance: {comp.variance} — explain:</span>
+                              <input type="text" value={row.variance_note}
+                                onChange={e => updateAccRow(idx, 'variance_note', e.target.value)}
+                                placeholder="e.g. broken, returned..."
+                                className="flex-1 px-2 py-1 rounded border text-xs"
+                                style={{ ...inputStyle, borderColor: row.variance_note.trim() ? theme.border : 'var(--color-status-error)' }} />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
                     )
                   })}
                 </tbody>
               </table>
+              <div className="px-4 py-2 text-right text-sm font-semibold" style={{ color: theme.primary, borderTopColor: theme.border, borderTopWidth: 1 }}>
+                Accessories Revenue: ZMW {accessoryTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </div>
+              {accComputations.every(c => c.sold === 0 && c.damaged === 0) && (
+                <div className="px-4 pb-3">
+                  <button onClick={() => {
+                    setAccNoSales(true)
+                    setAccessoryRows(prev => prev.map(r => ({ ...r, closing_stock: String(r.opening_stock) })))
+                  }} className="text-xs px-3 py-1 rounded border" style={{ color: theme.textSecondary, borderColor: theme.border }}>
+                    Confirm No Sales This Shift
+                  </button>
+                </div>
+              )}
+              </div>
+              )}
               </div>
               )}
             </div>
@@ -1174,6 +1295,13 @@ export default function MyShift() {
               </button>
               {showLubs && (
               <div>
+              {lubNoSales ? (
+                <div className="p-4 flex items-center gap-2">
+                  <span className="text-sm font-medium" style={{ color: 'var(--color-status-success)' }}>No lubricant sales this shift ✓</span>
+                  <button onClick={() => setLubNoSales(false)} className="text-xs underline" style={{ color: theme.textSecondary }}>Undo</button>
+                </div>
+              ) : (
+              <div>
               <div className="px-4 pb-2 flex justify-end">
                 <input
                   type="text"
@@ -1187,7 +1315,7 @@ export default function MyShift() {
               <table className="min-w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
-                    {['Product', 'Opening', 'Additions', 'Closing', 'Sold'].map(h => (
+                    {['Product', 'Opening', 'Sold', 'Damaged', 'Closing', 'Expected', 'Variance'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
                         style={{ color: theme.textSecondary }}>{h}</th>
                     ))}
@@ -1198,7 +1326,8 @@ export default function MyShift() {
                     const row = lubricantRows[idx]
                     const comp = lubComputations[idx]
                     return (
-                      <tr key={row.product_code} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                      <React.Fragment key={row.product_code}>
+                      <tr className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                         <td className="px-3 py-1" style={{ color: theme.textPrimary }}>
                           <div className="font-medium text-sm">{row.description}</div>
                           <div className="text-xs" style={{ color: theme.textSecondary }}>
@@ -1209,30 +1338,70 @@ export default function MyShift() {
                           {row.opening_stock}
                         </td>
                         <td className="px-3 py-1">
+                          <input type="number" min={0} max={row.opening_stock} step={1}
+                            value={row.sold} onChange={e => updateLubRow(idx, 'sold', e.target.value)}
+                            placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
+                            style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
+                        </td>
+                        <td className="px-3 py-1">
                           <input type="number" min={0} step={1}
-                            value={row.additions} onChange={e => updateLubRow(idx, 'additions', e.target.value)}
-                            placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
+                            value={row.damaged} onChange={e => updateLubRow(idx, 'damaged', e.target.value)}
+                            placeholder="0" className="w-14 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
                         </td>
                         <td className="px-3 py-1">
                           <input type="number" min={0} step={1}
                             value={row.closing_stock} onChange={e => updateLubRow(idx, 'closing_stock', e.target.value)}
                             placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
                         </td>
-                        <td className="px-3 py-1 text-center font-mono font-medium" style={{ color: theme.textPrimary }}>
-                          {comp.sold}
+                        <td className="px-3 py-1 text-center font-mono text-xs" style={{ color: theme.textSecondary }}>
+                          {comp.expectedClosing}
+                        </td>
+                        <td className={`px-3 py-1 text-center font-mono font-medium`}
+                          style={{ color: comp.hasVariance ? 'var(--color-status-error)' : theme.textSecondary }}>
+                          {row.closing_stock !== '' ? comp.variance : '—'}
                         </td>
                       </tr>
+                      {comp.hasVariance && (
+                        <tr style={{ backgroundColor: 'var(--color-status-error-light)' }}>
+                          <td colSpan={7} className="px-4 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium" style={{ color: 'var(--color-status-error)' }}>Variance: {comp.variance} — explain:</span>
+                              <input type="text" value={row.variance_note}
+                                onChange={e => updateLubRow(idx, 'variance_note', e.target.value)}
+                                placeholder="e.g. broken bottle, miscount..."
+                                className="flex-1 px-2 py-1 rounded border text-xs"
+                                style={{ ...inputStyle, borderColor: row.variance_note.trim() ? theme.border : 'var(--color-status-error)' }} />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
                     )
                   })}
                   {filteredLubIdx.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-3 py-4 text-center text-sm" style={{ color: theme.textSecondary }}>
+                      <td colSpan={7} className="px-3 py-4 text-center text-sm" style={{ color: theme.textSecondary }}>
                         No lubricants match "{lubSearch}"
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
+              <div className="px-4 py-2 text-right text-sm font-semibold" style={{ color: theme.primary, borderTopColor: theme.border, borderTopWidth: 1 }}>
+                Lubricants Revenue: ZMW {lubricantTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </div>
+              {lubComputations.every(c => c.sold === 0 && c.damaged === 0) && (
+                <div className="px-4 pb-3">
+                  <button onClick={() => {
+                    setLubNoSales(true)
+                    setLubricantRows(prev => prev.map(r => ({ ...r, closing_stock: String(r.opening_stock) })))
+                  }} className="text-xs px-3 py-1 rounded border" style={{ color: theme.textSecondary, borderColor: theme.border }}>
+                    Confirm No Sales This Shift
+                  </button>
+                </div>
+              )}
+              </div>
+              )}
               </div>
               )}
             </div>
@@ -1335,17 +1504,18 @@ export default function MyShift() {
           </div>
 
           {/* LPG Cylinders Review — only rows with activity */}
-          {lpgRows.some((row, idx) => lpgComputations[idx].totalSold > 0 || (parseInt(row.additions) || 0) > 0) && (
+          {(lpgNoSales || lpgRows.some((_, idx) => lpgComputations[idx].totalSold > 0 || lpgComputations[idx].damaged > 0)) && (
             <div className="rounded-lg shadow mb-6 overflow-x-auto"
               style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
               <div className="p-4 font-semibold text-sm"
                 style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
-                LPG Cylinders
+                LPG Cylinders {lpgNoSales && <span className="text-xs font-normal" style={{ color: 'var(--color-status-success)' }}>(No sales confirmed)</span>}
               </div>
+              {!lpgNoSales && (
               <table className="min-w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
-                    {['Size', 'Open Full', 'Additions', 'Close Full', 'Sold', 'Refill', 'With Cyl'].map(h => (
+                    {['Size', 'Opening', 'Refills', 'New Cyl', 'Damaged', 'Closing', 'Variance'].map(h => (
                       <th key={h} className="px-2 py-2 text-center text-xs font-medium uppercase whitespace-nowrap"
                         style={{ color: theme.textSecondary }}>{h}</th>
                     ))}
@@ -1354,50 +1524,40 @@ export default function MyShift() {
                 <tbody>
                   {lpgRows.map((row, idx) => {
                     const comp = lpgComputations[idx]
-                    if (comp.totalSold === 0 && comp.additions === 0) return null
+                    if (comp.totalSold === 0 && comp.damaged === 0) return null
                     return (
                       <tr key={row.size_kg} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                        <td className="px-2 py-2 text-center font-medium whitespace-nowrap" style={{ color: theme.textPrimary }}>
-                          {row.size_kg}kg
-                        </td>
-                        <td className="px-2 py-2 text-center font-mono" style={{ color: theme.textSecondary }}>
-                          {row.opening_full}
-                        </td>
-                        <td className="px-2 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>
-                          {comp.additions}
-                        </td>
-                        <td className="px-2 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>
-                          {comp.closingFull}
-                        </td>
-                        <td className="px-2 py-2 text-center font-mono font-medium" style={{ color: theme.textPrimary }}>
-                          {comp.totalSold}
-                        </td>
-                        <td className="px-2 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>
-                          {comp.refill}
-                        </td>
-                        <td className="px-2 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>
-                          {comp.withCyl}
+                        <td className="px-2 py-2 text-center font-medium" style={{ color: theme.textPrimary }}>{row.size_kg}kg</td>
+                        <td className="px-2 py-2 text-center font-mono" style={{ color: theme.textSecondary }}>{row.opening_full}</td>
+                        <td className="px-2 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>{comp.refill}</td>
+                        <td className="px-2 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>{comp.withCyl}</td>
+                        <td className="px-2 py-2 text-center font-mono" style={{ color: comp.damaged > 0 ? 'var(--color-status-warning)' : theme.textSecondary }}>{comp.damaged}</td>
+                        <td className="px-2 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>{comp.closingFull}</td>
+                        <td className="px-2 py-2 text-center font-mono" style={{ color: comp.hasVariance ? 'var(--color-status-error)' : theme.textSecondary }}>
+                          {comp.variance}{comp.hasVariance && row.variance_note ? ` (${row.variance_note})` : ''}
                         </td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
+              )}
             </div>
           )}
 
           {/* Accessories Review — only rows with activity */}
-          {accessoryRows.some((_, idx) => accComputations[idx].sold > 0 || accComputations[idx].additions > 0) && (
+          {(accNoSales || accessoryRows.some((_, idx) => accComputations[idx].sold > 0 || accComputations[idx].damaged > 0)) && (
             <div className="rounded-lg shadow mb-6 overflow-x-auto"
               style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
               <div className="p-4 font-semibold text-sm"
                 style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
-                LPG Accessories
+                Accessories {accNoSales && <span className="text-xs font-normal" style={{ color: 'var(--color-status-success)' }}>(No sales confirmed)</span>}
               </div>
+              {!accNoSales && (
               <table className="min-w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
-                    {['Product', 'Opening', 'Additions', 'Closing', 'Sold'].map(h => (
+                    {['Product', 'Opening', 'Sold', 'Damaged', 'Closing', 'Variance'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
                         style={{ color: theme.textSecondary }}>{h}</th>
                     ))}
@@ -1406,44 +1566,39 @@ export default function MyShift() {
                 <tbody>
                   {accessoryRows.map((row, idx) => {
                     const comp = accComputations[idx]
-                    if (comp.sold === 0 && comp.additions === 0) return null
+                    if (comp.sold === 0 && comp.damaged === 0) return null
                     return (
                       <tr key={row.product_code} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                        <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>
-                          {row.description}
-                        </td>
-                        <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textSecondary }}>
-                          {row.opening_stock}
-                        </td>
-                        <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>
-                          {comp.additions}
-                        </td>
-                        <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>
-                          {comp.closing}
-                        </td>
-                        <td className="px-3 py-2 text-center font-mono font-medium" style={{ color: theme.textPrimary }}>
-                          {comp.sold}
+                        <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{row.description}</td>
+                        <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textSecondary }}>{row.opening_stock}</td>
+                        <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>{comp.sold}</td>
+                        <td className="px-3 py-2 text-center font-mono" style={{ color: comp.damaged > 0 ? 'var(--color-status-warning)' : theme.textSecondary }}>{comp.damaged}</td>
+                        <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>{comp.closing}</td>
+                        <td className="px-3 py-2 text-center font-mono" style={{ color: comp.hasVariance ? 'var(--color-status-error)' : theme.textSecondary }}>
+                          {comp.variance}{comp.hasVariance && row.variance_note ? ` (${row.variance_note})` : ''}
                         </td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
+              )}
             </div>
           )}
 
           {/* Lubricants Review — only rows with activity */}
-          {lubricantRows.some((_, idx) => lubComputations[idx].sold > 0 || lubComputations[idx].additions > 0) && (
+          {(lubNoSales || lubricantRows.some((_, idx) => lubComputations[idx].sold > 0 || lubComputations[idx].damaged > 0)) && (
             <div className="rounded-lg shadow mb-6 overflow-x-auto"
               style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
               <div className="p-4 font-semibold text-sm"
                 style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
-                Lubricants
+                Lubricants {lubNoSales && <span className="text-xs font-normal" style={{ color: 'var(--color-status-success)' }}>(No sales confirmed)</span>}
               </div>
+              {!lubNoSales && (
               <table className="min-w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
-                    {['Product', 'Opening', 'Additions', 'Closing', 'Sold'].map(h => (
+                    {['Product', 'Opening', 'Sold', 'Damaged', 'Closing', 'Variance'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
                         style={{ color: theme.textSecondary }}>{h}</th>
                     ))}
@@ -1452,30 +1607,26 @@ export default function MyShift() {
                 <tbody>
                   {lubricantRows.map((row, idx) => {
                     const comp = lubComputations[idx]
-                    if (comp.sold === 0 && comp.additions === 0) return null
+                    if (comp.sold === 0 && comp.damaged === 0) return null
                     return (
                       <tr key={row.product_code} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                         <td className="px-3 py-2" style={{ color: theme.textPrimary }}>
                           <div className="font-medium text-sm">{row.description}</div>
                           <div className="text-xs" style={{ color: theme.textSecondary }}>{row.category}</div>
                         </td>
-                        <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textSecondary }}>
-                          {row.opening_stock}
-                        </td>
-                        <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>
-                          {comp.additions}
-                        </td>
-                        <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>
-                          {comp.closing}
-                        </td>
-                        <td className="px-3 py-2 text-center font-mono font-medium" style={{ color: theme.textPrimary }}>
-                          {comp.sold}
+                        <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textSecondary }}>{row.opening_stock}</td>
+                        <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>{comp.sold}</td>
+                        <td className="px-3 py-2 text-center font-mono" style={{ color: comp.damaged > 0 ? 'var(--color-status-warning)' : theme.textSecondary }}>{comp.damaged}</td>
+                        <td className="px-3 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>{comp.closing}</td>
+                        <td className="px-3 py-2 text-center font-mono" style={{ color: comp.hasVariance ? 'var(--color-status-error)' : theme.textSecondary }}>
+                          {comp.variance}{comp.hasVariance && row.variance_note ? ` (${row.variance_note})` : ''}
                         </td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
+              )}
             </div>
           )}
 
