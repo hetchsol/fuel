@@ -308,41 +308,41 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       children: [
         { path: '/shifts', label: 'Shifts', roles: ['user', 'supervisor', 'owner'] },
         { path: '/enter-readings', label: 'Enter Readings', roles: ['user', 'supervisor'] },
-        { path: '/handover-review', label: 'Handover Review', roles: ['supervisor', 'owner'] },
+        { path: '/handover-review', label: 'Handover Review', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/readings', label: 'OCR Reading Entry', roles: ['user', 'supervisor'], disabled: true },
-        { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'owner'] },
-        { path: '/fuel-operations', label: 'Fuel Operations', roles: ['supervisor', 'owner'] },
-        { path: '/lpg-daily', label: 'LPG Daily Operations', roles: ['supervisor', 'owner'] },
-        { path: '/lubricants-daily', label: 'Lubricants Daily', roles: ['supervisor', 'owner'] },
+        { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/fuel-operations', label: 'Fuel Operations', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/lpg-daily', label: 'LPG Daily Operations', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/lubricants-daily', label: 'Lubricants Daily', roles: ['supervisor', 'manager', 'owner'] },
       ]
     },
     {
       label: 'Inventory & Sales',
-      roles: ['supervisor', 'owner'],
+      roles: ['supervisor', 'manager', 'owner'],
       children: [
-        { path: '/inventory', label: 'Tank Levels', roles: ['supervisor', 'owner'] },
-        { path: '/sales', label: 'Sales', roles: ['supervisor', 'owner'] },
-        { path: '/accounts', label: 'Credit Accounts', roles: ['supervisor', 'owner'] },
+        { path: '/inventory', label: 'Tank Levels', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/sales', label: 'Sales', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/accounts', label: 'Credit Accounts', roles: ['supervisor', 'manager', 'owner'] },
       ]
     },
     {
       label: 'Reconciliation',
-      roles: ['supervisor', 'owner'],
+      roles: ['supervisor', 'manager', 'owner'],
       children: [
-        { path: '/three-way-reconciliation', label: 'Three-Way Reconciliation', roles: ['supervisor', 'owner'] },
-        { path: '/tank-analysis', label: 'Tank Analysis', roles: ['supervisor', 'owner'] },
-        { path: '/reconciliation', label: 'Shift Reconciliation', roles: ['supervisor', 'owner'] },
+        { path: '/three-way-reconciliation', label: 'Three-Way Reconciliation', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/tank-analysis', label: 'Tank Analysis', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/reconciliation', label: 'Shift Reconciliation', roles: ['supervisor', 'manager', 'owner'] },
       ]
     },
     {
       label: 'Reports',
-      roles: ['supervisor', 'owner'],
+      roles: ['supervisor', 'manager', 'owner'],
       children: [
-        { path: '/reports', label: 'Sales Reports', roles: ['supervisor', 'owner'] },
-        { path: '/tank-readings-report', label: 'Tank Readings & Monitor', roles: ['supervisor', 'owner'] },
-        { path: '/advanced-reports', label: 'Advanced Reports', roles: ['supervisor', 'owner'] },
-        { path: '/alerts', label: 'Anomaly Alerts', roles: ['supervisor', 'owner'] },
-        { path: '/notifications', label: 'Notifications', roles: ['supervisor', 'owner'] },
+        { path: '/reports', label: 'Sales Reports', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/tank-readings-report', label: 'Tank Readings & Monitor', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/advanced-reports', label: 'Advanced Reports', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/alerts', label: 'Anomaly Alerts', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/notifications', label: 'Notifications', roles: ['supervisor', 'manager', 'owner'] },
       ]
     },
     {
