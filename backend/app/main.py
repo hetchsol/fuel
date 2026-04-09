@@ -165,10 +165,10 @@ def startup():
             save_stations()
             logger.info(f"[migrate] Synced station name to business name: '{biz_name}'")
 
-    # Step 5: Persist seeded data to DB if available
-    if is_db_active():
-        logger.info("[startup] Step 5: Persisting to database...")
-        save_all_stations_storage()
+    # Step 5: Persist only seed_defaults changes (islands/settings) without
+    # overwriting externally seeded operational data (readings, shifts, etc.)
+    # The shutdown handler saves the full state.
+    logger.info("[startup] Step 5: Defaults applied (full persist on shutdown)")
 
     # Backward compat: global STORAGE points to ST001
     st001 = get_station_storage("ST001")
