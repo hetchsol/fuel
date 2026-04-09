@@ -11,6 +11,7 @@ export default function Shifts() {
   const [attendants, setAttendants] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [fuelPrices, setFuelPrices] = useState<Record<string, number>>({ Petrol: 0, Diesel: 0 })
 
   // Shift management state
   const [showManagementModal, setShowManagementModal] = useState(false)
@@ -45,6 +46,13 @@ export default function Shifts() {
   const [previousDipData, setPreviousDipData] = useState<any>(null)
 
   // Fetch active shift on mount
+  useEffect(() => {
+    authFetch(`/api/v1/settings/fuel`, { headers: getHeaders() })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data) setFuelPrices({ Petrol: data.petrol_price_per_liter || 0, Diesel: data.diesel_price_per_liter || 0 }) })
+      .catch(() => {})
+  }, [])
+
   useEffect(() => {
     // Get current user for role check
     const userData = localStorage.getItem('user')
@@ -1024,7 +1032,9 @@ export default function Shifts() {
                       {reading.opening_volume_liters != null && (
                         <div className="flex justify-between text-xs text-content-secondary">
                           <span>Opening Volume:</span>
-                          <span>{Math.round(reading.opening_volume_liters).toLocaleString()} L</span>
+                          <span>{Math.round(reading.opening_volume_liters).toLocaleString()} L
+                            {(() => { const p = fuelPrices[tank?.fuel_type || ''] || 0; return p > 0 ? <span className="ml-1 font-mono text-content-secondary/60">(ZMW {(reading.opening_volume_liters * p).toLocaleString(undefined, { maximumFractionDigits: 0 })})</span> : null })()}
+                          </span>
                         </div>
                       )}
 
@@ -1037,7 +1047,9 @@ export default function Shifts() {
                       {reading.closing_volume_liters != null && (
                         <div className="flex justify-between text-xs text-content-secondary">
                           <span>Closing Volume:</span>
-                          <span>{Math.round(reading.closing_volume_liters).toLocaleString()} L</span>
+                          <span>{Math.round(reading.closing_volume_liters).toLocaleString()} L
+                            {(() => { const p = fuelPrices[tank?.fuel_type || ''] || 0; return p > 0 ? <span className="ml-1 font-mono text-content-secondary/60">(ZMW {(reading.closing_volume_liters * p).toLocaleString(undefined, { maximumFractionDigits: 0 })})</span> : null })()}
+                          </span>
                         </div>
                       )}
 
@@ -1047,6 +1059,7 @@ export default function Shifts() {
                             <span className="text-action-primary">Tank Movement:</span>
                             <span className="text-action-primary">
                               {Math.round(movement).toLocaleString()} L
+                              {(() => { const p = fuelPrices[tank?.fuel_type || ''] || 0; return p > 0 ? <span className="ml-1 text-xs font-mono font-normal">(ZMW {(Math.abs(movement) * p).toLocaleString(undefined, { maximumFractionDigits: 0 })})</span> : null })()}
                             </span>
                           </div>
                         </div>

@@ -366,8 +366,8 @@ export default function ThreeWayReconciliation() {
                         <div className="text-lg font-bold text-action-primary">
                           {shift.reconciliation.sources.physical.tank_movement_liters?.toLocaleString()} L
                         </div>
-                        <div className="text-xs text-action-primary">
-                          {shift.reconciliation.sources.physical.expected_cash?.toLocaleString()} cash
+                        <div className="text-xs font-mono text-action-primary">
+                          ZMW {shift.reconciliation.sources.physical.expected_cash?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </div>
                       </div>
 
@@ -376,8 +376,8 @@ export default function ThreeWayReconciliation() {
                         <div className="text-lg font-bold text-category-a">
                           {shift.reconciliation.sources.operational.nozzle_sales_liters?.toLocaleString()} L
                         </div>
-                        <div className="text-xs text-category-a">
-                          {shift.reconciliation.sources.operational.expected_cash?.toLocaleString()} cash
+                        <div className="text-xs font-mono text-category-a">
+                          ZMW {shift.reconciliation.sources.operational.expected_cash?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </div>
                       </div>
 
@@ -386,8 +386,8 @@ export default function ThreeWayReconciliation() {
                         <div className="text-lg font-bold text-status-success">
                           {shift.reconciliation.sources.financial.equivalent_liters?.toLocaleString()} L
                         </div>
-                        <div className="text-xs text-status-success">
-                          {shift.reconciliation.sources.financial.actual_cash?.toLocaleString()} cash
+                        <div className="text-xs font-mono text-status-success">
+                          ZMW {shift.reconciliation.sources.financial.actual_cash?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </div>
                       </div>
                     </div>

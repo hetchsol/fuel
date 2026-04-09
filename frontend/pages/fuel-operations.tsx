@@ -88,6 +88,15 @@ export default function FuelOperations() {
     }
   }, [availableTanks, selectedTank])
 
+  useEffect(() => {
+    authFetch(`${BASE}/settings/fuel`, { headers: getHeaders() })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data) setFuelPrices({ Petrol: data.petrol_price_per_liter || 0, Diesel: data.diesel_price_per_liter || 0 })
+      })
+      .catch(() => {})
+  }, [])
+
   // Tank Reading Form State
   const [readingForm, setReadingForm] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -117,6 +126,7 @@ export default function FuelOperations() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [fuelPrices, setFuelPrices] = useState<Record<string, number>>({ Petrol: 0, Diesel: 0 })
 
   // Summary tab state
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
@@ -593,28 +603,33 @@ export default function FuelOperations() {
                 {/* Today's Activity */}
                 {(() => {
                   const fuelType = availableTanks.find(t => t.tank_id === selectedTank)?.fuel_type || 'Diesel'
+                  const ppl = fuelPrices[fuelType] || 0
                   const todayDelivered = levelsMovements?.summary?.total_delivered ?? 0
                   const todaySold = levelsMovements?.summary?.total_sold ?? 0
                   const netChange = todayDelivered - todaySold
                   const maxBar = Math.max(todayDelivered, todaySold, 1)
+                  const fmtK = (v: number) => `ZMW ${(v * ppl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
                   return (
                     <div className="mb-6">
-                      <h2 className="text-xl font-semibold mb-4">Today's Activity -- {fuelType}</h2>
+                      <h2 className="text-xl font-semibold mb-4">Today's Activity — {fuelType} {ppl > 0 && <span className="text-sm font-normal text-content-secondary">@ K{ppl}/L</span>}</h2>
                       <div className="grid grid-cols-3 gap-4 mb-4">
                         <div className="bg-status-success-light rounded-lg p-4 border border-status-success">
                           <p className="text-xs text-status-success font-medium">Deliveries In</p>
                           <p className="text-2xl font-bold text-status-success">{todayDelivered.toLocaleString(undefined, { maximumFractionDigits: 0 })} L</p>
+                          {ppl > 0 && <p className="text-xs text-status-success/70 font-mono mt-0.5">{fmtK(todayDelivered)}</p>}
                         </div>
                         <div className="bg-status-error-light rounded-lg p-4 border border-status-error">
                           <p className="text-xs text-status-error font-medium">Sales Out</p>
                           <p className="text-2xl font-bold text-status-error">{todaySold.toLocaleString(undefined, { maximumFractionDigits: 0 })} L</p>
+                          {ppl > 0 && <p className="text-xs text-status-error/70 font-mono mt-0.5">{fmtK(todaySold)}</p>}
                         </div>
                         <div className={`rounded-lg p-4 border ${netChange >= 0 ? 'bg-status-success-light border-status-success' : 'bg-status-error-light border-status-error'}`}>
                           <p className={`text-xs font-medium ${netChange >= 0 ? 'text-status-success' : 'text-status-error'}`}>Net Change</p>
                           <p className={`text-2xl font-bold ${netChange >= 0 ? 'text-status-success' : 'text-status-error'}`}>
                             {netChange >= 0 ? '+' : ''}{netChange.toLocaleString(undefined, { maximumFractionDigits: 0 })} L
                           </p>
+                          {ppl > 0 && <p className={`text-xs font-mono mt-0.5 ${netChange >= 0 ? 'text-status-success/70' : 'text-status-error/70'}`}>{fmtK(netChange)}</p>}
                         </div>
                       </div>
                       {/* Visual bar */}
@@ -653,6 +668,7 @@ export default function FuelOperations() {
                             <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Time</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Type</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Volume</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Value (ZMW)</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Reference</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Description</th>
                             <th className="px-4 py-3 text-right text-xs font-medium text-content-secondary uppercase">Running Net</th>
@@ -680,6 +696,9 @@ export default function FuelOperations() {
                                 </td>
                                 <td className={`px-4 py-3 text-sm font-semibold ${m.volume >= 0 ? 'text-status-success' : 'text-status-error'}`}>
                                   {m.volume >= 0 ? '+' : ''}{m.volume.toLocaleString(undefined, { maximumFractionDigits: 1 })} L
+                                </td>
+                                <td className={`px-4 py-3 text-xs font-mono ${m.volume >= 0 ? 'text-status-success' : 'text-status-error'}`}>
+                                  {(() => { const ft = availableTanks.find(t => t.tank_id === selectedTank)?.fuel_type || 'Diesel'; const p = fuelPrices[ft] || 0; return p > 0 ? `K${(Math.abs(m.volume) * p).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—' })()}
                                 </td>
                                 <td className="px-4 py-3 text-sm font-mono text-content-secondary">
                                   {m.reference_id}

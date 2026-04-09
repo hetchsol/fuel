@@ -540,16 +540,19 @@ export default function TankReadingsReport() {
                       <div className="text-sm font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>
                         {reading.tank_volume_movement.toFixed(3)} L
                       </div>
+                      {reading.price_per_liter > 0 && <div className="text-xs font-mono" style={{ color: theme.textSecondary }}>ZMW {(Math.abs(reading.tank_volume_movement) * reading.price_per_liter).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>
                         {reading.total_electronic_dispensed.toFixed(3)} L
                       </div>
+                      {reading.price_per_liter > 0 && <div className="text-xs font-mono" style={{ color: theme.textSecondary }}>ZMW {(reading.total_electronic_dispensed * reading.price_per_liter).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm transition-colors duration-300" style={{ color: theme.textPrimary }}>
                         {reading.electronic_vs_tank_variance.toFixed(3)} L
                       </div>
+                      {reading.price_per_liter > 0 && <div className="text-xs font-mono" style={{ color: theme.textSecondary }}>ZMW {(Math.abs(reading.electronic_vs_tank_variance) * reading.price_per_liter).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
                       <div className={`text-xs font-medium ${
                         Math.abs(reading.electronic_vs_tank_percent) > 1 ? 'text-status-error' :
                         Math.abs(reading.electronic_vs_tank_percent) > 0.5 ? 'text-status-warning' :
