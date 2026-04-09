@@ -1083,84 +1083,84 @@ export default function MyShift() {
                 <button onClick={() => setLpgNoSales(false)} className="text-xs underline" style={{ color: theme.textSecondary }}>Undo</button>
               </div>
             ) : (
-            <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr style={{ backgroundColor: theme.background }}>
-                  {['Size', 'Opening', 'Refills Sold', 'New Cyl Sold', 'Damaged', 'Closing', 'Expected', 'Variance'].map(h => (
-                    <th key={h} className="px-2 py-2 text-center text-xs font-medium uppercase whitespace-nowrap"
-                      style={{ color: theme.textSecondary }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {lpgRows.map((row, idx) => {
-                  const comp = lpgComputations[idx]
-                  return (
-                    <React.Fragment key={row.size_kg}>
-                    <tr className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                      <td className="px-2 py-1 text-center font-medium whitespace-nowrap" style={{ color: theme.textPrimary }}>
-                        {row.size_kg}kg
-                      </td>
-                      <td className="px-2 py-1 text-center font-mono" style={{ color: theme.textSecondary }}>
-                        {row.opening_full}
-                      </td>
-                      <td className="px-2 py-1">
+            <>
+            <div className="px-4 py-2 space-y-3">
+              {lpgRows.map((row, idx) => {
+                const comp = lpgComputations[idx]
+                return (
+                  <div key={row.size_kg} className="rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
+                    {/* Header row */}
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-bold" style={{ color: theme.textPrimary }}>{row.size_kg}kg Cylinder</span>
+                      <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ backgroundColor: theme.cardBg, color: theme.textSecondary }}>
+                        Opening: {row.opening_full}
+                      </span>
+                    </div>
+
+                    {/* Input grid — 2 columns on mobile, 4 on desktop */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Refills Sold</label>
                         <input type="number" min={0} max={row.opening_full} step={1}
                           value={row.sold_refill} onChange={e => updateLpgRow(idx, 'sold_refill', e.target.value)}
-                          placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
+                          placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
                           style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
-                      </td>
-                      <td className="px-2 py-1">
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>New Cyl Sold</label>
                         <input type="number" min={0} max={row.opening_full} step={1}
                           value={row.sold_with_cylinder} onChange={e => updateLpgRow(idx, 'sold_with_cylinder', e.target.value)}
-                          placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
+                          placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
                           style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
-                      </td>
-                      <td className="px-2 py-1">
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Damaged</label>
                         <input type="number" min={0} step={1}
                           value={row.damaged} onChange={e => updateLpgRow(idx, 'damaged', e.target.value)}
-                          placeholder="0" className="w-14 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
-                      </td>
-                      <td className="px-2 py-1">
+                          placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Closing (Count)</label>
                         <input type="number" min={0} step={1}
                           value={row.closing_full} onChange={e => updateLpgRow(idx, 'closing_full', e.target.value)}
-                          placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
-                      </td>
-                      <td className="px-2 py-1 text-center font-mono text-xs" style={{ color: theme.textSecondary }}>
-                        {comp.expectedClosing}
-                      </td>
-                      <td className={`px-2 py-1 text-center font-mono font-medium ${comp.hasVariance ? 'text-status-error' : ''}`}
-                        style={{ color: comp.hasVariance ? 'var(--color-status-error)' : theme.textSecondary }}>
-                        {row.closing_full !== '' ? comp.variance : '—'}
-                      </td>
-                    </tr>
+                          placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
+                      </div>
+                    </div>
+
+                    {/* Computed footer */}
+                    {row.closing_full !== '' && (
+                      <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                        <span className="text-xs" style={{ color: theme.textSecondary }}>
+                          Expected: <span className="font-mono">{comp.expectedClosing}</span>
+                        </span>
+                        <span className="text-xs font-medium font-mono" style={{ color: comp.hasVariance ? 'var(--color-status-error)' : 'var(--color-status-success)' }}>
+                          Variance: {comp.variance === 0 ? '0 ✓' : comp.variance}
+                        </span>
+                      </div>
+                    )}
+
                     {comp.soldExceedsOpening && (
-                      <tr><td colSpan={8} className="px-4 py-1 text-xs" style={{ color: 'var(--color-status-error)' }}>
+                      <div className="mt-2 text-xs" style={{ color: 'var(--color-status-error)' }}>
                         Cannot sell more than opening stock ({row.opening_full})
-                      </td></tr>
+                      </div>
                     )}
+
                     {comp.hasVariance && (
-                      <tr style={{ backgroundColor: 'var(--color-status-error-light)' }}>
-                        <td colSpan={8} className="px-4 py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium" style={{ color: 'var(--color-status-error)' }}>
-                              Variance: {comp.variance} — explain:
-                            </span>
-                            <input type="text" value={row.variance_note}
-                              onChange={e => updateLpgRow(idx, 'variance_note', e.target.value)}
-                              placeholder="e.g. 1 cylinder damaged, miscount..."
-                              className="flex-1 px-2 py-1 rounded border text-xs"
-                              style={{ ...inputStyle, borderColor: row.variance_note.trim() ? theme.border : 'var(--color-status-error)' }} />
-                          </div>
-                        </td>
-                      </tr>
+                      <div className="mt-2 p-2 rounded" style={{ backgroundColor: 'var(--color-status-error-light)' }}>
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: 'var(--color-status-error)' }}>
+                          Explain variance ({comp.variance})
+                        </label>
+                        <input type="text" value={row.variance_note}
+                          onChange={e => updateLpgRow(idx, 'variance_note', e.target.value)}
+                          placeholder="e.g. 1 cylinder damaged, miscount..."
+                          className="w-full px-2 py-1.5 rounded border text-xs"
+                          style={{ ...inputStyle, borderColor: row.variance_note.trim() ? theme.border : 'var(--color-status-error)' }} />
+                      </div>
                     )}
-                    </React.Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
+                  </div>
+                )
+              })}
+            </div>
             <div className="px-4 py-2 text-right text-sm font-semibold" style={{ color: theme.primary, borderTopColor: theme.border, borderTopWidth: 1 }}>
               LPG Revenue: ZMW {lpgTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
@@ -1174,7 +1174,7 @@ export default function MyShift() {
                 </button>
               </div>
             )}
-            </div>
+            </>
             )}
             </div>
             )}
@@ -1198,71 +1198,61 @@ export default function MyShift() {
                   <button onClick={() => setAccNoSales(false)} className="text-xs underline" style={{ color: theme.textSecondary }}>Undo</button>
                 </div>
               ) : (
-              <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr style={{ backgroundColor: theme.background }}>
-                    {['Product', 'Opening', 'Sold', 'Damaged', 'Closing', 'Expected', 'Variance'].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
-                        style={{ color: theme.textSecondary }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {accessoryRows.map((row, idx) => {
-                    const comp = accComputations[idx]
-                    return (
-                      <React.Fragment key={row.product_code}>
-                      <tr className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                        <td className="px-3 py-1" style={{ color: theme.textPrimary }}>
-                          <div className="font-medium text-sm">{row.description}</div>
-                        </td>
-                        <td className="px-3 py-1 text-center font-mono" style={{ color: theme.textSecondary }}>
-                          {row.opening_stock}
-                        </td>
-                        <td className="px-3 py-1">
+              <>
+              <div className="px-4 py-2 space-y-3">
+                {accessoryRows.map((row, idx) => {
+                  const comp = accComputations[idx]
+                  return (
+                    <div key={row.product_code} className="rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-bold" style={{ color: theme.textPrimary }}>{row.description}</span>
+                        <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ backgroundColor: theme.cardBg, color: theme.textSecondary }}>
+                          Opening: {row.opening_stock}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Qty Sold</label>
                           <input type="number" min={0} max={row.opening_stock} step={1}
                             value={row.sold} onChange={e => updateAccRow(idx, 'sold', e.target.value)}
-                            placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
+                            placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
                             style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
-                        </td>
-                        <td className="px-3 py-1">
+                        </div>
+                        <div>
+                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Damaged</label>
                           <input type="number" min={0} step={1}
                             value={row.damaged} onChange={e => updateAccRow(idx, 'damaged', e.target.value)}
-                            placeholder="0" className="w-14 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
-                        </td>
-                        <td className="px-3 py-1">
+                            placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Stock on Hand</label>
                           <input type="number" min={0} step={1}
                             value={row.closing_stock} onChange={e => updateAccRow(idx, 'closing_stock', e.target.value)}
-                            placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
-                        </td>
-                        <td className="px-3 py-1 text-center font-mono text-xs" style={{ color: theme.textSecondary }}>
-                          {comp.expectedClosing}
-                        </td>
-                        <td className={`px-3 py-1 text-center font-mono font-medium`}
-                          style={{ color: comp.hasVariance ? 'var(--color-status-error)' : theme.textSecondary }}>
-                          {row.closing_stock !== '' ? comp.variance : '—'}
-                        </td>
-                      </tr>
-                      {comp.hasVariance && (
-                        <tr style={{ backgroundColor: 'var(--color-status-error-light)' }}>
-                          <td colSpan={7} className="px-4 py-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium" style={{ color: 'var(--color-status-error)' }}>Variance: {comp.variance} — explain:</span>
-                              <input type="text" value={row.variance_note}
-                                onChange={e => updateAccRow(idx, 'variance_note', e.target.value)}
-                                placeholder="e.g. broken, returned..."
-                                className="flex-1 px-2 py-1 rounded border text-xs"
-                                style={{ ...inputStyle, borderColor: row.variance_note.trim() ? theme.border : 'var(--color-status-error)' }} />
-                            </div>
-                          </td>
-                        </tr>
+                            placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
+                        </div>
+                      </div>
+                      {row.closing_stock !== '' && (
+                        <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                          <span className="text-xs" style={{ color: theme.textSecondary }}>Expected: <span className="font-mono">{comp.expectedClosing}</span></span>
+                          <span className="text-xs font-medium font-mono" style={{ color: comp.hasVariance ? 'var(--color-status-error)' : 'var(--color-status-success)' }}>
+                            Variance: {comp.variance === 0 ? '0 ✓' : comp.variance}
+                          </span>
+                        </div>
                       )}
-                      </React.Fragment>
-                    )
-                  })}
-                </tbody>
-              </table>
+                      {comp.hasVariance && (
+                        <div className="mt-2 p-2 rounded" style={{ backgroundColor: 'var(--color-status-error-light)' }}>
+                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: 'var(--color-status-error)' }}>Explain variance ({comp.variance})</label>
+                          <input type="text" value={row.variance_note}
+                            onChange={e => updateAccRow(idx, 'variance_note', e.target.value)}
+                            placeholder="e.g. broken, returned..."
+                            className="w-full px-2 py-1.5 rounded border text-xs"
+                            style={{ ...inputStyle, borderColor: row.variance_note.trim() ? theme.border : 'var(--color-status-error)' }} />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
               <div className="px-4 py-2 text-right text-sm font-semibold" style={{ color: theme.primary, borderTopColor: theme.border, borderTopWidth: 1 }}>
                 Accessories Revenue: ZMW {accessoryTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
@@ -1276,7 +1266,7 @@ export default function MyShift() {
                   </button>
                 </div>
               )}
-              </div>
+              </>
               )}
               </div>
               )}
@@ -1312,81 +1302,69 @@ export default function MyShift() {
                   style={inputStyle}
                 />
               </div>
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr style={{ backgroundColor: theme.background }}>
-                    {['Product', 'Opening', 'Sold', 'Damaged', 'Closing', 'Expected', 'Variance'].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
-                        style={{ color: theme.textSecondary }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredLubIdx.map(idx => {
-                    const row = lubricantRows[idx]
-                    const comp = lubComputations[idx]
-                    return (
-                      <React.Fragment key={row.product_code}>
-                      <tr className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                        <td className="px-3 py-1" style={{ color: theme.textPrimary }}>
-                          <div className="font-medium text-sm">{row.description}</div>
-                          <div className="text-xs" style={{ color: theme.textSecondary }}>
-                            {row.category}
-                          </div>
-                        </td>
-                        <td className="px-3 py-1 text-center font-mono" style={{ color: theme.textSecondary }}>
-                          {row.opening_stock}
-                        </td>
-                        <td className="px-3 py-1">
+              <div className="px-4 py-2 space-y-3">
+                {filteredLubIdx.map(idx => {
+                  const row = lubricantRows[idx]
+                  const comp = lubComputations[idx]
+                  return (
+                    <div key={row.product_code} className="rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <span className="text-sm font-bold" style={{ color: theme.textPrimary }}>{row.description}</span>
+                          <span className="text-xs ml-2" style={{ color: theme.textSecondary }}>{row.category}</span>
+                        </div>
+                        <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ backgroundColor: theme.cardBg, color: theme.textSecondary }}>
+                          Opening: {row.opening_stock}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Qty Sold</label>
                           <input type="number" min={0} max={row.opening_stock} step={1}
                             value={row.sold} onChange={e => updateLubRow(idx, 'sold', e.target.value)}
-                            placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono"
+                            placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
                             style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
-                        </td>
-                        <td className="px-3 py-1">
+                        </div>
+                        <div>
+                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Damaged</label>
                           <input type="number" min={0} step={1}
                             value={row.damaged} onChange={e => updateLubRow(idx, 'damaged', e.target.value)}
-                            placeholder="0" className="w-14 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
-                        </td>
-                        <td className="px-3 py-1">
+                            placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Stock on Hand</label>
                           <input type="number" min={0} step={1}
                             value={row.closing_stock} onChange={e => updateLubRow(idx, 'closing_stock', e.target.value)}
-                            placeholder="0" className="w-16 px-1 py-1 rounded border text-sm text-center font-mono" style={inputStyle} />
-                        </td>
-                        <td className="px-3 py-1 text-center font-mono text-xs" style={{ color: theme.textSecondary }}>
-                          {comp.expectedClosing}
-                        </td>
-                        <td className={`px-3 py-1 text-center font-mono font-medium`}
-                          style={{ color: comp.hasVariance ? 'var(--color-status-error)' : theme.textSecondary }}>
-                          {row.closing_stock !== '' ? comp.variance : '—'}
-                        </td>
-                      </tr>
-                      {comp.hasVariance && (
-                        <tr style={{ backgroundColor: 'var(--color-status-error-light)' }}>
-                          <td colSpan={7} className="px-4 py-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium" style={{ color: 'var(--color-status-error)' }}>Variance: {comp.variance} — explain:</span>
-                              <input type="text" value={row.variance_note}
-                                onChange={e => updateLubRow(idx, 'variance_note', e.target.value)}
-                                placeholder="e.g. broken bottle, miscount..."
-                                className="flex-1 px-2 py-1 rounded border text-xs"
-                                style={{ ...inputStyle, borderColor: row.variance_note.trim() ? theme.border : 'var(--color-status-error)' }} />
-                            </div>
-                          </td>
-                        </tr>
+                            placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
+                        </div>
+                      </div>
+                      {row.closing_stock !== '' && (
+                        <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                          <span className="text-xs" style={{ color: theme.textSecondary }}>Expected: <span className="font-mono">{comp.expectedClosing}</span></span>
+                          <span className="text-xs font-medium font-mono" style={{ color: comp.hasVariance ? 'var(--color-status-error)' : 'var(--color-status-success)' }}>
+                            Variance: {comp.variance === 0 ? '0 ✓' : comp.variance}
+                          </span>
+                        </div>
                       )}
-                      </React.Fragment>
-                    )
-                  })}
-                  {filteredLubIdx.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="px-3 py-4 text-center text-sm" style={{ color: theme.textSecondary }}>
-                        No lubricants match "{lubSearch}"
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                      {comp.hasVariance && (
+                        <div className="mt-2 p-2 rounded" style={{ backgroundColor: 'var(--color-status-error-light)' }}>
+                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: 'var(--color-status-error)' }}>Explain variance ({comp.variance})</label>
+                          <input type="text" value={row.variance_note}
+                            onChange={e => updateLubRow(idx, 'variance_note', e.target.value)}
+                            placeholder="e.g. broken bottle, miscount..."
+                            className="w-full px-2 py-1.5 rounded border text-xs"
+                            style={{ ...inputStyle, borderColor: row.variance_note.trim() ? theme.border : 'var(--color-status-error)' }} />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                {filteredLubIdx.length === 0 && (
+                  <div className="py-4 text-center text-sm" style={{ color: theme.textSecondary }}>
+                    No lubricants match "{lubSearch}"
+                  </div>
+                )}
+              </div>
               <div className="px-4 py-2 text-right text-sm font-semibold" style={{ color: theme.primary, borderTopColor: theme.border, borderTopWidth: 1 }}>
                 Lubricants Revenue: ZMW {lubricantTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
