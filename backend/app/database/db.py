@@ -138,15 +138,24 @@ def init_db():
         logger.info("[db] Tables created")
 
         # Add is_active column if it doesn't exist (migration)
-        _conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE")
-        logger.info("[db] Migrations applied")
+        try:
+            _conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE")
+            logger.info("[db] Migrations applied")
+        except Exception as e:
+            logger.warning(f"[db] Migration warning (non-fatal): {e}")
 
-        # Performance indexes
-        _conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)")
-        _conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username)")
-        _conn.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)")
-        _conn.execute("CREATE INDEX IF NOT EXISTS idx_users_station ON users(station_id)")
-        _conn.execute("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)")
+        # Performance indexes (best effort — skip if slow)
+        for idx_sql in [
+            "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)",
+            "CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username)",
+            "CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)",
+            "CREATE INDEX IF NOT EXISTS idx_users_station ON users(station_id)",
+            "CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)",
+        ]:
+            try:
+                _conn.execute(idx_sql)
+            except Exception:
+                pass
         logger.info("[db] Indexes created")
 
         # Switch to transactional mode for normal operations
