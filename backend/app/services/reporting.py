@@ -274,17 +274,63 @@ class ReportingService:
         total_volume = sum(r.get('volume', 0) for r in nozzle_readings)
         total_readings = len(nozzle_readings)
 
-        # Get opening and closing readings
-        sorted_readings = sorted(nozzle_readings, key=lambda x: x.get('timestamp', ''))
-        opening_reading = sorted_readings[0].get('reading', 0) if sorted_readings else 0
-        closing_reading = sorted_readings[-1].get('reading', 0) if sorted_readings else 0
+        # Sort by date + shift_type for correct ordering
+        shift_order = {'Day': 0, 'Night': 1}
+        sorted_readings = sorted(
+            nozzle_readings,
+            key=lambda x: (x.get('date', ''), shift_order.get(x.get('shift_type', ''), 0))
+        )
+
+        # Period opening = first reading's opening, period closing = last reading's closing
+        first = sorted_readings[0]
+        last = sorted_readings[-1]
+
+        electronic_opening = first.get('electronic_opening', 0)
+        electronic_closing = last.get('electronic_closing', 0)
+        mechanical_opening = first.get('mechanical_opening', 0)
+        mechanical_closing = last.get('mechanical_closing', 0)
+
+        electronic_movement = round(electronic_closing - electronic_opening, 3)
+        mechanical_movement = round(mechanical_closing - mechanical_opening, 3)
+        overall_deviation = round(electronic_movement - mechanical_movement, 3)
+
+        # Per-shift breakdown with deviations
+        shift_breakdown = []
+        for r in sorted_readings:
+            e_open = r.get('electronic_opening', 0)
+            e_close = r.get('electronic_closing', 0)
+            m_open = r.get('mechanical_opening', 0)
+            m_close = r.get('mechanical_closing', 0)
+            e_vol = round(e_close - e_open, 3)
+            m_vol = round(m_close - m_open, 3)
+            dev = round(e_vol - m_vol, 3)
+            vol = r.get('volume', e_vol)
+
+            shift_breakdown.append({
+                'shift_id': r.get('shift_id', ''),
+                'date': r.get('date', ''),
+                'shift_type': r.get('shift_type', ''),
+                'staff_name': r.get('staff_name', ''),
+                'electronic_opening': e_open,
+                'electronic_closing': e_close,
+                'electronic_volume': e_vol,
+                'mechanical_opening': m_open,
+                'mechanical_closing': m_close,
+                'mechanical_volume': m_vol,
+                'volume_sold': vol,
+                'deviation_liters': dev,
+                'deviation_flagged': abs(dev) > 0.8,
+            })
 
         # Determine fuel type from islands data (nozzle lookup)
         fuel_type = 'Unknown'
         for island_data in self.islands_data.values():
             ps = island_data.get('pump_station')
             if ps:
-                for n in ps.get('nozzles', []):
+                nozzles = ps.get('nozzles', [])
+                if isinstance(nozzles, dict):
+                    nozzles = list(nozzles.values())
+                for n in nozzles:
                     if n.get('nozzle_id') == nozzle_id:
                         fuel_type = n.get('fuel_type', '') or 'Unknown'
                         break
@@ -301,10 +347,16 @@ class ReportingService:
             'summary': {
                 'total_readings': total_readings,
                 'total_volume': total_volume,
-                'opening_reading': opening_reading,
-                'closing_reading': closing_reading,
-                'meter_difference': closing_reading - opening_reading
+                'electronic_opening': electronic_opening,
+                'electronic_closing': electronic_closing,
+                'electronic_movement': electronic_movement,
+                'mechanical_opening': mechanical_opening,
+                'mechanical_closing': mechanical_closing,
+                'mechanical_movement': mechanical_movement,
+                'overall_deviation': overall_deviation,
+                'deviation_flagged': abs(overall_deviation) > 0.8,
             },
+            'shift_breakdown': shift_breakdown,
             'readings': nozzle_readings
         }
 
@@ -457,6 +509,13 @@ class ReportingService:
 
         if filters.get('shift_id'):
             filtered_data = self.filter_by_shift(filters['shift_id'], filtered_data)
+
+        if filters.get('shift_type'):
+            st = filters['shift_type']
+            filtered_data = [
+                r for r in filtered_data
+                if r.get('shift_type', '').lower() == st.lower()
+            ]
 
         # Calculate aggregated metrics
         total_transactions = len(filtered_data)

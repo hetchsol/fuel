@@ -375,7 +375,10 @@ def get_all_product_types(
     ctx: dict = Depends(get_station_context)
 ):
     """
-    Get list of all product types from sales data
+    Get list of all product types including individual inventory items
+
+    Returns fuel types (Petrol, Diesel) plus every individual LPG cylinder size,
+    lubricant, and accessory item currently in stock.
 
     Example: /reports/product/list?start_date=2025-12-01&end_date=2025-12-31
     """
@@ -389,20 +392,54 @@ def get_all_product_types(
     if start_date and end_date:
         data = service.filter_by_date_range(start_date, end_date, data)
 
-    # Extract unique product types
+    # Extract unique product types from readings
     product_types = set()
     for record in data:
         product = record.get('product_type') or record.get('fuel_type')
         if product:
             product_types.add(product)
 
-    # Default product types if no data
-    if not product_types:
-        product_types = {'Petrol', 'Diesel', 'LPG', 'Lubricants', 'Accessories'}
+    # Always include fuel types
+    product_types.update({'Petrol', 'Diesel'})
+
+    # Build detailed items list: each item with category and description
+    items = []
+    for pt in sorted(product_types):
+        items.append({"value": pt, "label": pt, "category": "Fuel"})
+
+    # Add LPG cylinder sizes from settings
+    settings = storage.get('settings', {})
+    cylinder_sizes = settings.get('cylinder_sizes', [])
+    if cylinder_sizes:
+        for cs in cylinder_sizes:
+            size = cs if isinstance(cs, str) else cs.get('size', cs.get('label', str(cs)))
+            items.append({"value": f"LPG - {size}", "label": f"LPG - {size}", "category": "LPG"})
+    else:
+        items.append({"value": "LPG", "label": "LPG", "category": "LPG"})
+
+    # Add individual lubricant items
+    lubricants = storage.get('lubricants', {})
+    if lubricants:
+        for code, lub in lubricants.items():
+            desc = lub.get('description', code)
+            cat = lub.get('category', 'Lubricant')
+            items.append({"value": f"Lubricant - {code}", "label": f"{desc}", "category": f"Lubricants ({cat})"})
+    else:
+        items.append({"value": "Lubricants", "label": "Lubricants", "category": "Lubricants"})
+
+    # Add individual accessory items
+    accessories = storage.get('lpg_accessories', {})
+    if accessories:
+        for code, acc in accessories.items():
+            desc = acc.get('description', code)
+            items.append({"value": f"Accessory - {code}", "label": f"{desc}", "category": "Accessories"})
+    else:
+        items.append({"value": "Accessories", "label": "Accessories", "category": "Accessories"})
 
     return {
-        "product_types": sorted(list(product_types)),
-        "total_count": len(product_types)
+        "product_types": sorted([item["value"] for item in items]),
+        "items": items,
+        "total_count": len(items)
     }
 
 
@@ -465,6 +502,7 @@ def get_custom_report(
     island_id: Optional[str] = Query(None, description="Filter by island ID"),
     product_type: Optional[str] = Query(None, description="Filter by product type"),
     shift_id: Optional[str] = Query(None, description="Filter by shift ID"),
+    shift_type: Optional[str] = Query(None, description="Filter by shift type (Day, Night)"),
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     current_user: dict = Depends(require_supervisor_or_owner),
@@ -477,7 +515,7 @@ def get_custom_report(
 
     Apply any combination of filters to generate a custom report.
 
-    Example: /reports/custom?staff_name=John&product_type=Petrol&start_date=2025-12-01&end_date=2025-12-31
+    Example: /reports/custom?staff_name=John&product_type=Petrol&shift_type=Day&start_date=2025-12-01&end_date=2025-12-31
     """
     filters = {}
 
@@ -491,6 +529,8 @@ def get_custom_report(
         filters['product_type'] = product_type
     if shift_id:
         filters['shift_id'] = shift_id
+    if shift_type:
+        filters['shift_type'] = shift_type
     if start_date:
         filters['start_date'] = start_date
     if end_date:

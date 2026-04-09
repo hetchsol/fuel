@@ -17,17 +17,20 @@ export default function AdvancedReports() {
     island_id: '',
     product_type: '',
     shift_id: '',
+    shift_type: '',
     start_date: '',
     end_date: ''
   })
 
   const [specificId, setSpecificId] = useState('')
+  const [productSearch, setProductSearch] = useState('')
 
   // Dropdown lists
   const [staffList, setStaffList] = useState<string[]>([])
   const [nozzleList, setNozzleList] = useState<string[]>([])
   const [islandList, setIslandList] = useState<string[]>([])
   const [productList, setProductList] = useState<string[]>(['Petrol', 'Diesel', 'LPG', 'Lubricants', 'Accessories'])
+  const [productItems, setProductItems] = useState<{value: string, label: string, category: string}[]>([])
   const [loadingLists, setLoadingLists] = useState(false)
 
   const productTypes = ['Petrol', 'Diesel', 'LPG', 'Lubricants', 'Accessories']
@@ -52,12 +55,13 @@ export default function AdvancedReports() {
             getStaffList().catch(() => ({ staff_names: [] })),
             getNozzleList().catch(() => ({ nozzle_ids: [] })),
             getIslandList().catch(() => ({ island_ids: [] })),
-            getProductList().catch(() => ({ product_types: productTypes }))
+            getProductList().catch(() => ({ product_types: productTypes, items: [] }))
           ])
           setStaffList(staffData.staff_names || [])
           setNozzleList(nozzleData.nozzle_ids || [])
           setIslandList(islandData.island_ids || [])
           setProductList(productData.product_types || productTypes)
+          if (productData.items) setProductItems(productData.items)
         } else {
           switch (reportType) {
             case 'staff':
@@ -75,6 +79,7 @@ export default function AdvancedReports() {
             case 'product':
               const productData = await getProductList()
               setProductList(productData.product_types || productTypes)
+              if (productData.items) setProductItems(productData.items)
               break
           }
         }
@@ -151,6 +156,7 @@ export default function AdvancedReports() {
           if (filters.island_id) params.push(`island_id=${encodeURIComponent(filters.island_id)}`)
           if (filters.product_type) params.push(`product_type=${encodeURIComponent(filters.product_type)}`)
           if (filters.shift_id) params.push(`shift_id=${encodeURIComponent(filters.shift_id)}`)
+          if (filters.shift_type) params.push(`shift_type=${encodeURIComponent(filters.shift_type)}`)
           if (filters.start_date) params.push(`start_date=${filters.start_date}`)
           if (filters.end_date) params.push(`end_date=${filters.end_date}`)
           url += params.join('&')
@@ -227,7 +233,8 @@ export default function AdvancedReports() {
                 setReportType(type.value)
                 setReportData(null)
                 setError('')
-                setSpecificId('') // Reset selection when changing report type
+                setSpecificId('')
+                setProductSearch('')
               }}
               className={`p-4 rounded-lg border-2 transition-all ${
                 reportType === type.value
@@ -305,18 +312,50 @@ export default function AdvancedReports() {
                   ))}
                 </select>
               ) : (
-                <select
-                  value={specificId}
-                  onChange={(e) => setSpecificId(e.target.value)}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                >
-                  <option value="">Select Product Type</option>
-                  {productList.map((product) => (
-                    <option key={product} value={product}>
-                      {product}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={productSearch}
+                    onChange={(e) => {
+                      setProductSearch(e.target.value)
+                      if (!e.target.value) setSpecificId('')
+                    }}
+                    placeholder="Search or select product..."
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  />
+                  {productSearch && !specificId && (
+                    <div className="absolute z-20 w-full mt-1 bg-surface-card border border-surface-border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {(productItems.length > 0 ? productItems : productList.map(p => ({ value: p, label: p, category: '' })))
+                        .filter(item => item.label.toLowerCase().includes(productSearch.toLowerCase()) || item.category.toLowerCase().includes(productSearch.toLowerCase()))
+                        .map((item) => (
+                          <button
+                            key={item.value}
+                            onClick={() => { setSpecificId(item.value); setProductSearch(item.label) }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-action-primary-light transition-colors flex justify-between"
+                          >
+                            <span className="text-content-primary">{item.label}</span>
+                            {item.category && <span className="text-xs text-content-secondary">{item.category}</span>}
+                          </button>
+                        ))}
+                      {(productItems.length > 0 ? productItems : productList.map(p => ({ value: p, label: p, category: '' })))
+                        .filter(item => item.label.toLowerCase().includes(productSearch.toLowerCase()) || item.category.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
+                        <div className="px-3 py-2 text-sm text-content-secondary">No products found</div>
+                      )}
+                    </div>
+                  )}
+                  {!productSearch && !specificId && (
+                    <div className="absolute z-20 w-full mt-1 bg-surface-card border border-surface-border rounded-md shadow-lg max-h-60 overflow-y-auto hidden group-focus-within:block">
+                    </div>
+                  )}
+                  {specificId && (
+                    <button
+                      onClick={() => { setSpecificId(''); setProductSearch('') }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-content-secondary hover:text-content-primary text-sm"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -388,6 +427,18 @@ export default function AdvancedReports() {
                 </select>
               </div>
               <div>
+                <label className="block text-sm font-medium text-content-secondary mb-2">Shift Type</label>
+                <select
+                  value={filters.shift_type}
+                  onChange={(e) => setFilters({ ...filters, shift_type: e.target.value })}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                >
+                  <option value="">Both Shifts</option>
+                  <option value="Day">Day Shift</option>
+                  <option value="Night">Night Shift</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-content-secondary mb-2">Shift ID</label>
                 <input
                   type="text"
@@ -456,10 +507,12 @@ export default function AdvancedReports() {
                 island_id: '',
                 product_type: '',
                 shift_id: '',
+                shift_type: '',
                 start_date: '',
                 end_date: ''
               })
               setSpecificId('')
+              setProductSearch('')
               setReportData(null)
               setError('')
             }}
@@ -542,17 +595,75 @@ export default function AdvancedReports() {
             </div>
           )}
 
-          {/* Raw JSON data */}
-          <div className="mt-6">
-            <details className="cursor-pointer">
-              <summary className="text-sm font-semibold text-content-secondary hover:text-content-primary">
-                View Full Report Data (JSON)
-              </summary>
-              <pre className="mt-2 p-4 bg-surface-bg rounded-lg text-xs overflow-x-auto">
-                {JSON.stringify(reportData, null, 2)}
-              </pre>
-            </details>
-          </div>
+          {/* Nozzle shift breakdown — readings + deviations */}
+          {reportData.shift_breakdown && (
+            <div className="mb-6">
+              <h3 className="text-md font-semibold text-content-primary mb-3">Shift-by-Shift Readings</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-surface-border">
+                  <thead className="bg-surface-bg">
+                    <tr>
+                      <th className="px-3 py-3 text-left text-xs font-medium text-content-secondary uppercase">Shift</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium text-content-secondary uppercase">Attendant</th>
+                      <th className="px-3 py-3 text-right text-xs font-medium text-content-secondary uppercase">Elec Open</th>
+                      <th className="px-3 py-3 text-right text-xs font-medium text-content-secondary uppercase">Elec Close</th>
+                      <th className="px-3 py-3 text-right text-xs font-medium text-content-secondary uppercase">Mech Open</th>
+                      <th className="px-3 py-3 text-right text-xs font-medium text-content-secondary uppercase">Mech Close</th>
+                      <th className="px-3 py-3 text-right text-xs font-medium text-content-secondary uppercase">Volume (L)</th>
+                      <th className="px-3 py-3 text-right text-xs font-medium text-content-secondary uppercase">Deviation (L)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-surface-card divide-y divide-surface-border">
+                    {reportData.shift_breakdown.map((row: any, i: number) => (
+                      <tr key={i} className={`hover:bg-surface-bg ${row.deviation_flagged ? 'bg-status-error-light' : ''}`}>
+                        <td className="px-3 py-3 text-sm text-content-primary whitespace-nowrap">
+                          {row.date} {row.shift_type}
+                        </td>
+                        <td className="px-3 py-3 text-sm text-content-secondary">{row.staff_name}</td>
+                        <td className="px-3 py-3 text-sm text-content-secondary text-right font-mono">{row.electronic_opening?.toLocaleString()}</td>
+                        <td className="px-3 py-3 text-sm text-content-secondary text-right font-mono">{row.electronic_closing?.toLocaleString()}</td>
+                        <td className="px-3 py-3 text-sm text-content-secondary text-right font-mono">{row.mechanical_opening?.toLocaleString()}</td>
+                        <td className="px-3 py-3 text-sm text-content-secondary text-right font-mono">{row.mechanical_closing?.toLocaleString()}</td>
+                        <td className="px-3 py-3 text-sm text-content-primary text-right font-mono font-semibold">{row.volume_sold?.toLocaleString()}</td>
+                        <td className={`px-3 py-3 text-sm text-right font-mono font-semibold ${row.deviation_flagged ? 'text-status-error' : 'text-content-secondary'}`}>
+                          {row.deviation_liters}
+                          {row.deviation_flagged && ' ⚠'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Period totals */}
+              {reportData.summary?.overall_deviation !== undefined && (
+                <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-surface-bg rounded-lg p-3">
+                    <p className="text-xs text-content-secondary">Period Electronic</p>
+                    <p className="text-sm font-mono font-semibold text-content-primary">
+                      {reportData.summary.electronic_opening?.toLocaleString()} → {reportData.summary.electronic_closing?.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-surface-bg rounded-lg p-3">
+                    <p className="text-xs text-content-secondary">Period Mechanical</p>
+                    <p className="text-sm font-mono font-semibold text-content-primary">
+                      {reportData.summary.mechanical_opening?.toLocaleString()} → {reportData.summary.mechanical_closing?.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-surface-bg rounded-lg p-3">
+                    <p className="text-xs text-content-secondary">Total Volume</p>
+                    <p className="text-sm font-mono font-semibold text-content-primary">{reportData.summary.total_volume?.toLocaleString()} L</p>
+                  </div>
+                  <div className={`rounded-lg p-3 ${reportData.summary.deviation_flagged ? 'bg-status-error-light' : 'bg-surface-bg'}`}>
+                    <p className="text-xs text-content-secondary">Overall Deviation</p>
+                    <p className={`text-sm font-mono font-semibold ${reportData.summary.deviation_flagged ? 'text-status-error' : 'text-content-primary'}`}>
+                      {reportData.summary.overall_deviation} L {reportData.summary.deviation_flagged ? '⚠' : ''}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

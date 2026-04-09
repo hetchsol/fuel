@@ -135,6 +135,7 @@ export async function getCustomReport(filters: {
   island_id?: string;
   product_type?: string;
   shift_id?: string;
+  shift_type?: string;
   start_date?: string;
   end_date?: string;
 }) {
