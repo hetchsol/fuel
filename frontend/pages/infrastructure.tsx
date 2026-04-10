@@ -152,6 +152,28 @@ export default function Infrastructure() {
     }
   }
 
+  const deleteIsland = async (islandId: string, islandName: string) => {
+    if (!confirm(`Delete ${islandName} (${islandId})? This will remove the island and all its nozzles. This cannot be undone.`)) return
+    setLoading(true)
+    setMessage(null)
+    try {
+      const res = await authFetch(`${BASE}/islands/${islandId}`, { method: 'DELETE', headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setMessage({ type: 'success', text: data.message || `${islandName} deleted` })
+        fetchIslands()
+        setTimeout(() => setMessage(null), 5000)
+      } else {
+        const error = await res.json()
+        setMessage({ type: 'error', text: error.detail || 'Failed to delete island' })
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Network error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const updateTankCapacity = async (tankId: string, capacity: number) => {
     setLoading(true)
     try {
@@ -645,6 +667,17 @@ export default function Infrastructure() {
                     </div>
                   </div>
                 )}
+
+                {/* Delete Island */}
+                <div className="mt-3 pt-3 border-t border-surface-border">
+                  <button
+                    onClick={() => deleteIsland(island.island_id, island.name)}
+                    disabled={loading}
+                    className="px-3 py-1 bg-status-error-light text-status-error rounded-md hover:bg-red-200 text-xs font-semibold disabled:opacity-50"
+                  >
+                    Delete Island
+                  </button>
+                </div>
               </div>
             ))}
           </div>
