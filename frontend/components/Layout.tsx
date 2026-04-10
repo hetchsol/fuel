@@ -75,6 +75,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // Mobile nav
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [setupPending, setSetupPending] = useState(false)
 
   // Deposit overdue alert
   const [depositOverdue, setDepositOverdue] = useState(false)
@@ -92,6 +93,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           .then(r => r.ok ? r.json() : null)
           .then(sys => {
             if (sys && !sys.setup_completed) {
+              setSetupPending(true)
               // Set cookie so middleware enforces on subsequent navigations
               const secure = window.location.protocol === 'https:' ? '; Secure' : ''
               document.cookie = `needsSetup=1; path=/; SameSite=Lax${secure}`
@@ -359,7 +361,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     },
   ]
 
-  const navItems = user
+  const isSetupPage = ['/setup', '/initializing', '/login'].includes(router.pathname)
+  const hideNav = setupPending || isSetupPage
+
+  const navItems = (user && !hideNav)
     ? allNavItems.filter(item => {
         if (item.roles.includes(user.role)) {
           if (item.children) {
