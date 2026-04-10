@@ -137,12 +137,18 @@ def init_db():
         """)
         logger.info("[db] Tables created")
 
+        # Set statement timeout to prevent hanging on slow Neon connections
+        try:
+            _conn.execute("SET statement_timeout = '5s'")
+        except Exception:
+            pass
+
         # Add is_active column if it doesn't exist (migration)
         try:
             _conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE")
             logger.info("[db] Migrations applied")
         except Exception as e:
-            logger.warning(f"[db] Migration warning (non-fatal): {e}")
+            logger.warning(f"[db] Migration skipped (non-fatal): {e}")
 
         # Performance indexes (best effort — skip if slow)
         for idx_sql in [
@@ -156,9 +162,13 @@ def init_db():
                 _conn.execute(idx_sql)
             except Exception:
                 pass
-        logger.info("[db] Indexes created")
+        logger.info("[db] Indexes done")
 
-        # Switch to transactional mode for normal operations
+        # Reset timeout and switch to transactional mode for normal operations
+        try:
+            _conn.execute("SET statement_timeout = '0'")
+        except Exception:
+            pass
         _conn.close()
         _conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
         logger.info("[db] Switched to transactional mode")
