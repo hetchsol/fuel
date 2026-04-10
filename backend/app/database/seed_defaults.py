@@ -10,7 +10,15 @@ def seed_station_defaults(storage: dict):
     Populate a station's storage dict with default island layout and settings.
     Tanks, accounts, accessories, and lubricants are configured by the owner
     through the setup wizard or respective UI pages.
+
+    Skip seeding entirely if setup_completed is explicitly False (bare metal state).
+    The setup wizard will configure everything.
     """
+    sys_settings = storage.get('system_settings')
+    if sys_settings and sys_settings.get('setup_completed') is False and not storage.get('islands'):
+        # Bare metal — owner will configure via setup wizard
+        return
+
     _seed_islands(storage)
     _migrate_islands_add_display_fields(storage)
     _migrate_islands_default_active(storage)
