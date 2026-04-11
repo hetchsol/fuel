@@ -64,6 +64,19 @@ def update_tank_level(tank_id: str, volume_dispensed: float, ctx: dict = Depends
         "status": "updated"
     }
 
+@router.put("/{tank_id}/set-level")
+def set_tank_level(tank_id: str, level: float, ctx: dict = Depends(get_station_context)):
+    """Set the current level of a tank directly (owner only, for initial stock entry)"""
+    storage = ctx["storage"]
+    tank_data = storage.get('tanks', {})
+    if tank_id not in tank_data:
+        raise HTTPException(status_code=404, detail="Tank not found")
+    tank_data[tank_id]["current_level"] = min(level, tank_data[tank_id]["capacity"])
+    tank_data[tank_id]["last_updated"] = datetime.now().isoformat()
+    from ...database.storage import save_station_storage
+    save_station_storage(ctx["station_id"])
+    return {"tank_id": tank_id, "current_level": tank_data[tank_id]["current_level"], "status": "level_set"}
+
 @router.post("/refill/{tank_id}")
 def refill_tank(tank_id: str, volume_added: float, ctx: dict = Depends(get_station_context)):
     """

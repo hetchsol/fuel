@@ -527,8 +527,39 @@ export default function Infrastructure() {
                   </div>
                 )}
 
+                {/* Set Current Level */}
+                <div className="mt-4 pt-4 border-t border-surface-border flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={tank.capacity}
+                    step={0.1}
+                    placeholder="Set level (L)"
+                    id={`level-${tank.tank_id}`}
+                    className="w-32 px-2 py-1 text-sm rounded border border-surface-border bg-surface-bg text-content-primary"
+                  />
+                  <button
+                    onClick={async () => {
+                      const input = document.getElementById(`level-${tank.tank_id}`) as HTMLInputElement
+                      const val = parseFloat(input?.value)
+                      if (isNaN(val) || val < 0) { setMessage({ type: 'error', text: 'Enter a valid level' }); return }
+                      setTankLoading(true)
+                      try {
+                        const res = await authFetch(`${BASE}/tanks/${tank.tank_id}/set-level?level=${val}`, { method: 'PUT', headers: getHeaders() })
+                        if (res.ok) { setMessage({ type: 'success', text: `${tank.tank_id} set to ${val.toLocaleString()} L` }); fetchTanks(); setTimeout(() => setMessage(null), 5000) }
+                        else { const e = await res.json(); setMessage({ type: 'error', text: e.detail || 'Failed' }) }
+                      } catch (err: any) { setMessage({ type: 'error', text: err.message }) }
+                      finally { setTankLoading(false) }
+                    }}
+                    disabled={tankLoading}
+                    className="px-3 py-1 bg-action-primary text-white rounded-md text-sm font-semibold disabled:opacity-50"
+                  >
+                    Set Level
+                  </button>
+                </div>
+
                 {/* Delete Tank */}
-                <div className="mt-4 pt-4 border-t border-surface-border">
+                <div className="mt-3">
                   <button
                     onClick={() => deleteTank(tank.tank_id)}
                     disabled={tankLoading}
