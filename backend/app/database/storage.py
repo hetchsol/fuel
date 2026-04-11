@@ -96,6 +96,24 @@ def get_station_storage(station_id: str) -> Dict[str, Any]:
     return STATIONS_STORAGE[station_id]
 
 
+def reload_station_from_db(station_id: str) -> Dict[str, Any]:
+    """
+    Force-reload a station's storage from the database, replacing the in-memory copy.
+    Used when external changes (e.g. DB wipe) need to be picked up without restart.
+    """
+    from .db import DATABASE_URL, db_load_storage, is_db_active
+    with _storage_locks[station_id]:
+        if DATABASE_URL and is_db_active():
+            db_data = db_load_storage(station_id)
+            if db_data:
+                STATIONS_STORAGE[station_id] = db_data
+                logger.info(f"[storage] Reloaded station {station_id} from database")
+            else:
+                STATIONS_STORAGE[station_id] = _make_empty_storage()
+                logger.info(f"[storage] Station {station_id} not in DB — reset to empty")
+    return STATIONS_STORAGE.get(station_id, _make_empty_storage())
+
+
 def save_station_storage(station_id: str):
     """
     Persist the in-memory storage dict for a station to PostgreSQL.

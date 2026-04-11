@@ -237,10 +237,12 @@ def login(credentials: UserLogin, request: Request):
         db_create_session(token, user["user_id"], username, user["role"], expires_at)
 
         # Check if setup wizard is needed (owner + setup not yet completed)
+        # Reload from DB to pick up any external changes (e.g. bare metal wipe)
         needs_setup = False
         if user["role"] == "owner":
             station_id = user.get("station_id") or DEFAULT_STATION_ID
-            storage = get_station_storage(station_id)
+            from ...database.storage import reload_station_from_db
+            storage = reload_station_from_db(station_id)
             sys_settings = storage.get("system_settings", {})
             needs_setup = not sys_settings.get("setup_completed", False)
 
@@ -274,13 +276,15 @@ def login(credentials: UserLogin, request: Request):
         }
 
         # Check if setup wizard is needed (owner + setup not yet completed)
+        # Reload from DB to pick up any external changes (e.g. bare metal wipe)
         needs_setup = False
         role_val = user_data.get("role")
         if hasattr(role_val, 'value'):
             role_val = role_val.value
         if role_val == "owner":
             station_id = user_data.get("station_id") or DEFAULT_STATION_ID
-            storage = get_station_storage(station_id)
+            from ...database.storage import reload_station_from_db
+            storage = reload_station_from_db(station_id)
             sys_settings = storage.get("system_settings", {})
             needs_setup = not sys_settings.get("setup_completed", False)
 
