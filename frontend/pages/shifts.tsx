@@ -205,10 +205,10 @@ export default function Shifts() {
       })
       if (res.ok) {
         const data = await res.json()
-        // Filter only users with role='user' (attendants)
-        const attendantsOnly = data.filter((u: any) => u.role === 'user')
-        setAvailableStaff(attendantsOnly)
-        if (attendantsOnly.length === 0 && data.length === 0) {
+        // Include attendants and supervisors
+        const eligible = data.filter((u: any) => u.role === 'user' || u.role === 'supervisor')
+        setAvailableStaff(eligible)
+        if (eligible.length === 0 && data.length === 0) {
           setError('No staff found. Create attendants in Administration > Users first.')
         }
       } else {
@@ -373,6 +373,8 @@ export default function Shifts() {
       setSelectedAttendants(shift.assignments.map((a: any) => ({
         user_id: a.attendant_id,
         full_name: a.attendant_name,
+        role: a.role || 'user',
+        is_shift_supervisor: a.is_shift_supervisor || false,
         island_ids: a.island_ids || [],
         nozzle_ids: a.nozzle_ids || []
       })))
@@ -390,12 +392,20 @@ export default function Shifts() {
       setSelectedAttendants([...selectedAttendants, {
         user_id: staff.user_id,
         full_name: staff.full_name,
+        role: staff.role,
+        is_shift_supervisor: staff.role === 'supervisor',
         island_ids: [],
         nozzle_ids: []
       }])
     } else {
       setSelectedAttendants(selectedAttendants.filter(a => a.user_id !== staff.user_id))
     }
+  }
+
+  const toggleShiftSupervisor = (userId: string) => {
+    setSelectedAttendants(selectedAttendants.map(a =>
+      a.user_id === userId ? { ...a, is_shift_supervisor: !a.is_shift_supervisor } : a
+    ))
   }
 
   const handleIslandToggle = (attendantId: string, islandId: string, checked: boolean) => {
@@ -539,7 +549,8 @@ export default function Shifts() {
       attendant_id: a.user_id,
       attendant_name: a.full_name,
       island_ids: a.island_ids || [],
-      nozzle_ids: a.nozzle_ids || []
+      nozzle_ids: a.nozzle_ids || [],
+      is_shift_supervisor: a.is_shift_supervisor || false,
     }))
 
     if (editingShiftId) {
@@ -762,6 +773,9 @@ export default function Shifts() {
                           {shift.assignments.map((a: any) => (
                             <div key={a.attendant_id} className="text-sm">
                               <span className="font-medium text-content-primary">{a.attendant_name}</span>
+                              {a.is_shift_supervisor && (
+                                <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-action-primary/15 text-action-primary font-medium">Shift Supervisor</span>
+                              )}
                               {a.nozzle_ids && a.nozzle_ids.length > 0 && (
                                 <span className="text-content-secondary ml-2">
                                   — {a.nozzle_ids.map((nid: string) => {
@@ -1459,7 +1473,7 @@ export default function Shifts() {
 
               {/* Attendant Selection */}
               <div className="mb-6">
-                <label className="block text-sm font-medium mb-2">Select Attendants</label>
+                <label className="block text-sm font-medium mb-2">Select Staff for This Shift</label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {availableStaff.map(staff => (
                     <label key={staff.user_id} className="flex items-center space-x-2 p-2 border rounded hover:bg-surface-bg cursor-pointer">
@@ -1470,6 +1484,9 @@ export default function Shifts() {
                         className="form-checkbox"
                       />
                       <span className="text-sm">{staff.full_name}</span>
+                      {staff.role === 'supervisor' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-action-primary/15 text-action-primary font-medium">Supervisor</span>
+                      )}
                     </label>
                   ))}
                 </div>
@@ -1478,7 +1495,20 @@ export default function Shifts() {
               {/* Assignment Details for Each Attendant */}
               {selectedAttendants.map(attendant => (
                 <div key={attendant.user_id} className="mb-6 p-4 border rounded-lg bg-surface-bg">
-                  <h3 className="font-semibold mb-3">👤 {attendant.full_name}</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold">👤 {attendant.full_name}</h3>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={attendant.is_shift_supervisor || false}
+                        onChange={() => toggleShiftSupervisor(attendant.user_id)}
+                        className="form-checkbox"
+                      />
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded ${attendant.is_shift_supervisor ? 'bg-action-primary text-white' : 'bg-surface-card text-content-secondary border border-surface-border'}`}>
+                        Shift Supervisor
+                      </span>
+                    </label>
+                  </div>
 
                   {/* Island Selection */}
                   <div className="mb-4">
