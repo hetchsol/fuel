@@ -150,6 +150,18 @@ def cancel_scheduled_price(index: int, ctx: dict = Depends(get_station_context))
     return {"status": "success", "message": "Scheduled price change cancelled"}
 
 
+@router.get("/business-info")
+def get_business_info(ctx: dict = Depends(get_station_context)):
+    """Get business details for report headers. Returns raw data without validation."""
+    sys = ctx["storage"].get('system_settings', {})
+    return {
+        "business_name": sys.get("business_name", ""),
+        "station_location": sys.get("station_location", ""),
+        "contact_phone": sys.get("contact_phone", ""),
+        "contact_email": sys.get("contact_email", ""),
+    }
+
+
 @router.get("/system", response_model=SystemSettings)
 def get_system_settings(ctx: dict = Depends(get_station_context)):
     """

@@ -14,10 +14,10 @@ let fetchPromise: Promise<BusinessInfo | null> | null = null
 function fetchBusinessInfo(): Promise<BusinessInfo | null> {
   if (cachedBusinessInfo) return Promise.resolve(cachedBusinessInfo)
   if (fetchPromise) return fetchPromise
-  fetchPromise = authFetch('/api/v1/settings/system', { headers: getHeaders() })
+  fetchPromise = authFetch('/api/v1/settings/business-info', { headers: getHeaders() })
     .then(r => r.ok ? r.json() : null)
     .then(data => {
-      if (data?.business_name) {
+      if (data) {
         const info: BusinessInfo = {
           business_name: data.business_name || '',
           station_location: data.station_location || '',
