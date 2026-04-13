@@ -71,35 +71,37 @@ def validate_unique_nozzle_assignment(assignments: List[Dict[str, Any]]) -> None
         raise ValueError(f"Nozzles assigned to multiple attendants: {', '.join(duplicates)}")
 
 
+def derive_island_ids_from_nozzles(nozzle_ids: List[str], storage: Dict[str, Any] = None) -> List[str]:
+    """Derive the set of island IDs that own the given nozzles."""
+    store = storage if storage is not None else storage_module.STORAGE
+    island_ids = []
+    for island_id, island in store.get('islands', {}).items():
+        ps = island.get('pump_station')
+        if not ps:
+            continue
+        for nozzle in ps.get('nozzles', []):
+            if nozzle.get('nozzle_id') in nozzle_ids:
+                if island_id not in island_ids:
+                    island_ids.append(island_id)
+    return island_ids
+
+
 def validate_shift_assignments(assignments: List[Dict[str, Any]], storage: Dict[str, Any] = None) -> None:
     """Validate all assignments in a shift"""
     errors = []
 
     for assignment in assignments:
         attendant_id = assignment.get('attendant_id')
-        island_ids = assignment.get('island_ids', [])
         nozzle_ids = assignment.get('nozzle_ids', [])
 
         # Validate attendant exists
         if not validate_attendant_exists(attendant_id):
             errors.append(f"Attendant {attendant_id} does not exist or is not a user")
 
-        # Validate islands exist
-        for island_id in island_ids:
-            if not validate_island_exists(island_id, storage):
-                errors.append(f"Island {island_id} does not exist")
-
-        # Validate nozzles exist and belong to assigned islands
+        # Validate nozzles exist
         for nozzle_id in nozzle_ids:
             if not validate_nozzle_exists(nozzle_id, storage):
                 errors.append(f"Nozzle {nozzle_id} does not exist")
-            elif island_ids:
-                belongs_to_any = any(
-                    validate_nozzle_belongs_to_island(nozzle_id, island_id, storage)
-                    for island_id in island_ids
-                )
-                if not belongs_to_any:
-                    errors.append(f"Nozzle {nozzle_id} does not belong to assigned islands")
 
     # Validate unique nozzle assignment
     try:

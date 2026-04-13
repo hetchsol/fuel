@@ -411,25 +411,21 @@ export default function Shifts() {
   const handleIslandToggle = (attendantId: string, islandId: string, checked: boolean) => {
     setSelectedAttendants(selectedAttendants.map(attendant => {
       if (attendant.user_id === attendantId) {
-        const island_ids = checked
-          ? [...(attendant.island_ids || []), islandId]
-          : (attendant.island_ids || []).filter((id: string) => id !== islandId)
-
-        // Auto-add all nozzles when island is checked, remove when unchecked
+        // Island toggle is a convenience shortcut: select/deselect all nozzles on that island
         let nozzle_ids = [...(attendant.nozzle_ids || [])]
         const island = islandsData.find(i => i.island_id === islandId)
         const islandNozzleIds = island?.pump_station?.nozzles?.map((n: any) => n.nozzle_id) || []
 
         if (checked) {
-          // Add all nozzles from this island (avoid duplicates)
           for (const nid of islandNozzleIds) {
             if (!nozzle_ids.includes(nid)) nozzle_ids.push(nid)
           }
         } else {
-          // Remove nozzles belonging to the unchecked island
           nozzle_ids = nozzle_ids.filter((nid: string) => !islandNozzleIds.includes(nid))
         }
 
+        // island_ids are auto-derived from selected nozzles
+        const island_ids = deriveIslandIds(nozzle_ids)
         return { ...attendant, island_ids, nozzle_ids }
       }
       return attendant
@@ -442,7 +438,8 @@ export default function Shifts() {
         const nozzle_ids = checked
           ? [...(attendant.nozzle_ids || []), nozzleId]
           : (attendant.nozzle_ids || []).filter((id: string) => id !== nozzleId)
-        return { ...attendant, nozzle_ids }
+        const island_ids = deriveIslandIds(nozzle_ids)
+        return { ...attendant, nozzle_ids, island_ids }
       }
       return attendant
     }))
@@ -466,6 +463,34 @@ export default function Shifts() {
     return nozzles
   }
 
+  // Derive island IDs from a list of nozzle IDs (nozzle-first approach)
+  const deriveIslandIds = (nozzleIds: string[]): string[] => {
+    const ids: string[] = []
+    islandsData.forEach((island: any) => {
+      const islandNozzleIds = island.pump_station?.nozzles?.map((n: any) => n.nozzle_id) || []
+      if (nozzleIds.some(nid => islandNozzleIds.includes(nid))) {
+        if (!ids.includes(island.island_id)) ids.push(island.island_id)
+      }
+    })
+    return ids
+  }
+
+  // Get all nozzles from all active islands, grouped by island
+  const getAllNozzlesGroupedByIsland = () => {
+    return islandsData.map((island: any) => ({
+      island_id: island.island_id,
+      island_name: island.name,
+      fuel_type_abbrev: island.fuel_type_abbrev,
+      product_type: island.product_type,
+      nozzles: (island.pump_station?.nozzles || []).map((nozzle: any) => ({
+        ...nozzle,
+        fuel_type_abbrev: island.fuel_type_abbrev,
+        island_id: island.island_id,
+        island_name: island.name,
+      }))
+    })).filter((g: any) => g.nozzles.length > 0)
+  }
+
   // Validate shift before creation — returns array of error strings (empty = valid)
   const validateShift = (): string[] => {
     const errors: string[] = []
@@ -476,14 +501,7 @@ export default function Shifts() {
       errors.push('At least one attendant must be selected.')
     }
 
-    // 2. Every attendant must have at least one island assigned
-    selectedAttendants.forEach(a => {
-      if (!a.island_ids || a.island_ids.length === 0) {
-        errors.push(`${a.full_name} has no islands assigned.`)
-      }
-    })
-
-    // 3. Every attendant must have at least one nozzle assigned
+    // 2. Every attendant must have at least one nozzle assigned
     selectedAttendants.forEach(a => {
       if (!a.nozzle_ids || a.nozzle_ids.length === 0) {
         errors.push(`${a.full_name} has no nozzles assigned.`)
@@ -778,10 +796,24 @@ export default function Shifts() {
                               )}
                               {a.nozzle_ids && a.nozzle_ids.length > 0 && (
                                 <span className="text-content-secondary ml-2">
-                                  — {a.nozzle_ids.map((nid: string) => {
-                                    const nozzle = nozzles.find(n => n.nozzle_id === nid)
-                                    return nozzle ? getNozzleDisplayName(nozzle) : nid
-                                  }).join(', ')}
+                                  — {(() => {
+                                    // Group nozzles by island for compact display
+                                    const groups: Record<string, string[]> = {}
+                                    a.nozzle_ids.forEach((nid: string) => {
+                                      for (const island of islandsData) {
+                                        const nz = island.pump_station?.nozzles?.find((n: any) => n.nozzle_id === nid)
+                                        if (nz) {
+                                          const key = island.name
+                                          if (!groups[key]) groups[key] = []
+                                          const label = (island.fuel_type_abbrev && nz.display_label)
+                                            ? `${island.fuel_type_abbrev} ${nz.display_label}` : nz.display_label || nid
+                                          groups[key].push(label)
+                                          break
+                                        }
+                                      }
+                                    })
+                                    return Object.entries(groups).map(([name, labels]) => `${name}: ${labels.join(', ')}`).join(' | ')
+                                  })()}
                                 </span>
                               )}
                             </div>
@@ -815,38 +847,52 @@ export default function Shifts() {
                     <div key={assignment.attendant_id} className="p-4 bg-surface-card rounded-lg border border-surface-border">
                       <p className="font-medium mb-2 text-content-primary">👤 {assignment.attendant_name}</p>
 
-                      {assignment.island_ids && assignment.island_ids.length > 0 && (
-                        <div className="mb-2">
-                          <span className="text-sm text-content-secondary">Islands: </span>
-                          <span className="text-sm font-medium">
-                            {assignment.island_ids.map((id: string) => {
-                              const island = islandsData.find(i => i.island_id === id)
-                              return island?.name || id
-                            }).join(', ')}
-                          </span>
-                        </div>
-                      )}
-
                       {assignment.nozzle_ids && assignment.nozzle_ids.length > 0 && (
                         <div>
-                          <span className="text-sm text-content-secondary">Nozzles: </span>
-                          <div className="flex flex-wrap gap-2 mt-1">
-                            {assignment.nozzle_ids.map((nozzleId: string) => {
-                              const nozzle = getFilteredNozzles(assignment.island_ids).find((n: any) => n.nozzle_id === nozzleId)
-                              return (
-                                <span
-                                  key={nozzleId}
-                                  className={`px-2 py-1 text-xs rounded ${
-                                    nozzle?.fuel_type === 'Petrol'
-                                      ? 'bg-action-primary-light text-action-primary'
-                                      : 'bg-category-c-light text-category-c'
-                                  }`}
-                                >
-                                  {nozzle ? getNozzleDisplayName(nozzle) : nozzleId}
-                                </span>
-                              )
-                            })}
-                          </div>
+                          {/* Group nozzles by their parent island */}
+                          {(() => {
+                            const grouped: Record<string, { island_name: string; nozzle_labels: { id: string; label: string; fuel_type: string }[] }> = {}
+                            assignment.nozzle_ids.forEach((nozzleId: string) => {
+                              let found = false
+                              for (const island of islandsData) {
+                                const nozzle = island.pump_station?.nozzles?.find((n: any) => n.nozzle_id === nozzleId)
+                                if (nozzle) {
+                                  if (!grouped[island.island_id]) {
+                                    grouped[island.island_id] = { island_name: island.name, nozzle_labels: [] }
+                                  }
+                                  const label = (island.fuel_type_abbrev && nozzle.display_label)
+                                    ? `${island.fuel_type_abbrev} ${nozzle.display_label}`
+                                    : nozzle.display_label || nozzleId
+                                  grouped[island.island_id].nozzle_labels.push({ id: nozzleId, label, fuel_type: nozzle.fuel_type })
+                                  found = true
+                                  break
+                                }
+                              }
+                              if (!found) {
+                                if (!grouped['unknown']) grouped['unknown'] = { island_name: 'Unknown', nozzle_labels: [] }
+                                grouped['unknown'].nozzle_labels.push({ id: nozzleId, label: nozzleId, fuel_type: '' })
+                              }
+                            })
+                            return Object.entries(grouped).map(([islId, group]) => (
+                              <div key={islId} className="mb-2">
+                                <span className="text-xs text-content-secondary font-medium">{group.island_name}:</span>
+                                <div className="flex flex-wrap gap-1.5 mt-1 ml-2">
+                                  {group.nozzle_labels.map(n => (
+                                    <span
+                                      key={n.id}
+                                      className={`px-2 py-1 text-xs rounded ${
+                                        n.fuel_type === 'Petrol'
+                                          ? 'bg-action-primary-light text-action-primary'
+                                          : 'bg-category-c-light text-category-c'
+                                      }`}
+                                    >
+                                      {n.label}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ))
+                          })()}
                         </div>
                       )}
                     </div>
@@ -1510,48 +1556,75 @@ export default function Shifts() {
                     </label>
                   </div>
 
-                  {/* Island Selection */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2">Assigned Islands</label>
-                    <div className="flex flex-wrap gap-2">
-                      {islandsData.map(island => (
-                        <label key={island.island_id} className="flex items-center space-x-2 p-2 border rounded hover:bg-action-primary-light cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={attendant.island_ids?.includes(island.island_id) || false}
-                            onChange={(e) => handleIslandToggle(attendant.user_id, island.island_id, e.target.checked)}
-                            className="form-checkbox"
-                          />
-                          <span className="text-sm">{island.name}{island.fuel_type_abbrev ? ` (${island.fuel_type_abbrev})` : ''}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Nozzle Selection (filtered by selected islands) */}
+                  {/* Nozzle Assignment — grouped by island */}
                   <div>
-                    <label className="block text-sm font-medium mb-2">Assigned Nozzles</label>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      {getFilteredNozzles(attendant.island_ids || []).map(nozzle => (
-                        <label
-                          key={nozzle.nozzle_id}
-                          className={`flex items-center space-x-2 p-2 border rounded hover:bg-action-primary-light cursor-pointer ${
-                            nozzle.fuel_type === 'Petrol' ? 'border-fuel-petrol-border' : 'border-fuel-diesel-border'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={attendant.nozzle_ids?.includes(nozzle.nozzle_id) || false}
-                            onChange={(e) => handleNozzleToggle(attendant.user_id, nozzle.nozzle_id, e.target.checked)}
-                            className="form-checkbox"
-                          />
-                          <span className="text-sm">{getNozzleDisplayName(nozzle)}</span>
-                        </label>
-                      ))}
+                    <label className="block text-sm font-medium mb-2">Assign Nozzles</label>
+                    <p className="text-xs text-content-secondary mb-3">Pick individual nozzles from any island. Use the island header checkbox to select/deselect all nozzles on that island.</p>
+                    <div className="space-y-3">
+                      {getAllNozzlesGroupedByIsland().map((group: any) => {
+                        const allIslandNozzleIds = group.nozzles.map((n: any) => n.nozzle_id)
+                        const selectedCount = allIslandNozzleIds.filter((nid: string) => attendant.nozzle_ids?.includes(nid)).length
+                        const allSelected = selectedCount === allIslandNozzleIds.length && allIslandNozzleIds.length > 0
+                        const someSelected = selectedCount > 0 && !allSelected
+                        // Check if any nozzle on this island is assigned to another attendant
+                        const otherAttendantNozzles = new Set(
+                          selectedAttendants
+                            .filter(a => a.user_id !== attendant.user_id)
+                            .flatMap(a => a.nozzle_ids || [])
+                        )
+                        return (
+                          <div key={group.island_id} className={`p-3 rounded-lg border ${
+                            group.product_type === 'Petrol' ? 'border-fuel-petrol-border bg-fuel-petrol-light/30' : 'border-fuel-diesel-border bg-fuel-diesel-light/30'
+                          }`}>
+                            <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={allSelected}
+                                ref={(el) => { if (el) el.indeterminate = someSelected }}
+                                onChange={(e) => handleIslandToggle(attendant.user_id, group.island_id, e.target.checked)}
+                                className="form-checkbox"
+                              />
+                              <span className="text-sm font-semibold">{group.island_name}</span>
+                              {group.fuel_type_abbrev && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                  group.product_type === 'Petrol' ? 'bg-fuel-petrol-light text-fuel-petrol' : 'bg-fuel-diesel-light text-fuel-diesel'
+                                }`}>{group.fuel_type_abbrev}</span>
+                              )}
+                              <span className="text-xs text-content-secondary ml-auto">{selectedCount}/{allIslandNozzleIds.length}</span>
+                            </label>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 ml-6">
+                              {group.nozzles.map((nozzle: any) => {
+                                const takenByOther = otherAttendantNozzles.has(nozzle.nozzle_id)
+                                const takenByName = takenByOther
+                                  ? selectedAttendants.find(a => a.user_id !== attendant.user_id && a.nozzle_ids?.includes(nozzle.nozzle_id))?.full_name
+                                  : null
+                                return (
+                                  <label
+                                    key={nozzle.nozzle_id}
+                                    className={`flex items-center space-x-2 p-2 border rounded cursor-pointer ${
+                                      takenByOther
+                                        ? 'opacity-50 border-status-error bg-status-error-light cursor-not-allowed'
+                                        : nozzle.fuel_type === 'Petrol' ? 'border-fuel-petrol-border hover:bg-action-primary-light' : 'border-fuel-diesel-border hover:bg-category-c-light'
+                                    }`}
+                                    title={takenByOther ? `Assigned to ${takenByName}` : ''}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={attendant.nozzle_ids?.includes(nozzle.nozzle_id) || false}
+                                      onChange={(e) => handleNozzleToggle(attendant.user_id, nozzle.nozzle_id, e.target.checked)}
+                                      className="form-checkbox"
+                                      disabled={takenByOther}
+                                    />
+                                    <span className="text-sm">{getNozzleDisplayName(nozzle)}</span>
+                                    {takenByOther && <span className="text-[10px] text-status-error ml-auto">taken</span>}
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
-                    {(!attendant.island_ids || attendant.island_ids.length === 0) && (
-                      <p className="text-sm text-content-secondary mt-2">Select islands first to see available nozzles</p>
-                    )}
                   </div>
                 </div>
               ))}
@@ -1566,20 +1639,35 @@ export default function Shifts() {
                     <p><strong>Shift ID:</strong> {shiftForm.date}-{shiftForm.shift_type}</p>
                     <div className="mt-2">
                       <strong>Assignments:</strong>
-                      {selectedAttendants.map(a => (
-                        <div key={a.user_id} className="ml-4 mt-1">
-                          <span className="font-medium">{a.full_name}</span>
-                          <span className="text-action-primary">
-                            {' '}&#8212; {(a.island_ids || []).length} island(s), {(a.nozzle_ids || []).length} nozzle(s)
-                          </span>
-                          <div className="ml-2 text-xs text-action-primary">
-                            Nozzles: {(a.nozzle_ids || []).map((nid: string) => {
-                              const nozzle = nozzles.find(n => n.nozzle_id === nid)
-                              return nozzle ? getNozzleDisplayName(nozzle) : nid
-                            }).join(', ') || 'None'}
+                      {selectedAttendants.map(a => {
+                        // Group nozzles by island for confirmation display
+                        const grouped: Record<string, { name: string; labels: string[] }> = {}
+                        ;(a.nozzle_ids || []).forEach((nid: string) => {
+                          for (const island of islandsData) {
+                            const nz = island.pump_station?.nozzles?.find((n: any) => n.nozzle_id === nid)
+                            if (nz) {
+                              if (!grouped[island.island_id]) grouped[island.island_id] = { name: island.name, labels: [] }
+                              const label = (island.fuel_type_abbrev && nz.display_label)
+                                ? `${island.fuel_type_abbrev} ${nz.display_label}` : nz.display_label || nid
+                              grouped[island.island_id].labels.push(label)
+                              break
+                            }
+                          }
+                        })
+                        return (
+                          <div key={a.user_id} className="ml-4 mt-1">
+                            <span className="font-medium">{a.full_name}</span>
+                            <span className="text-action-primary">
+                              {' '}&#8212; {(a.nozzle_ids || []).length} nozzle(s) across {Object.keys(grouped).length} island(s)
+                            </span>
+                            {Object.entries(grouped).map(([islId, g]) => (
+                              <div key={islId} className="ml-2 text-xs text-action-primary">
+                                {g.name}: {g.labels.join(', ')}
+                              </div>
+                            ))}
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
 

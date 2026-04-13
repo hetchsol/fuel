@@ -9,7 +9,7 @@ from typing import List
 from datetime import datetime
 from ...models.models import Shift, ShiftType, DualReading, NozzleShiftSummary, TankDipReading
 from ...services.relationship_validation import validate_create, validate_delete_operation
-from ...services.shift_validation import validate_shift_assignments
+from ...services.shift_validation import validate_shift_assignments, derive_island_ids_from_nozzles
 from .auth import get_current_user, require_supervisor_or_owner, require_owner, get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.shift_auto_close import check_and_close_stale_shifts
@@ -67,6 +67,12 @@ def create_shift(shift: Shift, ctx: dict = Depends(get_station_context)):
             validate_shift_assignments([a.dict() for a in shift.assignments])
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+    # Auto-derive island_ids from nozzle assignments (nozzle-first flexibility)
+    if shift.assignments:
+        for a in shift.assignments:
+            if a.nozzle_ids:
+                a.island_ids = derive_island_ids_from_nozzles(a.nozzle_ids)
 
     # Populate metadata
     shift.created_by = current_user['user_id']
@@ -374,6 +380,12 @@ def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_co
             validate_shift_assignments([a.dict() for a in shift.assignments])
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+    # Auto-derive island_ids from nozzle assignments (nozzle-first flexibility)
+    if shift.assignments:
+        for a in shift.assignments:
+            if a.nozzle_ids:
+                a.island_ids = derive_island_ids_from_nozzles(a.nozzle_ids)
 
     # Update attendants list for backward compatibility
     if shift.assignments:
