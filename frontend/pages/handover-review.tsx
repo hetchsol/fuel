@@ -50,8 +50,11 @@ interface HandoverEntry {
   }[] | null
   expected_cash: number
   actual_cash: number
+  pos_receipts?: number
+  total_accounted?: number
   difference: number
   status: string
+  phase?: string
   review_status: string
   supervisor_review?: {
     reviewed_by: string
@@ -88,6 +91,7 @@ export default function HandoverReview() {
   const [summaryPending, setSummaryPending] = useState(0)
   const [summaryFlagged, setSummaryFlagged] = useState(0)
   const [summaryApprovedToday, setSummaryApprovedToday] = useState(0)
+  const [staleReadingsCount, setStaleReadingsCount] = useState(0)
 
   // Filters
   const [filterDate, setFilterDate] = useState('')
@@ -134,6 +138,7 @@ export default function HandoverReview() {
         setSummaryPending(data.pending || 0)
         setSummaryFlagged(data.flagged || 0)
         setSummaryApprovedToday(data.approved_today || 0)
+        setStaleReadingsCount(data.stale_readings_count || 0)
         setLoading(false)
       })
       .catch(err => {
@@ -286,6 +291,13 @@ export default function HandoverReview() {
           </div>
         ))}
       </div>
+
+      {/* Stale readings warning */}
+      {staleReadingsCount > 0 && (
+        <div className="rounded-lg p-3 text-sm" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)', borderWidth: 1, borderColor: 'var(--color-status-warning)' }}>
+          <span className="font-semibold">{staleReadingsCount} attendant(s)</span> have verified readings but haven't completed shift closing (over 4 hours ago). Follow up in the office.
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg p-3 shadow"

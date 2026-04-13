@@ -176,7 +176,8 @@ export default function MyShift() {
   const [nozzleLossThreshold, setNozzleLossThreshold] = useState<number>(0.8)
 
   // Wizard step state
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
+  const [currentStep, setCurrentStep] = useState<1 | 2>(1)
+  const [readingsVerifiedHandover, setReadingsVerifiedHandover] = useState<any>(null)
   // Review confirmation modal
   const [showReviewModal, setShowReviewModal] = useState(false)
 
@@ -211,6 +212,7 @@ export default function MyShift() {
         )
         setMeterThreshold(shiftData.meter_discrepancy_threshold ?? 0.5)
         setNozzleLossThreshold(shiftData.nozzle_allowable_loss_liters ?? 0.8)
+        setReadingsVerifiedHandover(shiftData.readings_verified_handover || null)
 
         // Fetch credit accounts for line-item entry
         authFetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
@@ -394,8 +396,8 @@ export default function MyShift() {
   })
 
   const canProceedToReview = allClosingsEntered && allValid && allMechEntered && allMechValid && allStockVarianceNotesProvided && noStockOutViolations && allDeviationNotesProvided
-  const canSubmit = currentStep === 3 && allClosingsEntered && allValid && allMechEntered && allMechValid
-    && allStockVarianceNotesProvided && noStockOutViolations && actualCash !== '' && !submitting
+  const canSubmit = currentStep === 2 && allClosingsEntered && allValid && allMechEntered && allMechValid
+    && allStockVarianceNotesProvided && noStockOutViolations && !submitting
     && (!hasDeviationFlags || notes.trim() !== '')
 
   const updateClosingReading = (nozzleId: string, value: string) => {
@@ -479,7 +481,7 @@ export default function MyShift() {
         lub_no_sales: lubNoSales,
       }
 
-      const res = await authFetch(`${BASE}/handover/submit`, {
+      const res = await authFetch(`${BASE}/handover/submit-readings`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -491,17 +493,6 @@ export default function MyShift() {
             mechanical_opening: r.mechanical_opening,
             mechanical_closing: parseFloat(r.mechanical_closing) || 0,
           })),
-          lpg_sales: lpgTotal,
-          lubricant_sales: lubricantTotal,
-          accessory_sales: accessoryTotal,
-          credit_sales: creditVal,
-          credit_sale_items: creditItems.map(i => ({
-            account_id: i.account_id,
-            account_name: i.account_name,
-            fuel_type: i.fuel_type,
-            volume: parseFloat(i.volume) || 0,
-          })),
-          actual_cash: actualCashVal,
           notes: notes || null,
           stock_snapshot: stockSnapshot,
         }),
@@ -509,12 +500,13 @@ export default function MyShift() {
 
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.detail || 'Failed to submit handover')
+        throw new Error(err.detail || 'Failed to submit readings')
       }
 
       const result = await res.json()
       setHandoverResult(result)
-      setSuccess('Shift handover submitted successfully!')
+      setReadingsVerifiedHandover(result)
+      setSuccess('Readings verified successfully! Proceed to the office for shift closing.')
     } catch (err: any) {
       setError(err.message || 'Submission failed')
     } finally {
@@ -623,16 +615,37 @@ export default function MyShift() {
   // Step-specific subtitles
   const stepSubtitles: Record<number, string> = {
     1: 'Enter closing readings and stock counts for your shift',
-    2: 'Review your entries before confirming',
-    3: 'Complete your cash handover',
+    2: 'Review your entries before submitting',
+  }
+
+  const handleRedoReadings = async () => {
+    if (!readingsVerifiedHandover) return
+    if (!confirm('This will discard your previously submitted readings. Continue?')) return
+    try {
+      const res = await authFetch(`${BASE}/handover/redo-readings`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ handover_id: readingsVerifiedHandover.handover_id }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Failed to redo readings')
+      }
+      setReadingsVerifiedHandover(null)
+      setHandoverResult(null)
+      setSuccess('')
+      setCurrentStep(1)
+    } catch (err: any) {
+      setError(err.message || 'Failed to redo readings')
+    }
   }
 
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>My Shift</h1>
+        <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Readings Verification</h1>
         <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
-          {handoverResult ? 'Shift handover submitted' : stepSubtitles[currentStep]}
+          {handoverResult ? 'Readings verified — proceed to office for shift closing' : stepSubtitles[currentStep]}
         </p>
       </div>
 
@@ -757,6 +770,32 @@ export default function MyShift() {
         </div>
       )}
 
+      {/* Phase 1 already submitted banner */}
+      {readingsVerifiedHandover && !handoverResult && (
+        <div className="rounded-lg shadow p-4 mb-6"
+          style={{ backgroundColor: 'var(--color-status-success-light)', borderColor: 'var(--color-status-success)', borderWidth: 2 }}>
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="font-semibold text-sm" style={{ color: 'var(--color-status-success)' }}>
+                Readings Verified
+              </h3>
+              <p className="text-sm mt-1" style={{ color: 'var(--color-status-success)' }}>
+                Your readings have been submitted. Proceed to the office for shift closing.
+              </p>
+              <p className="text-xs mt-2" style={{ color: 'var(--color-status-success)' }}>
+                Handover ID: {readingsVerifiedHandover.handover_id} | Total Expected: K{(readingsVerifiedHandover.total_expected || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </p>
+            </div>
+            <button
+              onClick={handleRedoReadings}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg"
+              style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)', borderColor: 'var(--color-status-warning)', borderWidth: 1 }}>
+              Redo Readings
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Safe Deposits — visible on all steps during active shift */}
       {shiftFound && !handoverResult && (
         <div className="rounded-lg shadow mb-6 overflow-hidden"
@@ -870,25 +909,6 @@ export default function MyShift() {
             </span>
           </div>
 
-          <div className="w-8 sm:w-16 h-0.5 mx-1 sm:mx-3"
-            style={{ backgroundColor: currentStep > 2 ? theme.primary : theme.border }} />
-
-          {/* Step 3 */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-              style={{
-                backgroundColor: currentStep === 3 ? theme.primary : 'transparent',
-                color: currentStep === 3 ? '#fff' : theme.textSecondary,
-                borderWidth: 2,
-                borderColor: currentStep === 3 ? theme.primary : theme.border,
-              }}>
-              3
-            </div>
-            <span className="text-sm font-medium hidden sm:inline"
-              style={{ color: currentStep === 3 ? theme.textPrimary : theme.textSecondary }}>
-              Cash Handover
-            </span>
-          </div>
         </div>
       )}
 
@@ -1617,330 +1637,84 @@ export default function MyShift() {
               {'\u2190'} Back to Edit
             </button>
             <button
-              onClick={() => setCurrentStep(3)}
-              className="px-6 py-3 rounded-lg text-sm font-semibold text-white"
+              onClick={() => setShowReviewModal(true)}
+              disabled={!canProceedToReview}
+              className="px-6 py-3 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
               style={{ backgroundColor: theme.primary }}>
-              Confirm & Proceed to Cash Handover {'\u2192'}
+              Submit Readings
             </button>
           </div>
         </>
       )}
 
-      {/* ============================================= */}
-      {/* STEP 3: Cash Handover (financial reveal)      */}
-      {/* ============================================= */}
-      {currentStep === 3 && !handoverResult && (
-        <>
-          <div className="rounded-lg shadow p-4 mb-6"
+      {/* Review Confirmation Modal */}
+      {showReviewModal && !handoverResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
             style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-            <h2 className="text-sm font-semibold mb-3 uppercase tracking-wide" style={{ color: theme.textSecondary }}>
-              Cash Handover
-            </h2>
-            <div className={`grid grid-cols-1 ${isAttendant ? '' : 'md:grid-cols-2'} gap-6`}>
-              {/* Left: computation summary — hidden from attendants */}
-              {!isAttendant && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span style={{ color: theme.textSecondary }}>Fuel Revenue</span>
-                  <span className="font-mono font-medium" style={{ color: theme.textPrimary }}>
-                    {fmtZMW(fuelRevenue)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span style={{ color: theme.textSecondary }}>+ LPG Sales</span>
-                  <span className="font-mono" style={{ color: theme.textPrimary }}>
-                    {fmtZMW(lpgTotal)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span style={{ color: theme.textSecondary }}>+ Lubricant Sales</span>
-                  <span className="font-mono" style={{ color: theme.textPrimary }}>
-                    {fmtZMW(lubricantTotal)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span style={{ color: theme.textSecondary }}>+ Accessory Sales</span>
-                  <span className="font-mono" style={{ color: theme.textPrimary }}>
-                    {fmtZMW(accessoryTotal)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm pt-2" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                  <span className="font-semibold" style={{ color: theme.textPrimary }}>Total Expected</span>
-                  <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>
-                    {fmtZMW(totalExpected)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span style={{ color: theme.textSecondary }}>- Credit Sales</span>
-                  <span className="font-mono" style={{ color: 'var(--color-status-error)' }}>
-                    -{fmtZMW(creditVal)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm pt-2" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                  <span className="font-bold" style={{ color: theme.textPrimary }}>Expected Cash</span>
-                  <span className="font-mono font-bold" style={{ color: theme.primary }}>
-                    {fmtZMW(expectedCash)} ZMW
-                  </span>
-                </div>
+            <h3 className="text-lg font-bold mb-3" style={{ color: theme.textPrimary }}>
+              Confirm Readings Submission
+            </h3>
+
+            {hasLossFlags && (
+              <div className="rounded-lg p-3 mb-3 text-sm"
+                style={{
+                  backgroundColor: 'var(--color-status-error-light, #fde8e8)',
+                  color: 'var(--color-status-error)',
+                  borderWidth: 1,
+                  borderColor: 'var(--color-status-error)',
+                }}>
+                <span className="font-semibold">Nozzle Loss Alert:</span>
+                <ul className="mt-1 list-disc list-inside">
+                  {nozzleRows.map((row, idx) => {
+                    const comp = nozzleComputations[idx]
+                    if (!comp.lossExceedsThreshold) return null
+                    const label = row.fuel_type_abbrev && row.display_label
+                      ? `${row.fuel_type_abbrev} ${row.display_label}`
+                      : row.nozzle_id
+                    return (
+                      <li key={row.nozzle_id}>
+                        {label}: {comp.deviationL.toFixed(3)}L loss (threshold: {nozzleLossThreshold}L)
+                      </li>
+                    )
+                  })}
+                </ul>
               </div>
-              )}
+            )}
 
-              {/* Right: actual cash + difference */}
-              <div className="space-y-4">
-                {/* Credit Sales — line items or legacy input */}
-                {creditAccounts.length > 0 ? (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Credit Sales</label>
-                      <button type="button" onClick={() => setCreditItems(prev => [...prev, { account_id: creditAccounts[0]?.account_id || '', account_name: creditAccounts[0]?.account_name || '', fuel_type: 'Diesel', volume: '', price_per_liter: creditAccounts[0]?.default_price_per_liter || fuelPrices.Diesel, amount: 0 }])}
-                        className="px-2 py-1 text-xs font-medium rounded text-white"
-                        style={{ backgroundColor: theme.primary }}>
-                        + Add
-                      </button>
-                    </div>
-                    {creditItems.length === 0 && (
-                      <div className="text-xs py-2 text-center" style={{ color: theme.textSecondary }}>No credit sales — tap Add to record one</div>
-                    )}
-                    {creditItems.map((item, idx) => {
-                      const acct = creditAccounts.find(a => a.account_id === item.account_id)
-                      const resolvedPrice = acct?.default_price_per_liter || fuelPrices[item.fuel_type as 'Diesel'|'Petrol'] || 0
-                      const vol = parseFloat(item.volume) || 0
-                      const amt = round2(vol * resolvedPrice)
-                      // Sync amount if changed
-                      if (item.price_per_liter !== resolvedPrice || item.amount !== amt) {
-                        const updated = [...creditItems]
-                        updated[idx] = { ...item, price_per_liter: resolvedPrice, amount: amt }
-                        setCreditItems(updated)
-                      }
-                      return (
-                        <div key={idx} className={`grid ${isAttendant ? 'grid-cols-8' : 'grid-cols-12'} gap-1 items-end mb-1`}>
-                          <div className={isAttendant ? 'col-span-3' : 'col-span-4'}>
-                            {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Account</div>}
-                            <select value={item.account_id} onChange={e => {
-                              const a = creditAccounts.find(x => x.account_id === e.target.value)
-                              const updated = [...creditItems]
-                              updated[idx] = { ...item, account_id: e.target.value, account_name: a?.account_name || '' }
-                              setCreditItems(updated)
-                            }} className="w-full px-1 py-1.5 rounded border text-xs" style={inputStyle}>
-                              {creditAccounts.map(a => <option key={a.account_id} value={a.account_id}>{a.account_name}</option>)}
-                            </select>
-                          </div>
-                          <div className="col-span-2">
-                            {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Fuel</div>}
-                            <select value={item.fuel_type} onChange={e => {
-                              const updated = [...creditItems]
-                              updated[idx] = { ...item, fuel_type: e.target.value }
-                              setCreditItems(updated)
-                            }} className="w-full px-1 py-1.5 rounded border text-xs" style={inputStyle}>
-                              <option value="Diesel">Diesel</option>
-                              <option value="Petrol">Petrol</option>
-                            </select>
-                          </div>
-                          <div className="col-span-2">
-                            {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Vol (L)</div>}
-                            <input type="number" min={0} step="0.01" value={item.volume}
-                              onChange={e => {
-                                const updated = [...creditItems]
-                                updated[idx] = { ...item, volume: e.target.value }
-                                setCreditItems(updated)
-                              }}
-                              placeholder="0" className="w-full px-1 py-1.5 rounded border text-xs text-right font-mono" style={inputStyle} />
-                          </div>
-                          {!isAttendant && (
-                          <div className="col-span-1">
-                            {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>K/L</div>}
-                            <div className="px-1 py-1.5 text-xs font-mono text-right" style={{ color: theme.textSecondary }}>{resolvedPrice.toFixed(2)}</div>
-                          </div>
-                          )}
-                          {!isAttendant && (
-                          <div className="col-span-2">
-                            {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Amount</div>}
-                            <div className="px-1 py-1.5 text-xs font-mono text-right font-medium" style={{ color: theme.textPrimary }}>{fmtZMW(amt)}</div>
-                          </div>
-                          )}
-                          <div className="col-span-1 flex justify-center">
-                            {idx === 0 && <div className="text-[10px] mb-0.5 invisible">X</div>}
-                            <button type="button" onClick={() => setCreditItems(prev => prev.filter((_, i) => i !== idx))}
-                              className="text-xs px-1 py-1" style={{ color: 'var(--color-status-error)' }}>✕</button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                    {creditItems.length > 0 && !isAttendant && (
-                      <div className="flex justify-between text-xs font-semibold pt-1 mt-1" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                        <span style={{ color: theme.textSecondary }}>Credit Total</span>
-                        <span className="font-mono" style={{ color: theme.textPrimary }}>{fmtZMW(creditItemsTotal)}</span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  !isAttendant ? (
-                  <div>
-                    <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-                      Credit Sales (ZMW)
-                    </label>
-                    <input type="number" min={0} step="0.01" value={creditSales}
-                      onChange={e => setCreditSales(e.target.value)} placeholder="0.00"
-                      className="w-full px-3 py-2 rounded border text-sm text-right font-mono"
-                      style={inputStyle} />
-                  </div>
-                  ) : null
-                )}
-                <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-                    Actual Cash Handed In (ZMW)
-                  </label>
-                  <input type="number" min={0} step="0.01" value={actualCash}
-                    onChange={e => setActualCash(e.target.value)} placeholder="0.00"
-                    className="w-full px-3 py-2 rounded border text-sm text-right text-lg font-mono"
-                    style={inputStyle} />
-                </div>
-
-                {actualCash !== '' && !isAttendant && (
-                  <div className="rounded-lg p-4 text-center"
-                    style={{
-                      backgroundColor: difference >= 0 ? 'var(--color-status-success-light)' : 'var(--color-status-error-light)',
-                      borderWidth: 2,
-                      borderColor: difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)',
-                    }}>
-                    <div className="text-xs uppercase tracking-wide mb-1"
-                      style={{ color: difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
-                      {difference >= 0 ? 'Surplus' : 'Shortage'}
-                    </div>
-                    <div className="text-2xl font-bold font-mono"
-                      style={{ color: difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
-                      {difference >= 0 ? '+' : ''}{fmtZMW(difference)} ZMW
-                    </div>
-                  </div>
-                )}
-
-                {hasDeviationFlags && (
-                  <div className="rounded-lg p-3 text-sm"
-                    style={{
-                      backgroundColor: 'var(--color-status-warning-light, #fef3cd)',
-                      color: 'var(--color-status-warning, #856404)',
-                      borderWidth: 1,
-                      borderColor: 'var(--color-status-warning, #ffc107)',
-                    }}>
-                    <span className="font-semibold">Warning:</span> Meter discrepancy detected on {nozzleComputations.filter(c => c.flagged).length} nozzle(s). You must provide an explanation before submitting.
-                  </div>
-                )}
-
-                {hasLossFlags && (
-                  <div className="rounded-lg p-3 text-sm"
-                    style={{
-                      backgroundColor: 'var(--color-status-error-light, #fde8e8)',
-                      color: 'var(--color-status-error)',
-                      borderWidth: 1,
-                      borderColor: 'var(--color-status-error)',
-                    }}>
-                    <span className="font-semibold">Nozzle Loss Alert:</span> {nozzleComputations.filter(c => c.lossExceedsThreshold).length} nozzle(s) exceed the allowable loss of {nozzleLossThreshold}L. Please verify your readings.
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-                    {hasDeviationFlags ? 'Notes (required — explain meter discrepancy)' : 'Notes (optional)'}
-                  </label>
-                  <textarea value={notes} onChange={e => setNotes(e.target.value)}
-                    placeholder={hasDeviationFlags ? 'Explain the meter discrepancy...' : 'Any remarks about the shift...'}
-                    rows={2}
-                    className="w-full px-3 py-2 rounded border text-sm"
-                    style={{
-                      ...inputStyle,
-                      borderColor: hasDeviationFlags && notes.trim() === '' ? 'var(--color-status-error)' : theme.border,
-                    }} />
-                </div>
+            {hasDeviationFlags && !hasLossFlags && (
+              <div className="rounded-lg p-3 mb-3 text-sm"
+                style={{
+                  backgroundColor: 'var(--color-status-warning-light, #fef3cd)',
+                  color: 'var(--color-status-warning, #856404)',
+                  borderWidth: 1,
+                  borderColor: 'var(--color-status-warning, #ffc107)',
+                }}>
+                <span className="font-semibold">Warning:</span> Meter discrepancy detected on {nozzleComputations.filter(c => c.flagged).length} nozzle(s).
               </div>
+            )}
+
+            <p className="text-sm mb-4" style={{ color: theme.textSecondary }}>
+              Your readings and stock counts will be submitted for verification. After this, proceed to the office for shift closing.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowReviewModal(false)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold"
+                style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border, borderWidth: 1 }}>
+                Go Back
+              </button>
+              <button
+                onClick={() => { setShowReviewModal(false); handleSubmit() }}
+                disabled={submitting}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                style={{ backgroundColor: theme.primary }}>
+                {submitting ? 'Submitting...' : 'Submit Readings'}
+              </button>
             </div>
           </div>
-
-          {/* Step 3 Navigation */}
-          <div className="flex justify-between mb-6">
-            <button
-              onClick={() => setCurrentStep(2)}
-              className="px-6 py-3 rounded-lg text-sm font-semibold"
-              style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border, borderWidth: 1 }}>
-              {'\u2190'} Back to Review
-            </button>
-            <button
-              onClick={() => setShowReviewModal(true)}
-              disabled={!canSubmit}
-              className="px-6 py-3 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: canSubmit ? theme.primary : '#9ca3af' }}>
-              {submitting ? 'Submitting...' : 'Submit Shift Handover'}
-            </button>
-          </div>
-
-          {/* Review Confirmation Modal */}
-          {showReviewModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-              <div className="rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
-                style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-                <h3 className="text-lg font-bold mb-3" style={{ color: theme.textPrimary }}>
-                  Review Your Readings
-                </h3>
-
-                {hasLossFlags && (
-                  <div className="rounded-lg p-3 mb-3 text-sm"
-                    style={{
-                      backgroundColor: 'var(--color-status-error-light, #fde8e8)',
-                      color: 'var(--color-status-error)',
-                      borderWidth: 1,
-                      borderColor: 'var(--color-status-error)',
-                    }}>
-                    <span className="font-semibold">Nozzle Loss Alert:</span>
-                    <ul className="mt-1 list-disc list-inside">
-                      {nozzleRows.map((row, idx) => {
-                        const comp = nozzleComputations[idx]
-                        if (!comp.lossExceedsThreshold) return null
-                        const label = row.fuel_type_abbrev && row.display_label
-                          ? `${row.fuel_type_abbrev} ${row.display_label}`
-                          : row.nozzle_id
-                        return (
-                          <li key={row.nozzle_id}>
-                            {label}: {comp.deviationL.toFixed(3)}L loss (threshold: {nozzleLossThreshold}L)
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </div>
-                )}
-
-                {hasDeviationFlags && !hasLossFlags && (
-                  <div className="rounded-lg p-3 mb-3 text-sm"
-                    style={{
-                      backgroundColor: 'var(--color-status-warning-light, #fef3cd)',
-                      color: 'var(--color-status-warning, #856404)',
-                      borderWidth: 1,
-                      borderColor: 'var(--color-status-warning, #ffc107)',
-                    }}>
-                    <span className="font-semibold">Warning:</span> Meter discrepancy detected on {nozzleComputations.filter(c => c.flagged).length} nozzle(s).
-                  </div>
-                )}
-
-                <p className="text-sm mb-4" style={{ color: theme.textSecondary }}>
-                  Please review your readings carefully before submitting. Are you sure all inputs are correct?
-                </p>
-
-                <div className="flex justify-end gap-3">
-                  <button
-                    onClick={() => setShowReviewModal(false)}
-                    className="px-4 py-2 rounded-lg text-sm font-semibold"
-                    style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border, borderWidth: 1 }}>
-                    Go Back & Review
-                  </button>
-                  <button
-                    onClick={() => { setShowReviewModal(false); handleSubmit() }}
-                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
-                    style={{ backgroundColor: theme.primary }}>
-                    Yes, Submit
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
 
       {/* Handover Result Display — shown after submission */}
@@ -1948,7 +1722,7 @@ export default function MyShift() {
         <div className="rounded-lg shadow p-6 mb-6"
           style={{ backgroundColor: theme.cardBg, borderColor: 'var(--color-status-success)', borderWidth: 2 }}>
           <h2 className="text-lg font-bold mb-4" style={{ color: theme.textPrimary }}>
-            {isAttendant ? 'Shift Handover Submitted' : 'Handover Summary'}
+            {isAttendant ? 'Readings Verified' : 'Readings Summary'}
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
             <div>

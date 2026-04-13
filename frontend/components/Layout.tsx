@@ -303,7 +303,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const allNavItems = [
     { path: '/', label: 'Dashboard', roles: ['user', 'supervisor', 'owner'] },
-    { path: '/my-shift', label: 'My Shift', roles: ['user', 'supervisor'] },
+    { path: '/my-shift', label: 'Readings Verification', roles: ['user', 'supervisor'] },
+    { path: '/shift-closing', label: 'Shift Closing', roles: ['user', 'supervisor', 'manager', 'owner'] },
     {
       label: 'Operations',
       roles: ['user', 'supervisor', 'owner'],

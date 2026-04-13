@@ -839,8 +839,24 @@ class ShiftStockSnapshot(BaseModel):
     accessories: List[AccessoryStockLineItem] = []
     lubricants: List[LubricantStockLineItem] = []
 
+class ReadingsVerificationInput(BaseModel):
+    """Phase 1: Readings + stock counts submitted at the forecourt"""
+    shift_id: str
+    nozzle_readings: List[HandoverNozzleReadingInput]
+    stock_snapshot: Optional[ShiftStockSnapshot] = None
+    notes: Optional[str] = None
+
+class ShiftClosingInput(BaseModel):
+    """Phase 2: Financial reconciliation submitted in the office with manager"""
+    handover_id: str
+    actual_cash: float = Field(..., ge=0)          # Safe cash + cash in hand combined
+    pos_receipts: float = Field(default=0, ge=0)   # POS terminal total
+    credit_sales: float = Field(default=0, ge=0)
+    credit_sale_items: List['HandoverCreditSaleItem'] = []
+    notes: Optional[str] = None
+
 class HandoverInput(BaseModel):
-    """Input for submitting a shift handover"""
+    """Input for submitting a shift handover (legacy single-submit)"""
     shift_id: str
     nozzle_readings: List[HandoverNozzleReadingInput]
     lpg_sales: float = Field(default=0, ge=0)        # total ZMW from LPG cylinders sold this shift
@@ -877,7 +893,12 @@ class HandoverOutput(BaseModel):
     expected_cash: float        # total_expected - credit_sales
     actual_cash: float
     difference: float           # actual - expected (+surplus / -shortage)
+    pos_receipts: float = 0     # POS terminal total
+    total_accounted: float = 0  # cash + POS + credit
     status: str                 # "submitted" or "reopened"
+    phase: str = "completed"    # "readings_verified" | "completed" | "readings_superseded"
+    phase_1_completed_at: Optional[str] = None
+    phase_2_completed_at: Optional[str] = None
     review_status: str = "submitted"           # "submitted" | "flagged" | "approved" | "returned"
     supervisor_review: Optional[dict] = None   # {reviewed_by, reviewed_by_name, reviewed_at, action, note}
     auto_flag_reasons: Optional[List[str]] = None  # e.g. ["cash_shortage", "meter_deviation"]
