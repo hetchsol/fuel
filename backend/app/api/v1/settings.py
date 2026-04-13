@@ -6,9 +6,11 @@ import re
 import json
 import os
 from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
 from ...models.models import (
     FuelSettings, SystemSettings, ValidationThresholds, EmailSettings,
     TaxLevySettings, StockAlertSettings, ReconciliationToleranceSettings,
+    ScheduledPriceChange,
 )
 from .auth import get_station_context, require_manager_or_owner, require_owner
 from ...services.audit_service import log_audit_event
@@ -69,6 +71,84 @@ def update_fuel_settings(settings: FuelSettings, ctx: dict = Depends(get_station
         "message": "Settings updated successfully",
         "settings": storage.setdefault('fuel_settings', {})
     }
+
+@router.get("/fuel/scheduled-prices")
+def get_scheduled_prices(ctx: dict = Depends(get_station_context)):
+    """Get all scheduled price changes for this station."""
+    station_id = ctx["station_id"]
+    scheduled = load_station_json(station_id, 'scheduled_price_changes.json', default=[])
+    # Also sync with storage
+    ctx["storage"]["scheduled_price_changes"] = scheduled
+    return {"scheduled_prices": scheduled}
+
+
+@router.post("/fuel/schedule-price", dependencies=[Depends(require_manager_or_owner)])
+def schedule_price_change(data: ScheduledPriceChange, ctx: dict = Depends(get_station_context)):
+    """Schedule a future price change. Owner/manager only."""
+    station_id = ctx["station_id"]
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    if data.effective_date <= today:
+        raise HTTPException(status_code=400, detail="Effective date must be in the future")
+
+    if data.fuel_type not in ("Diesel", "Petrol"):
+        raise HTTPException(status_code=400, detail="fuel_type must be 'Diesel' or 'Petrol'")
+
+    scheduled = load_station_json(station_id, 'scheduled_price_changes.json', default=[])
+
+    # Prevent duplicate for same fuel_type + date
+    for entry in scheduled:
+        if entry.get("fuel_type") == data.fuel_type and entry.get("effective_date") == data.effective_date and not entry.get("applied"):
+            raise HTTPException(status_code=400, detail=f"A price change for {data.fuel_type} on {data.effective_date} is already scheduled")
+
+    entry = {
+        "fuel_type": data.fuel_type,
+        "new_price_per_liter": data.new_price_per_liter,
+        "effective_date": data.effective_date,
+        "old_price_per_liter": None,
+        "created_by": ctx.get("user_id"),
+        "created_at": datetime.now().isoformat(),
+        "applied": False,
+        "applied_at": None,
+    }
+    scheduled.append(entry)
+    save_station_json(station_id, 'scheduled_price_changes.json', scheduled)
+    ctx["storage"]["scheduled_price_changes"] = scheduled
+
+    log_audit_event(
+        station_id=station_id, action="price_change_scheduled",
+        performed_by=ctx["username"], entity_type="fuel_settings",
+        details={"fuel_type": data.fuel_type, "new_price": data.new_price_per_liter, "effective_date": data.effective_date},
+    )
+
+    return {"status": "success", "message": f"{data.fuel_type} price K{data.new_price_per_liter} scheduled for {data.effective_date}", "entry": entry}
+
+
+@router.delete("/fuel/scheduled-price/{index}", dependencies=[Depends(require_manager_or_owner)])
+def cancel_scheduled_price(index: int, ctx: dict = Depends(get_station_context)):
+    """Cancel a pending (unapplied) scheduled price change. Owner/manager only."""
+    station_id = ctx["station_id"]
+    scheduled = load_station_json(station_id, 'scheduled_price_changes.json', default=[])
+
+    if index < 0 or index >= len(scheduled):
+        raise HTTPException(status_code=404, detail="Scheduled price not found")
+
+    entry = scheduled[index]
+    if entry.get("applied"):
+        raise HTTPException(status_code=400, detail="Cannot cancel an already-applied price change")
+
+    removed = scheduled.pop(index)
+    save_station_json(station_id, 'scheduled_price_changes.json', scheduled)
+    ctx["storage"]["scheduled_price_changes"] = scheduled
+
+    log_audit_event(
+        station_id=station_id, action="price_change_cancelled",
+        performed_by=ctx["username"], entity_type="fuel_settings",
+        details={"fuel_type": removed["fuel_type"], "new_price": removed["new_price_per_liter"], "effective_date": removed["effective_date"]},
+    )
+
+    return {"status": "success", "message": "Scheduled price change cancelled"}
+
 
 @router.get("/system", response_model=SystemSettings)
 def get_system_settings(ctx: dict = Depends(get_station_context)):

@@ -13,6 +13,8 @@ export default function Settings() {
     petrol_allowable_loss_percent: 0.5,
     nozzle_allowable_loss_liters: 0.8,
   })
+  const [scheduledPrices, setScheduledPrices] = useState<any[]>([])
+  const [scheduleForm, setScheduleForm] = useState({ fuel_type: 'Diesel', new_price_per_liter: '', effective_date: '' })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -90,6 +92,7 @@ export default function Settings() {
 
   useEffect(() => {
     loadSettings()
+    loadScheduledPrices()
     loadSystemSettings()
     loadValidationThresholds()
     loadEmailSettings()
@@ -107,6 +110,55 @@ export default function Settings() {
     } catch (err) {
       console.error('Failed to load settings:', err)
     }
+  }
+
+  const loadScheduledPrices = async () => {
+    try {
+      const res = await authFetch(`${BASE}/settings/fuel/scheduled-prices`, { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setScheduledPrices(data.scheduled_prices || [])
+      }
+    } catch {}
+  }
+
+  const handleSchedulePrice = async () => {
+    if (!scheduleForm.new_price_per_liter || !scheduleForm.effective_date) return
+    try {
+      const res = await authFetch(`${BASE}/settings/fuel/schedule-price`, {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fuel_type: scheduleForm.fuel_type,
+          new_price_per_liter: parseFloat(scheduleForm.new_price_per_liter),
+          effective_date: scheduleForm.effective_date,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        setError(err.detail || 'Failed to schedule price')
+        return
+      }
+      setMessage('Price change scheduled successfully')
+      setScheduleForm({ fuel_type: 'Diesel', new_price_per_liter: '', effective_date: '' })
+      loadScheduledPrices()
+    } catch (err: any) {
+      setError(err.message || 'Failed to schedule price')
+    }
+  }
+
+  const handleCancelSchedule = async (index: number) => {
+    if (!confirm('Cancel this scheduled price change?')) return
+    try {
+      const res = await authFetch(`${BASE}/settings/fuel/scheduled-price/${index}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      })
+      if (res.ok) {
+        setMessage('Scheduled price change cancelled')
+        loadScheduledPrices()
+      }
+    } catch {}
   }
 
   const loadSystemSettings = async () => {
@@ -577,6 +629,76 @@ export default function Settings() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Scheduled Price Changes */}
+            <div className="border-b pb-6">
+              <h2 className="text-xl font-semibold text-content-primary mb-4">Scheduled Price Changes</h2>
+              <p className="text-sm text-content-secondary mb-3">Schedule future price changes (e.g., month-end adjustments). The new price activates automatically at midnight on the effective date.</p>
+
+              {/* Schedule form */}
+              <div className="flex flex-wrap items-end gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-medium text-content-secondary mb-1">Fuel Type</label>
+                  <select value={scheduleForm.fuel_type} onChange={e => setScheduleForm({ ...scheduleForm, fuel_type: e.target.value })}
+                    className="px-3 py-2 border border-surface-border rounded-md text-sm">
+                    <option value="Diesel">Diesel</option>
+                    <option value="Petrol">Petrol</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-content-secondary mb-1">New Price (ZMW)</label>
+                  <input type="number" step="0.01" min="0" value={scheduleForm.new_price_per_liter}
+                    onChange={e => setScheduleForm({ ...scheduleForm, new_price_per_liter: e.target.value })}
+                    placeholder="0.00"
+                    className="px-3 py-2 border border-surface-border rounded-md text-sm w-32" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-content-secondary mb-1">Effective Date</label>
+                  <input type="date" value={scheduleForm.effective_date}
+                    onChange={e => setScheduleForm({ ...scheduleForm, effective_date: e.target.value })}
+                    className="px-3 py-2 border border-surface-border rounded-md text-sm" />
+                </div>
+                <button type="button" onClick={handleSchedulePrice}
+                  disabled={!scheduleForm.new_price_per_liter || !scheduleForm.effective_date}
+                  className="px-4 py-2 bg-action-primary text-white rounded-md text-sm font-medium disabled:opacity-50">
+                  Schedule
+                </button>
+              </div>
+
+              {/* Scheduled list */}
+              {scheduledPrices.length > 0 ? (
+                <div className="space-y-2">
+                  {scheduledPrices.map((sp: any, idx: number) => (
+                    <div key={idx} className={`flex items-center justify-between p-3 rounded-lg border text-sm ${
+                      sp.applied ? 'bg-surface-bg border-surface-border' : 'bg-action-primary-light border-action-primary'
+                    }`}>
+                      <div>
+                        <span className="font-medium text-content-primary">{sp.fuel_type}</span>
+                        <span className="text-content-secondary mx-2">→</span>
+                        <span className="font-mono font-semibold text-content-primary">K{sp.new_price_per_liter}</span>
+                        <span className="text-content-secondary ml-2">effective {sp.effective_date}</span>
+                        {sp.applied && sp.old_price_per_liter && (
+                          <span className="text-xs text-content-secondary ml-2">(was K{sp.old_price_per_liter})</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {sp.applied ? (
+                          <span className="text-xs px-2 py-0.5 rounded bg-status-success-light text-status-success font-medium">Applied</span>
+                        ) : (
+                          <>
+                            <span className="text-xs px-2 py-0.5 rounded bg-action-primary-light text-action-primary font-medium">Pending</span>
+                            <button type="button" onClick={() => handleCancelSchedule(idx)}
+                              className="text-xs text-status-error hover:underline">Cancel</button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-content-secondary">No scheduled price changes.</p>
+              )}
             </div>
 
             <div>

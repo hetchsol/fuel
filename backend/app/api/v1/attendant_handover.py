@@ -13,7 +13,7 @@ from ...models.models import (
     HandoverNozzleReadingInput, HandoverNozzleReadingSummary,
     HandoverCreditSaleItem, ShiftStockSnapshot, UserRole,
 )
-from ...config import resolve_fuel_price
+from ...config import resolve_fuel_price, resolve_fuel_price_for_shift, apply_due_price_changes
 from ...database.storage import get_nozzle
 from ...services.inventory import process_credit_sale
 from .auth import get_current_user, require_supervisor_or_owner, get_station_context
@@ -87,11 +87,15 @@ def _validate_shift_and_assignment(shift_id: str, ctx: dict, storage: dict):
     return shift, my_assignment, allowed_nozzle_ids
 
 
-def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, user_id, allowed_nozzle_ids):
-    """Process nozzle readings and compute summaries. Returns (nozzle_summaries, fuel_revenue)."""
+def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, user_id, allowed_nozzle_ids,
+                             shift_date=None, shift_type=None):
+    """Process nozzle readings and compute summaries. Returns (nozzle_summaries, fuel_revenue, had_er_closing)."""
     for reading in nozzle_readings:
         if reading.nozzle_id not in allowed_nozzle_ids:
             raise HTTPException(status_code=400, detail=f"Nozzle {reading.nozzle_id} is not in your assignment")
+
+    # Apply any due price changes lazily
+    apply_due_price_changes(storage, station_id)
 
     # Check for enter_readings closing data
     enter_readings_db = _load_enter_readings(station_id)
@@ -131,8 +135,48 @@ def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, use
         if volume < 0:
             raise HTTPException(status_code=400, detail=f"Closing reading for {reading.nozzle_id} is less than opening reading")
 
-        price = resolve_fuel_price(fuel_type, storage)
-        revenue = round(volume * price, 2)
+        # Check for price change during this shift
+        price_info = resolve_fuel_price_for_shift(fuel_type, shift_date or "", shift_type or "", storage)
+
+        # Price changeover fields
+        changeover_reading_val = None
+        changeover_estimated = None
+        pre_change_volume = None
+        post_change_volume = None
+        pre_change_price = None
+        post_change_price = None
+        pre_change_revenue = None
+        post_change_revenue = None
+
+        if price_info["has_price_change"] and volume > 0:
+            old_price = price_info["old_price"] or price_info["price"]
+            new_price = price_info["new_price"] or price_info["price"]
+
+            if reading.changeover_reading is not None:
+                co = reading.changeover_reading
+                if co < opening_val or co > closing_val:
+                    raise HTTPException(status_code=400,
+                        detail=f"Changeover reading for {reading.nozzle_id} must be between opening ({opening_val}) and closing ({closing_val})")
+                changeover_reading_val = co
+                changeover_estimated = False
+            else:
+                # Estimate: midnight is 6 hours into a 12-hour night shift (50%)
+                co = opening_val + volume * 0.5
+                changeover_reading_val = round(co, 3)
+                changeover_estimated = True
+
+            pre_change_volume = round(changeover_reading_val - opening_val, 3)
+            post_change_volume = round(closing_val - changeover_reading_val, 3)
+            pre_change_price = old_price
+            post_change_price = new_price
+            pre_change_revenue = round(pre_change_volume * old_price, 2)
+            post_change_revenue = round(post_change_volume * new_price, 2)
+            revenue = round(pre_change_revenue + post_change_revenue, 2)
+            price = round(revenue / volume, 2) if volume > 0 else old_price  # weighted average for display
+        else:
+            price = price_info["price"]
+            revenue = round(volume * price, 2)
+
         fuel_revenue += revenue
 
         mech_volume = round(reading.mechanical_closing - reading.mechanical_opening, 3)
@@ -160,6 +204,14 @@ def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, use
             meter_deviation_liters=deviation_liters,
             meter_deviation_percent=deviation_percent,
             meter_deviation_flagged=deviation_flagged,
+            changeover_reading=changeover_reading_val,
+            changeover_estimated=changeover_estimated,
+            pre_change_volume=pre_change_volume,
+            post_change_volume=post_change_volume,
+            pre_change_price=pre_change_price,
+            post_change_price=post_change_price,
+            pre_change_revenue=pre_change_revenue,
+            post_change_revenue=post_change_revenue,
         ))
 
     return nozzle_summaries, round(fuel_revenue, 2), bool(er_closing)
@@ -594,12 +646,22 @@ async def get_my_shift(ctx: dict = Depends(get_station_context)):
                 for nozzle in ps.get("nozzles", []):
                     assigned_nozzle_ids.append(nozzle["nozzle_id"])
 
+    # Apply any due price changes lazily
+    apply_due_price_changes(storage, ctx["station_id"])
+
+    shift_date = my_shift.get("date", "")
+    shift_type_val = my_shift.get("shift_type", "")
+
     nozzle_details = []
+    price_change_detected = False
     for nozzle_id in assigned_nozzle_ids:
         nozzle = get_nozzle(nozzle_id, storage=storage)
         if nozzle:
             fuel_type = _get_fuel_type(nozzle_id, storage=storage)
-            price = resolve_fuel_price(fuel_type, storage)
+            price_info = resolve_fuel_price_for_shift(fuel_type, shift_date, shift_type_val, storage)
+            price = price_info["price"]
+            if price_info["has_price_change"]:
+                price_change_detected = True
             # Find parent island for fuel_type_abbrev
             fuel_type_abbrev = None
             for isl in islands_data.values():
@@ -620,6 +682,9 @@ async def get_my_shift(ctx: dict = Depends(get_station_context)):
                 "status": nozzle.get("status", "Active"),
                 "display_label": nozzle.get("display_label"),
                 "fuel_type_abbrev": fuel_type_abbrev,
+                "has_price_change": price_info["has_price_change"],
+                "old_price": price_info.get("old_price"),
+                "new_price": price_info.get("new_price"),
             })
 
     # Check enter_readings status
@@ -659,6 +724,7 @@ async def get_my_shift(ctx: dict = Depends(get_station_context)):
         "enter_readings_submitted": enter_readings_submitted,
         "enter_readings_closing": enter_readings_closing,
         "readings_verified_handover": readings_verified_handover,
+        "price_change_detected": price_change_detected,
     }
 
 
@@ -810,7 +876,8 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
             raise HTTPException(status_code=409, detail="Readings already submitted for this shift. Use redo-readings to replace.")
 
     nozzle_summaries, fuel_revenue, had_er_closing = _process_nozzle_readings(
-        data.nozzle_readings, storage, station_id, data.shift_id, user_id, allowed_nozzle_ids)
+        data.nozzle_readings, storage, station_id, data.shift_id, user_id, allowed_nozzle_ids,
+        shift_date=shift.get("date"), shift_type=shift.get("shift_type"))
 
     lpg_sales, lubricant_sales, accessory_sales, enriched_snapshot, stock_variance_flags = \
         _process_stock_snapshot(data.stock_snapshot, station_id, storage)
@@ -819,6 +886,8 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
 
     # Phase 1 flags only (no cash data)
     phase1_flags = _compute_phase1_flags(nozzle_summaries, stock_variance_flags, storage)
+    if any(ns.changeover_estimated for ns in nozzle_summaries):
+        phase1_flags.append("changeover_estimated")
 
     handover_id = f"HO-{data.shift_id}-{user_id}-{datetime.now().strftime('%H%M%S')}"
     now_iso = datetime.now().isoformat()
@@ -1060,7 +1129,8 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     shift, my_assignment, allowed_nozzle_ids = _validate_shift_and_assignment(data.shift_id, ctx, storage)
 
     nozzle_summaries, fuel_revenue, had_er_closing = _process_nozzle_readings(
-        data.nozzle_readings, storage, station_id, data.shift_id, user_id, allowed_nozzle_ids)
+        data.nozzle_readings, storage, station_id, data.shift_id, user_id, allowed_nozzle_ids,
+        shift_date=shift.get("date"), shift_type=shift.get("shift_type"))
 
     lpg_sales = data.lpg_sales
     lubricant_sales = data.lubricant_sales

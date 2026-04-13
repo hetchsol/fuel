@@ -354,19 +354,39 @@ def calculate_shift_reconciliation(shift_id: str, nozzle_summaries: dict, lpg_re
     """
     storage = ctx["storage"]
 
-    # Calculate fuel revenues by looking up nozzle fuel type from storage
+    # Try to use stored handover revenue (frozen at submission time) instead of recalculating
+    # This ensures price changes after submission don't corrupt historical reconciliation
+    station_id = ctx["station_id"]
+    handovers_db = load_station_json(station_id, 'attendant_handovers.json', default={})
+    shift_handovers = [h for h in handovers_db.values()
+                       if h.get("shift_id") == shift_id and h.get("phase", "completed") == "completed"]
+
     petrol_volume = 0.0
     diesel_volume = 0.0
-    for nozzle_id, summary in nozzle_summaries.items():
-        nozzle = get_nozzle(nozzle_id, storage=storage)
-        fuel_type = nozzle.get("fuel_type", "") if nozzle else ""
-        if fuel_type == "Petrol":
-            petrol_volume += summary["electronic_movement"]
-        elif fuel_type == "Diesel":
-            diesel_volume += summary["electronic_movement"]
+    petrol_revenue = 0.0
+    diesel_revenue = 0.0
 
-    petrol_revenue = petrol_volume * resolve_fuel_price("Petrol", storage)
-    diesel_revenue = diesel_volume * resolve_fuel_price("Diesel", storage)
+    if shift_handovers:
+        # Use stored revenue from handover nozzle summaries
+        for ho in shift_handovers:
+            for ns in ho.get("nozzle_summaries", []):
+                if ns.get("fuel_type") == "Petrol":
+                    petrol_volume += ns.get("volume_sold", 0)
+                    petrol_revenue += ns.get("revenue", 0)
+                elif ns.get("fuel_type") == "Diesel":
+                    diesel_volume += ns.get("volume_sold", 0)
+                    diesel_revenue += ns.get("revenue", 0)
+    else:
+        # Fallback: recalculate from nozzle_summaries param (backward compat)
+        for nozzle_id, summary in nozzle_summaries.items():
+            nozzle = get_nozzle(nozzle_id, storage=storage)
+            fuel_type = nozzle.get("fuel_type", "") if nozzle else ""
+            if fuel_type == "Petrol":
+                petrol_volume += summary["electronic_movement"]
+            elif fuel_type == "Diesel":
+                diesel_volume += summary["electronic_movement"]
+        petrol_revenue = petrol_volume * resolve_fuel_price("Petrol", storage)
+        diesel_revenue = diesel_volume * resolve_fuel_price("Diesel", storage)
 
     # Calculate totals
     total_expected = petrol_revenue + diesel_revenue + lpg_revenue + lubricants_revenue + accessories_revenue

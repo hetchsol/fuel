@@ -91,6 +91,16 @@ class FuelSettings(BaseModel):
     petrol_allowable_loss_percent: float = Field(..., ge=0, le=5.0)  # e.g., 0.5%
     nozzle_allowable_loss_liters: float = Field(default=0.8, ge=0, le=50.0)  # per-nozzle loss threshold in liters
 
+class ScheduledPriceChange(BaseModel):
+    fuel_type: str                                       # "Diesel" or "Petrol"
+    new_price_per_liter: float = Field(..., gt=0, le=1000)
+    effective_date: str                                   # YYYY-MM-DD (price activates at 00:00)
+    old_price_per_liter: Optional[float] = None          # snapshot of price before change (set on apply)
+    created_by: Optional[str] = None
+    created_at: Optional[str] = None
+    applied: bool = False
+    applied_at: Optional[str] = None
+
 class ValidationThresholds(BaseModel):
     pass_threshold: float = Field(default=0.5, ge=0, le=10.0)  # Variance <= this % = PASS
     warning_threshold: float = Field(default=1.0, ge=0, le=20.0)  # Variance <= this % = WARNING
@@ -777,6 +787,7 @@ class HandoverNozzleReadingInput(BaseModel):
     closing_reading: float = Field(..., ge=0)      # entered by attendant
     mechanical_opening: float = Field(default=0, ge=0)  # mechanical (totalizer) opening
     mechanical_closing: float = Field(default=0, ge=0)  # mechanical (totalizer) closing
+    changeover_reading: Optional[float] = Field(default=None, ge=0)  # midnight reading for price change shifts
 
 class HandoverNozzleReadingSummary(BaseModel):
     """Computed nozzle reading summary for handover output"""
@@ -793,6 +804,15 @@ class HandoverNozzleReadingSummary(BaseModel):
     meter_deviation_liters: Optional[float] = None
     meter_deviation_percent: Optional[float] = None
     meter_deviation_flagged: Optional[bool] = None
+    # Price changeover fields (for shifts spanning a price change)
+    changeover_reading: Optional[float] = None
+    changeover_estimated: Optional[bool] = None
+    pre_change_volume: Optional[float] = None
+    post_change_volume: Optional[float] = None
+    pre_change_price: Optional[float] = None
+    post_change_price: Optional[float] = None
+    pre_change_revenue: Optional[float] = None
+    post_change_revenue: Optional[float] = None
 
 # ===== Shift-Level Stock Snapshot Models =====
 

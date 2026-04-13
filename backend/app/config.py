@@ -241,6 +241,104 @@ def resolve_fuel_price(fuel_type: str, storage: dict = None) -> float:
     return get_fuel_price(fuel_type)
 
 
+def apply_due_price_changes(storage: dict, station_id: str = None) -> list:
+    """
+    Lazily apply any scheduled price changes whose effective_date has passed.
+    Snapshots the old price before updating. Returns list of applied changes.
+    """
+    from datetime import datetime
+    scheduled = storage.get('scheduled_price_changes', [])
+    if not scheduled:
+        return []
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    applied = []
+    fuel_settings = storage.setdefault('fuel_settings', {})
+
+    for entry in scheduled:
+        if entry.get('applied') or not entry.get('effective_date'):
+            continue
+        if entry['effective_date'] > today:
+            continue
+
+        fuel_type = entry.get('fuel_type', '').upper()
+        if 'DIESEL' in fuel_type:
+            entry['old_price_per_liter'] = fuel_settings.get('diesel_price_per_liter', DIESEL_PRICE_PER_LITER)
+            fuel_settings['diesel_price_per_liter'] = entry['new_price_per_liter']
+        elif 'PETROL' in fuel_type or 'GASOLINE' in fuel_type:
+            entry['old_price_per_liter'] = fuel_settings.get('petrol_price_per_liter', PETROL_PRICE_PER_LITER)
+            fuel_settings['petrol_price_per_liter'] = entry['new_price_per_liter']
+
+        entry['applied'] = True
+        entry['applied_at'] = datetime.now().isoformat()
+        applied.append(entry)
+
+    if applied and station_id:
+        from .database.station_files import save_station_json
+        save_station_json(station_id, 'scheduled_price_changes.json', scheduled)
+
+    return applied
+
+
+def resolve_fuel_price_for_shift(fuel_type: str, shift_date: str, shift_type: str, storage: dict = None) -> dict:
+    """
+    For a given shift, determine whether a price change occurred during it.
+    A Night shift on date D runs 6PM on D to 6AM on D+1.
+    A price change with effective_date == D+1 means it changed at midnight during this shift.
+
+    Returns:
+        {
+            "price": float,               # current price (for single-price backward compat)
+            "has_price_change": bool,
+            "old_price": float | None,     # price before the changeover
+            "new_price": float | None,     # price after the changeover
+            "effective_date": str | None,
+        }
+    """
+    from datetime import datetime, timedelta
+    current_price = resolve_fuel_price(fuel_type, storage)
+    result = {"price": current_price, "has_price_change": False,
+              "old_price": None, "new_price": None, "effective_date": None}
+
+    # Only Night shifts can span a price change (they cross midnight)
+    if not shift_type or shift_type.upper() != "NIGHT":
+        return result
+
+    if not storage:
+        return result
+
+    scheduled = storage.get('scheduled_price_changes', [])
+    if not scheduled:
+        return result
+
+    # Night shift on date D crosses into D+1
+    try:
+        shift_d = datetime.strptime(shift_date, "%Y-%m-%d")
+        next_day = (shift_d + timedelta(days=1)).strftime("%Y-%m-%d")
+    except (ValueError, TypeError):
+        return result
+
+    fuel_upper = fuel_type.upper()
+
+    for entry in scheduled:
+        if not entry.get('applied'):
+            continue
+        entry_fuel = (entry.get('fuel_type') or '').upper()
+        matches_fuel = ('DIESEL' in fuel_upper and 'DIESEL' in entry_fuel) or \
+                       (('PETROL' in fuel_upper or 'GASOLINE' in fuel_upper) and
+                        ('PETROL' in entry_fuel or 'GASOLINE' in entry_fuel))
+        if not matches_fuel:
+            continue
+        if entry.get('effective_date') == next_day:
+            result["has_price_change"] = True
+            result["old_price"] = entry.get('old_price_per_liter')
+            result["new_price"] = entry.get('new_price_per_liter')
+            result["effective_date"] = next_day
+            break
+
+    return result
+
+
 def resolve_vat_rate(storage: dict = None) -> float:
     """Resolve VAT rate from runtime settings, falling back to config constant."""
     if storage:

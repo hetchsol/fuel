@@ -14,6 +14,9 @@ interface NozzleInfo {
   status: string
   display_label?: string | null
   fuel_type_abbrev?: string | null
+  has_price_change?: boolean
+  old_price?: number | null
+  new_price?: number | null
 }
 
 interface NozzleRow {
@@ -27,6 +30,7 @@ interface NozzleRow {
   display_label?: string | null
   fuel_type_abbrev?: string | null
   deviation_note: string
+  changeover_reading: string
 }
 
 // Stock count row types
@@ -178,6 +182,7 @@ export default function MyShift() {
   // Wizard step state
   const [currentStep, setCurrentStep] = useState<1 | 2>(1)
   const [readingsVerifiedHandover, setReadingsVerifiedHandover] = useState<any>(null)
+  const [priceChangeDetected, setPriceChangeDetected] = useState(false)
   // Review confirmation modal
   const [showReviewModal, setShowReviewModal] = useState(false)
 
@@ -196,6 +201,7 @@ export default function MyShift() {
         setShiftFound(true)
         setShiftInfo(shiftData.shift)
         setAssignmentInfo(shiftData.assignment)
+        setPriceChangeDetected(shiftData.price_change_detected || false)
         setNozzleRows(
           (shiftData.nozzles || []).map((n: NozzleInfo) => ({
             nozzle_id: n.nozzle_id,
@@ -208,6 +214,7 @@ export default function MyShift() {
             display_label: n.display_label,
             fuel_type_abbrev: n.fuel_type_abbrev,
             deviation_note: '',
+            changeover_reading: '',
           }))
         )
         setMeterThreshold(shiftData.meter_discrepancy_threshold ?? 0.5)
@@ -492,6 +499,7 @@ export default function MyShift() {
             closing_reading: parseFloat(r.closing_reading) || 0,
             mechanical_opening: r.mechanical_opening,
             mechanical_closing: parseFloat(r.mechanical_closing) || 0,
+            ...(r.changeover_reading ? { changeover_reading: parseFloat(r.changeover_reading) } : {}),
           })),
           notes: notes || null,
           stock_snapshot: stockSnapshot,
@@ -918,6 +926,14 @@ export default function MyShift() {
       {/* ============================================= */}
       {currentStep === 1 && !handoverResult && (
         <>
+          {/* Price change banner */}
+          {priceChangeDetected && (
+            <div className="rounded-lg p-3 mb-4 text-sm"
+              style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)', borderWidth: 1, borderColor: 'var(--color-status-warning)' }}>
+              <span className="font-semibold">Price change detected during this shift.</span> Enter the meter reading at midnight (changeover point) for each nozzle. If you don't have the reading, leave it blank and the system will estimate.
+            </div>
+          )}
+
           {/* Nozzle Readings Table — collapsible */}
           <div className="rounded-lg shadow mb-6 overflow-hidden"
             style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
@@ -932,7 +948,7 @@ export default function MyShift() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
-                  {['Nozzle', 'Fuel Type', 'Elect. Open', 'Elect. Close', 'Volume (L)', 'Mech. Open', 'Mech. Close', 'Deviation'].map(h => (
+                  {['Nozzle', 'Fuel Type', 'Elect. Open', ...(priceChangeDetected ? ['Changeover'] : []), 'Elect. Close', 'Volume (L)', 'Mech. Open', 'Mech. Close', 'Deviation'].map(h => (
                     <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
                       style={{ color: theme.textSecondary }}>{h}</th>
                   ))}
@@ -973,6 +989,23 @@ export default function MyShift() {
                           style={inputStyle}
                         />
                       </td>
+                      {priceChangeDetected && (
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          step="0.001"
+                          value={row.changeover_reading}
+                          onChange={e => setNozzleRows(prev => prev.map(r => r.nozzle_id === row.nozzle_id ? { ...r, changeover_reading: e.target.value } : r))}
+                          placeholder="Midnight"
+                          className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right font-mono"
+                          style={{
+                            ...inputStyle,
+                            borderColor: row.changeover_reading && (parseFloat(row.changeover_reading) < row.opening_reading || (row.closing_reading && parseFloat(row.changeover_reading) > parseFloat(row.closing_reading)))
+                              ? 'var(--color-status-error)' : 'var(--color-status-warning)',
+                          }}
+                        />
+                      </td>
+                      )}
                       <td className="px-3 py-2">
                         <input
                           type="number"
