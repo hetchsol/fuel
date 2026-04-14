@@ -376,7 +376,10 @@ export default function Shifts() {
         role: a.role || 'user',
         is_shift_supervisor: a.is_shift_supervisor || false,
         island_ids: a.island_ids || [],
-        nozzle_ids: a.nozzle_ids || []
+        nozzle_ids: a.nozzle_ids || [],
+        assigned_lpg: a.assigned_lpg || false,
+        assigned_lubricants: a.assigned_lubricants || false,
+        assigned_accessories: a.assigned_accessories || false,
       })))
     } else {
       setSelectedAttendants([])
@@ -569,6 +572,9 @@ export default function Shifts() {
       island_ids: a.island_ids || [],
       nozzle_ids: a.nozzle_ids || [],
       is_shift_supervisor: a.is_shift_supervisor || false,
+      assigned_lpg: a.assigned_lpg || false,
+      assigned_lubricants: a.assigned_lubricants || false,
+      assigned_accessories: a.assigned_accessories || false,
     }))
 
     if (editingShiftId) {
@@ -846,6 +852,15 @@ export default function Shifts() {
                   ).map((assignment: any) => (
                     <div key={assignment.attendant_id} className="p-4 bg-surface-card rounded-lg border border-surface-border">
                       <p className="font-medium mb-2 text-content-primary">👤 {assignment.attendant_name}</p>
+
+                      {/* Product assignments */}
+                      {(assignment.assigned_lpg || assignment.assigned_lubricants || assignment.assigned_accessories) && (
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {assignment.assigned_lpg && <span className="px-2 py-0.5 text-xs rounded bg-status-success/10 text-status-success border border-status-success/30 font-medium">LPG</span>}
+                          {assignment.assigned_lubricants && <span className="px-2 py-0.5 text-xs rounded bg-status-warning/10 text-status-warning border border-status-warning/30 font-medium">Lubricants</span>}
+                          {assignment.assigned_accessories && <span className="px-2 py-0.5 text-xs rounded bg-action-primary/10 text-action-primary border border-action-primary/30 font-medium">Accessories</span>}
+                        </div>
+                      )}
 
                       {assignment.nozzle_ids && assignment.nozzle_ids.length > 0 && (
                         <div>
@@ -1556,6 +1571,53 @@ export default function Shifts() {
                     </label>
                   </div>
 
+                  {/* Product Assignment — LPG, Lubricants, Accessories */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-2">Assign Products</label>
+                    <p className="text-xs text-content-secondary mb-2">Select which product operations this attendant is responsible for during this shift.</p>
+                    <div className="flex flex-wrap gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer p-2 border rounded-lg hover:bg-action-primary-light">
+                        <input
+                          type="checkbox"
+                          checked={attendant.assigned_lpg || false}
+                          onChange={() => {
+                            setSelectedAttendants(prev => prev.map(a =>
+                              a.user_id === attendant.user_id ? { ...a, assigned_lpg: !a.assigned_lpg } : a
+                            ))
+                          }}
+                          className="form-checkbox"
+                        />
+                        <span className="text-sm font-medium">LPG</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer p-2 border rounded-lg hover:bg-action-primary-light">
+                        <input
+                          type="checkbox"
+                          checked={attendant.assigned_lubricants || false}
+                          onChange={() => {
+                            setSelectedAttendants(prev => prev.map(a =>
+                              a.user_id === attendant.user_id ? { ...a, assigned_lubricants: !a.assigned_lubricants } : a
+                            ))
+                          }}
+                          className="form-checkbox"
+                        />
+                        <span className="text-sm font-medium">Lubricants</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer p-2 border rounded-lg hover:bg-action-primary-light">
+                        <input
+                          type="checkbox"
+                          checked={attendant.assigned_accessories || false}
+                          onChange={() => {
+                            setSelectedAttendants(prev => prev.map(a =>
+                              a.user_id === attendant.user_id ? { ...a, assigned_accessories: !a.assigned_accessories } : a
+                            ))
+                          }}
+                          className="form-checkbox"
+                        />
+                        <span className="text-sm font-medium">Accessories</span>
+                      </label>
+                    </div>
+                  </div>
+
                   {/* Nozzle Assignment — grouped by island */}
                   <div>
                     <label className="block text-sm font-medium mb-2">Assign Nozzles</label>
@@ -1654,12 +1716,22 @@ export default function Shifts() {
                             }
                           }
                         })
+                        const productAssignments = [
+                          a.assigned_lpg && 'LPG',
+                          a.assigned_lubricants && 'Lubricants',
+                          a.assigned_accessories && 'Accessories',
+                        ].filter(Boolean)
                         return (
                           <div key={a.user_id} className="ml-4 mt-1">
                             <span className="font-medium">{a.full_name}</span>
                             <span className="text-action-primary">
                               {' '}&#8212; {(a.nozzle_ids || []).length} nozzle(s) across {Object.keys(grouped).length} island(s)
                             </span>
+                            {productAssignments.length > 0 && (
+                              <span className="text-action-primary text-xs ml-1">
+                                + {productAssignments.join(', ')}
+                              </span>
+                            )}
                             {Object.entries(grouped).map(([islId, g]) => (
                               <div key={islId} className="ml-2 text-xs text-action-primary">
                                 {g.name}: {g.labels.join(', ')}

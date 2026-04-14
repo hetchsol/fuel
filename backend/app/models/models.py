@@ -206,6 +206,9 @@ class AttendantAssignment(BaseModel):
     attendant_name: str
     island_ids: List[str] = []
     nozzle_ids: List[str] = []
+    assigned_lpg: bool = False
+    assigned_lubricants: bool = False
+    assigned_accessories: bool = False
 
 class TankDipReading(BaseModel):
     tank_id: str
