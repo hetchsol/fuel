@@ -159,7 +159,7 @@ def cancel_scheduled_price(index: int, ctx: dict = Depends(get_station_context))
     log_audit_event(
         station_id=station_id, action="price_change_cancelled",
         performed_by=ctx["username"], entity_type="fuel_settings",
-        details={"fuel_type": removed["fuel_type"], "new_price": removed["new_price_per_liter"], "effective_date": removed["effective_date"]},
+        details={"fuel_type": removed["fuel_type"], "new_price": removed["new_price_per_liter"], "effective_date": removed["effective_date"], "effective_time": removed.get("effective_time", "00:00")},
     )
 
     return {"status": "success", "message": "Scheduled price change cancelled"}

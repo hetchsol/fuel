@@ -525,7 +525,7 @@ def get_three_way_reconciliation(reading_id: str, ctx: dict = Depends(get_statio
 
     if not reconciliation:
         # Calculate if not present (for old readings)
-        reconciliation = get_reconciliation_summary_for_shift(reading)
+        reconciliation = get_reconciliation_summary_for_shift(reading, storage=ctx["storage"])
 
     # Add reading metadata
     reconciliation['reading_metadata'] = {
@@ -559,7 +559,7 @@ def get_daily_three_way_summary(date: str, ctx: dict = Depends(get_station_conte
         if r_data.get('date') == date:
             reconciliation = r_data.get('reconciliation')
             if not reconciliation:
-                reconciliation = get_reconciliation_summary_for_shift(r_data)
+                reconciliation = get_reconciliation_summary_for_shift(r_data, storage=ctx["storage"])
 
             date_readings.append({
                 'reading_id': r_id,
@@ -640,7 +640,7 @@ def get_reconciliation_patterns(tank_id: str, days: int = 30, ctx: dict = Depend
         )
 
     # Perform pattern analysis
-    pattern_analysis = get_historical_variance_pattern(readings)
+    pattern_analysis = get_historical_variance_pattern(readings, storage=ctx["storage"])
 
     # Add metadata
     pattern_analysis['tank_id'] = tank_id

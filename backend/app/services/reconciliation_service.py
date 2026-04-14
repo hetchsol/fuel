@@ -468,12 +468,13 @@ def _generate_recommendations(status: ReconciliationStatus, variances: Dict, roo
     return recommendations
 
 
-def get_reconciliation_summary_for_shift(reading_data: Dict) -> Dict:
+def get_reconciliation_summary_for_shift(reading_data: Dict, storage: dict = None) -> Dict:
     """
     Convenience function to get reconciliation summary from a tank reading.
 
     Args:
         reading_data: Complete tank reading data with tank movement, nozzles, and cash
+        storage: Station storage dict for loading configured tolerance settings
 
     Returns:
         Three-way reconciliation report
@@ -490,20 +491,24 @@ def get_reconciliation_summary_for_shift(reading_data: Dict) -> Dict:
     actual_cash = reading_data.get('actual_cash_banked')
     price_per_liter = reading_data.get('price_per_liter', 0)
 
+    config = ReconciliationConfig(storage=storage) if storage else None
+
     return calculate_three_way_reconciliation(
         tank_movement=tank_movement,
         nozzle_sales=nozzle_sales,
         actual_cash=actual_cash,
-        price_per_liter=price_per_liter
+        price_per_liter=price_per_liter,
+        config=config
     )
 
 
-def get_historical_variance_pattern(readings: List[Dict]) -> Dict:
+def get_historical_variance_pattern(readings: List[Dict], storage: dict = None) -> Dict:
     """
     Analyze variance patterns across multiple shifts to identify systematic issues.
 
     Args:
         readings: List of tank reading data for multiple shifts
+        storage: Station storage dict for loading configured tolerance settings
 
     Returns:
         Pattern analysis showing trends and recurring issues
@@ -536,7 +541,7 @@ def get_historical_variance_pattern(readings: List[Dict]) -> Dict:
     total_nozzle_cash_variance = 0
 
     for reading in readings:
-        reconciliation = get_reconciliation_summary_for_shift(reading)
+        reconciliation = get_reconciliation_summary_for_shift(reading, storage=storage)
 
         # Count by status
         if reconciliation['status'] == ReconciliationStatus.BALANCED:

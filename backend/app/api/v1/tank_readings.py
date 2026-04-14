@@ -509,7 +509,7 @@ def submit_tank_reading(
         'total_mechanical_dispensed': calculations['total_mechanical_dispensed'],
         'actual_cash_banked': calculations.get('actual_cash_banked'),
         'price_per_liter': calculations.get('price_per_liter', 0)
-    })
+    }, storage=ctx["storage"])
 
     # Calculate delivery VAT (Gap 2)
     delivery_vat_amount = None
