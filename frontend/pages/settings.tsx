@@ -1082,7 +1082,7 @@ export default function Settings() {
       )}
 
       {/* ── Reconciliation Tolerances Tab ── */}
-      {/* Previous dual-gate UI archived at: frontend/pages/_archived/recon_tolerances_tab_dual_gate_v1.tsx */}
+      {/* Previous dual-gate UI archived at: frontend/_archived/recon_tolerances_tab_dual_gate_v1.tsx */}
       {activeTab === 'recon-tolerances' && (
         <div className="bg-surface-card rounded-lg shadow p-6">
           <div className="space-y-6">
