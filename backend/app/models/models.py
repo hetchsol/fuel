@@ -94,7 +94,8 @@ class FuelSettings(BaseModel):
 class ScheduledPriceChange(BaseModel):
     fuel_type: str                                       # "Diesel" or "Petrol"
     new_price_per_liter: float = Field(..., gt=0, le=1000)
-    effective_date: str                                   # YYYY-MM-DD (price activates at 00:00)
+    effective_date: str                                   # YYYY-MM-DD
+    effective_time: str = "00:00"                         # HH:MM (24-hour) — when on that date the price activates
     old_price_per_liter: Optional[float] = None          # snapshot of price before change (set on apply)
     created_by: Optional[str] = None
     created_at: Optional[str] = None
@@ -130,13 +131,28 @@ class StockAlertSettings(BaseModel):
     low_stock_threshold_percent: float = Field(default=25.0, ge=0, le=100.0)
     critical_stock_threshold_percent: float = Field(default=10.0, ge=0, le=100.0)
 
+class VolumeTier(BaseModel):
+    up_to_liters: float = Field(..., gt=0, le=1000000.0)   # Upper bound of this bracket (litres)
+    tolerance_minor: float = Field(..., ge=0, le=10000.0)    # Acceptable loss (litres) for this bracket
+    tolerance_investigation: float = Field(..., ge=0, le=50000.0)  # Investigation threshold (litres) for this bracket
+
 class ReconciliationToleranceSettings(BaseModel):
+    volume_tolerance_mode: str = Field(default="percentage")  # "percentage" | "fixed" | "hybrid" | "tiered"
+    # Fixed mode fields
     volume_tolerance_minor: float = Field(default=50.0, ge=0, le=10000.0)
     volume_tolerance_investigation: float = Field(default=200.0, ge=0, le=50000.0)
+    # Percentage mode fields
     percent_tolerance_minor: float = Field(default=0.5, ge=0, le=100.0)
     percent_tolerance_investigation: float = Field(default=2.0, ge=0, le=100.0)
+    # Hybrid mode fields (percentage with litre cap)
+    volume_cap_minor: float = Field(default=0.0, ge=0, le=10000.0)
+    volume_cap_investigation: float = Field(default=0.0, ge=0, le=50000.0)
+    # Tiered mode fields
+    volume_tiers: List[VolumeTier] = Field(default_factory=list)
+    # Cash (always flat ZMW, independent of volume mode)
     cash_tolerance_minor: float = Field(default=500.0, ge=0, le=1000000.0)
     cash_tolerance_investigation: float = Field(default=2000.0, ge=0, le=1000000.0)
+    # Shared
     min_volume_for_percent: float = Field(default=100.0, ge=0, le=10000.0)
 
 class StockDelivery(BaseModel):

@@ -14,7 +14,7 @@ export default function Settings() {
     nozzle_allowable_loss_liters: 0.8,
   })
   const [scheduledPrices, setScheduledPrices] = useState<any[]>([])
-  const [scheduleForm, setScheduleForm] = useState({ fuel_type: 'Diesel', new_price_per_liter: '', effective_date: '' })
+  const [scheduleForm, setScheduleForm] = useState({ fuel_type: 'Diesel', new_price_per_liter: '', effective_date: '', effective_time: '00:00' })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -62,11 +62,15 @@ export default function Settings() {
   const [stockAlertsMessage, setStockAlertsMessage] = useState('')
   const [stockAlertsError, setStockAlertsError] = useState('')
 
-  const [reconTolerances, setReconTolerances] = useState({
+  const [reconTolerances, setReconTolerances] = useState<any>({
+    volume_tolerance_mode: 'percentage',
     volume_tolerance_minor: 50.0,
     volume_tolerance_investigation: 200.0,
+    volume_cap_minor: 0.0,
+    volume_cap_investigation: 0.0,
     percent_tolerance_minor: 0.5,
     percent_tolerance_investigation: 2.0,
+    volume_tiers: [],
     cash_tolerance_minor: 500.0,
     cash_tolerance_investigation: 2000.0,
     min_volume_for_percent: 100.0,
@@ -132,6 +136,7 @@ export default function Settings() {
           fuel_type: scheduleForm.fuel_type,
           new_price_per_liter: parseFloat(scheduleForm.new_price_per_liter),
           effective_date: scheduleForm.effective_date,
+          effective_time: scheduleForm.effective_time || '00:00',
         }),
       })
       if (!res.ok) {
@@ -140,7 +145,7 @@ export default function Settings() {
         return
       }
       setMessage('Price change scheduled successfully')
-      setScheduleForm({ fuel_type: 'Diesel', new_price_per_liter: '', effective_date: '' })
+      setScheduleForm({ fuel_type: 'Diesel', new_price_per_liter: '', effective_date: '', effective_time: '00:00' })
       loadScheduledPrices()
     } catch (err: any) {
       setError(err.message || 'Failed to schedule price')
@@ -388,20 +393,30 @@ export default function Settings() {
     setReconLoading(true)
     setReconMessage('')
     setReconError('')
-    if (reconTolerances.volume_tolerance_minor >= reconTolerances.volume_tolerance_investigation) {
-      setReconError('Volume minor must be less than investigation')
-      setReconLoading(false)
-      return
+    const mode = reconTolerances.volume_tolerance_mode
+    if (mode === 'fixed' && reconTolerances.volume_tolerance_minor >= reconTolerances.volume_tolerance_investigation) {
+      setReconError('Volume minor must be less than investigation'); setReconLoading(false); return
     }
-    if (reconTolerances.percent_tolerance_minor >= reconTolerances.percent_tolerance_investigation) {
-      setReconError('Percent minor must be less than investigation')
-      setReconLoading(false)
-      return
+    if ((mode === 'percentage' || mode === 'hybrid') && reconTolerances.percent_tolerance_minor >= reconTolerances.percent_tolerance_investigation) {
+      setReconError('Percent minor must be less than investigation'); setReconLoading(false); return
+    }
+    if (mode === 'hybrid' && reconTolerances.volume_cap_minor > 0 && reconTolerances.volume_cap_investigation > 0 && reconTolerances.volume_cap_minor >= reconTolerances.volume_cap_investigation) {
+      setReconError('Volume cap minor must be less than volume cap investigation'); setReconLoading(false); return
+    }
+    if (mode === 'tiered') {
+      const tiers = reconTolerances.volume_tiers || []
+      if (tiers.length === 0) { setReconError('Tiered mode requires at least one tier'); setReconLoading(false); return }
+      for (let i = 0; i < tiers.length; i++) {
+        if (tiers[i].tolerance_minor >= tiers[i].tolerance_investigation) {
+          setReconError(`Tier ${i + 1}: minor must be less than investigation`); setReconLoading(false); return
+        }
+        if (i > 0 && tiers[i].up_to_liters <= tiers[i - 1].up_to_liters) {
+          setReconError(`Tier ${i + 1}: volume must be greater than previous tier`); setReconLoading(false); return
+        }
+      }
     }
     if (reconTolerances.cash_tolerance_minor >= reconTolerances.cash_tolerance_investigation) {
-      setReconError('Cash minor must be less than investigation')
-      setReconLoading(false)
-      return
+      setReconError('Cash minor must be less than investigation'); setReconLoading(false); return
     }
     try {
       const res = await authFetch(`${BASE}/settings/reconciliation-tolerances`, {
@@ -634,7 +649,7 @@ export default function Settings() {
             {/* Scheduled Price Changes */}
             <div className="border-b pb-6">
               <h2 className="text-xl font-semibold text-content-primary mb-4">Scheduled Price Changes</h2>
-              <p className="text-sm text-content-secondary mb-3">Schedule future price changes (e.g., month-end adjustments). The new price activates automatically at midnight on the effective date.</p>
+              <p className="text-sm text-content-secondary mb-3">Schedule future price changes (e.g., month-end adjustments). The new price activates automatically at the specified date and time.</p>
 
               {/* Schedule form */}
               <div className="flex flex-wrap items-end gap-3 mb-4">
@@ -659,6 +674,12 @@ export default function Settings() {
                     onChange={e => setScheduleForm({ ...scheduleForm, effective_date: e.target.value })}
                     className="px-3 py-2 border border-surface-border rounded-md text-sm" />
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-content-secondary mb-1">Time</label>
+                  <input type="time" value={scheduleForm.effective_time}
+                    onChange={e => setScheduleForm({ ...scheduleForm, effective_time: e.target.value })}
+                    className="px-3 py-2 border border-surface-border rounded-md text-sm" />
+                </div>
                 <button type="button" onClick={handleSchedulePrice}
                   disabled={!scheduleForm.new_price_per_liter || !scheduleForm.effective_date}
                   className="px-4 py-2 bg-action-primary text-white rounded-md text-sm font-medium disabled:opacity-50">
@@ -677,7 +698,7 @@ export default function Settings() {
                         <span className="font-medium text-content-primary">{sp.fuel_type}</span>
                         <span className="text-content-secondary mx-2">→</span>
                         <span className="font-mono font-semibold text-content-primary">K{sp.new_price_per_liter}</span>
-                        <span className="text-content-secondary ml-2">effective {sp.effective_date}</span>
+                        <span className="text-content-secondary ml-2">effective {sp.effective_date} at {sp.effective_time || '00:00'}</span>
                         {sp.applied && sp.old_price_per_liter && (
                           <span className="text-xs text-content-secondary ml-2">(was K{sp.old_price_per_liter})</span>
                         )}
@@ -888,7 +909,12 @@ export default function Settings() {
                     className="w-full px-3 py-2 border border-status-success rounded-md focus:outline-none focus:ring-status-success focus:border-status-success"
                     required
                   />
-                  <p className="text-xs text-content-secondary mt-1">Variance &le; this % = PASS (Green status)</p>
+                  <p className="text-xs text-content-secondary mt-1">
+                    Variance &le; this % = PASS (Green status)
+                    <span className="ml-1 text-content-tertiary">
+                      — e.g. {((validationThresholds.pass_threshold / 100) * 20000).toFixed(0)}L on a 20,000L tank, {((validationThresholds.pass_threshold / 100) * 5000).toFixed(0)}L on 5,000L
+                    </span>
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">WARNING Threshold (%)</label>
@@ -902,7 +928,12 @@ export default function Settings() {
                     className="w-full px-3 py-2 border border-status-warning rounded-md focus:outline-none focus:ring-status-warning focus:border-status-warning"
                     required
                   />
-                  <p className="text-xs text-content-secondary mt-1">Variance &le; this % = WARNING (Yellow status)</p>
+                  <p className="text-xs text-content-secondary mt-1">
+                    Variance &le; this % = WARNING (Yellow status)
+                    <span className="ml-1 text-content-tertiary">
+                      — e.g. {((validationThresholds.warning_threshold / 100) * 20000).toFixed(0)}L on a 20,000L tank, {((validationThresholds.warning_threshold / 100) * 5000).toFixed(0)}L on 5,000L
+                    </span>
+                  </p>
                 </div>
               </div>
 
@@ -920,6 +951,9 @@ export default function Settings() {
                 />
                 <p className="text-xs text-content-secondary mt-1">
                   When electronic vs mechanical dispensed discrepancy exceeds this threshold, attendants must provide a note explaining the difference.
+                  <span className="block mt-0.5 text-content-tertiary">
+                    e.g. {((validationThresholds.meter_discrepancy_threshold / 100) * 2000).toFixed(1)}L on 2,000L dispensed, {((validationThresholds.meter_discrepancy_threshold / 100) * 500).toFixed(1)}L on 500L dispensed
+                  </span>
                 </p>
               </div>
 
@@ -1048,141 +1082,336 @@ export default function Settings() {
       )}
 
       {/* ── Reconciliation Tolerances Tab ── */}
+      {/* Previous dual-gate UI archived at: frontend/pages/_archived/recon_tolerances_tab_dual_gate_v1.tsx */}
       {activeTab === 'recon-tolerances' && (
         <div className="bg-surface-card rounded-lg shadow p-6">
           <div className="space-y-6">
             <div className="border-b pb-4">
               <h2 className="text-xl font-semibold text-content-primary mb-2">Reconciliation Tolerances</h2>
               <p className="text-sm text-content-secondary">
-                Configure tolerance thresholds for three-way reconciliation (Tank vs Nozzle vs Cash).
+                Configure how the system decides whether a fuel variance is acceptable, needs investigation, or is critical.
               </p>
             </div>
 
-            {/* Volume Tolerances */}
+            {/* Mode Selector */}
             <div>
-              <h3 className="text-sm font-semibold text-content-primary mb-3">Volume Tolerances (Liters)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Minor (L)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="10000"
-                    value={reconTolerances.volume_tolerance_minor}
-                    onChange={(e) => setReconTolerances({ ...reconTolerances, volume_tolerance_minor: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    required
-                  />
-                  <p className="text-xs text-content-secondary mt-1">Up to this = acceptable</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Investigation (L)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="50000"
-                    value={reconTolerances.volume_tolerance_investigation}
-                    onChange={(e) => setReconTolerances({ ...reconTolerances, volume_tolerance_investigation: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    required
-                  />
-                  <p className="text-xs text-content-secondary mt-1">Above minor, up to this = investigate</p>
-                </div>
-              </div>
+              <label className="block text-sm font-medium text-content-primary mb-2">Volume Tolerance Mode</label>
+              <select
+                value={reconTolerances.volume_tolerance_mode}
+                onChange={(e) => setReconTolerances({ ...reconTolerances, volume_tolerance_mode: e.target.value })}
+                className="w-full px-3 py-2 border border-surface-border rounded-md text-sm focus:outline-none focus:ring-action-primary focus:border-action-primary"
+              >
+                <option value="percentage">Percentage — tolerance scales with volume</option>
+                <option value="fixed">Fixed Litres — same litre tolerance regardless of volume</option>
+                <option value="hybrid">Hybrid — percentage with a maximum litre cap</option>
+                <option value="tiered">Tiered — different tolerances for different volume ranges</option>
+              </select>
             </div>
 
-            {/* Percentage Tolerances */}
-            <div>
-              <h3 className="text-sm font-semibold text-content-primary mb-3">Percentage Tolerances (%)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Mode description */}
+            <div className="bg-surface-bg border border-surface-border rounded-lg p-4">
+              {reconTolerances.volume_tolerance_mode === 'percentage' && (
                 <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Minor (%)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    value={reconTolerances.percent_tolerance_minor}
-                    onChange={(e) => setReconTolerances({ ...reconTolerances, percent_tolerance_minor: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    required
-                  />
+                  <h3 className="text-sm font-semibold text-content-primary mb-1">Percentage Mode</h3>
+                  <p className="text-sm text-content-secondary">
+                    Tolerance is calculated as a percentage of the total volume. For example, at 0.5% a 20,000L shift
+                    allows up to 100L variance, while a 500L shift allows only 2.5L. This scales naturally but can
+                    be too generous on large volumes.
+                  </p>
                 </div>
+              )}
+              {reconTolerances.volume_tolerance_mode === 'fixed' && (
                 <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Investigation (%)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    value={reconTolerances.percent_tolerance_investigation}
-                    onChange={(e) => setReconTolerances({ ...reconTolerances, percent_tolerance_investigation: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    required
-                  />
+                  <h3 className="text-sm font-semibold text-content-primary mb-1">Fixed Litres Mode</h3>
+                  <p className="text-sm text-content-secondary">
+                    A flat litre tolerance is applied regardless of volume. Every shift is held to the same absolute
+                    standard. Best when you want tight, predictable control. May produce false flags on very large
+                    volumes if set too tight.
+                  </p>
                 </div>
-              </div>
+              )}
+              {reconTolerances.volume_tolerance_mode === 'hybrid' && (
+                <div>
+                  <h3 className="text-sm font-semibold text-content-primary mb-1">Hybrid Mode (Percentage + Cap)</h3>
+                  <p className="text-sm text-content-secondary">
+                    Tolerance is calculated as a percentage of volume, but <strong>capped</strong> at a maximum number of litres.
+                    The system uses <em>whichever is smaller</em>. This gives proportional sensitivity on small volumes
+                    while preventing large volumes from hiding big losses behind a small percentage.
+                  </p>
+                  <p className="text-sm text-content-secondary mt-1">
+                    Example: at 0.5% with a 5L cap — a 200L shift allows 1L (percentage governs), but a 20,000L shift
+                    allows only 5L (cap kicks in), not 100L.
+                  </p>
+                </div>
+              )}
+              {reconTolerances.volume_tolerance_mode === 'tiered' && (
+                <div>
+                  <h3 className="text-sm font-semibold text-content-primary mb-1">Tiered Mode (Volume Brackets)</h3>
+                  <p className="text-sm text-content-secondary">
+                    Define volume brackets with specific litre tolerances for each range. This gives you full control
+                    over exactly how much loss is acceptable at every volume level. The system finds the bracket that
+                    matches the shift volume and applies that tier's tolerance.
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Cash Tolerances */}
-            <div>
+            {/* ── Percentage mode fields ── */}
+            {reconTolerances.volume_tolerance_mode === 'percentage' && (
+              <div>
+                <h3 className="text-sm font-semibold text-content-primary mb-3">Percentage Tolerances</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-content-secondary mb-1">Acceptable (%)</label>
+                    <input type="number" step="0.1" min="0" max="100"
+                      value={reconTolerances.percent_tolerance_minor}
+                      onChange={(e) => setReconTolerances({ ...reconTolerances, percent_tolerance_minor: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 border border-status-success rounded-md focus:outline-none focus:ring-status-success" required />
+                    <p className="text-xs text-content-secondary mt-1">
+                      Variance up to this % = acceptable
+                      <span className="block text-content-tertiary mt-0.5">
+                        {((reconTolerances.percent_tolerance_minor / 100) * 20000).toFixed(0)}L on 20,000L
+                        {' / '}{((reconTolerances.percent_tolerance_minor / 100) * 5000).toFixed(0)}L on 5,000L
+                        {' / '}{((reconTolerances.percent_tolerance_minor / 100) * 500).toFixed(1)}L on 500L
+                      </span>
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-content-secondary mb-1">Investigation (%)</label>
+                    <input type="number" step="0.1" min="0" max="100"
+                      value={reconTolerances.percent_tolerance_investigation}
+                      onChange={(e) => setReconTolerances({ ...reconTolerances, percent_tolerance_investigation: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 border border-status-warning rounded-md focus:outline-none focus:ring-status-warning" required />
+                    <p className="text-xs text-content-secondary mt-1">
+                      Above acceptable but within this = investigate; beyond = critical
+                      <span className="block text-content-tertiary mt-0.5">
+                        {((reconTolerances.percent_tolerance_investigation / 100) * 20000).toFixed(0)}L on 20,000L
+                        {' / '}{((reconTolerances.percent_tolerance_investigation / 100) * 5000).toFixed(0)}L on 5,000L
+                        {' / '}{((reconTolerances.percent_tolerance_investigation / 100) * 500).toFixed(1)}L on 500L
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Minimum Volume for % Calculation (L)</label>
+                  <input type="number" step="10" min="0" max="10000"
+                    value={reconTolerances.min_volume_for_percent}
+                    onChange={(e) => setReconTolerances({ ...reconTolerances, min_volume_for_percent: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md max-w-xs" required />
+                  <p className="text-xs text-content-secondary mt-1">Below this volume, percentage is not calculated (avoids misleading % on tiny amounts)</p>
+                </div>
+              </div>
+            )}
+
+            {/* ── Fixed mode fields ── */}
+            {reconTolerances.volume_tolerance_mode === 'fixed' && (
+              <div>
+                <h3 className="text-sm font-semibold text-content-primary mb-3">Fixed Volume Tolerances (Litres)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-content-secondary mb-1">Acceptable (L)</label>
+                    <input type="number" step="0.5" min="0" max="10000"
+                      value={reconTolerances.volume_tolerance_minor}
+                      onChange={(e) => setReconTolerances({ ...reconTolerances, volume_tolerance_minor: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 border border-status-success rounded-md focus:outline-none focus:ring-status-success" required />
+                    <p className="text-xs text-content-secondary mt-1">Variance up to this many litres = acceptable, regardless of volume handled</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-content-secondary mb-1">Investigation (L)</label>
+                    <input type="number" step="0.5" min="0" max="50000"
+                      value={reconTolerances.volume_tolerance_investigation}
+                      onChange={(e) => setReconTolerances({ ...reconTolerances, volume_tolerance_investigation: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 border border-status-warning rounded-md focus:outline-none focus:ring-status-warning" required />
+                    <p className="text-xs text-content-secondary mt-1">Above acceptable but within this = investigate; beyond = critical</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Hybrid mode fields ── */}
+            {reconTolerances.volume_tolerance_mode === 'hybrid' && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-content-primary mb-3">Percentage</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-content-secondary mb-1">Acceptable (%)</label>
+                      <input type="number" step="0.1" min="0" max="100"
+                        value={reconTolerances.percent_tolerance_minor}
+                        onChange={(e) => setReconTolerances({ ...reconTolerances, percent_tolerance_minor: parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 border border-status-success rounded-md" required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-content-secondary mb-1">Investigation (%)</label>
+                      <input type="number" step="0.1" min="0" max="100"
+                        value={reconTolerances.percent_tolerance_investigation}
+                        onChange={(e) => setReconTolerances({ ...reconTolerances, percent_tolerance_investigation: parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 border border-status-warning rounded-md" required />
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-status-warning/5 border border-status-warning/30 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-content-primary mb-1">Maximum Litre Cap</h3>
+                  <p className="text-xs text-content-secondary mb-3">
+                    The cap is the hard ceiling. Even if the percentage allows more, loss beyond the cap triggers escalation.
+                    Set to 0 to disable (percentage alone governs).
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-content-secondary mb-1">Cap — Acceptable (L)</label>
+                      <input type="number" step="0.5" min="0" max="10000"
+                        value={reconTolerances.volume_cap_minor}
+                        onChange={(e) => setReconTolerances({ ...reconTolerances, volume_cap_minor: parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 border border-status-warning/50 rounded-md" required />
+                      <p className="text-xs text-content-secondary mt-1">
+                        {reconTolerances.volume_cap_minor > 0
+                          ? `Active — max ${reconTolerances.volume_cap_minor}L acceptable loss`
+                          : 'Disabled (0) — no cap'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-content-secondary mb-1">Cap — Investigation (L)</label>
+                      <input type="number" step="0.5" min="0" max="50000"
+                        value={reconTolerances.volume_cap_investigation}
+                        onChange={(e) => setReconTolerances({ ...reconTolerances, volume_cap_investigation: parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 border border-status-warning/50 rounded-md" required />
+                      <p className="text-xs text-content-secondary mt-1">
+                        {reconTolerances.volume_cap_investigation > 0
+                          ? `Active — above ${reconTolerances.volume_cap_minor || 'acceptable'} but within ${reconTolerances.volume_cap_investigation}L = investigate`
+                          : 'Disabled (0) — no cap'}
+                      </p>
+                    </div>
+                  </div>
+                  {reconTolerances.volume_cap_minor > 0 && (
+                    <div className="mt-3 p-2.5 bg-surface-card rounded border border-surface-border">
+                      <p className="text-xs text-content-secondary font-medium mb-1">With current settings:</p>
+                      <p className="text-xs text-content-tertiary">
+                        20,000L shift: {reconTolerances.percent_tolerance_minor}% = {((reconTolerances.percent_tolerance_minor / 100) * 20000).toFixed(0)}L,
+                        but cap limits to {reconTolerances.volume_cap_minor}L
+                      </p>
+                      <p className="text-xs text-content-tertiary">
+                        200L shift: {reconTolerances.percent_tolerance_minor}% = {((reconTolerances.percent_tolerance_minor / 100) * 200).toFixed(1)}L
+                        (below cap, percentage governs)
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Minimum Volume for % Calculation (L)</label>
+                  <input type="number" step="10" min="0" max="10000"
+                    value={reconTolerances.min_volume_for_percent}
+                    onChange={(e) => setReconTolerances({ ...reconTolerances, min_volume_for_percent: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md max-w-xs" required />
+                  <p className="text-xs text-content-secondary mt-1">Below this volume, percentage is not calculated</p>
+                </div>
+              </div>
+            )}
+
+            {/* ── Tiered mode fields ── */}
+            {reconTolerances.volume_tolerance_mode === 'tiered' && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-content-primary">Volume Tiers</h3>
+                  <button type="button" onClick={() => {
+                    const tiers = [...(reconTolerances.volume_tiers || [])]
+                    const lastUpTo = tiers.length > 0 ? tiers[tiers.length - 1].up_to_liters : 0
+                    tiers.push({ up_to_liters: lastUpTo + 5000, tolerance_minor: 5, tolerance_investigation: 15 })
+                    setReconTolerances({ ...reconTolerances, volume_tiers: tiers })
+                  }} className="px-3 py-1.5 bg-action-primary text-white rounded-md text-xs font-medium">
+                    + Add Tier
+                  </button>
+                </div>
+                {(!reconTolerances.volume_tiers || reconTolerances.volume_tiers.length === 0) && (
+                  <p className="text-sm text-content-secondary italic">No tiers defined. Add at least one tier to use tiered mode.</p>
+                )}
+                {reconTolerances.volume_tiers && reconTolerances.volume_tiers.length > 0 && (
+                  <div className="space-y-2">
+                    {/* Header */}
+                    <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-xs font-medium text-content-secondary px-1">
+                      <span>Up to (L)</span>
+                      <span>Acceptable (L)</span>
+                      <span>Investigation (L)</span>
+                      <span className="w-8"></span>
+                    </div>
+                    {reconTolerances.volume_tiers.map((tier: any, idx: number) => (
+                      <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
+                        <div className="relative">
+                          <input type="number" step="100" min="1"
+                            value={tier.up_to_liters}
+                            onChange={(e) => {
+                              const tiers = [...reconTolerances.volume_tiers]
+                              tiers[idx] = { ...tiers[idx], up_to_liters: parseFloat(e.target.value) || 0 }
+                              setReconTolerances({ ...reconTolerances, volume_tiers: tiers })
+                            }}
+                            className="w-full px-3 py-2 border border-surface-border rounded-md text-sm" />
+                          {idx === 0 && <span className="absolute -top-0.5 right-1 text-[10px] text-content-tertiary">0 – {tier.up_to_liters}L</span>}
+                          {idx > 0 && <span className="absolute -top-0.5 right-1 text-[10px] text-content-tertiary">{reconTolerances.volume_tiers[idx-1].up_to_liters} – {tier.up_to_liters}L</span>}
+                        </div>
+                        <input type="number" step="0.5" min="0"
+                          value={tier.tolerance_minor}
+                          onChange={(e) => {
+                            const tiers = [...reconTolerances.volume_tiers]
+                            tiers[idx] = { ...tiers[idx], tolerance_minor: parseFloat(e.target.value) || 0 }
+                            setReconTolerances({ ...reconTolerances, volume_tiers: tiers })
+                          }}
+                          className="w-full px-3 py-2 border border-status-success rounded-md text-sm" />
+                        <input type="number" step="0.5" min="0"
+                          value={tier.tolerance_investigation}
+                          onChange={(e) => {
+                            const tiers = [...reconTolerances.volume_tiers]
+                            tiers[idx] = { ...tiers[idx], tolerance_investigation: parseFloat(e.target.value) || 0 }
+                            setReconTolerances({ ...reconTolerances, volume_tiers: tiers })
+                          }}
+                          className="w-full px-3 py-2 border border-status-warning rounded-md text-sm" />
+                        <button type="button" onClick={() => {
+                          const tiers = reconTolerances.volume_tiers.filter((_: any, i: number) => i !== idx)
+                          setReconTolerances({ ...reconTolerances, volume_tiers: tiers })
+                        }} className="w-8 h-8 flex items-center justify-center text-status-error hover:bg-status-error/10 rounded">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                    <p className="text-xs text-content-tertiary mt-1">
+                      Volumes above the last tier use the last tier's tolerances. Tiers must be in ascending order.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Cash Tolerances (always shown) ── */}
+            <div className="border-t pt-4">
               <h3 className="text-sm font-semibold text-content-primary mb-3">Cash Tolerances (ZMW)</h3>
+              <p className="text-xs text-content-secondary mb-3">Cash tolerances are always flat ZMW amounts, independent of volume mode.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Minor (ZMW)</label>
-                  <input
-                    type="number"
-                    step="10"
-                    min="0"
-                    max="1000000"
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Acceptable (ZMW)</label>
+                  <input type="number" step="10" min="0" max="1000000"
                     value={reconTolerances.cash_tolerance_minor}
                     onChange={(e) => setReconTolerances({ ...reconTolerances, cash_tolerance_minor: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    required
-                  />
+                    className="w-full px-3 py-2 border border-status-success rounded-md" required />
+                  <p className="text-xs text-content-secondary mt-1">Cash variance up to this = acceptable</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Investigation (ZMW)</label>
-                  <input
-                    type="number"
-                    step="10"
-                    min="0"
-                    max="1000000"
+                  <input type="number" step="10" min="0" max="1000000"
                     value={reconTolerances.cash_tolerance_investigation}
                     onChange={(e) => setReconTolerances({ ...reconTolerances, cash_tolerance_investigation: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    required
-                  />
+                    className="w-full px-3 py-2 border border-status-warning rounded-md" required />
+                  <p className="text-xs text-content-secondary mt-1">Above acceptable but within this = investigate; beyond = critical</p>
                 </div>
               </div>
             </div>
 
-            {/* Min Volume for Percent */}
-            <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">Minimum Volume for % Calculation (L)</label>
-              <input
-                type="number"
-                step="10"
-                min="0"
-                max="10000"
-                value={reconTolerances.min_volume_for_percent}
-                onChange={(e) => setReconTolerances({ ...reconTolerances, min_volume_for_percent: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary max-w-xs"
-                required
-              />
-              <p className="text-xs text-content-secondary mt-1">Percentage variance is not calculated for volumes below this</p>
-            </div>
-
+            {/* Status messages */}
             {reconMessage && (
               <div className="p-4 bg-status-success-light border border-status-success rounded-md">
-                <p className="text-sm text-status-success">✓ {reconMessage}</p>
+                <p className="text-sm text-status-success">&#10003; {reconMessage}</p>
               </div>
             )}
             {reconError && (
               <div className="p-4 bg-status-error-light border border-status-error rounded-md">
-                <p className="text-sm text-status-error">✗ {reconError}</p>
+                <p className="text-sm text-status-error">&#10007; {reconError}</p>
               </div>
             )}
 
@@ -1194,24 +1423,21 @@ export default function Settings() {
               {reconLoading ? 'Saving...' : 'Save Reconciliation Tolerances'}
             </button>
 
+            {/* Reconciliation levels reference */}
             <div className="bg-surface-bg border border-surface-border rounded-lg p-4">
               <h3 className="text-sm font-semibold text-content-primary mb-2">Reconciliation Levels</h3>
               <ul className="text-sm text-content-secondary space-y-2">
                 <li className="flex items-start">
                   <span className="text-status-success font-bold mr-2">BALANCED:</span>
-                  <span>All three sources match within minor tolerance</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-status-warning font-bold mr-2">MINOR:</span>
-                  <span>Small discrepancy within acceptable range</span>
+                  <span>All three sources match within acceptable tolerance</span>
                 </li>
                 <li className="flex items-start">
                   <span className="text-status-warning font-bold mr-2">INVESTIGATION:</span>
-                  <span>Between minor and investigation threshold - requires review</span>
+                  <span>Exceeds acceptable but within investigation threshold — requires review</span>
                 </li>
                 <li className="flex items-start">
                   <span className="text-status-error font-bold mr-2">CRITICAL:</span>
-                  <span>Above investigation threshold - significant mismatch</span>
+                  <span>Above investigation threshold — significant mismatch, immediate action needed</span>
                 </li>
               </ul>
             </div>

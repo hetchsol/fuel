@@ -166,10 +166,14 @@ def _seed_settings(storage: dict):
     # Seed reconciliation tolerance settings if missing
     if 'reconciliation_tolerance_settings' not in storage or not storage['reconciliation_tolerance_settings']:
         storage['reconciliation_tolerance_settings'] = {
+            "volume_tolerance_mode": "percentage",
             "volume_tolerance_minor": 50.0,
             "volume_tolerance_investigation": 200.0,
+            "volume_cap_minor": 0.0,
+            "volume_cap_investigation": 0.0,
             "percent_tolerance_minor": 0.5,
             "percent_tolerance_investigation": 2.0,
+            "volume_tiers": [],
             "cash_tolerance_minor": 500.0,
             "cash_tolerance_investigation": 2000.0,
             "min_volume_for_percent": 100.0,

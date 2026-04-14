@@ -243,7 +243,7 @@ def resolve_fuel_price(fuel_type: str, storage: dict = None) -> float:
 
 def apply_due_price_changes(storage: dict, station_id: str = None) -> list:
     """
-    Lazily apply any scheduled price changes whose effective_date has passed.
+    Lazily apply any scheduled price changes whose effective date+time has passed.
     Snapshots the old price before updating. Returns list of applied changes.
     """
     from datetime import datetime
@@ -251,14 +251,19 @@ def apply_due_price_changes(storage: dict, station_id: str = None) -> list:
     if not scheduled:
         return []
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now()
     applied = []
     fuel_settings = storage.setdefault('fuel_settings', {})
 
     for entry in scheduled:
         if entry.get('applied') or not entry.get('effective_date'):
             continue
-        if entry['effective_date'] > today:
+        effective_time = entry.get('effective_time', '00:00') or '00:00'
+        try:
+            effective_dt = datetime.strptime(f"{entry['effective_date']} {effective_time}", "%Y-%m-%d %H:%M")
+        except (ValueError, TypeError):
+            continue
+        if effective_dt > now:
             continue
 
         fuel_type = entry.get('fuel_type', '').upper()
@@ -329,12 +334,35 @@ def resolve_fuel_price_for_shift(fuel_type: str, shift_date: str, shift_type: st
                         ('PETROL' in entry_fuel or 'GASOLINE' in entry_fuel))
         if not matches_fuel:
             continue
-        if entry.get('effective_date') == next_day:
-            result["has_price_change"] = True
-            result["old_price"] = entry.get('old_price_per_liter')
-            result["new_price"] = entry.get('new_price_per_liter')
-            result["effective_date"] = next_day
-            break
+        # Check if the price change effective datetime falls within this night shift (6PM D to 6AM D+1)
+        effective_time = entry.get('effective_time', '00:00') or '00:00'
+        entry_date = entry.get('effective_date', '')
+        if entry_date == next_day:
+            # A change on D+1 at midnight (or early morning) falls within the night shift
+            try:
+                eh, em = map(int, effective_time.split(":"))
+            except (ValueError, TypeError):
+                eh, em = 0, 0
+            if eh < 6:  # before 6 AM on D+1 means it's within the night shift
+                result["has_price_change"] = True
+                result["old_price"] = entry.get('old_price_per_liter')
+                result["new_price"] = entry.get('new_price_per_liter')
+                result["effective_date"] = entry_date
+                result["effective_time"] = effective_time
+                break
+        elif entry_date == shift_date:
+            # A change on the shift date itself at/after 6PM falls within the night shift
+            try:
+                eh, em = map(int, effective_time.split(":"))
+            except (ValueError, TypeError):
+                eh, em = 0, 0
+            if eh >= 18:  # at or after 6 PM on D means it's within the night shift
+                result["has_price_change"] = True
+                result["old_price"] = entry.get('old_price_per_liter')
+                result["new_price"] = entry.get('new_price_per_liter')
+                result["effective_date"] = entry_date
+                result["effective_time"] = effective_time
+                break
 
     return result
 

@@ -663,13 +663,24 @@ def get_three_way_config(ctx: dict = Depends(get_station_context)):
 
     config = ReconciliationConfig(storage=ctx["storage"])
 
+    mode = config.VOLUME_TOLERANCE_MODE
+    volume_info = {'mode': mode}
+    if mode == 'fixed':
+        volume_info['minor_liters'] = config.VOLUME_TOLERANCE_MINOR
+        volume_info['investigation_liters'] = config.VOLUME_TOLERANCE_INVESTIGATION
+    elif mode == 'percentage':
+        volume_info['minor_percent'] = config.PERCENT_TOLERANCE_MINOR
+        volume_info['investigation_percent'] = config.PERCENT_TOLERANCE_INVESTIGATION
+    elif mode == 'hybrid':
+        volume_info['minor_percent'] = config.PERCENT_TOLERANCE_MINOR
+        volume_info['investigation_percent'] = config.PERCENT_TOLERANCE_INVESTIGATION
+        volume_info['cap_minor_liters'] = config.VOLUME_CAP_MINOR if config.VOLUME_CAP_MINOR > 0 else None
+        volume_info['cap_investigation_liters'] = config.VOLUME_CAP_INVESTIGATION if config.VOLUME_CAP_INVESTIGATION > 0 else None
+    elif mode == 'tiered':
+        volume_info['tiers'] = config.VOLUME_TIERS
+
     return {
-        'volume_tolerances': {
-            'minor_liters': config.VOLUME_TOLERANCE_MINOR,
-            'investigation_liters': config.VOLUME_TOLERANCE_INVESTIGATION,
-            'minor_percent': config.PERCENT_TOLERANCE_MINOR,
-            'investigation_percent': config.PERCENT_TOLERANCE_INVESTIGATION
-        },
+        'volume_tolerances': volume_info,
         'cash_tolerances': {
             'minor_amount': config.CASH_TOLERANCE_MINOR,
             'investigation_amount': config.CASH_TOLERANCE_INVESTIGATION

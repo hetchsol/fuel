@@ -39,10 +39,14 @@ class ReconciliationConfig:
 
     # Class-level defaults (used when no storage provided)
     _DEFAULTS = {
+        'volume_tolerance_mode': 'percentage',
         'volume_tolerance_minor': 50.0,
         'volume_tolerance_investigation': 200.0,
+        'volume_cap_minor': 0.0,
+        'volume_cap_investigation': 0.0,
         'percent_tolerance_minor': 0.5,
         'percent_tolerance_investigation': 2.0,
+        'volume_tiers': [],
         'cash_tolerance_minor': 500.0,
         'cash_tolerance_investigation': 2000.0,
         'min_volume_for_percent': 100.0,
@@ -53,10 +57,14 @@ class ReconciliationConfig:
         if storage:
             settings = storage.get('reconciliation_tolerance_settings', {}) or {}
         d = self._DEFAULTS
+        self.VOLUME_TOLERANCE_MODE = str(settings.get('volume_tolerance_mode', d['volume_tolerance_mode']))
         self.VOLUME_TOLERANCE_MINOR = float(settings.get('volume_tolerance_minor', d['volume_tolerance_minor']))
         self.VOLUME_TOLERANCE_INVESTIGATION = float(settings.get('volume_tolerance_investigation', d['volume_tolerance_investigation']))
+        self.VOLUME_CAP_MINOR = float(settings.get('volume_cap_minor', d['volume_cap_minor']))
+        self.VOLUME_CAP_INVESTIGATION = float(settings.get('volume_cap_investigation', d['volume_cap_investigation']))
         self.PERCENT_TOLERANCE_MINOR = float(settings.get('percent_tolerance_minor', d['percent_tolerance_minor']))
         self.PERCENT_TOLERANCE_INVESTIGATION = float(settings.get('percent_tolerance_investigation', d['percent_tolerance_investigation']))
+        self.VOLUME_TIERS = list(settings.get('volume_tiers', d['volume_tiers']))
         self.CASH_TOLERANCE_MINOR = float(settings.get('cash_tolerance_minor', d['cash_tolerance_minor']))
         self.CASH_TOLERANCE_INVESTIGATION = float(settings.get('cash_tolerance_investigation', d['cash_tolerance_investigation']))
         self.MIN_VOLUME_FOR_PERCENT = float(settings.get('min_volume_for_percent', d['min_volume_for_percent']))
@@ -131,7 +139,7 @@ def calculate_three_way_reconciliation(
         'variance_liters': tank_nozzle_variance_liters,
         'variance_cash': tank_nozzle_variance_cash,
         'variance_percent': tank_nozzle_percent,
-        'status': _classify_volume_variance(abs(tank_nozzle_variance_liters), tank_nozzle_percent, config)
+        'status': _classify_volume_variance(abs(tank_nozzle_variance_liters), tank_nozzle_percent, config, reference_volume=tank_movement)
     }
 
     # Variance 2: Tank vs Cash (Physical vs Financial)
@@ -182,11 +190,55 @@ def calculate_three_way_reconciliation(
     return result
 
 
-def _classify_volume_variance(abs_variance_liters: float, variance_percent: float, config: ReconciliationConfig) -> str:
-    """Classify volume variance into tolerance levels."""
-    if abs_variance_liters <= config.VOLUME_TOLERANCE_MINOR and variance_percent <= config.PERCENT_TOLERANCE_MINOR:
+def _resolve_tiered_tolerance(reference_volume: float, tiers: list) -> tuple:
+    """Find the matching tier for a given volume and return (minor, investigation) tolerances."""
+    if not tiers:
+        return (50.0, 200.0)  # safe fallback
+    sorted_tiers = sorted(tiers, key=lambda t: t.get('up_to_liters', 0) if isinstance(t, dict) else t.up_to_liters)
+    for tier in sorted_tiers:
+        up_to = tier.get('up_to_liters', 0) if isinstance(tier, dict) else tier.up_to_liters
+        minor = tier.get('tolerance_minor', 50.0) if isinstance(tier, dict) else tier.tolerance_minor
+        inv = tier.get('tolerance_investigation', 200.0) if isinstance(tier, dict) else tier.tolerance_investigation
+        if reference_volume <= up_to:
+            return (minor, inv)
+    # Volume exceeds all tiers — use the last (largest) tier
+    last = sorted_tiers[-1]
+    minor = last.get('tolerance_minor', 50.0) if isinstance(last, dict) else last.tolerance_minor
+    inv = last.get('tolerance_investigation', 200.0) if isinstance(last, dict) else last.tolerance_investigation
+    return (minor, inv)
+
+
+def _classify_volume_variance(abs_variance_liters: float, variance_percent: float, config: ReconciliationConfig, reference_volume: float = 0) -> str:
+    """Classify volume variance into tolerance levels based on the configured mode.
+
+    Modes:
+      - percentage: tolerance = reference_volume × percent / 100
+      - fixed: tolerance = flat litre value
+      - hybrid: tolerance = min(reference_volume × percent / 100, cap)
+      - tiered: tolerance looked up from volume brackets
+    """
+    mode = config.VOLUME_TOLERANCE_MODE
+
+    if mode == "fixed":
+        vol_minor = config.VOLUME_TOLERANCE_MINOR
+        vol_inv = config.VOLUME_TOLERANCE_INVESTIGATION
+    elif mode == "hybrid":
+        pct_minor = reference_volume * (config.PERCENT_TOLERANCE_MINOR / 100) if reference_volume > 0 else 0
+        pct_inv = reference_volume * (config.PERCENT_TOLERANCE_INVESTIGATION / 100) if reference_volume > 0 else 0
+        cap_minor = config.VOLUME_CAP_MINOR if config.VOLUME_CAP_MINOR > 0 else float('inf')
+        cap_inv = config.VOLUME_CAP_INVESTIGATION if config.VOLUME_CAP_INVESTIGATION > 0 else float('inf')
+        vol_minor = min(pct_minor, cap_minor)
+        vol_inv = min(pct_inv, cap_inv)
+    elif mode == "tiered":
+        vol_minor, vol_inv = _resolve_tiered_tolerance(reference_volume, config.VOLUME_TIERS)
+    else:
+        # Default: percentage mode
+        vol_minor = reference_volume * (config.PERCENT_TOLERANCE_MINOR / 100) if reference_volume > 0 else 0
+        vol_inv = reference_volume * (config.PERCENT_TOLERANCE_INVESTIGATION / 100) if reference_volume > 0 else 0
+
+    if abs_variance_liters <= vol_minor:
         return "WITHIN_TOLERANCE"
-    elif abs_variance_liters <= config.VOLUME_TOLERANCE_INVESTIGATION and variance_percent <= config.PERCENT_TOLERANCE_INVESTIGATION:
+    elif abs_variance_liters <= vol_inv:
         return "REQUIRES_INVESTIGATION"
     else:
         return "CRITICAL"

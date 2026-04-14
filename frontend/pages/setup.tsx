@@ -68,10 +68,14 @@ export default function SetupWizard() {
   const [warningThreshold, setWarningThreshold] = useState(1.0)
   const [lowStock, setLowStock] = useState(25)
   const [criticalStock, setCriticalStock] = useState(10)
+  const [volMode, setVolMode] = useState('percentage')
   const [volMinor, setVolMinor] = useState(50)
   const [volInvestigation, setVolInvestigation] = useState(200)
+  const [volCapMinor, setVolCapMinor] = useState(0)
+  const [volCapInvestigation, setVolCapInvestigation] = useState(0)
   const [pctMinor, setPctMinor] = useState(0.5)
   const [pctInvestigation, setPctInvestigation] = useState(2.0)
+  const [volTiers, setVolTiers] = useState<any[]>([])
   const [cashMinor, setCashMinor] = useState(500)
   const [cashInvestigation, setCashInvestigation] = useState(2000)
 
@@ -308,10 +312,14 @@ export default function SetupWizard() {
         authFetch(`${BASE}/settings/reconciliation-tolerances`, {
           method: 'PUT',
           body: JSON.stringify({
+            volume_tolerance_mode: volMode,
             volume_tolerance_minor: volMinor,
             volume_tolerance_investigation: volInvestigation,
+            volume_cap_minor: volCapMinor,
+            volume_cap_investigation: volCapInvestigation,
             percent_tolerance_minor: pctMinor,
             percent_tolerance_investigation: pctInvestigation,
+            volume_tiers: volTiers,
             cash_tolerance_minor: cashMinor,
             cash_tolerance_investigation: cashInvestigation,
             min_volume_for_percent: 100,
@@ -730,23 +738,60 @@ export default function SetupWizard() {
               {/* Reconciliation Tolerances */}
               <div className="p-3 bg-surface-card/30 border border-surface-border rounded-lg space-y-2">
                 <p className="text-xs font-semibold text-content-secondary">Reconciliation Tolerances</p>
+                <div>
+                  <label className="block text-[10px] text-content-tertiary mb-0.5">Volume tolerance mode</label>
+                  <select value={volMode} onChange={e => setVolMode(e.target.value)} className={smallInputClass + ' !w-full'}>
+                    <option value="percentage">Percentage</option>
+                    <option value="fixed">Fixed Litres</option>
+                    <option value="hybrid">Hybrid (% + cap)</option>
+                    <option value="tiered">Tiered (brackets)</option>
+                  </select>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs text-content-secondary mb-1">Volume Minor (L)</label>
-                    <input type="number" min="0" value={volMinor} onChange={e => setVolMinor(parseFloat(e.target.value) || 0)} className={smallInputClass} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-content-secondary mb-1">Volume Investigate (L)</label>
-                    <input type="number" min="0" value={volInvestigation} onChange={e => setVolInvestigation(parseFloat(e.target.value) || 0)} className={smallInputClass} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-content-secondary mb-1">Percent Minor (%)</label>
-                    <input type="number" step="0.1" min="0" value={pctMinor} onChange={e => setPctMinor(parseFloat(e.target.value) || 0)} className={smallInputClass} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-content-secondary mb-1">Percent Investigate (%)</label>
-                    <input type="number" step="0.1" min="0" value={pctInvestigation} onChange={e => setPctInvestigation(parseFloat(e.target.value) || 0)} className={smallInputClass} />
-                  </div>
+                  {(volMode === 'percentage' || volMode === 'hybrid') && <>
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-1">Percent Minor (%)</label>
+                      <input type="number" step="0.1" min="0" value={pctMinor} onChange={e => setPctMinor(parseFloat(e.target.value) || 0)} className={smallInputClass} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-1">Percent Investigate (%)</label>
+                      <input type="number" step="0.1" min="0" value={pctInvestigation} onChange={e => setPctInvestigation(parseFloat(e.target.value) || 0)} className={smallInputClass} />
+                    </div>
+                  </>}
+                  {volMode === 'fixed' && <>
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-1">Volume Minor (L)</label>
+                      <input type="number" step="0.5" min="0" value={volMinor} onChange={e => setVolMinor(parseFloat(e.target.value) || 0)} className={smallInputClass} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-1">Volume Investigate (L)</label>
+                      <input type="number" step="0.5" min="0" value={volInvestigation} onChange={e => setVolInvestigation(parseFloat(e.target.value) || 0)} className={smallInputClass} />
+                    </div>
+                  </>}
+                  {volMode === 'hybrid' && <>
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-1">Cap Minor (L)</label>
+                      <input type="number" step="0.5" min="0" value={volCapMinor} onChange={e => setVolCapMinor(parseFloat(e.target.value) || 0)} className={smallInputClass} />
+                      <p className="text-[10px] text-content-tertiary mt-0.5">{volCapMinor > 0 ? `Max ${volCapMinor}L` : '0 = no cap'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-1">Cap Investigate (L)</label>
+                      <input type="number" step="0.5" min="0" value={volCapInvestigation} onChange={e => setVolCapInvestigation(parseFloat(e.target.value) || 0)} className={smallInputClass} />
+                      <p className="text-[10px] text-content-tertiary mt-0.5">{volCapInvestigation > 0 ? `Max ${volCapInvestigation}L` : '0 = no cap'}</p>
+                    </div>
+                  </>}
+                  {volMode === 'tiered' && <div className="col-span-2 space-y-1">
+                    {volTiers.map((t: any, i: number) => (
+                      <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-1 items-center">
+                        <input type="number" placeholder="Up to (L)" value={t.up_to_liters} onChange={e => { const ts = [...volTiers]; ts[i] = { ...ts[i], up_to_liters: parseFloat(e.target.value) || 0 }; setVolTiers(ts) }} className={smallInputClass} />
+                        <input type="number" placeholder="Minor (L)" step="0.5" value={t.tolerance_minor} onChange={e => { const ts = [...volTiers]; ts[i] = { ...ts[i], tolerance_minor: parseFloat(e.target.value) || 0 }; setVolTiers(ts) }} className={smallInputClass} />
+                        <input type="number" placeholder="Invest (L)" step="0.5" value={t.tolerance_investigation} onChange={e => { const ts = [...volTiers]; ts[i] = { ...ts[i], tolerance_investigation: parseFloat(e.target.value) || 0 }; setVolTiers(ts) }} className={smallInputClass} />
+                        <button type="button" onClick={() => setVolTiers(volTiers.filter((_: any, j: number) => j !== i))} className="text-status-error text-xs">X</button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setVolTiers([...volTiers, { up_to_liters: (volTiers.length > 0 ? volTiers[volTiers.length-1].up_to_liters : 0) + 5000, tolerance_minor: 5, tolerance_investigation: 15 }])}
+                      className="text-[10px] text-action-primary font-medium">+ Add tier</button>
+                  </div>}
                   <div>
                     <label className="block text-xs text-content-secondary mb-1">Cash Minor (ZMW)</label>
                     <input type="number" min="0" value={cashMinor} onChange={e => setCashMinor(parseFloat(e.target.value) || 0)} className={smallInputClass} />

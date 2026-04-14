@@ -86,28 +86,43 @@ def get_scheduled_prices(ctx: dict = Depends(get_station_context)):
 def schedule_price_change(data: ScheduledPriceChange, ctx: dict = Depends(get_station_context)):
     """Schedule a future price change. Owner/manager only."""
     station_id = ctx["station_id"]
-    today = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now()
 
-    if data.effective_date <= today:
-        raise HTTPException(status_code=400, detail="Effective date must be in the future")
+    # Validate effective_time format
+    effective_time = data.effective_time or "00:00"
+    try:
+        hour, minute = map(int, effective_time.split(":"))
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ValueError
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="effective_time must be in HH:MM 24-hour format")
+
+    # Build the full effective datetime for comparison
+    effective_dt = datetime.strptime(f"{data.effective_date} {effective_time}", "%Y-%m-%d %H:%M")
+    if effective_dt <= now:
+        raise HTTPException(status_code=400, detail="Effective date and time must be in the future")
 
     if data.fuel_type not in ("Diesel", "Petrol"):
         raise HTTPException(status_code=400, detail="fuel_type must be 'Diesel' or 'Petrol'")
 
     scheduled = load_station_json(station_id, 'scheduled_price_changes.json', default=[])
 
-    # Prevent duplicate for same fuel_type + date
+    # Prevent duplicate for same fuel_type + date + time
     for entry in scheduled:
-        if entry.get("fuel_type") == data.fuel_type and entry.get("effective_date") == data.effective_date and not entry.get("applied"):
-            raise HTTPException(status_code=400, detail=f"A price change for {data.fuel_type} on {data.effective_date} is already scheduled")
+        if (entry.get("fuel_type") == data.fuel_type
+                and entry.get("effective_date") == data.effective_date
+                and entry.get("effective_time", "00:00") == effective_time
+                and not entry.get("applied")):
+            raise HTTPException(status_code=400, detail=f"A price change for {data.fuel_type} on {data.effective_date} at {effective_time} is already scheduled")
 
     entry = {
         "fuel_type": data.fuel_type,
         "new_price_per_liter": data.new_price_per_liter,
         "effective_date": data.effective_date,
+        "effective_time": effective_time,
         "old_price_per_liter": None,
         "created_by": ctx.get("user_id"),
-        "created_at": datetime.now().isoformat(),
+        "created_at": now.isoformat(),
         "applied": False,
         "applied_at": None,
     }
@@ -118,10 +133,10 @@ def schedule_price_change(data: ScheduledPriceChange, ctx: dict = Depends(get_st
     log_audit_event(
         station_id=station_id, action="price_change_scheduled",
         performed_by=ctx["username"], entity_type="fuel_settings",
-        details={"fuel_type": data.fuel_type, "new_price": data.new_price_per_liter, "effective_date": data.effective_date},
+        details={"fuel_type": data.fuel_type, "new_price": data.new_price_per_liter, "effective_date": data.effective_date, "effective_time": effective_time},
     )
 
-    return {"status": "success", "message": f"{data.fuel_type} price K{data.new_price_per_liter} scheduled for {data.effective_date}", "entry": entry}
+    return {"status": "success", "message": f"{data.fuel_type} price K{data.new_price_per_liter} scheduled for {data.effective_date} at {effective_time}", "entry": entry}
 
 
 @router.delete("/fuel/scheduled-price/{index}", dependencies=[Depends(require_manager_or_owner)])
@@ -400,21 +415,50 @@ def get_reconciliation_tolerance_settings(ctx: dict = Depends(get_station_contex
 @router.put("/reconciliation-tolerances")
 def update_reconciliation_tolerance_settings(settings: ReconciliationToleranceSettings, ctx: dict = Depends(get_station_context)):
     """Update reconciliation tolerance settings"""
-    # Validate: minor < investigation for each pair
-    if settings.volume_tolerance_minor >= settings.volume_tolerance_investigation:
-        raise HTTPException(status_code=422, detail="Volume minor tolerance must be less than investigation tolerance")
-    if settings.percent_tolerance_minor >= settings.percent_tolerance_investigation:
-        raise HTTPException(status_code=422, detail="Percent minor tolerance must be less than investigation tolerance")
+    mode = settings.volume_tolerance_mode
+    if mode not in ("percentage", "fixed", "hybrid", "tiered"):
+        raise HTTPException(status_code=422, detail="volume_tolerance_mode must be 'percentage', 'fixed', 'hybrid', or 'tiered'")
+
+    # Mode-conditional validation
+    if mode == "fixed":
+        if settings.volume_tolerance_minor >= settings.volume_tolerance_investigation:
+            raise HTTPException(status_code=422, detail="Volume minor tolerance must be less than investigation tolerance")
+    elif mode == "percentage":
+        if settings.percent_tolerance_minor >= settings.percent_tolerance_investigation:
+            raise HTTPException(status_code=422, detail="Percent minor tolerance must be less than investigation tolerance")
+    elif mode == "hybrid":
+        if settings.percent_tolerance_minor >= settings.percent_tolerance_investigation:
+            raise HTTPException(status_code=422, detail="Percent minor tolerance must be less than investigation tolerance")
+        if settings.volume_cap_minor > 0 and settings.volume_cap_investigation > 0:
+            if settings.volume_cap_minor >= settings.volume_cap_investigation:
+                raise HTTPException(status_code=422, detail="Volume cap minor must be less than volume cap investigation")
+    elif mode == "tiered":
+        if not settings.volume_tiers or len(settings.volume_tiers) == 0:
+            raise HTTPException(status_code=422, detail="Tiered mode requires at least one volume tier")
+        prev_up_to = 0
+        for i, tier in enumerate(settings.volume_tiers):
+            if tier.up_to_liters <= prev_up_to:
+                raise HTTPException(status_code=422, detail=f"Tier {i+1}: up_to_liters must be greater than previous tier ({prev_up_to}L)")
+            if tier.tolerance_minor >= tier.tolerance_investigation:
+                raise HTTPException(status_code=422, detail=f"Tier {i+1}: minor tolerance must be less than investigation tolerance")
+            prev_up_to = tier.up_to_liters
+
+    # Cash validation (always applies)
     if settings.cash_tolerance_minor >= settings.cash_tolerance_investigation:
         raise HTTPException(status_code=422, detail="Cash minor tolerance must be less than investigation tolerance")
 
     storage = ctx["storage"]
     old_settings = dict(storage.setdefault('reconciliation_tolerance_settings', {}))
+
     storage['reconciliation_tolerance_settings'] = {
+        "volume_tolerance_mode": mode,
         "volume_tolerance_minor": settings.volume_tolerance_minor,
         "volume_tolerance_investigation": settings.volume_tolerance_investigation,
+        "volume_cap_minor": settings.volume_cap_minor,
+        "volume_cap_investigation": settings.volume_cap_investigation,
         "percent_tolerance_minor": settings.percent_tolerance_minor,
         "percent_tolerance_investigation": settings.percent_tolerance_investigation,
+        "volume_tiers": [t.model_dump() for t in settings.volume_tiers] if settings.volume_tiers else [],
         "cash_tolerance_minor": settings.cash_tolerance_minor,
         "cash_tolerance_investigation": settings.cash_tolerance_investigation,
         "min_volume_for_percent": settings.min_volume_for_percent,
