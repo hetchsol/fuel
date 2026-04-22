@@ -399,10 +399,9 @@ export default function SetupWizard() {
   }
 
   const validateStaff = () => {
-    const attendants = createdUsers.filter(u => u.role === 'user')
-    const supervisors = createdUsers.filter(u => u.role === 'supervisor')
-    if (attendants.length === 0) { toast.error('Create at least one attendant'); return false }
-    if (supervisors.length === 0) { toast.error('Create at least one supervisor'); return false }
+    // Staff are optional at station setup — the owner account is already active and
+    // can operate the system on its own. Attendants and supervisors can be added any
+    // time from User Management.
     return true
   }
 
@@ -813,7 +812,8 @@ export default function SetupWizard() {
               <StepHeader
                 icon={<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>}
                 iconBg="bg-status-success/20" iconColor="text-status-success"
-                title="Create Staff" subtitle="Add at least one attendant and one supervisor"
+                title="Create Staff (optional)"
+                subtitle="You can skip this and add attendants, supervisors or managers any time from User Management."
               />
 
               {/* Created users list */}
@@ -871,10 +871,11 @@ export default function SetupWizard() {
                 </button>
               </div>
 
-              {/* Status summary */}
+              {/* Status summary (informational only — staff are optional) */}
               <div className="flex gap-3 text-xs text-content-secondary">
-                <span>Attendants: <strong className={createdUsers.filter(u => u.role === 'user').length > 0 ? 'text-status-success' : 'text-status-error'}>{createdUsers.filter(u => u.role === 'user').length}</strong></span>
-                <span>Supervisors: <strong className={createdUsers.filter(u => u.role === 'supervisor').length > 0 ? 'text-status-success' : 'text-status-error'}>{createdUsers.filter(u => u.role === 'supervisor').length}</strong></span>
+                <span>Attendants: <strong className="text-content-primary">{createdUsers.filter(u => u.role === 'user').length}</strong></span>
+                <span>Supervisors: <strong className="text-content-primary">{createdUsers.filter(u => u.role === 'supervisor').length}</strong></span>
+                <span>Managers: <strong className="text-content-primary">{createdUsers.filter(u => u.role === 'manager').length}</strong></span>
               </div>
 
               <NavButtons />
