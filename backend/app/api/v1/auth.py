@@ -377,39 +377,46 @@ def get_user_info(token: str):
 
 
 @router.get("/users", dependencies=[Depends(require_manager_or_owner)])
-def list_users(current_user: dict = Depends(get_current_user)):
-    """List all users (Manager/Owner). Managers see only attendants and supervisors."""
-    caller_role = current_user.get("role", "")
+def list_users(ctx: dict = Depends(get_station_context)):
+    """
+    List users of the current station only.
+
+    Scoping rules (matches how the owner expects 'Users under Kalulushi' vs
+    'Users under Luanshya' to behave):
+      - Return only users whose station_id matches the current station context.
+      - Owner accounts (station_id = None) are cross-station and are NOT shown
+        in station-scoped lists — they are managed on their own surface.
+      - Managers additionally see only attendants and supervisors (no managers).
+    """
+    caller_role = ctx.get("role", "")
     if hasattr(caller_role, 'value'):
         caller_role = caller_role.value
     is_manager = caller_role == "manager"
-    # Managers can only see users with role user/supervisor
     visible_roles = ["user", "supervisor"] if is_manager else None
+    station_id = ctx.get("station_id")
+
+    def visible(u: dict) -> bool:
+        if (u.get("station_id") or None) != station_id:
+            return False
+        if visible_roles and u.get("role") not in visible_roles:
+            return False
+        return True
 
     if _USE_DB():
         from ...database.db import db_get_all_users
         users = db_get_all_users()
-        return [
-            {
-                "user_id": u["user_id"], "username": u["username"],
-                "full_name": u["full_name"], "role": u["role"],
-                "station_id": u.get("station_id"),
-                "is_active": u.get("is_active", True),
-            }
-            for u in users
-            if not visible_roles or u["role"] in visible_roles
-        ]
     else:
-        return [
-            {
-                "user_id": user["user_id"], "username": user["username"],
-                "full_name": user["full_name"], "role": user["role"],
-                "station_id": user.get("station_id"),
-                "is_active": user.get("is_active", True),
-            }
-            for user in users_db.values()
-            if not visible_roles or user["role"] in visible_roles
-        ]
+        users = list(users_db.values())
+
+    return [
+        {
+            "user_id": u["user_id"], "username": u["username"],
+            "full_name": u["full_name"], "role": u["role"],
+            "station_id": u.get("station_id"),
+            "is_active": u.get("is_active", True),
+        }
+        for u in users if visible(u)
+    ]
 
 
 @router.post("/users")
@@ -641,45 +648,38 @@ def delete_user(username: str, current_user: dict = Depends(require_manager_or_o
 
 
 @router.get("/staff")
-def list_staff(current_user: dict = Depends(get_current_user)):
-    """Get list of staff members for shift assignment. Filtered by station for non-owners."""
-    caller_station = current_user.get("station_id")
-    caller_role = current_user.get("role")
-    if hasattr(caller_role, 'value'):
-        caller_role = caller_role.value
-    is_owner = caller_role == "owner"
+def list_staff(ctx: dict = Depends(get_station_context)):
+    """
+    Get active attendants and supervisors for the current station.
 
-    def _matches_station(u: dict) -> bool:
-        if is_owner:
-            return True  # Owners see all staff
-        # Non-owners see only staff assigned to their station (or unassigned)
-        u_station = u.get("station_id")
-        return not u_station or u_station == caller_station
+    Strictly scoped: only users whose station_id matches the current station
+    appear here, including when the caller is an owner viewing a specific
+    station. Owner accounts (station_id=None) are never listed.
+    """
+    station_id = ctx.get("station_id")
+
+    def visible(u: dict) -> bool:
+        if u.get("role") not in ("user", "supervisor"):
+            return False
+        if not u.get("is_active", True):
+            return False
+        return (u.get("station_id") or None) == station_id
 
     if _USE_DB():
         from ...database.db import db_get_all_users
         users = db_get_all_users()
-        return [
-            {
-                "user_id": u["user_id"], "username": u["username"],
-                "full_name": u["full_name"], "role": u["role"],
-                "station_id": u.get("station_id"),
-                "is_active": u.get("is_active", True),
-            }
-            for u in users
-            if u["role"] in ["user", "supervisor"] and u.get("is_active", True) and _matches_station(u)
-        ]
     else:
-        return [
-            {
-                "user_id": user["user_id"], "username": user["username"],
-                "full_name": user["full_name"], "role": user["role"],
-                "station_id": user.get("station_id"),
-                "is_active": user.get("is_active", True),
-            }
-            for user in users_db.values()
-            if user["role"] in ["user", "supervisor"] and user.get("is_active", True) and _matches_station(user)
-        ]
+        users = list(users_db.values())
+
+    return [
+        {
+            "user_id": u["user_id"], "username": u["username"],
+            "full_name": u["full_name"], "role": u["role"],
+            "station_id": u.get("station_id"),
+            "is_active": u.get("is_active", True),
+        }
+        for u in users if visible(u)
+    ]
 
 
 @router.patch("/users/{username}/toggle-status")
