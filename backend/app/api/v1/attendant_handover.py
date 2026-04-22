@@ -26,6 +26,7 @@ from .lpg_daily import (
     load_lpg_accessories, save_lpg_accessories,
     load_lpg_daily, save_lpg_daily,
     get_pricing_for_size,
+    process_cylinder_trades,
 )
 from .lubricants_daily import (
     load_product_catalog as load_lubricant_catalog,
@@ -225,14 +226,27 @@ def _process_stock_snapshot(stock_snapshot, station_id, storage):
     lpg_pricing_db = load_lpg_pricing(station_id)
     stock_variance_flags = []
 
+    # LPG cylinder trades (upgrades/downgrades) — captured per shift
+    trades_input = getattr(stock_snapshot, 'lpg_trades', None) or []
+    traded_in_map, traded_out_map, processed_trades, total_trade_revenue = \
+        process_cylinder_trades(trades_input, lpg_pricing_db)
+
     # LPG cylinders
     lpg_sales = 0.0
     enriched_lpg = []
     for row in stock_snapshot.lpg_cylinders:
         total_sold = row.sold_refill + row.sold_with_cylinder
         damaged = getattr(row, 'damaged', 0)
-        expected_closing = row.opening_full - total_sold - damaged
+        t_in = traded_in_map.get(row.size_kg, 0)
+        t_out = traded_out_map.get(row.size_kg, 0)
+        # Filled-stock variance: traded_out leaves as filled; traded_in arrives empty and does not count here.
+        expected_closing = row.opening_full - total_sold - damaged - t_out
         variance = expected_closing - row.closing_full
+        # Empty-stock variance: refill sales and upgrade trade-ins add to empties; downgrade trade-outs
+        # (when the station gives back a smaller empty) reduce them. In the upgrade case the station
+        # hands out a filled larger cylinder, so there is no empty-out movement for traded_out.
+        expected_closing_empty = row.opening_empty + row.sold_refill + t_in
+        empty_variance = expected_closing_empty - row.closing_empty
         pricing = get_pricing_for_size(row.size_kg, lpg_pricing_db)
         value_refill = round(row.sold_refill * pricing["price_refill"], 2)
         value_with_cyl = round(row.sold_with_cylinder * pricing["price_with_cylinder"], 2)
@@ -240,17 +254,22 @@ def _process_stock_snapshot(stock_snapshot, station_id, storage):
         lpg_sales += sales_value
         variance_note = getattr(row, 'variance_note', None) or None
         if variance != 0 and not variance_note:
-            stock_variance_flags.append(f"LPG {row.size_kg}kg: variance {variance}")
+            stock_variance_flags.append(f"LPG {row.size_kg}kg filled: variance {variance}")
+        if empty_variance != 0 and not variance_note:
+            stock_variance_flags.append(f"LPG {row.size_kg}kg empty: variance {empty_variance}")
         enriched_lpg.append({
             "size_kg": row.size_kg, "opening_full": row.opening_full, "opening_empty": row.opening_empty,
             "additions": row.additions, "closing_full": row.closing_full, "closing_empty": row.closing_empty,
             "total_sold": total_sold, "sold_refill": row.sold_refill, "sold_with_cylinder": row.sold_with_cylinder,
-            "damaged": damaged, "expected_closing": expected_closing, "variance": variance,
+            "damaged": damaged,
+            "traded_in": t_in, "traded_out": t_out,
+            "expected_closing": expected_closing, "variance": variance,
+            "expected_closing_empty": expected_closing_empty, "empty_variance": empty_variance,
             "variance_note": variance_note, "refill_price": pricing["price_refill"],
             "price_with_cylinder": pricing["price_with_cylinder"],
             "value_refill": value_refill, "value_with_cylinder": value_with_cyl, "sales_value": sales_value,
         })
-    lpg_sales = round(lpg_sales, 2)
+    lpg_sales = round(lpg_sales + total_trade_revenue, 2)
 
     # Accessories
     accessory_sales = 0.0
@@ -309,7 +328,13 @@ def _process_stock_snapshot(stock_snapshot, station_id, storage):
         })
     lubricant_sales = round(lubricant_sales, 2)
 
-    enriched_snapshot = {"lpg_cylinders": enriched_lpg, "accessories": enriched_acc, "lubricants": enriched_lub}
+    enriched_snapshot = {
+        "lpg_cylinders": enriched_lpg,
+        "accessories": enriched_acc,
+        "lubricants": enriched_lub,
+        "lpg_trades": [t.model_dump(mode='json') for t in processed_trades],
+        "lpg_trade_revenue": total_trade_revenue,
+    }
     return lpg_sales, lubricant_sales, accessory_sales, enriched_snapshot, stock_variance_flags
 
 
@@ -421,18 +446,23 @@ def _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift
         cylinder_rows.append({
             "size_kg": cyl["size_kg"], "opening_balance": cyl["opening_full"],
             "opening_empty": cyl.get("opening_empty", 0), "receipts": cyl["additions"],
-            "traded_in": 0, "traded_out": 0, "sold_refill": cyl.get("sold_refill", 0),
+            "traded_in": cyl.get("traded_in", 0), "traded_out": cyl.get("traded_out", 0),
+            "sold_refill": cyl.get("sold_refill", 0),
             "sold_with_cylinder": cyl.get("sold_with_cylinder", 0), "balance": cyl["closing_full"],
             "closing_empty": cyl.get("closing_empty", 0),
             "value_refill": val_refill, "value_with_cylinder": val_with_cyl, "total_value": total_val,
         })
+    trade_revenue = round(enriched_snapshot.get("lpg_trade_revenue", 0.0), 2)
+    trades_out = enriched_snapshot.get("lpg_trades", []) or []
+    grand_total = round(grand_total + trade_revenue, 2)
     book_pop = sum(r["balance"] + r.get("closing_empty", 0) for r in cylinder_rows)
     lpg_daily_db[lpg_entry_id] = {
         "entry_id": lpg_entry_id, "date": shift_date, "shift_type": shift_type,
         "salesperson": user_name, "cylinder_rows": cylinder_rows,
-        "grand_total_value": round(grand_total, 2), "book_cylinder_population": book_pop,
+        "grand_total_value": grand_total, "book_cylinder_population": book_pop,
         "actual_cylinder_population": None, "population_difference": None,
         "recorded_by": user_id, "created_at": now_iso,
+        "trades": trades_out, "total_trade_revenue": trade_revenue,
         "notes": f"Auto-generated from handover {handover_id}",
     }
     save_lpg_daily(lpg_daily_db, station_id)

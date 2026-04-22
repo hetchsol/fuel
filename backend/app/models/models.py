@@ -683,7 +683,7 @@ class LPGCylinderTrade(BaseModel):
     from_size_kg: int       # e.g., 3
     to_size_kg: int         # e.g., 6
     quantity: int = 1
-    price_difference: float = 0.0   # Server-calculated: to_price - from_price (positive = upgrade fee)
+    price_difference: float = 0.0   # Server-calculated: price_refill[to] + (deposit[to] - deposit[from])
     trade_type: str = ""            # Server-calculated: "upgrade" or "downgrade"
 
 class LPGCylinderShiftRow(BaseModel):
@@ -692,11 +692,11 @@ class LPGCylinderShiftRow(BaseModel):
     opening_balance: int = 0        # Filled cylinders at shift start
     opening_empty: int = 0          # Empty cylinders at shift start
     receipts: int = 0
-    traded_in: int = 0      # Cylinders received via trade (increases stock of this size)
-    traded_out: int = 0     # Cylinders given away via trade (decreases stock of this size)
+    traded_in: int = 0      # Empty cylinders received via trade (flows to empty stock, not filled)
+    traded_out: int = 0     # Filled cylinders given away via trade (decreases filled stock of this size)
     sold_refill: int = 0
     sold_with_cylinder: int = 0
-    balance: int = 0  # Server-calculated: opening + receipts + traded_in - sold_refill - sold_with_cylinder - traded_out
+    balance: int = 0  # Server-calculated filled balance: opening + receipts - sold_refill - sold_with_cylinder - traded_out
     closing_empty: int = 0          # Empty cylinders at shift end
     value_refill: float = 0.0  # Server-calculated: price_refill * sold_refill
     value_with_cylinder: float = 0.0  # Server-calculated: price_with_cyl * sold_with_cylinder
@@ -877,6 +877,7 @@ class ShiftStockSnapshot(BaseModel):
     lpg_cylinders: List[LPGStockLineItem] = []
     accessories: List[AccessoryStockLineItem] = []
     lubricants: List[LubricantStockLineItem] = []
+    lpg_trades: List[LPGCylinderTrade] = []  # Upgrade/downgrade transactions captured during the shift
 
 class ReadingsVerificationInput(BaseModel):
     """Phase 1: Readings + stock counts submitted at the forecourt"""

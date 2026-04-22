@@ -165,6 +165,8 @@ export default function MyShift() {
   const [lpgNoSales, setLpgNoSales] = useState(false)
   const [accNoSales, setAccNoSales] = useState(false)
   const [lubNoSales, setLubNoSales] = useState(false)
+  // Upgrade/downgrade trades recorded during the shift (customer swaps one size for another)
+  const [lpgTrades, setLpgTrades] = useState<Array<{ from_size_kg: number; to_size_kg: number; quantity: string }>>([])
 
   // On This Shift (supervisor/manager overview)
   const [showOnThisShift, setShowOnThisShift] = useState(true)
@@ -372,7 +374,21 @@ export default function MyShift() {
     const value = refill * row.refill_price + withCyl * row.price_with_cylinder
     return { totalSold, refill, withCyl, damaged, expectedClosing, closingFull, variance, hasVariance, soldExceedsOpening, value }
   })
-  const lpgTotal = lpgComputations.reduce((s, c) => s + c.value, 0)
+  const lpgRowTotal = lpgComputations.reduce((s, c) => s + c.value, 0)
+  // Trade (upgrade/downgrade) revenue = price_refill[to] + (deposit[to] - deposit[from]) per trade.
+  const lpgPriceMap = new Map(lpgRows.map(r => [r.size_kg, { refill: r.refill_price, full: r.price_with_cylinder }]))
+  const lpgTradeRevenue = lpgTrades.reduce((s, t) => {
+    const q = parseInt(t.quantity) || 0
+    if (q <= 0 || t.from_size_kg === t.to_size_kg) return s
+    const from = lpgPriceMap.get(t.from_size_kg)
+    const to = lpgPriceMap.get(t.to_size_kg)
+    if (!from || !to) return s
+    const fromDeposit = from.full - from.refill
+    const toDeposit = to.full - to.refill
+    const charge = to.refill + (toDeposit - fromDeposit)
+    return s + charge * q
+  }, 0)
+  const lpgTotal = lpgRowTotal + lpgTradeRevenue
 
   // --- Accessory computations ---
   const accComputations = accessoryRows.map(row => {
@@ -510,6 +526,13 @@ export default function MyShift() {
           closing_stock: parseInt(row.closing_stock) || 0,
           variance_note: row.variance_note || null,
         })),
+        lpg_trades: lpgTrades
+          .filter(t => (parseInt(t.quantity) || 0) > 0 && t.from_size_kg !== t.to_size_kg)
+          .map(t => ({
+            from_size_kg: t.from_size_kg,
+            to_size_kg: t.to_size_kg,
+            quantity: parseInt(t.quantity) || 0,
+          })),
         lpg_no_sales: lpgNoSales,
         acc_no_sales: accNoSales,
         lub_no_sales: lubNoSales,
@@ -1280,7 +1303,93 @@ export default function MyShift() {
                 )
               })}
             </div>
+            {/* Upgrades / Downgrades — customer swapped one cylinder size for another */}
+            <div className="px-4 py-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs uppercase font-semibold" style={{ color: theme.textSecondary }}>
+                  Upgrades / Downgrades
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLpgTrades(prev => [...prev, { from_size_kg: 3, to_size_kg: 6, quantity: '' }])}
+                  className="text-xs px-2 py-1 rounded border"
+                  style={{ color: theme.textSecondary, borderColor: theme.border }}
+                >
+                  + Add trade
+                </button>
+              </div>
+              {lpgTrades.length === 0 ? (
+                <p className="text-xs" style={{ color: theme.textSecondary }}>
+                  Record a trade when a customer hands in a smaller (or larger) empty cylinder and takes a different size filled.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {lpgTrades.map((trade, idx) => (
+                    <div key={idx} className="grid grid-cols-7 gap-2 items-center">
+                      <div className="col-span-2">
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>From (empty)</label>
+                        <select
+                          value={trade.from_size_kg}
+                          onChange={e => setLpgTrades(prev => prev.map((t, i) => i === idx ? { ...t, from_size_kg: parseInt(e.target.value) } : t))}
+                          className="w-full px-2 py-1.5 rounded border text-sm"
+                          style={inputStyle}
+                        >
+                          {lpgRows.map(r => (
+                            <option key={r.size_kg} value={r.size_kg}>{r.size_kg}kg</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>To (filled)</label>
+                        <select
+                          value={trade.to_size_kg}
+                          onChange={e => setLpgTrades(prev => prev.map((t, i) => i === idx ? { ...t, to_size_kg: parseInt(e.target.value) } : t))}
+                          className="w-full px-2 py-1.5 rounded border text-sm"
+                          style={inputStyle}
+                        >
+                          {lpgRows.map(r => (
+                            <option key={r.size_kg} value={r.size_kg}>{r.size_kg}kg</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Qty</label>
+                        <input
+                          type="number" min={0} step={1}
+                          value={trade.quantity}
+                          onChange={e => setLpgTrades(prev => prev.map((t, i) => i === idx ? { ...t, quantity: e.target.value } : t))}
+                          placeholder="0"
+                          className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
+                          style={inputStyle}
+                        />
+                      </div>
+                      <div className="col-span-1 flex justify-end items-end h-full">
+                        <button
+                          type="button"
+                          onClick={() => setLpgTrades(prev => prev.filter((_, i) => i !== idx))}
+                          className="text-xs px-2 py-1.5 rounded border"
+                          style={{ color: 'var(--color-status-error)', borderColor: theme.border }}
+                          aria-label="Remove trade"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      {trade.from_size_kg === trade.to_size_kg && (
+                        <div className="col-span-7 text-xs" style={{ color: 'var(--color-status-error)' }}>
+                          From and To sizes must differ.
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="px-4 py-2 text-right text-sm font-semibold" style={{ color: theme.primary, borderTopColor: theme.border, borderTopWidth: 1 }}>
+              {lpgTradeRevenue > 0 && (
+                <span className="text-xs font-normal mr-2" style={{ color: theme.textSecondary }}>
+                  (incl. trades ZMW {lpgTradeRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })})
+                </span>
+              )}
               LPG Revenue: ZMW {lpgTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
             {lpgComputations.every(c => c.totalSold === 0 && (parseInt(lpgRows[lpgComputations.indexOf(c)]?.damaged || '0') || 0) === 0) && (

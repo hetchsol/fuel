@@ -109,6 +109,47 @@ def get_pricing_for_size(size_kg: int, lpg_pricing_db: dict) -> dict:
     return {"size_kg": size_kg, "price_refill": refill, "price_with_cylinder": refill + deposit}
 
 
+def process_cylinder_trades(trades, lpg_pricing_db):
+    """
+    Compute per-size traded_in/out tallies, processed trade records, and total trade revenue.
+
+    Upgrade charge (per LPG Recon spec): full gas for the new size + deposit difference.
+      charge = price_refill[to] + (deposit[to] - deposit[from])
+    where deposit = price_full_cylinder - price_refill.
+
+    Returns (traded_in_map, traded_out_map, processed_trades, total_trade_revenue).
+    """
+    traded_in_map = {s: 0 for s in LPG_SIZES}
+    traded_out_map = {s: 0 for s in LPG_SIZES}
+    processed_trades = []
+    total_trade_revenue = 0.0
+
+    if not trades:
+        return traded_in_map, traded_out_map, processed_trades, total_trade_revenue
+
+    for trade in trades:
+        from_pricing = get_pricing_for_size(trade.from_size_kg, lpg_pricing_db)
+        to_pricing = get_pricing_for_size(trade.to_size_kg, lpg_pricing_db)
+        from_deposit = from_pricing["price_with_cylinder"] - from_pricing["price_refill"]
+        to_deposit = to_pricing["price_with_cylinder"] - to_pricing["price_refill"]
+        price_diff = to_pricing["price_refill"] + (to_deposit - from_deposit)
+        trade_type = "upgrade" if trade.to_size_kg > trade.from_size_kg else "downgrade"
+
+        traded_in_map[trade.from_size_kg] += trade.quantity
+        traded_out_map[trade.to_size_kg] += trade.quantity
+        total_trade_revenue += price_diff * trade.quantity
+
+        processed_trades.append(LPGCylinderTrade(
+            from_size_kg=trade.from_size_kg,
+            to_size_kg=trade.to_size_kg,
+            quantity=trade.quantity,
+            price_difference=price_diff,
+            trade_type=trade_type,
+        ))
+
+    return traded_in_map, traded_out_map, processed_trades, round(total_trade_revenue, 2)
+
+
 # ===== ENDPOINTS =====
 
 @router.get("/pricing")
@@ -254,31 +295,12 @@ def submit_lpg_entry(
         )
 
     # Process trades: compute traded_in / traded_out per size and trade revenue
-    traded_in_map = {s: 0 for s in LPG_SIZES}
-    traded_out_map = {s: 0 for s in LPG_SIZES}
-    processed_trades = []
-    total_trade_revenue = 0.0
+    traded_in_map, traded_out_map, processed_trades, total_trade_revenue = \
+        process_cylinder_trades(entry_input.trades, lpg_pricing_db)
 
-    if entry_input.trades:
-        for trade in entry_input.trades:
-            from_pricing = get_pricing_for_size(trade.from_size_kg, lpg_pricing_db)
-            to_pricing = get_pricing_for_size(trade.to_size_kg, lpg_pricing_db)
-            price_diff = to_pricing['price_refill'] - from_pricing['price_refill']
-            trade_type = "upgrade" if trade.to_size_kg > trade.from_size_kg else "downgrade"
-
-            traded_in_map[trade.from_size_kg] += trade.quantity    # Station RECEIVES the FROM-size cylinder from customer
-            traded_out_map[trade.to_size_kg] += trade.quantity      # Station GIVES the TO-size cylinder to customer
-            total_trade_revenue += price_diff * trade.quantity
-
-            processed_trades.append(LPGCylinderTrade(
-                from_size_kg=trade.from_size_kg,
-                to_size_kg=trade.to_size_kg,
-                quantity=trade.quantity,
-                price_difference=price_diff,
-                trade_type=trade_type,
-            ))
-
-    # Calculate values for each row
+    # Calculate values for each row.
+    # Note: traded_in is an empty cylinder returned to the station and must NOT be added to
+    # the filled-stock balance. It is reflected via closing_empty instead (see expected_closing_empty below).
     calculated_rows = []
     grand_total = 0.0
 
@@ -287,7 +309,7 @@ def submit_lpg_entry(
 
         t_in = traded_in_map.get(row.size_kg, 0)
         t_out = traded_out_map.get(row.size_kg, 0)
-        balance = row.opening_balance + row.receipts + t_in - row.sold_refill - row.sold_with_cylinder - t_out
+        balance = row.opening_balance + row.receipts - row.sold_refill - row.sold_with_cylinder - t_out
         value_refill = pricing['price_refill'] * row.sold_refill
         value_with_cyl = pricing['price_with_cylinder'] * row.sold_with_cylinder
         total_value = value_refill + value_with_cyl
@@ -308,6 +330,9 @@ def submit_lpg_entry(
             total_value=total_value,
         ))
         grand_total += total_value
+
+    # Roll trade (upgrade/downgrade) revenue into the shift grand total so reconciliation sees it.
+    grand_total = round(grand_total + total_trade_revenue, 2)
 
     # Oversell warnings (non-blocking)
     warnings = []
