@@ -167,18 +167,22 @@ class StockDelivery(BaseModel):
 class Nozzle(BaseModel):
     nozzle_id: str
     pump_station_id: str
-    fuel_type: str  # Diesel or Petrol
+    fuel_type: str  # Diesel or Petrol — must equal tanks[tank_id].fuel_type when tank_id is set
     status: str  # Active, Inactive, Maintenance
+    tank_id: Optional[str] = None  # Primary source of truth for which tank this nozzle draws from.
+                                    # Falls back to pump_station.tank_id if unset (legacy data).
     electronic_reading: Optional[float] = None  # Current cumulative electronic reading
     mechanical_reading: Optional[float] = None  # Current cumulative mechanical reading
     display_label: Optional[str] = None  # e.g. "1A", "2B" — auto-computed per fuel type
+    fuel_type_abbrev: Optional[str] = None  # e.g. "LSD", "UNL" — auto-computed from fuel_type
     custom_label: Optional[str] = None   # Owner override for display_label
 
 class PumpStation(BaseModel):
     pump_station_id: str
     island_id: str
     name: str
-    tank_id: str  # Which tank this pump draws fuel from (TANK-DIESEL or TANK-PETROL)
+    tank_id: Optional[str] = None  # Default tank for any nozzle whose own tank_id is unset.
+                                    # Slated for removal in Phase 2 once all stations are migrated.
     nozzles: List[Nozzle]
 
 class Island(BaseModel):

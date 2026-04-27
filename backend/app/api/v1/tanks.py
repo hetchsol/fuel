@@ -519,16 +519,31 @@ def delete_tank(tank_id: str, ctx: dict = Depends(get_station_context)):
     if tank_id not in tank_data:
         raise HTTPException(status_code=404, detail="Tank not found")
 
-    # Check if tank is being used by any pump station
+    # Check if tank is being used by any pump station OR any nozzle.
+    # Nozzle-level assignments win over pump-level (since the multi-fuel refactor),
+    # so both must be checked before the tank can be safely removed.
     islands_data = storage.get('islands', {})
+    blocking_pumps = []      # list of (pump_station_id, island_id)
+    blocking_nozzles = []    # list of (nozzle_id, island_id)
 
     for island_id, island in islands_data.items():
-        pump_station = island.get("pump_station", {})
+        pump_station = island.get("pump_station") or {}
         if pump_station.get("tank_id") == tank_id:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot delete tank {tank_id}. It is currently used by pump station {pump_station.get('pump_station_id')} on island {island_id}. Please reassign the pump station first."
-            )
+            blocking_pumps.append((pump_station.get("pump_station_id"), island_id))
+        for nozzle in pump_station.get("nozzles", []) or []:
+            if nozzle.get("tank_id") == tank_id:
+                blocking_nozzles.append((nozzle.get("nozzle_id"), island_id))
+
+    if blocking_pumps or blocking_nozzles:
+        parts = [f"Cannot delete tank {tank_id} — still in use."]
+        if blocking_pumps:
+            pump_list = ", ".join(f"{pid} (island {iid})" for pid, iid in blocking_pumps)
+            parts.append(f"Pump stations: {pump_list}.")
+        if blocking_nozzles:
+            nozzle_list = ", ".join(f"{nid} (island {iid})" for nid, iid in blocking_nozzles)
+            parts.append(f"Nozzles: {nozzle_list}.")
+        parts.append("Reassign these to a different tank, then retry.")
+        raise HTTPException(status_code=400, detail=" ".join(parts))
 
     # Delete the tank
     deleted_tank = tank_data.pop(tank_id)

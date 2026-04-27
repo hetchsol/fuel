@@ -236,8 +236,14 @@ def filter_list_storage(
 
 def get_tank_id_for_nozzle(station_id: str = None, nozzle_id: str = None, storage: Dict[str, Any] = None) -> Optional[str]:
     """
-    Resolve nozzle → pump_station → tank_id by scanning the islands data.
-    Returns the tank_id that the nozzle's pump station draws from, or None if not found.
+    Resolve a nozzle's tank_id.
+
+    Resolution order (matches the multi-fuel refactor design):
+      1. nozzle.tank_id          — primary source of truth (post-migration)
+      2. pump_station.tank_id    — fallback for legacy / unmigrated nozzles
+      3. None                    — caller falls back to fuel_type heuristics
+
+    Returns None if the nozzle is not found.
     """
     store = storage
     if store is None:
@@ -251,14 +257,22 @@ def get_tank_id_for_nozzle(station_id: str = None, nozzle_id: str = None, storag
             continue
         for nozzle in ps.get('nozzles', []):
             if nozzle.get('nozzle_id') == nozzle_id:
+                # Tier 1: explicit nozzle.tank_id wins
+                nozzle_tank = nozzle.get('tank_id')
+                if nozzle_tank:
+                    return nozzle_tank
+                # Tier 2: inherit from pump
                 return ps.get('tank_id')
     return None
 
 
 def get_nozzle_ids_for_tank(station_id: str = None, tank_id: str = None, storage: Dict[str, Any] = None) -> List[str]:
     """
-    Reverse lookup: returns all nozzle_ids assigned to a given tank
-    by scanning pump_station.tank_id across all islands.
+    Reverse lookup: return all nozzle_ids that draw from a given tank.
+
+    A nozzle is considered to draw from `tank_id` if:
+      - nozzle.tank_id == tank_id (explicit assignment, primary truth), OR
+      - nozzle.tank_id is unset AND pump_station.tank_id == tank_id (legacy fallback)
     """
     store = storage
     if store is None:
@@ -271,10 +285,19 @@ def get_nozzle_ids_for_tank(station_id: str = None, tank_id: str = None, storage
         ps = island_data.get('pump_station')
         if not ps:
             continue
-        if ps.get('tank_id') == tank_id:
-            for nozzle in ps.get('nozzles', []):
-                nid = nozzle.get('nozzle_id')
-                if nid:
+        pump_tank_id = ps.get('tank_id')
+        for nozzle in ps.get('nozzles', []):
+            nid = nozzle.get('nozzle_id')
+            if not nid:
+                continue
+            nozzle_tank = nozzle.get('tank_id')
+            if nozzle_tank:
+                # Explicit assignment — only match when equal
+                if nozzle_tank == tank_id:
+                    nozzle_ids.append(nid)
+            else:
+                # Fallback to pump's tank_id
+                if pump_tank_id == tank_id:
                     nozzle_ids.append(nid)
     return nozzle_ids
 

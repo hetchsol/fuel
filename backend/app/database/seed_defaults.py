@@ -2,7 +2,10 @@
 Seed Default Data for Stations
 Extracts hardcoded defaults from API modules into one reusable function.
 """
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 def seed_station_defaults(storage: dict):
@@ -23,6 +26,7 @@ def seed_station_defaults(storage: dict):
     _migrate_islands_add_display_fields(storage)
     _migrate_islands_default_active(storage)
     _migrate_islands_assign_product_types(storage)
+    _migrate_nozzles_propagate_tank_id(storage)
     _seed_settings(storage)
 
 
@@ -71,6 +75,7 @@ def _seed_islands(storage: dict):
                         "nozzle_id": f"ISL{i}-A",
                         "pump_station_id": ps_id,
                         "fuel_type": product_type,
+                        "tank_id": tank_id,
                         "status": "Active",
                         "electronic_reading": 0,
                         "mechanical_reading": 0,
@@ -81,6 +86,7 @@ def _seed_islands(storage: dict):
                         "nozzle_id": f"ISL{i}-B",
                         "pump_station_id": ps_id,
                         "fuel_type": product_type,
+                        "tank_id": tank_id,
                         "status": "Active",
                         "electronic_reading": 0,
                         "mechanical_reading": 0,
@@ -259,6 +265,46 @@ def _migrate_islands_assign_product_types(storage: dict):
             pump_station["tank_id"] = tank_id
             for nozzle in pump_station.get("nozzles", []):
                 nozzle["fuel_type"] = product_type
+                nozzle["tank_id"] = tank_id
 
     from ..services.naming_convention import compute_display_labels
     compute_display_labels(islands)
+
+
+def _migrate_nozzles_propagate_tank_id(storage: dict) -> int:
+    """
+    Migration: copy each pump_station.tank_id down to its nozzles' tank_id field.
+
+    Idempotent — guards against overwriting nozzles that already have an explicit
+    tank_id (e.g. mixed-fuel islands configured via the preset endpoint).
+
+    Returns the count of nozzles freshly migrated. Safe to run repeatedly.
+    """
+    islands = storage.get('islands')
+    if not islands:
+        return 0
+
+    migrated = 0
+    skipped_no_pump_tank = 0
+    for island in islands.values():
+        pump = island.get('pump_station')
+        if not pump:
+            continue
+        pump_tank_id = pump.get('tank_id')
+        if not pump_tank_id:
+            skipped_no_pump_tank += 1
+            continue
+        for nozzle in pump.get('nozzles', []):
+            if nozzle.get('tank_id'):
+                continue  # already set; never overwrite
+            nozzle['tank_id'] = pump_tank_id
+            migrated += 1
+
+    if migrated:
+        logger.info(f"[migration] propagated tank_id to {migrated} nozzles")
+    if skipped_no_pump_tank:
+        logger.warning(
+            f"[migration] {skipped_no_pump_tank} pump_station(s) had no tank_id; "
+            "their nozzles fall back to fuel_type heuristics until configured"
+        )
+    return migrated
