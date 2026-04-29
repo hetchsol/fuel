@@ -256,10 +256,13 @@ export default function Infrastructure() {
     return presetDraft[island.island_id] || inferPreset(island)
   }
 
-  const updateDraft = (islandId: string, patch: Partial<IslandPresetDraft>) => {
+  const updateDraft = (island: Island, patch: Partial<IslandPresetDraft>) => {
     setPresetDraft(prev => ({
       ...prev,
-      [islandId]: { ...(prev[islandId] || {}), ...patch } as IslandPresetDraft,
+      // Seed from the inferred preset on first edit so partial drafts always
+      // carry nozzle_assignments / tank ids (otherwise switching to Custom
+      // mode would render with undefined nozzle_assignments).
+      [island.island_id]: { ...(prev[island.island_id] || inferPreset(island)), ...patch } as IslandPresetDraft,
     }))
   }
 
@@ -691,7 +694,7 @@ export default function Infrastructure() {
                           <button
                             key={p}
                             type="button"
-                            onClick={() => updateDraft(island.island_id, { preset: p })}
+                            onClick={() => updateDraft(island, { preset: p })}
                             className={`px-2 py-1.5 text-xs rounded-md border transition-colors ${
                               draft.preset === p
                                 ? 'bg-action-primary text-white border-action-primary font-semibold'
@@ -709,7 +712,7 @@ export default function Infrastructure() {
                           <label className="block text-[10px] font-semibold text-content-secondary mb-1">Diesel from</label>
                           <select
                             value={draft.diesel_tank_id || ''}
-                            onChange={e => updateDraft(island.island_id, { diesel_tank_id: e.target.value })}
+                            onChange={e => updateDraft(island, { diesel_tank_id: e.target.value })}
                             className="w-full px-2 py-1 text-xs border border-surface-border rounded-md"
                           >
                             <option value="">Choose a diesel tank…</option>
@@ -724,7 +727,7 @@ export default function Infrastructure() {
                           <label className="block text-[10px] font-semibold text-content-secondary mb-1">Petrol from</label>
                           <select
                             value={draft.petrol_tank_id || ''}
-                            onChange={e => updateDraft(island.island_id, { petrol_tank_id: e.target.value })}
+                            onChange={e => updateDraft(island, { petrol_tank_id: e.target.value })}
                             className="w-full px-2 py-1 text-xs border border-surface-border rounded-md"
                           >
                             <option value="">Choose a petrol tank…</option>
@@ -751,7 +754,7 @@ export default function Infrastructure() {
                               <input
                                 type="radio"
                                 checked={draft.preset === 'custom'}
-                                onChange={() => updateDraft(island.island_id, { preset: 'custom' })}
+                                onChange={() => updateDraft(island, { preset: 'custom' })}
                               />
                               Custom (per-nozzle tank)
                             </label>
@@ -776,7 +779,7 @@ export default function Infrastructure() {
                                         if (!newAssign.find(a => a.nozzle_id === n.nozzle_id)) {
                                           newAssign.push({ nozzle_id: n.nozzle_id, tank_id: e.target.value })
                                         }
-                                        updateDraft(island.island_id, { nozzle_assignments: newAssign })
+                                        updateDraft(island, { nozzle_assignments: newAssign })
                                       }}
                                       className="flex-1 px-1 py-0.5 border border-surface-border rounded text-[10px]"
                                     >
