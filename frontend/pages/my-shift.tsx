@@ -2419,17 +2419,28 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
                       {island.status}
                     </span>
                   </div>
-                  {island.product_type && (
-                    <p className="text-xs mb-2" style={{ color: theme.textSecondary }}>
-                      Product: {island.product_type}
-                    </p>
-                  )}
+                  {(() => {
+                    // For mixed islands, show all fuels present comma-separated.
+                    const fuels = Array.from(new Set(
+                      (island.pump_station?.nozzles || [])
+                        .map((n: any) => n.fuel_type)
+                        .filter(Boolean)
+                    ))
+                    if (fuels.length === 0) return null
+                    const label = fuels.length === 1 ? `Product: ${fuels[0]}` : `Products: ${fuels.join(', ')}`
+                    return (
+                      <p className="text-xs mb-2" style={{ color: theme.textSecondary }}>
+                        {label}
+                      </p>
+                    )
+                  })()}
                   {island.pump_station?.nozzles?.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {island.pump_station.nozzles.map((nozzle: any) => {
                         const isPetrol = nozzle.fuel_type === 'Petrol'
-                        const displayName = island.fuel_type_abbrev && nozzle.display_label
-                          ? `${island.fuel_type_abbrev} ${nozzle.display_label}`
+                        // Read fuel_type_abbrev per-nozzle so mixed islands display correctly
+                        const displayName = nozzle.fuel_type_abbrev && nozzle.display_label
+                          ? `${nozzle.fuel_type_abbrev} ${nozzle.display_label}`
                           : nozzle.display_label || nozzle.nozzle_id
 
                         // Check if this nozzle is assigned in any active shift

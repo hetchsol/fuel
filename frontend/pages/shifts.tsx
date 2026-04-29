@@ -480,18 +480,32 @@ export default function Shifts() {
 
   // Get all nozzles from all active islands, grouped by island
   const getAllNozzlesGroupedByIsland = () => {
-    return islandsData.map((island: any) => ({
-      island_id: island.island_id,
-      island_name: island.name,
-      fuel_type_abbrev: island.fuel_type_abbrev,
-      product_type: island.product_type,
-      nozzles: (island.pump_station?.nozzles || []).map((nozzle: any) => ({
+    return islandsData.map((island: any) => {
+      const nozzles = (island.pump_station?.nozzles || []).map((nozzle: any) => ({
         ...nozzle,
-        fuel_type_abbrev: island.fuel_type_abbrev,
+        // Preserve the nozzle's own fuel_type_abbrev (set per-nozzle by the
+        // backend's naming convention). Don't overwrite with the island's
+        // value — that's null for mixed islands.
         island_id: island.island_id,
         island_name: island.name,
       }))
-    })).filter((g: any) => g.nozzles.length > 0)
+      const fuelsOnIsland = new Set(nozzles.map((n: any) => n.fuel_type).filter(Boolean))
+      const mixed = fuelsOnIsland.size > 1
+      // Count by fuel for the header pills on mixed islands
+      const fuelCounts: Record<string, number> = {}
+      nozzles.forEach((n: any) => {
+        if (n.fuel_type) fuelCounts[n.fuel_type] = (fuelCounts[n.fuel_type] || 0) + 1
+      })
+      return {
+        island_id: island.island_id,
+        island_name: island.name,
+        fuel_type_abbrev: island.fuel_type_abbrev,  // null for mixed islands
+        product_type: island.product_type,            // "Mixed" for mixed islands
+        mixed,
+        fuel_counts: fuelCounts,
+        nozzles,
+      }
+    }).filter((g: any) => g.nozzles.length > 0)
   }
 
   // Validate shift before creation — returns array of error strings (empty = valid)
@@ -1634,10 +1648,15 @@ export default function Shifts() {
                             .filter(a => a.user_id !== attendant.user_id)
                             .flatMap(a => a.nozzle_ids || [])
                         )
+                        // Container styling: single-fuel islands get fuel-tinted background;
+                        // mixed islands get a neutral container with per-nozzle coloured rows.
+                        const containerClass = group.mixed
+                          ? 'border-surface-border bg-surface-card'
+                          : group.product_type === 'Petrol'
+                            ? 'border-fuel-petrol-border bg-fuel-petrol-light/30'
+                            : 'border-fuel-diesel-border bg-fuel-diesel-light/30'
                         return (
-                          <div key={group.island_id} className={`p-3 rounded-lg border ${
-                            group.product_type === 'Petrol' ? 'border-fuel-petrol-border bg-fuel-petrol-light/30' : 'border-fuel-diesel-border bg-fuel-diesel-light/30'
-                          }`}>
+                          <div key={group.island_id} className={`p-3 rounded-lg border ${containerClass}`}>
                             <label className="flex items-center gap-2 mb-2 cursor-pointer">
                               <input
                                 type="checkbox"
@@ -1647,42 +1666,95 @@ export default function Shifts() {
                                 className="form-checkbox"
                               />
                               <span className="text-sm font-semibold">{group.island_name}</span>
-                              {group.fuel_type_abbrev && (
+                              {/* Single-fuel: one pill with abbrev. Mixed: two pills, one per fuel. */}
+                              {group.mixed ? (
+                                <span className="flex gap-1">
+                                  {group.fuel_counts['Diesel'] > 0 && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-fuel-diesel-light text-fuel-diesel">
+                                      LSD {group.fuel_counts['Diesel']}
+                                    </span>
+                                  )}
+                                  {group.fuel_counts['Petrol'] > 0 && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-fuel-petrol-light text-fuel-petrol">
+                                      UNL {group.fuel_counts['Petrol']}
+                                    </span>
+                                  )}
+                                </span>
+                              ) : group.fuel_type_abbrev ? (
                                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
                                   group.product_type === 'Petrol' ? 'bg-fuel-petrol-light text-fuel-petrol' : 'bg-fuel-diesel-light text-fuel-diesel'
                                 }`}>{group.fuel_type_abbrev}</span>
-                              )}
+                              ) : null}
                               <span className="text-xs text-content-secondary ml-auto">{selectedCount}/{allIslandNozzleIds.length}</span>
                             </label>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 ml-6">
-                              {group.nozzles.map((nozzle: any) => {
-                                const takenByOther = otherAttendantNozzles.has(nozzle.nozzle_id)
-                                const takenByName = takenByOther
-                                  ? selectedAttendants.find(a => a.user_id !== attendant.user_id && a.nozzle_ids?.includes(nozzle.nozzle_id))?.full_name
-                                  : null
-                                return (
-                                  <label
-                                    key={nozzle.nozzle_id}
-                                    className={`flex items-center space-x-2 p-2 border rounded cursor-pointer ${
-                                      takenByOther
-                                        ? 'opacity-50 border-status-error bg-status-error-light cursor-not-allowed'
-                                        : nozzle.fuel_type === 'Petrol' ? 'border-fuel-petrol-border hover:bg-action-primary-light' : 'border-fuel-diesel-border hover:bg-category-c-light'
-                                    }`}
-                                    title={takenByOther ? `Assigned to ${takenByName}` : ''}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={attendant.nozzle_ids?.includes(nozzle.nozzle_id) || false}
-                                      onChange={(e) => handleNozzleToggle(attendant.user_id, nozzle.nozzle_id, e.target.checked)}
-                                      className="form-checkbox"
-                                      disabled={takenByOther}
-                                    />
-                                    <span className="text-sm">{getNozzleDisplayName(nozzle)}</span>
-                                    {takenByOther && <span className="text-[10px] text-status-error ml-auto">taken</span>}
-                                  </label>
-                                )
-                              })}
-                            </div>
+                            {/* Mixed islands: per-nozzle row layout (each row has its own fuel tint).
+                                Single-fuel islands: keep the compact 2/4-column grid. */}
+                            {group.mixed ? (
+                              <div className="space-y-1.5 ml-6">
+                                {group.nozzles.map((nozzle: any) => {
+                                  const takenByOther = otherAttendantNozzles.has(nozzle.nozzle_id)
+                                  const takenByName = takenByOther
+                                    ? selectedAttendants.find(a => a.user_id !== attendant.user_id && a.nozzle_ids?.includes(nozzle.nozzle_id))?.full_name
+                                    : null
+                                  const rowTint = nozzle.fuel_type === 'Petrol'
+                                    ? 'border-fuel-petrol-border bg-fuel-petrol-light/40'
+                                    : 'border-fuel-diesel-border bg-fuel-diesel-light/40'
+                                  return (
+                                    <label
+                                      key={nozzle.nozzle_id}
+                                      className={`flex items-center gap-2 p-2 border rounded cursor-pointer ${
+                                        takenByOther ? 'opacity-50 border-status-error bg-status-error-light cursor-not-allowed' : rowTint
+                                      }`}
+                                      title={takenByOther ? `Assigned to ${takenByName}` : ''}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={attendant.nozzle_ids?.includes(nozzle.nozzle_id) || false}
+                                        onChange={(e) => handleNozzleToggle(attendant.user_id, nozzle.nozzle_id, e.target.checked)}
+                                        className="form-checkbox"
+                                        disabled={takenByOther}
+                                      />
+                                      <span className="text-sm font-medium">{getNozzleDisplayName(nozzle)}</span>
+                                      <span className="text-[10px] text-content-secondary">{nozzle.fuel_type}</span>
+                                      {nozzle.tank_id && (
+                                        <span className="text-[10px] text-content-secondary">→ {nozzle.tank_id}</span>
+                                      )}
+                                      {takenByOther && <span className="text-[10px] text-status-error ml-auto">taken</span>}
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 ml-6">
+                                {group.nozzles.map((nozzle: any) => {
+                                  const takenByOther = otherAttendantNozzles.has(nozzle.nozzle_id)
+                                  const takenByName = takenByOther
+                                    ? selectedAttendants.find(a => a.user_id !== attendant.user_id && a.nozzle_ids?.includes(nozzle.nozzle_id))?.full_name
+                                    : null
+                                  return (
+                                    <label
+                                      key={nozzle.nozzle_id}
+                                      className={`flex items-center space-x-2 p-2 border rounded cursor-pointer ${
+                                        takenByOther
+                                          ? 'opacity-50 border-status-error bg-status-error-light cursor-not-allowed'
+                                          : nozzle.fuel_type === 'Petrol' ? 'border-fuel-petrol-border hover:bg-action-primary-light' : 'border-fuel-diesel-border hover:bg-category-c-light'
+                                      }`}
+                                      title={takenByOther ? `Assigned to ${takenByName}` : ''}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={attendant.nozzle_ids?.includes(nozzle.nozzle_id) || false}
+                                        onChange={(e) => handleNozzleToggle(attendant.user_id, nozzle.nozzle_id, e.target.checked)}
+                                        className="form-checkbox"
+                                        disabled={takenByOther}
+                                      />
+                                      <span className="text-sm">{getNozzleDisplayName(nozzle)}</span>
+                                      {takenByOther && <span className="text-[10px] text-status-error ml-auto">taken</span>}
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
                         )
                       })}
@@ -1709,8 +1781,9 @@ export default function Shifts() {
                             const nz = island.pump_station?.nozzles?.find((n: any) => n.nozzle_id === nid)
                             if (nz) {
                               if (!grouped[island.island_id]) grouped[island.island_id] = { name: island.name, labels: [] }
-                              const label = (island.fuel_type_abbrev && nz.display_label)
-                                ? `${island.fuel_type_abbrev} ${nz.display_label}` : nz.display_label || nid
+                              // Read fuel_type_abbrev per-nozzle so mixed islands render correctly
+                              const label = (nz.fuel_type_abbrev && nz.display_label)
+                                ? `${nz.fuel_type_abbrev} ${nz.display_label}` : nz.display_label || nid
                               grouped[island.island_id].labels.push(label)
                               break
                             }

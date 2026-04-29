@@ -149,7 +149,10 @@ export default function DailyTankReading() {
     setUser(JSON.parse(userData))
   }, [])
 
-  // Fetch active islands and build nozzle list dynamically from API
+  // Fetch active islands and build nozzle list dynamically from API.
+  // Filter is per-nozzle (by tank_id or fuel_type fallback) so mixed-fuel
+  // islands contribute only the nozzles that actually draw from the
+  // selected tank.
   useEffect(() => {
     const fetchNozzlesFromIslands = async () => {
       try {
@@ -160,27 +163,33 @@ export default function DailyTankReading() {
         if (!res.ok) return
 
         const allIslands = await res.json()
-        // Filter to islands matching the selected fuel type
-        const matchingIslands = allIslands.filter(
-          (isl: any) => isl.product_type === fuelType
-        )
 
-        // Build nozzle entries from matching islands, using display_label
+        // Build nozzle entries by walking every nozzle on every island and
+        // keeping only those wired to the selected tank. This works for
+        // single-fuel islands AND for the diesel-or-petrol nozzle on a
+        // mixed island.
         const nozzleEntries: any[] = []
-        matchingIslands.forEach((isl: any) => {
-          if (isl.pump_station?.nozzles) {
-            isl.pump_station.nozzles.forEach((nz: any) => {
-              nozzleEntries.push({
-                nozzle_id: nz.display_label || nz.nozzle_id,
-                internal_nozzle_id: nz.nozzle_id,
-                attendant: '',
-                electronic_opening: '',
-                electronic_closing: '',
-                mechanical_opening: '',
-                mechanical_closing: '',
-              })
+        allIslands.forEach((isl: any) => {
+          const pumpTankId = isl.pump_station?.tank_id || null
+          ;(isl.pump_station?.nozzles || []).forEach((nz: any) => {
+            // Tier 1: explicit nozzle.tank_id match wins.
+            // Tier 2: legacy fallback — nozzle has no tank_id, pump's tank matches.
+            // Tier 3: ultimate fallback — fuel_type matches (handles unconfigured stations).
+            const explicit = nz.tank_id
+            const matchesTank = explicit
+              ? explicit === selectedTank
+              : (pumpTankId === selectedTank || (!pumpTankId && nz.fuel_type === fuelType))
+            if (!matchesTank) return
+            nozzleEntries.push({
+              nozzle_id: nz.display_label || nz.nozzle_id,
+              internal_nozzle_id: nz.nozzle_id,
+              attendant: '',
+              electronic_opening: '',
+              electronic_closing: '',
+              mechanical_opening: '',
+              mechanical_closing: '',
             })
-          }
+          })
         })
 
         // Fallback: if no active islands configured, use default hardcoded labels
