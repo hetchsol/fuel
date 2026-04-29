@@ -16,10 +16,12 @@ interface Nozzle {
   nozzle_id: string
   pump_station_id: string
   fuel_type: string
+  tank_id: string | null
   status: string
   electronic_reading: number
   mechanical_reading: number
   display_label: string | null
+  fuel_type_abbrev: string | null
   custom_label: string | null
 }
 
@@ -27,7 +29,7 @@ interface PumpStation {
   pump_station_id: string
   island_id: string
   name: string
-  tank_id: string
+  tank_id: string | null
   nozzles: Nozzle[]
 }
 
@@ -40,6 +42,15 @@ interface Island {
   pump_station: PumpStation
   display_number: number | null
   fuel_type_abbrev: string | null
+}
+
+type PresetMode = 'all_diesel' | 'all_petrol' | 'mixed' | 'custom'
+
+interface IslandPresetDraft {
+  preset: PresetMode
+  diesel_tank_id?: string
+  petrol_tank_id?: string
+  nozzle_assignments: { nozzle_id: string; tank_id: string }[]
 }
 
 export default function Infrastructure() {
@@ -62,6 +73,11 @@ export default function Infrastructure() {
     initial_level: 0
   })
   const [tankLoading, setTankLoading] = useState(false)
+
+  // Per-island preset draft (keyed by island_id). Used to stage tank selections
+  // before clicking Apply.
+  const [presetDraft, setPresetDraft] = useState<Record<string, IslandPresetDraft>>({})
+  const [showAdvanced, setShowAdvanced] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     fetchTanks()
@@ -198,25 +214,95 @@ export default function Infrastructure() {
     }
   }
 
-  const updateProductType = async (islandId: string, productType: string) => {
+  // ─── Preset helpers ────────────────────────────────────────────────────
+
+  const dieselTanks = tanks.filter(t => t.fuel_type === 'Diesel')
+  const petrolTanks = tanks.filter(t => t.fuel_type === 'Petrol')
+
+  /** Infer the preset that best matches an island's current configuration. */
+  const inferPreset = (island: Island): IslandPresetDraft => {
+    const nozzles = island.pump_station?.nozzles || []
+    const fuels = new Set(nozzles.map(n => n.fuel_type).filter(Boolean))
+    const diesel_tank_id = nozzles.find(n => n.fuel_type === 'Diesel')?.tank_id || dieselTanks[0]?.tank_id
+    const petrol_tank_id = nozzles.find(n => n.fuel_type === 'Petrol')?.tank_id || petrolTanks[0]?.tank_id
+    const nozzle_assignments = nozzles.map(n => ({
+      nozzle_id: n.nozzle_id,
+      tank_id: n.tank_id || (n.fuel_type === 'Diesel' ? diesel_tank_id : petrol_tank_id) || '',
+    }))
+
+    if (fuels.size === 1 && fuels.has('Diesel')) {
+      // Same-fuel uniform tanks → all_diesel; otherwise custom
+      const tanksUsed = new Set(nozzles.map(n => n.tank_id))
+      if (tanksUsed.size <= 1) {
+        return { preset: 'all_diesel', diesel_tank_id, petrol_tank_id, nozzle_assignments }
+      }
+      return { preset: 'custom', diesel_tank_id, petrol_tank_id, nozzle_assignments }
+    }
+    if (fuels.size === 1 && fuels.has('Petrol')) {
+      const tanksUsed = new Set(nozzles.map(n => n.tank_id))
+      if (tanksUsed.size <= 1) {
+        return { preset: 'all_petrol', diesel_tank_id, petrol_tank_id, nozzle_assignments }
+      }
+      return { preset: 'custom', diesel_tank_id, petrol_tank_id, nozzle_assignments }
+    }
+    if (fuels.size === 2 && nozzles.length === 2) {
+      return { preset: 'mixed', diesel_tank_id, petrol_tank_id, nozzle_assignments }
+    }
+    return { preset: 'custom', diesel_tank_id, petrol_tank_id, nozzle_assignments }
+  }
+
+  /** Get the live draft for an island (initialising from current state if needed). */
+  const getDraft = (island: Island): IslandPresetDraft => {
+    return presetDraft[island.island_id] || inferPreset(island)
+  }
+
+  const updateDraft = (islandId: string, patch: Partial<IslandPresetDraft>) => {
+    setPresetDraft(prev => ({
+      ...prev,
+      [islandId]: { ...(prev[islandId] || {}), ...patch } as IslandPresetDraft,
+    }))
+  }
+
+  const applyPreset = async (island: Island) => {
+    const draft = getDraft(island)
+    const body: any = { preset: draft.preset }
+
+    if (draft.preset === 'custom') {
+      body.nozzle_assignments = draft.nozzle_assignments
+    } else {
+      const tanksPayload: any = {}
+      if ((draft.preset === 'all_diesel' || draft.preset === 'mixed') && dieselTanks.length > 1) {
+        tanksPayload.diesel_tank_id = draft.diesel_tank_id
+      }
+      if ((draft.preset === 'all_petrol' || draft.preset === 'mixed') && petrolTanks.length > 1) {
+        tanksPayload.petrol_tank_id = draft.petrol_tank_id
+      }
+      if (Object.keys(tanksPayload).length > 0) body.tanks = tanksPayload
+    }
+
     setLoading(true)
     try {
-      const res = await authFetch(`${BASE}/islands/${islandId}/product`, {
-        method: 'PUT',
+      const res = await authFetch(`${BASE}/islands/${island.island_id}/preset`, {
+        method: 'POST',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ product_type: productType }),
+        body: JSON.stringify(body),
       })
-
       if (res.ok) {
         const data = await res.json()
-        setMessage({ type: 'success', text: `${islandId} configured as ${productType}` })
+        const summary = data.island_product_type === 'Mixed'
+          ? 'Mixed (LSD + UNL)'
+          : data.island_product_type
+        setMessage({ type: 'success', text: `${island.island_id} configured: ${summary}` })
+        // Clear the draft so next render reads from fresh server data
+        setPresetDraft(prev => { const n = { ...prev }; delete n[island.island_id]; return n })
         fetchIslands()
+        setTimeout(() => setMessage(null), 4000)
       } else {
-        const error = await res.json()
-        setMessage({ type: 'error', text: error.detail || 'Failed to update product type' })
+        const err = await res.json()
+        setMessage({ type: 'error', text: err.detail || 'Failed to apply preset' })
       }
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Network error' })
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'Network error' })
     } finally {
       setLoading(false)
     }
@@ -248,29 +334,6 @@ export default function Infrastructure() {
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString()
-  }
-
-  const assignTank = async (islandId: string, tankId: string) => {
-    setLoading(true)
-    try {
-      const res = await authFetch(`${BASE}/islands/${islandId}/pump-station/tank?tank_id=${encodeURIComponent(tankId)}`, {
-        method: 'PUT',
-        headers: getHeaders(),
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        setMessage({ type: 'success', text: data.message })
-        fetchIslands()
-      } else {
-        const error = await res.json()
-        setMessage({ type: 'error', text: error.detail || 'Failed to assign tank' })
-      }
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Network error' })
-    } finally {
-      setLoading(false)
-    }
   }
 
   const getNozzleColor = (fuelType: string) => {
@@ -613,46 +676,136 @@ export default function Infrastructure() {
                   </span>
                 </div>
 
-                {/* Product Type */}
-                <div className="mb-3">
-                  <label className="block text-xs font-semibold text-content-secondary mb-1">Product Type</label>
-                  <select
-                    value={island.product_type || ''}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        updateProductType(island.island_id, e.target.value)
-                      }
-                    }}
-                    className="w-full px-2 py-1.5 text-sm border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
-                  >
-                    <option value="">Not configured</option>
-                    <option value="Petrol">Petrol (UNL)</option>
-                    <option value="Diesel">Diesel (LSD)</option>
-                  </select>
-                </div>
+                {/* Preset — pill selector + conditional tank pickers */}
+                {island.pump_station && (() => {
+                  const draft = getDraft(island)
+                  const showDieselPicker = (draft.preset === 'all_diesel' || draft.preset === 'mixed') && dieselTanks.length > 1
+                  const showPetrolPicker = (draft.preset === 'all_petrol' || draft.preset === 'mixed') && petrolTanks.length > 1
+                  const advancedOpen = !!showAdvanced[island.island_id] || draft.preset === 'custom'
 
-                {/* Tank Assignment */}
-                {island.pump_station && (
-                  <div className="mb-3">
-                    <label className="block text-xs font-semibold text-content-secondary mb-1">Assigned Tank</label>
-                    <select
-                      value={island.pump_station.tank_id || ''}
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          assignTank(island.island_id, e.target.value)
-                        }
-                      }}
-                      className="w-full px-2 py-1.5 text-sm border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
-                    >
-                      <option value="">Not assigned</option>
-                      {tanks.map(tank => (
-                        <option key={tank.tank_id} value={tank.tank_id}>
-                          {tank.tank_id} ({tank.fuel_type})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                  return (
+                    <div className="mb-3 space-y-2">
+                      <label className="block text-xs font-semibold text-content-secondary">Configuration</label>
+                      <div className="grid grid-cols-3 gap-1">
+                        {(['all_diesel', 'all_petrol', 'mixed'] as const).map(p => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => updateDraft(island.island_id, { preset: p })}
+                            className={`px-2 py-1.5 text-xs rounded-md border transition-colors ${
+                              draft.preset === p
+                                ? 'bg-action-primary text-white border-action-primary font-semibold'
+                                : 'bg-surface-bg text-content-primary border-surface-border hover:bg-surface-card'
+                            }`}
+                          >
+                            {p === 'all_diesel' ? 'All Diesel' : p === 'all_petrol' ? 'All Petrol' : 'Mixed'}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Conditional tank picker(s) */}
+                      {showDieselPicker && (
+                        <div>
+                          <label className="block text-[10px] font-semibold text-content-secondary mb-1">Diesel from</label>
+                          <select
+                            value={draft.diesel_tank_id || ''}
+                            onChange={e => updateDraft(island.island_id, { diesel_tank_id: e.target.value })}
+                            className="w-full px-2 py-1 text-xs border border-surface-border rounded-md"
+                          >
+                            <option value="">Choose a diesel tank…</option>
+                            {dieselTanks.map(t => (
+                              <option key={t.tank_id} value={t.tank_id}>{t.tank_id}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {showPetrolPicker && (
+                        <div>
+                          <label className="block text-[10px] font-semibold text-content-secondary mb-1">Petrol from</label>
+                          <select
+                            value={draft.petrol_tank_id || ''}
+                            onChange={e => updateDraft(island.island_id, { petrol_tank_id: e.target.value })}
+                            className="w-full px-2 py-1 text-xs border border-surface-border rounded-md"
+                          >
+                            <option value="">Choose a petrol tank…</option>
+                            {petrolTanks.map(t => (
+                              <option key={t.tank_id} value={t.tank_id}>{t.tank_id}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Advanced expander → Custom (per-nozzle) */}
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvanced(prev => ({ ...prev, [island.island_id]: !advancedOpen }))}
+                        className="text-[10px] text-content-secondary hover:text-content-primary underline"
+                      >
+                        {advancedOpen ? 'Hide advanced' : 'Advanced…'}
+                      </button>
+
+                      {advancedOpen && (
+                        <div className="pt-1 border-t border-surface-border space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-1 text-[10px]">
+                              <input
+                                type="radio"
+                                checked={draft.preset === 'custom'}
+                                onChange={() => updateDraft(island.island_id, { preset: 'custom' })}
+                              />
+                              Custom (per-nozzle tank)
+                            </label>
+                          </div>
+                          {draft.preset === 'custom' && (
+                            <div className="space-y-1">
+                              {island.pump_station.nozzles.map((n, idx) => {
+                                const assignment = draft.nozzle_assignments.find(a => a.nozzle_id === n.nozzle_id) || {
+                                  nozzle_id: n.nozzle_id,
+                                  tank_id: n.tank_id || '',
+                                }
+                                return (
+                                  <div key={n.nozzle_id} className="flex items-center gap-2 text-[10px]">
+                                    <span className="w-12 text-content-secondary">Slot {String.fromCharCode(65 + idx)}</span>
+                                    <select
+                                      value={assignment.tank_id}
+                                      onChange={e => {
+                                        const newAssign = draft.nozzle_assignments.map(a =>
+                                          a.nozzle_id === n.nozzle_id ? { ...a, tank_id: e.target.value } : a
+                                        )
+                                        // ensure entry exists
+                                        if (!newAssign.find(a => a.nozzle_id === n.nozzle_id)) {
+                                          newAssign.push({ nozzle_id: n.nozzle_id, tank_id: e.target.value })
+                                        }
+                                        updateDraft(island.island_id, { nozzle_assignments: newAssign })
+                                      }}
+                                      className="flex-1 px-1 py-0.5 border border-surface-border rounded text-[10px]"
+                                    >
+                                      <option value="">Choose tank…</option>
+                                      {tanks.map(t => (
+                                        <option key={t.tank_id} value={t.tank_id}>
+                                          {t.tank_id} ({t.fuel_type})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => applyPreset(island)}
+                        disabled={loading}
+                        className="w-full mt-1 px-3 py-1.5 bg-action-primary text-white rounded-md text-xs font-semibold hover:bg-action-primary/90 disabled:opacity-50"
+                      >
+                        Apply configuration
+                      </button>
+                    </div>
+                  )
+                })()}
 
                 {/* Activate / Deactivate */}
                 <div className="mb-3">
@@ -677,7 +830,7 @@ export default function Infrastructure() {
                   </div>
                 )}
 
-                {/* Nozzle Badges */}
+                {/* Nozzle Badges — read fuel_type_abbrev per-nozzle so mixed islands display correctly */}
                 {island.pump_station && (
                   <div>
                     <p className="text-xs font-semibold text-content-secondary mb-1">Nozzles</p>
@@ -688,11 +841,14 @@ export default function Infrastructure() {
                           className={`flex-1 p-1.5 rounded-md border text-center ${getNozzleColor(nozzle.fuel_type)}`}
                         >
                           <p className="font-bold text-xs">
-                            {island.fuel_type_abbrev && nozzle.display_label
-                              ? `${island.fuel_type_abbrev} ${nozzle.display_label}`
+                            {nozzle.fuel_type_abbrev && nozzle.display_label
+                              ? `${nozzle.fuel_type_abbrev} ${nozzle.display_label}`
                               : nozzle.nozzle_id}
                           </p>
-                          <p className="text-[10px] opacity-75">{nozzle.nozzle_id}</p>
+                          <p className="text-[10px] opacity-75">
+                            {nozzle.nozzle_id}
+                            {nozzle.tank_id && <span className="ml-1">→ {nozzle.tank_id}</span>}
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -718,7 +874,7 @@ export default function Infrastructure() {
             <h3 className="text-sm font-semibold text-action-primary mb-2">Standardized Island Configuration</h3>
             <ul className="text-sm text-action-primary space-y-1">
               <li>- <strong>6 Islands</strong>: Each station has 6 standard islands with 1 pump and 2 nozzles each</li>
-              <li>- <strong>Product Type</strong>: Configure each island as Petrol or Diesel. This sets the tank mapping and nozzle fuel types automatically.</li>
+              <li>- <strong>Configuration</strong>: Pick a preset per island — All Diesel, All Petrol, or Mixed. The system wires nozzles to the matching tank automatically. Use <em>Advanced</em> to assign each nozzle to a specific tank when you have more than one tank of the same fuel.</li>
               <li>- <strong>Activation</strong>: Islands must have a product type configured before they can be activated</li>
               <li>- <strong>Active Islands</strong>: Only active islands appear in shift allocation and operations</li>
               <li>- <strong>Owner Only</strong>: All island configuration changes require owner privileges</li>
