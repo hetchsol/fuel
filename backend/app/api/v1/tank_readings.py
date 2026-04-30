@@ -1089,6 +1089,12 @@ def record_delivery(
     tank_deliveries_db[delivery_id] = delivery_dict
     save_tank_deliveries(tank_deliveries_db, station_id)  # Persist to file
 
+    # Update tank current_level to reflect the delivery
+    tanks_data = storage.get('tanks', {})
+    if delivery_input.tank_id in tanks_data:
+        tanks_data[delivery_input.tank_id]["current_level"] = delivery_input.volume_after
+        tanks_data[delivery_input.tank_id]["last_updated"] = datetime.now().isoformat()
+
     return output
 
 
