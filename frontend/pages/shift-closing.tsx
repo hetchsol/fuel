@@ -27,6 +27,10 @@ export default function ShiftClosing() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  // Shift selection
+  const [availableShifts, setAvailableShifts] = useState<any[]>([])
+  const [selectedShiftId, setSelectedShiftId] = useState<string>('')
+
   // Phase 1 data
   const [handover, setHandover] = useState<any>(null)
   const [shiftInfo, setShiftInfo] = useState<any>(null)
@@ -53,14 +57,34 @@ export default function ShiftClosing() {
     borderColor: theme.border,
   }
 
+  // Fetch available shifts
   useEffect(() => {
-    loadData()
+    authFetch(`${BASE}/handover/my-shifts`, { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : { shifts: [] })
+      .then(data => {
+        setAvailableShifts(data.shifts || [])
+        if (data.shifts?.length === 1) {
+          setSelectedShiftId(data.shifts[0].shift_id)
+        } else if (data.shifts?.length === 0) {
+          setError('No active shift found.')
+          setLoading(false)
+        }
+      })
+      .catch(() => { setLoading(false) })
   }, [])
 
-  const loadData = async () => {
+  useEffect(() => {
+    if (selectedShiftId) loadData(selectedShiftId)
+  }, [selectedShiftId])
+
+  const loadData = async (shiftId: string) => {
     setLoading(true)
+    setError('')
+    setSuccess('')
+    setHandover(null)
+    setResult(null)
     try {
-      const shiftRes = await authFetch(`${BASE}/handover/my-shift`, { headers: getAuthHeaders() })
+      const shiftRes = await authFetch(`${BASE}/handover/my-shift?shift_id=${encodeURIComponent(shiftId)}`, { headers: getAuthHeaders() })
       const shiftData = await shiftRes.json()
 
       if (!shiftData.found) {
@@ -159,10 +183,31 @@ export default function ShiftClosing() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Shift Closing</h1>
-        <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
-          {result ? 'Shift closing submitted' : 'Financial reconciliation — verify cash, POS, and credit sales'}
-        </p>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Shift Closing</h1>
+            <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
+              {result ? 'Shift closing submitted' : 'Financial reconciliation — verify cash, POS, and credit sales'}
+            </p>
+          </div>
+          {availableShifts.length > 1 && (
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Active Shift</label>
+              <select
+                value={selectedShiftId}
+                onChange={e => setSelectedShiftId(e.target.value)}
+                className="px-3 py-2 rounded-lg border text-sm font-medium"
+                style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}>
+                <option value="">-- Select Shift --</option>
+                {availableShifts.map((s: any) => (
+                  <option key={s.shift_id} value={s.shift_id}>
+                    {s.date} — {s.shift_type} Shift
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       {error && (

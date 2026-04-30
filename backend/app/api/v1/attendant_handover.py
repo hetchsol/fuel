@@ -600,11 +600,40 @@ async def get_credit_accounts(ctx: dict = Depends(get_station_context)):
     return {"accounts": accounts_list, "fuel_prices": fuel_prices}
 
 
+@router.get("/my-shifts")
+async def get_my_active_shifts(ctx: dict = Depends(get_station_context)):
+    """
+    List all active shifts the current user is assigned to.
+    Returns lightweight shift info for dropdown selection.
+    """
+    storage = ctx["storage"]
+    user_id = ctx["user_id"]
+    user_name = ctx["full_name"]
+    shifts_data = storage.get('shifts', {})
+
+    my_shifts = []
+    for shift_id, shift in shifts_data.items():
+        if shift.get("status") != "active":
+            continue
+        for assignment in shift.get("assignments", []):
+            if assignment.get("attendant_id") == user_id or \
+               assignment.get("attendant_name", "").lower() == user_name.lower():
+                my_shifts.append({
+                    "shift_id": shift.get("shift_id", shift_id),
+                    "date": shift.get("date"),
+                    "shift_type": shift.get("shift_type"),
+                })
+                break
+
+    return {"shifts": my_shifts, "count": len(my_shifts)}
+
+
 @router.get("/my-shift")
-async def get_my_shift(ctx: dict = Depends(get_station_context)):
+async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_context)):
     """
     Find the current user's active shift and return shift info
     with assigned nozzles and their last known readings.
+    Optional shift_id param to select a specific active shift.
     """
     storage = ctx["storage"]
     user_id = ctx["user_id"]
@@ -616,12 +645,14 @@ async def get_my_shift(ctx: dict = Depends(get_station_context)):
     my_shift = None
     my_assignment = None
 
-    for shift_id, shift in shifts_data.items():
+    for sid, shift in shifts_data.items():
         if shift.get("status") != "active":
+            continue
+        # If shift_id specified, only match that one
+        if shift_id and shift.get("shift_id", sid) != shift_id:
             continue
         assignments = shift.get("assignments", [])
         for assignment in assignments:
-            # Match by attendant_id (user_id) or attendant_name
             if assignment.get("attendant_id") == user_id or \
                assignment.get("attendant_name", "").lower() == user_name.lower():
                 my_shift = shift

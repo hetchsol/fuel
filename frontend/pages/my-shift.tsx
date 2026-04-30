@@ -118,6 +118,10 @@ export default function MyShift() {
   const userRole = userData ? JSON.parse(userData).role : ''
   const isAttendant = userRole === 'user'
 
+  // Shift selection state
+  const [availableShifts, setAvailableShifts] = useState<any[]>([])
+  const [selectedShiftId, setSelectedShiftId] = useState<string>('')
+
   // Shift state
   const [shiftFound, setShiftFound] = useState<boolean | null>(null)
   const [shiftInfo, setShiftInfo] = useState<any>(null)
@@ -186,10 +190,29 @@ export default function MyShift() {
   // Review confirmation modal
   const [showReviewModal, setShowReviewModal] = useState(false)
 
-  // Fetch active shift first, then stock opening separately (so stock failure doesn't kill the page)
+  // Fetch available active shifts for dropdown
   useEffect(() => {
+    authFetch(`${BASE}/handover/my-shifts`, { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : { shifts: [] })
+      .then(data => {
+        setAvailableShifts(data.shifts || [])
+        // Auto-select the first shift if only one, or the most recent
+        if (data.shifts?.length === 1) {
+          setSelectedShiftId(data.shifts[0].shift_id)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  // Load shift data when selectedShiftId changes
+  const loadShiftData = (shiftId: string) => {
     setLoading(true)
-    authFetch(`${BASE}/handover/my-shift`, { headers: getAuthHeaders() })
+    setShiftFound(null)
+    setHandoverResult(null)
+    setSuccess('')
+    setError('')
+    const qs = shiftId ? `?shift_id=${encodeURIComponent(shiftId)}` : ''
+    authFetch(`${BASE}/handover/my-shift${qs}`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(shiftData => {
         if (!shiftData.found) {
@@ -284,7 +307,11 @@ export default function MyShift() {
         setShiftFound(false)
         setLoading(false)
       })
-  }, [])
+  }
+
+  useEffect(() => {
+    if (selectedShiftId) loadShiftData(selectedShiftId)
+  }, [selectedShiftId])
 
   // Fetch past handovers
   useEffect(() => {
@@ -651,10 +678,31 @@ export default function MyShift() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Readings Verification</h1>
-        <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
-          {handoverResult ? 'Readings verified — proceed to office for shift closing' : stepSubtitles[currentStep]}
-        </p>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Readings Verification</h1>
+            <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
+              {handoverResult ? 'Readings verified — proceed to office for shift closing' : stepSubtitles[currentStep]}
+            </p>
+          </div>
+          {availableShifts.length > 1 && (
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Active Shift</label>
+              <select
+                value={selectedShiftId}
+                onChange={e => setSelectedShiftId(e.target.value)}
+                className="px-3 py-2 rounded-lg border text-sm font-medium"
+                style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}>
+                <option value="">-- Select Shift --</option>
+                {availableShifts.map((s: any) => (
+                  <option key={s.shift_id} value={s.shift_id}>
+                    {s.date} — {s.shift_type} Shift
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       {error && (
