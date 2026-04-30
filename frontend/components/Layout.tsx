@@ -183,21 +183,27 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })
           .catch(() => {})
       } else {
-        // Supervisor/Manager/Owner: check all active shifts for any overdue deposits
+        // Supervisor/Manager/Owner: check ALL active shifts for any overdue deposits
         authFetch(`${BASE}/shifts/`)
           .then(r => r.ok ? r.json() : [])
-          .then(shifts => {
+          .then(async (shifts) => {
             const activeShifts = (shifts || []).filter((s: any) => s.status === 'active')
             if (activeShifts.length === 0) { setDepositOverdue(false); return }
-            // Check the most recent active shift
-            const latest = activeShifts[activeShifts.length - 1]
-            authFetch(`${BASE}/safe-deposits/${latest.shift_id}`)
-              .then(r => r.ok ? r.json() : { attendants: [] })
-              .then(depData => {
-                const anyOverdue = (depData.attendants || []).some((a: any) => a.overdue)
-                setDepositOverdue(anyOverdue)
-              })
-              .catch(() => {})
+            // Check all active shifts
+            let anyOverdue = false
+            for (const shift of activeShifts) {
+              try {
+                const depRes = await authFetch(`${BASE}/safe-deposits/${shift.shift_id}`)
+                if (depRes.ok) {
+                  const depData = await depRes.json()
+                  if ((depData.attendants || []).some((a: any) => a.overdue)) {
+                    anyOverdue = true
+                    break
+                  }
+                }
+              } catch {}
+            }
+            setDepositOverdue(anyOverdue)
           })
           .catch(() => {})
       }
