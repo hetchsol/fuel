@@ -23,9 +23,9 @@ THIN_BORDER = Border(
 )
 
 
-def _style_header_row(ws, col_count: int):
+def _style_header_row(ws, col_count: int, row: int = 1):
     for col in range(1, col_count + 1):
-        cell = ws.cell(row=1, column=col)
+        cell = ws.cell(row=row, column=col)
         cell.font = HEADER_FONT
         cell.fill = HEADER_FILL
         cell.alignment = HEADER_ALIGNMENT
@@ -54,6 +54,70 @@ def _workbook_to_bytes(wb: Workbook) -> bytes:
     wb.save(buf)
     buf.seek(0)
     return buf.read()
+
+
+TITLE_FONT = Font(name="Calibri", bold=True, size=14, color="1F4E79")
+SUBTITLE_FONT = Font(name="Calibri", bold=False, size=10, color="555555")
+CENTER_ALIGN = Alignment(horizontal="center")
+FOOTER_FONT = Font(name="Calibri", italic=True, size=9, color="999999")
+
+
+def _add_business_header(ws, col_count: int, business_info: dict = None, report_title: str = ""):
+    """Add centered business details header and report title. Returns the next row number for data."""
+    from datetime import datetime
+    row = 1
+    merge_end = get_column_letter(max(col_count, 1))
+
+    if business_info and business_info.get("business_name"):
+        # Business name
+        ws.merge_cells(f"A{row}:{merge_end}{row}")
+        cell = ws.cell(row=row, column=1, value=business_info["business_name"].upper())
+        cell.font = TITLE_FONT
+        cell.alignment = CENTER_ALIGN
+        row += 1
+
+        # Location
+        if business_info.get("station_location"):
+            ws.merge_cells(f"A{row}:{merge_end}{row}")
+            cell = ws.cell(row=row, column=1, value=business_info["station_location"].upper())
+            cell.font = SUBTITLE_FONT
+            cell.alignment = CENTER_ALIGN
+            row += 1
+
+        # Contact
+        parts = []
+        if business_info.get("contact_phone"): parts.append(business_info["contact_phone"])
+        if business_info.get("contact_email"): parts.append(business_info["contact_email"])
+        if parts:
+            ws.merge_cells(f"A{row}:{merge_end}{row}")
+            cell = ws.cell(row=row, column=1, value="  |  ".join(parts))
+            cell.font = SUBTITLE_FONT
+            cell.alignment = CENTER_ALIGN
+            row += 1
+
+        row += 1  # blank row
+
+    # Report title
+    if report_title:
+        ws.merge_cells(f"A{row}:{merge_end}{row}")
+        cell = ws.cell(row=row, column=1, value=report_title.upper())
+        cell.font = Font(name="Calibri", bold=True, size=12, color="1F4E79")
+        cell.alignment = CENTER_ALIGN
+        row += 1
+
+    row += 1  # blank row before data
+    return row
+
+
+def _add_timestamp_footer(ws, row: int, col_count: int):
+    """Add timestamp footer below data."""
+    from datetime import datetime
+    row += 1  # blank row
+    merge_end = get_column_letter(max(col_count, 1))
+    ws.merge_cells(f"A{row}:{merge_end}{row}")
+    cell = ws.cell(row=row, column=1, value=f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    cell.font = FOOTER_FONT
+    cell.alignment = CENTER_ALIGN
 
 
 # ---------- Tank Readings ----------
@@ -111,18 +175,23 @@ def tank_readings_to_csv(readings: List[dict]) -> str:
     return buf.getvalue()
 
 
-def tank_readings_to_excel(readings: List[dict], station_name: str = "Station") -> bytes:
+def tank_readings_to_excel(readings: List[dict], station_name: str = "Station", business_info: dict = None) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "Tank Readings"
 
-    # Title row
-    ws.append(_TR_HEADERS)
-    _style_header_row(ws, len(_TR_HEADERS))
+    col_count = len(_TR_HEADERS)
+    data_start = _add_business_header(ws, col_count, business_info, "Tank Readings Report")
+
+    # Header row
+    for i, h in enumerate(_TR_HEADERS, 1):
+        ws.cell(row=data_start, column=i, value=h)
+    _style_header_row(ws, col_count, data_start)
 
     rows = [_tank_reading_row(r) for r in readings]
-    _write_rows(ws, rows)
+    _write_rows(ws, rows, start_row=data_start + 1)
     _auto_column_widths(ws)
+    _add_timestamp_footer(ws, data_start + len(rows), col_count)
 
     ws.sheet_properties.tabColor = "1F4E79"
     return _workbook_to_bytes(wb)
@@ -169,17 +238,22 @@ def sales_to_csv(sales: List[dict]) -> str:
     return buf.getvalue()
 
 
-def sales_to_excel(sales: List[dict], station_name: str = "Station") -> bytes:
+def sales_to_excel(sales: List[dict], station_name: str = "Station", business_info: dict = None) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "Sales"
 
-    ws.append(_SALES_HEADERS)
-    _style_header_row(ws, len(_SALES_HEADERS))
+    col_count = len(_SALES_HEADERS)
+    data_start = _add_business_header(ws, col_count, business_info, "Sales Report")
+
+    for i, h in enumerate(_SALES_HEADERS, 1):
+        ws.cell(row=data_start, column=i, value=h)
+    _style_header_row(ws, col_count, data_start)
 
     rows = [_sale_row(s) for s in sales]
-    _write_rows(ws, rows)
+    _write_rows(ws, rows, start_row=data_start + 1)
     _auto_column_widths(ws)
+    _add_timestamp_footer(ws, data_start + len(rows), col_count)
 
     ws.sheet_properties.tabColor = "2E7D32"
     return _workbook_to_bytes(wb)
@@ -226,17 +300,22 @@ def reconciliation_to_csv(recon_data: List[dict]) -> str:
     return buf.getvalue()
 
 
-def reconciliation_to_excel(recon_data: List[dict], station_name: str = "Station") -> bytes:
+def reconciliation_to_excel(recon_data: List[dict], station_name: str = "Station", business_info: dict = None) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "Reconciliation"
 
-    ws.append(_RECON_HEADERS)
-    _style_header_row(ws, len(_RECON_HEADERS))
+    col_count = len(_RECON_HEADERS)
+    data_start = _add_business_header(ws, col_count, business_info, "Reconciliation Report")
+
+    for i, h in enumerate(_RECON_HEADERS, 1):
+        ws.cell(row=data_start, column=i, value=h)
+    _style_header_row(ws, col_count, data_start)
 
     rows = [_recon_row(r) for r in recon_data]
-    _write_rows(ws, rows)
+    _write_rows(ws, rows, start_row=data_start + 1)
     _auto_column_widths(ws)
+    _add_timestamp_footer(ws, data_start + len(rows), col_count)
 
     ws.sheet_properties.tabColor = "C62828"
     return _workbook_to_bytes(wb)

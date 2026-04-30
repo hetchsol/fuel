@@ -25,6 +25,16 @@ def _load_json(station_id: str, filename: str):
     return load_station_json(station_id, filename, default={})
 
 
+def _get_business_info(storage: dict) -> dict:
+    sys = storage.get('system_settings', {})
+    return {
+        "business_name": sys.get("business_name", ""),
+        "station_location": sys.get("station_location", ""),
+        "contact_phone": sys.get("contact_phone", ""),
+        "contact_email": sys.get("contact_email", ""),
+    }
+
+
 def _stream(content: bytes | str, filename: str, media_type: str):
     if isinstance(content, str):
         content = content.encode("utf-8")
@@ -69,7 +79,7 @@ def export_tank_readings(
         content = tank_readings_to_csv(readings)
         return _stream(content, "tank_readings.csv", "text/csv")
     else:
-        content = tank_readings_to_excel(readings, station_name=station_id)
+        content = tank_readings_to_excel(readings, station_name=station_id, business_info=_get_business_info(ctx["storage"]))
         return _stream(content, "tank_readings.xlsx",
                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -103,7 +113,7 @@ def export_sales(
         content = sales_to_csv(sales)
         return _stream(content, "sales.csv", "text/csv")
     else:
-        content = sales_to_excel(sales, station_name=station_id)
+        content = sales_to_excel(sales, station_name=station_id, business_info=_get_business_info(ctx["storage"]))
         return _stream(content, "sales.xlsx",
                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -135,6 +145,6 @@ def export_reconciliation(
         content = reconciliation_to_csv(recon_data)
         return _stream(content, "reconciliation.csv", "text/csv")
     else:
-        content = reconciliation_to_excel(recon_data, station_name=ctx["station_id"])
+        content = reconciliation_to_excel(recon_data, station_name=ctx["station_id"], business_info=_get_business_info(ctx["storage"]))
         return _stream(content, "reconciliation.xlsx",
                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

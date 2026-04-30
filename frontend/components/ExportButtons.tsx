@@ -1,17 +1,43 @@
-import { useState } from 'react'
-import { exportToExcel, exportToPDF, ExportConfig } from '../lib/exportUtils'
+import { useState, useEffect } from 'react'
+import { exportToExcel, exportToPDF, ExportConfig, BusinessInfo } from '../lib/exportUtils'
+import { getHeaders, authFetch } from '../lib/api'
 
 interface Props {
   getConfig: () => ExportConfig | null
   className?: string
 }
 
+// Cache business info so we don't fetch on every render
+let cachedBusinessInfo: BusinessInfo | null = null
+
 export default function ExportButtons({ getConfig, className = '' }: Props) {
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null)
+  const [businessInfo, setBusinessInfo] = useState<BusinessInfo | null>(cachedBusinessInfo)
+
+  useEffect(() => {
+    if (cachedBusinessInfo) return
+    authFetch('/api/v1/settings/system', { headers: getHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          const info: BusinessInfo = {
+            business_name: data.business_name || '',
+            station_location: data.station_location || '',
+            contact_phone: data.contact_phone || '',
+            contact_email: data.contact_email || '',
+          }
+          cachedBusinessInfo = info
+          setBusinessInfo(info)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const handleExport = async (format: 'xlsx' | 'pdf') => {
     const config = getConfig()
     if (!config) return
+    // Inject business info into config
+    config.businessInfo = businessInfo || undefined
     setExporting(format)
     try {
       if (format === 'xlsx') exportToExcel(config)
