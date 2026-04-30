@@ -995,11 +995,23 @@ export default function MyShift() {
             <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
+                {/* Group header row */}
                 <tr style={{ backgroundColor: theme.background }}>
-                  {['Nozzle', 'Fuel Type', 'Elect. Open', ...(priceChangeDetected ? ['Changeover'] : []), 'Elect. Close', 'Volume (L)', 'Mech. Open', 'Mech. Close', 'Deviation'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
-                      style={{ color: theme.textSecondary }}>{h}</th>
-                  ))}
+                  <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Nozzle</th>
+                  <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Fuel</th>
+                  <th colSpan={priceChangeDetected ? 4 : 3} className="px-3 py-1 text-center text-xs font-semibold uppercase" style={{ color: theme.primary, borderBottomColor: theme.primary, borderBottomWidth: 2 }}>Electronic</th>
+                  <th colSpan={3} className="px-3 py-1 text-center text-xs font-semibold uppercase" style={{ color: 'var(--color-status-warning)', borderBottomColor: 'var(--color-status-warning)', borderBottomWidth: 2 }}>Mechanical</th>
+                  <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Deviation</th>
+                </tr>
+                {/* Sub-header row */}
+                <tr style={{ backgroundColor: theme.background }}>
+                  <th className="px-3 py-1 text-left text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Open</th>
+                  {priceChangeDetected && <th className="px-3 py-1 text-left text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Changeover</th>}
+                  <th className="px-3 py-1 text-left text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Close</th>
+                  <th className="px-3 py-1 text-left text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Volume</th>
+                  <th className="px-3 py-1 text-left text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Open</th>
+                  <th className="px-3 py-1 text-left text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Close</th>
+                  <th className="px-3 py-1 text-left text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Volume</th>
                 </tr>
               </thead>
               <tbody>
@@ -1108,6 +1120,12 @@ export default function MyShift() {
                           </div>
                         )}
                       </td>
+                      {/* Mechanical Volume */}
+                      <td className="px-3 py-2 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
+                        {comp.mechValid && row.mechanical_closing !== ''
+                          ? comp.mechVolume.toLocaleString(undefined, { minimumFractionDigits: 3 })
+                          : '-'}
+                      </td>
                       <td className="px-3 py-2 text-right font-mono text-xs whitespace-nowrap" style={{
                         color: comp.flagged || comp.lossExceedsThreshold ? 'var(--color-status-error)' : theme.textSecondary,
                         fontWeight: comp.flagged || comp.lossExceedsThreshold ? 600 : 400,
@@ -1124,7 +1142,7 @@ export default function MyShift() {
                     {/* Inline deviation warning + mandatory note */}
                     {(comp.flagged || comp.lossExceedsThreshold) && comp.mechValid && row.closing_reading !== '' && (
                       <tr style={{ backgroundColor: 'rgba(239,83,80,0.05)' }}>
-                        <td colSpan={8} className="px-3 py-2">
+                        <td colSpan={priceChangeDetected ? 11 : 10} className="px-3 py-2">
                           <div className="flex items-start gap-3">
                             <div className="text-xs font-semibold text-status-error whitespace-nowrap pt-1">
                               {comp.lossExceedsThreshold
@@ -1514,10 +1532,17 @@ export default function MyShift() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
-                  {['Nozzle', 'Fuel Type', 'Elect. Open', 'Elect. Close', 'Volume (L)', 'Mech. Vol (L)', 'Deviation'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
-                      style={{ color: theme.textSecondary }}>{h}</th>
-                  ))}
+                  <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Nozzle</th>
+                  <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Fuel</th>
+                  <th colSpan={3} className="px-3 py-1 text-center text-xs font-semibold uppercase" style={{ color: theme.primary, borderBottomColor: theme.primary, borderBottomWidth: 2 }}>Electronic</th>
+                  <th colSpan={1} className="px-3 py-1 text-center text-xs font-semibold uppercase" style={{ color: 'var(--color-status-warning)', borderBottomColor: 'var(--color-status-warning)', borderBottomWidth: 2 }}>Mechanical</th>
+                  <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Deviation</th>
+                </tr>
+                <tr style={{ backgroundColor: theme.background }}>
+                  <th className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Open</th>
+                  <th className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Close</th>
+                  <th className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Volume</th>
+                  <th className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Volume</th>
                 </tr>
               </thead>
               <tbody>
@@ -1883,10 +1908,18 @@ export default function MyShift() {
               <table className="min-w-full text-sm mb-4">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
-                    {['Nozzle', 'Fuel', 'Elect. Open', 'Elect. Close', 'Volume (L)', 'Mech. Vol', 'Deviation', 'Revenue (ZMW)'].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
-                        style={{ color: theme.textSecondary }}>{h}</th>
-                    ))}
+                    <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Nozzle</th>
+                    <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Fuel</th>
+                    <th colSpan={3} className="px-3 py-1 text-center text-xs font-semibold uppercase" style={{ color: theme.primary, borderBottomColor: theme.primary, borderBottomWidth: 2 }}>Electronic</th>
+                    <th colSpan={1} className="px-3 py-1 text-center text-xs font-semibold uppercase" style={{ color: 'var(--color-status-warning)', borderBottomColor: 'var(--color-status-warning)', borderBottomWidth: 2 }}>Mechanical</th>
+                    <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Deviation</th>
+                    <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Revenue</th>
+                  </tr>
+                  <tr style={{ backgroundColor: theme.background }}>
+                    <th className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Open</th>
+                    <th className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Close</th>
+                    <th className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Volume</th>
+                    <th className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Volume</th>
                   </tr>
                 </thead>
                 <tbody>
