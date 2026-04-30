@@ -128,6 +128,14 @@ def get_shift_deposits(shift_id: str, ctx: dict = Depends(require_supervisor_or_
             aid = assignment.get("attendant_id", "")
             aname = assignment.get("attendant_name", "")
             if aid not in by_attendant:
+                # No deposits yet — only mark overdue if shift has been active long enough
+                shift_start = shift.get("created_at")
+                minutes_on_shift = 0
+                if shift_start:
+                    try:
+                        minutes_on_shift = (now - datetime.fromisoformat(shift_start)).total_seconds() / 60
+                    except (ValueError, KeyError):
+                        pass
                 by_attendant[aid] = {
                     "attendant_id": aid,
                     "attendant_name": aname,
@@ -135,7 +143,7 @@ def get_shift_deposits(shift_id: str, ctx: dict = Depends(require_supervisor_or_
                     "count": 0,
                     "total": 0.0,
                     "last_deposit_time": None,
-                    "overdue": True,
+                    "overdue": minutes_on_shift > DEPOSIT_INTERVAL_MINUTES,
                     "max_gap_minutes": None,
                 }
 
@@ -161,7 +169,19 @@ def get_shift_deposits(shift_id: str, ctx: dict = Depends(require_supervisor_or_
                 except (ValueError, KeyError):
                     pass
 
-            info["overdue"] = max_gap > DEPOSIT_INTERVAL_MINUTES if deposits else True
+            if deposits:
+                info["overdue"] = max_gap > DEPOSIT_INTERVAL_MINUTES
+            else:
+                # No deposits — use shift start time as reference
+                shift_start = shift.get("created_at")
+                if shift_start:
+                    try:
+                        minutes_on_shift = (now - datetime.fromisoformat(shift_start)).total_seconds() / 60
+                        info["overdue"] = minutes_on_shift > DEPOSIT_INTERVAL_MINUTES
+                    except (ValueError, KeyError):
+                        info["overdue"] = False
+                else:
+                    info["overdue"] = False
             info["max_gap_minutes"] = round(max_gap, 1) if deposits else None
 
         # Create notifications for overdue attendants
@@ -200,8 +220,10 @@ def get_my_deposits(shift_id: str, ctx: dict = Depends(get_station_context)):
     total = sum(d["amount"] for d in my_deposits)
 
     # Check if overdue — gap between consecutive deposits or from last deposit to now
+    # Only overdue if attendant has been on shift longer than the threshold
     overdue = False
     max_gap = 0
+    now = datetime.now()
     sorted_deps = sorted(my_deposits, key=lambda d: d.get("timestamp", ""))
     if len(sorted_deps) >= 2:
         for i in range(1, len(sorted_deps)):
@@ -215,13 +237,25 @@ def get_my_deposits(shift_id: str, ctx: dict = Depends(get_station_context)):
     if sorted_deps:
         try:
             last_dt = datetime.fromisoformat(sorted_deps[-1]["timestamp"])
-            gap_to_now = (datetime.now() - last_dt).total_seconds() / 60
+            gap_to_now = (now - last_dt).total_seconds() / 60
             max_gap = max(max_gap, gap_to_now)
         except (ValueError, KeyError):
             pass
         overdue = max_gap > DEPOSIT_INTERVAL_MINUTES
     else:
-        overdue = True  # No deposits at all
+        # No deposits yet — only overdue if shift has been active for longer than the threshold
+        storage = ctx["storage"]
+        shift = storage.get('shifts', {}).get(shift_id, {})
+        shift_start = shift.get("created_at")
+        if shift_start:
+            try:
+                start_dt = datetime.fromisoformat(shift_start)
+                minutes_on_shift = (now - start_dt).total_seconds() / 60
+                overdue = minutes_on_shift > DEPOSIT_INTERVAL_MINUTES
+            except (ValueError, KeyError):
+                overdue = False
+        else:
+            overdue = False
 
     return {
         "shift_id": shift_id,
