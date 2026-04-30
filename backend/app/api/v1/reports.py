@@ -15,10 +15,77 @@ from datetime import datetime
 router = APIRouter()
 
 
+def _load_readings_from_handovers(station_id: str, storage: dict) -> list:
+    """
+    Load all completed/approved handovers and flatten nozzle summaries into
+    the record format expected by the reporting service.
+
+    Each handover nozzle summary becomes a record with fields:
+        nozzle_id, fuel_type, volume, total_amount, attendant, staff_name,
+        date, shift_id, shift_type, island_id,
+        electronic_opening, electronic_closing,
+        mechanical_opening, mechanical_closing,
+        timestamp
+    """
+    handovers = load_station_json(station_id, 'attendant_handovers.json', default={})
+    islands_data = storage.get('islands', {})
+
+    # Build nozzle→island lookup
+    nozzle_to_island = {}
+    for island_id, island in islands_data.items():
+        ps = island.get('pump_station')
+        if ps:
+            for nozzle in ps.get('nozzles', []):
+                nozzle_to_island[nozzle.get('nozzle_id')] = island_id
+
+    records = []
+    for ho in handovers.values():
+        # Only include completed handovers (not readings_verified or superseded)
+        phase = ho.get('phase', 'completed')
+        if phase not in ('completed',):
+            continue
+
+        attendant_name = ho.get('attendant_name', '')
+        date = ho.get('date', '')
+        shift_id = ho.get('shift_id', '')
+        shift_type = ho.get('shift_type', '')
+        timestamp = ho.get('created_at', '')
+
+        for ns in ho.get('nozzle_summaries', []):
+            records.append({
+                'nozzle_id': ns.get('nozzle_id', ''),
+                'fuel_type': ns.get('fuel_type', ''),
+                'product_type': ns.get('fuel_type', ''),
+                'volume': ns.get('volume_sold', 0),
+                'total_amount': ns.get('revenue', 0),
+                'attendant': attendant_name,
+                'staff_name': attendant_name,
+                'user': attendant_name,
+                'date': date,
+                'shift_id': shift_id,
+                'shift_type': shift_type,
+                'island_id': nozzle_to_island.get(ns.get('nozzle_id', ''), ''),
+                'electronic_opening': ns.get('opening_reading', 0),
+                'electronic_closing': ns.get('closing_reading', 0),
+                'mechanical_opening': ns.get('mechanical_opening', 0),
+                'mechanical_closing': ns.get('mechanical_closing', 0),
+                'timestamp': timestamp,
+            })
+
+    return records
+
+
 def _build_reporting_service(storage: dict, station_id: str = "") -> ReportingService:
     """Build a ReportingService from station storage data"""
     recons = _get_reconciliations(station_id, storage) if station_id else storage.get('reconciliations_data', [])
-    # Get fuel prices for revenue computation (check both settings locations)
+
+    # Load readings from handovers (source of truth) + any legacy storage['readings']
+    handover_records = _load_readings_from_handovers(station_id, storage) if station_id else []
+    legacy_readings = storage.get('readings', [])
+    # Merge: handover records are authoritative, legacy readings fill gaps
+    all_readings = handover_records + legacy_readings
+
+    # Get fuel prices for revenue computation
     fuel_settings = storage.get('fuel_settings', {})
     settings = storage.get('settings', {})
     fuel_prices = {}
@@ -27,8 +94,8 @@ def _build_reporting_service(storage: dict, station_id: str = "") -> ReportingSe
     if dp: fuel_prices['Diesel'] = dp
     if pp: fuel_prices['Petrol'] = pp
     return ReportingService(
-        sales_data=storage.get('readings', []),
-        readings_data=storage.get('readings', []),
+        sales_data=all_readings,
+        readings_data=all_readings,
         shifts_data=list(storage.get('shifts', {}).values()),
         reconciliations_data=recons,
         islands_data=storage.get('islands', {}),
@@ -38,12 +105,20 @@ def _build_reporting_service(storage: dict, station_id: str = "") -> ReportingSe
 
 def _build_relational_service(storage: dict, station_id: str = "") -> RelationalQueryService:
     """Build a RelationalQueryService from station storage data"""
+    # Load readings from handovers (source of truth) + legacy
+    handover_records = _load_readings_from_handovers(station_id, storage) if station_id else []
+    legacy_readings = storage.get('readings', [])
+    all_readings = handover_records + legacy_readings
+
     # Flatten nozzles from islands
     nozzles_list = []
     for island_id, island_data in storage.get('islands', {}).items():
         pump_station = island_data.get('pump_station', {})
         if pump_station and pump_station.get('nozzles'):
-            for nozzle in pump_station['nozzles'].values():
+            nozzles = pump_station['nozzles']
+            if isinstance(nozzles, dict):
+                nozzles = list(nozzles.values())
+            for nozzle in nozzles:
                 nozzles_list.append(nozzle)
 
     # Flatten islands
@@ -52,8 +127,8 @@ def _build_relational_service(storage: dict, station_id: str = "") -> Relational
     recons = _get_reconciliations(station_id, storage) if station_id else storage.get('reconciliations_data', [])
 
     return RelationalQueryService({
-        'sales': storage.get('readings', []),
-        'readings': storage.get('readings', []),
+        'sales': all_readings,
+        'readings': all_readings,
         'shifts': list(storage.get('shifts', {}).values()),
         'reconciliations': recons,
         'nozzles': nozzles_list,
@@ -107,14 +182,12 @@ def get_all_staff_names(
     storage = ctx["storage"]
     service = _build_reporting_service(storage, ctx["station_id"])
 
-    readings = storage.get('readings', [])
-
-    # Filter data by date if provided
-    data = readings.copy()
+    # Use service's readings_data (loaded from handovers)
+    data = service.readings_data
     if start_date and end_date:
         data = service.filter_by_date_range(start_date, end_date, data)
 
-    # Extract unique staff names from readings
+    # Extract unique staff names
     staff_names = set()
     for record in data:
         name = record.get('staff_name') or record.get('attendant') or record.get('user')
@@ -200,14 +273,11 @@ def get_all_nozzle_ids(
     storage = ctx["storage"]
     service = _build_reporting_service(storage, ctx["station_id"])
 
-    readings = storage.get('readings', [])
-
-    # Filter data by date if provided
-    data = readings.copy()
+    data = service.readings_data
     if start_date and end_date:
         data = service.filter_by_date_range(start_date, end_date, data)
 
-    # Extract unique nozzle IDs from readings
+    # Extract unique nozzle IDs
     nozzle_ids = set()
     for record in data:
         nozzle_id = record.get('nozzle_id')
@@ -296,24 +366,16 @@ def get_all_island_ids(
     storage = ctx["storage"]
     service = _build_reporting_service(storage, ctx["station_id"])
 
-    readings = storage.get('readings', [])
-
-    # Filter data by date if provided
-    data = readings.copy()
+    data = service.readings_data
     if start_date and end_date:
         data = service.filter_by_date_range(start_date, end_date, data)
 
-    # Extract unique island IDs from readings
+    # Extract unique island IDs
     island_ids = set()
     for record in data:
         island_id = record.get('island_id')
         if island_id:
             island_ids.add(island_id)
-        nozzle_id = record.get('nozzle_id', '')
-        if 'ISLAND' in nozzle_id.upper():
-            parts = nozzle_id.split('-')
-            if len(parts) >= 2:
-                island_ids.add(f"{parts[0]}-{parts[1]}")
 
     # Fallback: if no readings data, get from configured islands
     if not island_ids:
@@ -394,14 +456,11 @@ def get_all_product_types(
     storage = ctx["storage"]
     service = _build_reporting_service(storage, ctx["station_id"])
 
-    readings = storage.get('readings', [])
-
-    # Filter data by date if provided
-    data = readings.copy()
+    data = service.readings_data
     if start_date and end_date:
         data = service.filter_by_date_range(start_date, end_date, data)
 
-    # Extract unique product types from readings
+    # Extract unique product types
     product_types = set()
     for record in data:
         product = record.get('product_type') or record.get('fuel_type')
