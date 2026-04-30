@@ -135,25 +135,36 @@ async def restock_accessory(product_code: str, quantity: int, ctx: dict = Depend
 @router.get("/summary/shift/{shift_id}")
 async def get_lpg_shift_summary(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
-    Get complete LPG summary for a shift (gas + accessories)
+    Get complete LPG summary for a shift (gas + accessories) from handover data.
     """
-    storage = ctx["storage"]
-    lpg_sales_data = storage.get('lpg_sales', [])
-    accessories_sales_data = storage.get('accessories_sales', [])
+    from ...database.station_files import load_station_json
+    station_id = ctx["station_id"]
+    handovers = load_station_json(station_id, 'attendant_handovers.json', default={})
 
-    # LPG gas sales
-    gas_sales = [sale for sale in lpg_sales_data if sale["shift_id"] == shift_id]
-    gas_revenue = sum(sale["total_amount"] for sale in gas_sales)
+    lpg_revenue = 0.0
+    acc_revenue = 0.0
+    lub_revenue = 0.0
+    lpg_count = 0
+    acc_count = 0
 
-    # Accessory sales
-    acc_sales = [sale for sale in accessories_sales_data if sale["shift_id"] == shift_id]
-    acc_revenue = sum(sale["total_amount"] for sale in acc_sales)
+    for ho in handovers.values():
+        if ho.get('shift_id') != shift_id:
+            continue
+        if ho.get('phase', 'completed') != 'completed':
+            continue
+        lpg_revenue += ho.get('lpg_sales', 0)
+        acc_revenue += ho.get('accessory_sales', 0)
+        lub_revenue += ho.get('lubricant_sales', 0)
+        snapshot = ho.get('stock_snapshot') or {}
+        lpg_count += len(snapshot.get('lpg_cylinders', []))
+        acc_count += len(snapshot.get('accessories', []))
 
     return {
         "shift_id": shift_id,
-        "lpg_gas_sales_count": len(gas_sales),
-        "lpg_gas_revenue": gas_revenue,
-        "accessories_sales_count": len(acc_sales),
-        "accessories_revenue": acc_revenue,
-        "total_lpg_revenue": gas_revenue + acc_revenue
+        "lpg_gas_sales_count": lpg_count,
+        "lpg_gas_revenue": round(lpg_revenue, 2),
+        "accessories_sales_count": acc_count,
+        "accessories_revenue": round(acc_revenue, 2),
+        "lubricant_revenue": round(lub_revenue, 2),
+        "total_lpg_revenue": round(lpg_revenue + acc_revenue, 2)
     }

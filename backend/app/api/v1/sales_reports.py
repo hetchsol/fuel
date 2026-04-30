@@ -1,12 +1,10 @@
 """
 Sales Reports API
-Provides sales analytics and reporting
+Provides sales analytics and reporting from handover data (source of truth)
 """
 
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict
-import json
-import os
 from collections import defaultdict
 
 from .auth import get_station_context
@@ -15,77 +13,73 @@ from ...database.station_files import load_station_json
 router = APIRouter()
 
 
-def load_sales(station_id: str) -> List[dict]:
-    """Load sales from station-specific storage"""
-    return load_station_json(station_id, 'sales.json', default=[])
+def _load_fuel_sales_from_handovers(station_id: str, storage: dict) -> List[dict]:
+    """
+    Load fuel sales data from completed handovers (source of truth).
+    Each handover nozzle summary becomes a sale record.
+    """
+    handovers = load_station_json(station_id, 'attendant_handovers.json', default={})
+    sales = []
+    for ho in handovers.values():
+        if ho.get('phase', 'completed') != 'completed':
+            continue
+        date = ho.get('date', '')
+        shift_id = ho.get('shift_id', '')
+        shift_type = ho.get('shift_type', '')
+        attendant = ho.get('attendant_name', '')
+        for ns in ho.get('nozzle_summaries', []):
+            sales.append({
+                'date': date,
+                'shift_id': shift_id,
+                'shift_type': shift_type,
+                'attendant': attendant,
+                'nozzle_id': ns.get('nozzle_id', ''),
+                'fuel_type': ns.get('fuel_type', ''),
+                'volume': ns.get('volume_sold', 0),
+                'total_amount': ns.get('revenue', 0),
+                'price_per_liter': ns.get('price_per_liter', 0),
+            })
+    return sales
 
 
 @router.get("/daily/{date}")
 def get_daily_sales_report(date: str, ctx: dict = Depends(get_station_context)):
     """
-    Get daily sales report for a specific date
-
-    Args:
-        date: Date in format YYYY-MM-DD (e.g., 2025-12-19)
-
-    Returns:
-        Summary of sales by fuel type for the date
+    Get daily sales report for a specific date from handover data.
     """
     try:
-        sales = load_sales(ctx["station_id"])
-
-        # Filter sales for the specific date
+        sales = _load_fuel_sales_from_handovers(ctx["station_id"], ctx["storage"])
         daily_sales = [s for s in sales if s.get("date") == date]
 
+        empty_fuel = {"total_volume": 0, "total_amount": 0, "sales_count": 0, "shifts": []}
         if not daily_sales:
             return {
-                "date": date,
-                "total_sales": 0,
-                "diesel": {
-                    "total_volume": 0,
-                    "total_amount": 0,
-                    "sales_count": 0,
-                    "shifts": []
-                },
-                "petrol": {
-                    "total_volume": 0,
-                    "total_amount": 0,
-                    "sales_count": 0,
-                    "shifts": []
-                },
-                "summary": {
-                    "total_volume": 0,
-                    "total_revenue": 0,
-                    "total_transactions": 0
-                }
+                "date": date, "total_sales": 0,
+                "diesel": {**empty_fuel}, "petrol": {**empty_fuel},
+                "summary": {"total_volume": 0, "total_revenue": 0, "total_transactions": 0}
             }
 
-        # Group by fuel type
         diesel_sales = [s for s in daily_sales if s.get("fuel_type") == "Diesel"]
         petrol_sales = [s for s in daily_sales if s.get("fuel_type") == "Petrol"]
 
-        # Calculate totals
-        diesel_volume = sum(s.get("average_volume", 0) for s in diesel_sales)
+        diesel_volume = sum(s.get("volume", 0) for s in diesel_sales)
         diesel_amount = sum(s.get("total_amount", 0) for s in diesel_sales)
-
-        petrol_volume = sum(s.get("average_volume", 0) for s in petrol_sales)
+        petrol_volume = sum(s.get("volume", 0) for s in petrol_sales)
         petrol_amount = sum(s.get("total_amount", 0) for s in petrol_sales)
 
-        report = {
+        return {
             "date": date,
             "diesel": {
                 "total_volume": round(diesel_volume, 2),
                 "total_amount": round(diesel_amount, 2),
                 "sales_count": len(diesel_sales),
-                "shifts": [s.get("shift_id") for s in diesel_sales],
-                "sales": diesel_sales
+                "shifts": list(set(s.get("shift_id") for s in diesel_sales)),
             },
             "petrol": {
                 "total_volume": round(petrol_volume, 2),
                 "total_amount": round(petrol_amount, 2),
                 "sales_count": len(petrol_sales),
-                "shifts": [s.get("shift_id") for s in petrol_sales],
-                "sales": petrol_sales
+                "shifts": list(set(s.get("shift_id") for s in petrol_sales)),
             },
             "summary": {
                 "total_volume": round(diesel_volume + petrol_volume, 2),
@@ -94,8 +88,6 @@ def get_daily_sales_report(date: str, ctx: dict = Depends(get_station_context)):
             }
         }
 
-        return report
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
 
@@ -103,30 +95,23 @@ def get_daily_sales_report(date: str, ctx: dict = Depends(get_station_context)):
 @router.get("/summary")
 def get_sales_summary(ctx: dict = Depends(get_station_context)):
     """
-    Get overall sales summary across all dates
+    Get overall sales summary across all dates from handover data.
     """
     try:
-        sales = load_sales(ctx["station_id"])
+        sales = _load_fuel_sales_from_handovers(ctx["station_id"], ctx["storage"])
 
         if not sales:
-            return {
-                "total_sales": 0,
-                "dates": [],
-                "fuel_types": {}
-            }
+            return {"total_sales": 0, "dates": [], "fuel_types": {},
+                    "total_revenue": 0, "total_volume": 0}
 
-        # Group by date
         by_date = defaultdict(list)
         for sale in sales:
-            date = sale.get("date", "unknown")
-            by_date[date].append(sale)
+            by_date[sale.get("date", "unknown")].append(sale)
 
-        # Summary by date
         date_summaries = []
         for date, date_sales in by_date.items():
-            total_volume = sum(s.get("average_volume", 0) for s in date_sales)
+            total_volume = sum(s.get("volume", 0) for s in date_sales)
             total_amount = sum(s.get("total_amount", 0) for s in date_sales)
-
             date_summaries.append({
                 "date": date,
                 "total_volume": round(total_volume, 2),
@@ -134,14 +119,13 @@ def get_sales_summary(ctx: dict = Depends(get_station_context)):
                 "transaction_count": len(date_sales)
             })
 
-        # Sort by date descending
         date_summaries.sort(key=lambda x: x["date"], reverse=True)
 
         return {
             "total_sales": len(sales),
             "dates": date_summaries,
             "total_revenue": round(sum(s.get("total_amount", 0) for s in sales), 2),
-            "total_volume": round(sum(s.get("average_volume", 0) for s in sales), 2)
+            "total_volume": round(sum(s.get("volume", 0) for s in sales), 2)
         }
 
     except Exception as e:
