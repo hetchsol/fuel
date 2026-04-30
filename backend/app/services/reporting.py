@@ -255,8 +255,8 @@ class ReportingService:
                 'total_readings': len(staff_readings)
             },
             'product_breakdown': dict(product_breakdown),
-            'sales': staff_sales[:50],  # Latest 50 sales
-            'readings': staff_readings[:50]  # Latest 50 readings
+            'sales': staff_sales,
+            'readings': staff_readings
         }
 
     def generate_nozzle_report(
@@ -485,7 +485,7 @@ class ReportingService:
                 'days_with_data': num_days
             },
             'daily_breakdown': dict(daily_breakdown),
-            'sales': product_sales[:100]  # Latest 100 sales
+            'sales': product_sales
         }
 
     def generate_multi_filter_report(

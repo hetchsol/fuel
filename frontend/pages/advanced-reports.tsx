@@ -210,12 +210,40 @@ export default function AdvancedReports() {
     if (!reportData) return null
 
     const reportLabel = reportTypes.find(r => r.value === reportType)?.label || 'Report'
+    const periodStr = `${reportData.period?.start_date || 'All'} to ${reportData.period?.end_date || 'All'}`
+
+    // Staff report — export all sales records (not just product breakdown)
+    if (reportData.staff_name && reportData.sales) {
+      return {
+        title: `Staff Performance Report — ${reportData.staff_name}`,
+        subtitle: periodStr,
+        filename: `staff_report_${reportData.staff_name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}`,
+        summaryCards: reportData.summary ? Object.entries(reportData.summary).map(([k, v]) => ({
+          label: k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          value: typeof v === 'number' ? (k.includes('revenue') ? formatCurrency(v) : v.toLocaleString()) : String(v),
+        })) : [],
+        columns: [
+          { header: 'Date', key: 'date' },
+          { header: 'Shift', key: 'shift_type' },
+          { header: 'Shift ID', key: 'shift_id' },
+          { header: 'Nozzle', key: 'nozzle_id' },
+          { header: 'Fuel Type', key: 'fuel_type' },
+          { header: 'Elec Open', key: 'electronic_opening', format: 'number' },
+          { header: 'Elec Close', key: 'electronic_closing', format: 'number' },
+          { header: 'Mech Open', key: 'mechanical_opening', format: 'number' },
+          { header: 'Mech Close', key: 'mechanical_closing', format: 'number' },
+          { header: 'Volume (L)', key: 'volume', format: 'number' },
+          { header: 'Revenue (ZMW)', key: 'total_amount', format: 'currency' },
+        ],
+        data: reportData.sales,
+      }
+    }
 
     // Nozzle shift breakdown
     if (reportData.shift_breakdown) {
       return {
         title: `Nozzle Report — ${reportData.nozzle_id || ''}`,
-        subtitle: `${reportData.fuel_type || ''} | ${reportData.period?.start_date || 'All'} to ${reportData.period?.end_date || 'All'}`,
+        subtitle: `${reportData.fuel_type || ''} | ${periodStr}`,
         filename: `nozzle_report_${reportData.nozzle_id || 'all'}_${new Date().toISOString().slice(0,10)}`,
         summaryCards: [
           { label: 'Total Volume', value: `${reportData.summary?.total_volume?.toLocaleString()} L` },
@@ -238,14 +266,36 @@ export default function AdvancedReports() {
       }
     }
 
-    // Product breakdown
+    // Product report — export all sales records
+    if (reportData.product_type && reportData.sales) {
+      return {
+        title: `Product Report — ${reportData.product_type}`,
+        subtitle: periodStr,
+        filename: `product_report_${reportData.product_type}_${new Date().toISOString().slice(0,10)}`,
+        summaryCards: reportData.summary ? Object.entries(reportData.summary).map(([k, v]) => ({
+          label: k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          value: typeof v === 'number' ? (k.includes('revenue') ? formatCurrency(v) : v.toLocaleString()) : String(v),
+        })) : [],
+        columns: [
+          { header: 'Date', key: 'date' },
+          { header: 'Shift', key: 'shift_type' },
+          { header: 'Attendant', key: 'attendant' },
+          { header: 'Nozzle', key: 'nozzle_id' },
+          { header: 'Volume (L)', key: 'volume', format: 'number' },
+          { header: 'Revenue (ZMW)', key: 'total_amount', format: 'currency' },
+        ],
+        data: reportData.sales,
+      }
+    }
+
+    // Product breakdown (island report, etc.)
     if (reportData.product_breakdown) {
       const rows = Object.entries(reportData.product_breakdown).map(([product, d]: [string, any]) => ({
         product, transactions: d.transactions || d.count || 0, revenue: d.revenue || 0, volume: d.volume || 0,
       }))
       return {
         title: reportLabel,
-        subtitle: `${reportData.period?.start_date || reportData.date || 'All'} to ${reportData.period?.end_date || reportData.date || 'All'}`,
+        subtitle: periodStr,
         filename: `${reportType}_report_${new Date().toISOString().slice(0,10)}`,
         summaryCards: reportData.summary ? Object.entries(reportData.summary).map(([k, v]) => ({
           label: k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
