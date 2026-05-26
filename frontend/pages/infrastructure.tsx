@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getHeaders, authFetch, isManagerOrAbove } from '../lib/api'
+import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -59,7 +59,6 @@ export default function Infrastructure() {
   const [islands, setIslands] = useState<Island[]>([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [userRole, setUserRole] = useState<string>('')
 
   // Island display-name edit state
   const [editingIslandName, setEditingIslandName] = useState<string | null>(null)
@@ -87,15 +86,7 @@ export default function Infrastructure() {
   useEffect(() => {
     fetchTanks()
     fetchIslands()
-    try {
-      const userData = localStorage.getItem('user')
-      if (userData) setUserRole(JSON.parse(userData).role || '')
-    } catch {
-      /* ignore malformed user payload */
-    }
   }, [])
-
-  const canEditIslandName = isManagerOrAbove(userRole)
 
   const fetchTanks = async () => {
     try {
@@ -744,20 +735,23 @@ export default function Infrastructure() {
                         </button>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2">
                         <h3 className="text-base font-bold text-content-primary truncate">{island.name}</h3>
-                        {canEditIslandName && (
-                          <button
-                            onClick={() => {
-                              setEditingIslandName(island.island_id)
-                              setIslandNameDraft(island.name)
-                            }}
-                            title="Rename island"
-                            className="shrink-0 text-xs text-action-primary hover:text-action-primary font-semibold underline"
-                          >
-                            Edit
-                          </button>
-                        )}
+                        {/* Rename control — the Infrastructure page is already
+                            restricted to owners (and the backend endpoint enforces
+                            manager/owner), so the button is always shown here. */}
+                        <button
+                          onClick={() => {
+                            setEditingIslandName(island.island_id)
+                            setIslandNameDraft(island.name)
+                          }}
+                          title="Rename island"
+                          aria-label="Rename island"
+                          className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-action-primary text-action-primary text-xs font-semibold hover:bg-action-primary-light"
+                        >
+                          <span aria-hidden="true">✎</span>
+                          Rename
+                        </button>
                       </div>
                     )}
                     <p className="text-xs text-content-secondary">{island.island_id}</p>

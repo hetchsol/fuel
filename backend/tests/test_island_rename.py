@@ -1,7 +1,7 @@
 """
 Tests for renaming an island's display name.
 
-Endpoint: PUT /api/v1/islands/{island_id}/name  (Manager/Owner only)
+Endpoint: PUT /api/v1/islands/{island_id}/name  (Owner only)
 
 These confirm the rename is purely a display-name change and is correctly
 role-gated. They do NOT exercise naming-convention / reconciliation logic,
