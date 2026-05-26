@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getHeaders, authFetch } from '../lib/api'
+import { getHeaders, authFetch, isManagerOrAbove } from '../lib/api'
 
 const BASE = '/api/v1'
 
@@ -59,6 +59,11 @@ export default function Infrastructure() {
   const [islands, setIslands] = useState<Island[]>([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [userRole, setUserRole] = useState<string>('')
+
+  // Island display-name edit state
+  const [editingIslandName, setEditingIslandName] = useState<string | null>(null)
+  const [islandNameDraft, setIslandNameDraft] = useState<string>('')
 
   // Tank capacity edit state
   const [editingTank, setEditingTank] = useState<string | null>(null)
@@ -82,7 +87,15 @@ export default function Infrastructure() {
   useEffect(() => {
     fetchTanks()
     fetchIslands()
+    try {
+      const userData = localStorage.getItem('user')
+      if (userData) setUserRole(JSON.parse(userData).role || '')
+    } catch {
+      /* ignore malformed user payload */
+    }
   }, [])
+
+  const canEditIslandName = isManagerOrAbove(userRole)
 
   const fetchTanks = async () => {
     try {
@@ -185,6 +198,36 @@ export default function Infrastructure() {
       }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'Network error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const renameIsland = async (islandId: string) => {
+    const name = islandNameDraft.trim()
+    if (!name) {
+      setMessage({ type: 'error', text: 'Island name cannot be empty' })
+      return
+    }
+    setLoading(true)
+    setMessage(null)
+    try {
+      const res = await authFetch(`${BASE}/islands/${islandId}/name`, {
+        method: 'PUT',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (res.ok) {
+        setMessage({ type: 'success', text: `Island renamed to "${name}"` })
+        setEditingIslandName(null)
+        fetchIslands()
+        setTimeout(() => setMessage(null), 4000)
+      } else {
+        const error = await res.json()
+        setMessage({ type: 'error', text: error.detail || 'Failed to rename island' })
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'Network error' })
     } finally {
       setLoading(false)
     }
@@ -354,7 +397,7 @@ export default function Infrastructure() {
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-content-primary">Infrastructure Management</h1>
-        <p className="mt-2 text-sm text-content-secondary">Manage tanks, islands, pumps, and nozzles (Owner Only)</p>
+        <p className="mt-2 text-sm text-content-secondary">Manage tanks, islands, pumps, and nozzles</p>
       </div>
 
       {/* Message Display */}
@@ -670,11 +713,56 @@ export default function Infrastructure() {
               >
                 {/* Header */}
                 <div className="flex justify-between items-center mb-3">
-                  <div>
-                    <h3 className="text-base font-bold text-content-primary">{island.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    {editingIslandName === island.island_id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={islandNameDraft}
+                          onChange={(e) => setIslandNameDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') renameIsland(island.island_id)
+                            if (e.key === 'Escape') setEditingIslandName(null)
+                          }}
+                          maxLength={60}
+                          autoFocus
+                          className="w-full px-2 py-1 text-sm border border-action-primary rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
+                          placeholder="Island name"
+                        />
+                        <button
+                          onClick={() => renameIsland(island.island_id)}
+                          disabled={loading}
+                          className="px-2 py-1 bg-action-primary text-white rounded-md text-xs font-semibold disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingIslandName(null)}
+                          className="px-2 py-1 bg-surface-border text-content-secondary rounded-md text-xs"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="text-base font-bold text-content-primary truncate">{island.name}</h3>
+                        {canEditIslandName && (
+                          <button
+                            onClick={() => {
+                              setEditingIslandName(island.island_id)
+                              setIslandNameDraft(island.name)
+                            }}
+                            title="Rename island"
+                            className="shrink-0 text-xs text-action-primary hover:text-action-primary font-semibold underline"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <p className="text-xs text-content-secondary">{island.island_id}</p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusBadge(island.status)}`}>
+                  <span className={`ml-2 shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusBadge(island.status)}`}>
                     {island.status === 'active' ? 'Active' : 'Inactive'}
                   </span>
                 </div>

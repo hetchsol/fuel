@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from ...models.models import Island, PumpStation, Nozzle, FUEL_TYPE_ABBREVIATIONS, FUEL_TYPE_FROM_ABBREV
 from ...services.naming_convention import compute_display_labels
 from ...config import TANK_ID_PETROL, TANK_ID_DIESEL
-from .auth import get_station_context
+from .auth import get_station_context, require_manager_or_owner
 
 router = APIRouter()
 
@@ -109,6 +109,9 @@ class StatusUpdate(BaseModel):
 
 class ProductUpdate(BaseModel):
     product_type: str  # "Petrol" or "Diesel"
+
+class IslandNameUpdate(BaseModel):
+    name: str  # New human-readable display name for the island
 
 class NozzleLabelUpdate(BaseModel):
     custom_label: Optional[str] = None  # Set to None to clear and use auto-computed label
@@ -260,6 +263,44 @@ async def update_island_status(
     island = islands_data[island_id]
     island["status"] = new_status
     return {"status": "success", "island_id": island_id, "new_status": new_status}
+
+
+@router.put("/{island_id}/name", dependencies=[Depends(require_manager_or_owner)])
+async def update_island_name(
+    island_id: str,
+    body: IslandNameUpdate,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Rename an island's display name (Manager/Owner only).
+
+    This changes ONLY the human-readable `name` shown in the UI. It does not
+    touch product_type, nozzle/tank assignments, status, or the auto-computed
+    display fields (display_number / fuel_type_abbrev / nozzle display_label),
+    so no operational, naming, or reconciliation logic is affected.
+    """
+    storage = ctx["storage"]
+    islands_data = storage.get('islands', {})
+
+    if island_id not in islands_data:
+        raise HTTPException(status_code=404, detail="Island not found")
+
+    new_name = (body.name or "").strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="Island name cannot be empty")
+    if len(new_name) > 60:
+        raise HTTPException(status_code=400, detail="Island name must be 60 characters or fewer")
+
+    island = islands_data[island_id]
+    old_name = island.get("name")
+    island["name"] = new_name
+
+    return {
+        "status": "success",
+        "island_id": island_id,
+        "old_name": old_name,
+        "name": new_name,
+    }
 
 
 @router.put("/{island_id}/product", deprecated=True)
