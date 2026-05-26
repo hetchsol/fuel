@@ -197,13 +197,23 @@ export default function MyShift() {
     authFetch(`${BASE}/handover/my-shifts`, { headers: getAuthHeaders() })
       .then(r => r.ok ? r.json() : { shifts: [] })
       .then(data => {
-        setAvailableShifts(data.shifts || [])
-        // Auto-select the first shift if only one, or the most recent
-        if (data.shifts?.length === 1) {
-          setSelectedShiftId(data.shifts[0].shift_id)
+        const shifts = data.shifts || []
+        setAvailableShifts(shifts)
+        if (shifts.length === 1) {
+          // Single shift: auto-select; loadShiftData() runs via the
+          // selectedShiftId effect and clears the spinner itself.
+          setSelectedShiftId(shifts[0].shift_id)
+        } else if (shifts.length === 0) {
+          // No assigned active shift — surface the empty/supervisor state
+          // instead of spinning forever.
+          setShiftFound(false)
+          setLoading(false)
+        } else {
+          // Multiple active shifts — let the user pick from the dropdown.
+          setLoading(false)
         }
       })
-      .catch(() => {})
+      .catch(() => { setShiftFound(false); setLoading(false) })
   }, [])
 
   // Load shift data when selectedShiftId changes

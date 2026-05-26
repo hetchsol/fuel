@@ -314,7 +314,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       roles: ['user', 'supervisor', 'manager', 'owner'],
       children: [
         { path: '/my-shift', label: 'Readings Verification', roles: ['user', 'supervisor'] },
-        { path: '/shift-closing', label: 'Shift Closing', roles: ['user', 'supervisor', 'manager', 'owner'] },
+        { path: '/shift-closing', label: 'Close Shift', roles: ['user', 'supervisor', 'manager', 'owner'] },
       ]
     },
     {

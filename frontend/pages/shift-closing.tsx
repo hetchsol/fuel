@@ -62,11 +62,16 @@ export default function ShiftClosing() {
     authFetch(`${BASE}/handover/my-shifts`, { headers: getAuthHeaders() })
       .then(r => r.ok ? r.json() : { shifts: [] })
       .then(data => {
-        setAvailableShifts(data.shifts || [])
-        if (data.shifts?.length === 1) {
-          setSelectedShiftId(data.shifts[0].shift_id)
-        } else if (data.shifts?.length === 0) {
-          setError('No active shift found.')
+        const shifts = data.shifts || []
+        setAvailableShifts(shifts)
+        if (shifts.length === 1) {
+          // Single shift: auto-select; loadData() runs via the selectedShiftId
+          // effect and clears the spinner itself.
+          setSelectedShiftId(shifts[0].shift_id)
+        } else {
+          // 0 shifts (nothing to close) or 2+ (awaiting a dropdown pick): there's
+          // no shift to auto-load, so stop the spinner rather than hang forever.
+          if (shifts.length === 0) setError('No active shift found.')
           setLoading(false)
         }
       })
@@ -185,7 +190,7 @@ export default function ShiftClosing() {
       <div className="mb-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Shift Closing</h1>
+            <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Close Shift</h1>
             <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
               {result ? 'Shift closing submitted' : 'Financial reconciliation — verify cash, POS, and credit sales'}
             </p>
