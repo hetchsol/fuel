@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
+import DoubleEntryModal from '../components/DoubleEntryModal'
 import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
@@ -31,6 +32,10 @@ interface NozzleRow {
   fuel_type_abbrev?: string | null
   deviation_note: string
   changeover_reading: string
+  // Double-entry verification: true once the value has been blind-keyed twice
+  // and the two entries matched 100%.
+  closing_verified: boolean
+  mech_closing_verified: boolean
 }
 
 // Stock count row types
@@ -250,6 +255,8 @@ export default function MyShift() {
             fuel_type_abbrev: n.fuel_type_abbrev,
             deviation_note: '',
             changeover_reading: '',
+            closing_verified: false,
+            mech_closing_verified: false,
           }))
         )
         setMeterThreshold(shiftData.meter_discrepancy_threshold ?? 0.5)
@@ -436,9 +443,11 @@ export default function MyShift() {
   const expectedCash = totalExpected - creditVal
   const difference = actualCashVal - expectedCash
 
-  const allClosingsEntered = nozzleRows.length > 0 && nozzleRows.every(r => r.closing_reading !== '')
+  // Double-entry: a closing reading counts as "entered" only once it has been
+  // blind-keyed twice and verified (not merely typed once).
+  const allClosingsEntered = nozzleRows.length > 0 && nozzleRows.every(r => r.closing_reading !== '' && r.closing_verified)
   const allValid = nozzleComputations.every(c => c.valid || c.volume === 0)
-  const allMechEntered = nozzleRows.every(r => r.mechanical_closing !== '')
+  const allMechEntered = nozzleRows.every(r => r.mechanical_closing !== '' && r.mech_closing_verified)
   const allMechValid = nozzleComputations.every(c => c.mechValid !== false)
   // Stock variance validation: all variances must have notes
   const allStockVarianceNotesProvided = [
@@ -460,21 +469,27 @@ export default function MyShift() {
     && allStockVarianceNotesProvided && noStockOutViolations && !submitting
     && (!hasDeviationFlags || notes.trim() !== '')
 
-  const updateClosingReading = (nozzleId: string, value: string) => {
+  // Which closing reading (if any) is currently being double-entered.
+  const [activeEntry, setActiveEntry] = useState<{ nozzleId: string; field: 'electronic' | 'mechanical' } | null>(null)
+
+  // Commit a closing reading once it has passed the blind double-entry check.
+  // Stores the value verbatim and marks the field verified — downstream volume/
+  // deviation logic is unchanged from when the value was typed directly.
+  const confirmClosingReading = (nozzleId: string, value: string) => {
     setNozzleRows(prev =>
-      prev.map(r => r.nozzle_id === nozzleId ? { ...r, closing_reading: value } : r)
+      prev.map(r => r.nozzle_id === nozzleId ? { ...r, closing_reading: value, closing_verified: true } : r)
+    )
+  }
+
+  const confirmMechClosing = (nozzleId: string, value: string) => {
+    setNozzleRows(prev =>
+      prev.map(r => r.nozzle_id === nozzleId ? { ...r, mechanical_closing: value, mech_closing_verified: true } : r)
     )
   }
 
   const updateOpeningReading = (nozzleId: string, value: string) => {
     setNozzleRows(prev =>
       prev.map(r => r.nozzle_id === nozzleId ? { ...r, opening_reading: parseFloat(value) || 0 } : r)
-    )
-  }
-
-  const updateMechClosing = (nozzleId: string, value: string) => {
-    setNozzleRows(prev =>
-      prev.map(r => r.nozzle_id === nozzleId ? { ...r, mechanical_closing: value } : r)
     )
   }
 
@@ -710,6 +725,28 @@ export default function MyShift() {
 
   return (
     <div>
+      {/* Blind double-entry prompt for a closing reading */}
+      {activeEntry && (() => {
+        const row = nozzleRows.find(r => r.nozzle_id === activeEntry.nozzleId)
+        if (!row) return null
+        const isElectronic = activeEntry.field === 'electronic'
+        const label = row.fuel_type_abbrev && row.display_label
+          ? `${row.fuel_type_abbrev} ${row.display_label}`
+          : row.nozzle_id
+        return (
+          <DoubleEntryModal
+            title={`${label} — ${isElectronic ? 'Electronic' : 'Mechanical'} Closing`}
+            unit="L"
+            minValue={isElectronic ? row.opening_reading : row.mechanical_opening}
+            onConfirm={(value) => {
+              if (isElectronic) confirmClosingReading(activeEntry.nozzleId, value)
+              else confirmMechClosing(activeEntry.nozzleId, value)
+              setActiveEntry(null)
+            }}
+            onCancel={() => setActiveEntry(null)}
+          />
+        )
+      })()}
       <div className="mb-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -1100,18 +1137,20 @@ export default function MyShift() {
                       </td>
                       )}
                       <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          step="0.001"
-                          value={row.closing_reading}
-                          onChange={e => updateClosingReading(row.nozzle_id, e.target.value)}
-                          placeholder="Elect. close"
-                          className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right font-mono"
-                          style={{
-                            ...inputStyle,
-                            borderColor: hasError ? 'var(--color-status-error)' : theme.border,
-                          }}
-                        />
+                        {row.closing_verified && row.closing_reading !== '' ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="font-mono text-xs sm:text-sm" style={{ color: theme.textPrimary }}>{row.closing_reading}</span>
+                            <span title="Double-entry verified" style={{ color: 'var(--color-status-success)' }}>✓</span>
+                            <button type="button" onClick={() => setActiveEntry({ nozzleId: row.nozzle_id, field: 'electronic' })}
+                              className="text-xs underline" style={{ color: theme.primary }}>Re-do</button>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => setActiveEntry({ nozzleId: row.nozzle_id, field: 'electronic' })}
+                            className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm font-medium"
+                            style={{ ...inputStyle, borderColor: theme.primary, color: theme.primary }}>
+                            Enter ✎
+                          </button>
+                        )}
                         {hasError && (
                           <div className="text-xs mt-0.5" style={{ color: 'var(--color-status-error)' }}>
                             Must be &ge; opening
@@ -1135,18 +1174,20 @@ export default function MyShift() {
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          step="0.001"
-                          value={row.mechanical_closing}
-                          onChange={e => updateMechClosing(row.nozzle_id, e.target.value)}
-                          placeholder="Mech close"
-                          className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right font-mono"
-                          style={{
-                            ...inputStyle,
-                            borderColor: mechError ? 'var(--color-status-error)' : theme.border,
-                          }}
-                        />
+                        {row.mech_closing_verified && row.mechanical_closing !== '' ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="font-mono text-xs sm:text-sm" style={{ color: theme.textPrimary }}>{row.mechanical_closing}</span>
+                            <span title="Double-entry verified" style={{ color: 'var(--color-status-success)' }}>✓</span>
+                            <button type="button" onClick={() => setActiveEntry({ nozzleId: row.nozzle_id, field: 'mechanical' })}
+                              className="text-xs underline" style={{ color: theme.primary }}>Re-do</button>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => setActiveEntry({ nozzleId: row.nozzle_id, field: 'mechanical' })}
+                            className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm font-medium"
+                            style={{ ...inputStyle, borderColor: theme.primary, color: theme.primary }}>
+                            Enter ✎
+                          </button>
+                        )}
                         {mechError && (
                           <div className="text-xs mt-0.5" style={{ color: 'var(--color-status-error)' }}>
                             Must be &ge; opening
