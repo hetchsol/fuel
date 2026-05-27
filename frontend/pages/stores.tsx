@@ -130,7 +130,7 @@ export default function StoresDashboard() {
             { label: 'Stores Units', value: summary.total_stores_units, color: 'var(--color-content-primary)' },
             { label: 'Forecourt Units', value: summary.total_forecourt_units, color: 'var(--color-status-success)' },
           ].map(c => (
-            <div key={c.label} className="rounded-lg p-4 shadow bg-card border border-surface-border">
+            <div key={c.label} className="rounded-lg p-4 shadow bg-surface-card border border-surface-border">
               <div className="text-xs font-medium uppercase text-content-secondary">{c.label}</div>
               <div className="text-2xl font-bold mt-1" style={{ color: c.color }}>{c.value}</div>
             </div>
@@ -146,7 +146,7 @@ export default function StoresDashboard() {
       )}
 
       {/* Items table */}
-      <div className="rounded-lg shadow overflow-x-auto bg-card border border-surface-border">
+      <div className="rounded-lg shadow overflow-x-auto bg-surface-card border border-surface-border">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-surface-bg">
@@ -202,7 +202,7 @@ export default function StoresDashboard() {
           {showHistory ? 'Hide' : 'Show'} recent movements
         </button>
         {showHistory && (
-          <div className="mt-2 rounded-lg shadow overflow-x-auto bg-card border border-surface-border">
+          <div className="mt-2 rounded-lg shadow overflow-x-auto bg-surface-card border border-surface-border">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-surface-bg">
@@ -322,7 +322,7 @@ function ActionModal({ action, item, busy, setBusy, onClose, onDone }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="rounded-lg shadow-lg p-6 w-full max-w-md bg-card border border-surface-border">
+      <div className="rounded-lg shadow-lg p-6 w-full max-w-md bg-surface-card border border-surface-border">
         <h3 className="text-lg font-semibold mb-1 text-content-primary">{titles[action]}</h3>
         {item && <p className="text-sm mb-4 text-content-secondary">{item.name} — stores {item.stores}, forecourt {item.forecourt}</p>}
 
