@@ -420,8 +420,13 @@ export default function Shifts() {
         const islandNozzleIds = island?.pump_station?.nozzles?.map((n: any) => n.nozzle_id) || []
 
         if (checked) {
+          // "Select all" must skip nozzles already taken by another attendant
+          // (assignment is per-nozzle — an island can be split across people).
+          const takenByOthers = new Set(
+            selectedAttendants.filter(a => a.user_id !== attendantId).flatMap(a => a.nozzle_ids || [])
+          )
           for (const nid of islandNozzleIds) {
-            if (!nozzle_ids.includes(nid)) nozzle_ids.push(nid)
+            if (!nozzle_ids.includes(nid) && !takenByOthers.has(nid)) nozzle_ids.push(nid)
           }
         } else {
           nozzle_ids = nozzle_ids.filter((nid: string) => !islandNozzleIds.includes(nid))
@@ -478,9 +483,11 @@ export default function Shifts() {
     return ids
   }
 
-  // Get all nozzles from all active islands, grouped by island
+  // Get all nozzles from all active islands, grouped by island.
+  // Defensive: only ACTIVE islands are selectable for assignment (deactivated
+  // islands must never appear), even if the fetch ever returns mixed data.
   const getAllNozzlesGroupedByIsland = () => {
-    return islandsData.map((island: any) => {
+    return islandsData.filter((island: any) => island.status === 'active').map((island: any) => {
       const nozzles = (island.pump_station?.nozzles || []).map((nozzle: any) => ({
         ...nozzle,
         // Preserve the nozzle's own fuel_type_abbrev (set per-nozzle by the
@@ -1639,15 +1646,22 @@ export default function Shifts() {
                     <div className="space-y-3">
                       {getAllNozzlesGroupedByIsland().map((group: any) => {
                         const allIslandNozzleIds = group.nozzles.map((n: any) => n.nozzle_id)
-                        const selectedCount = allIslandNozzleIds.filter((nid: string) => attendant.nozzle_ids?.includes(nid)).length
-                        const allSelected = selectedCount === allIslandNozzleIds.length && allIslandNozzleIds.length > 0
-                        const someSelected = selectedCount > 0 && !allSelected
-                        // Check if any nozzle on this island is assigned to another attendant
+                        // Nozzles already assigned to ANOTHER attendant in this shift.
                         const otherAttendantNozzles = new Set(
                           selectedAttendants
                             .filter(a => a.user_id !== attendant.user_id)
                             .flatMap(a => a.nozzle_ids || [])
                         )
+                        // Assignment is PER-NOZZLE: a single (possibly multi-fuel) island
+                        // can be split across attendants, and an attendant can hold nozzles
+                        // on several islands. Only nozzles taken by others are unavailable;
+                        // the rest of the island stays selectable.
+                        const availableNozzleIds = allIslandNozzleIds.filter((nid: string) => !otherAttendantNozzles.has(nid))
+                        const takenCount = allIslandNozzleIds.length - availableNozzleIds.length
+                        const islandFullyTaken = availableNozzleIds.length === 0
+                        const selectedCount = availableNozzleIds.filter((nid: string) => attendant.nozzle_ids?.includes(nid)).length
+                        const allSelected = availableNozzleIds.length > 0 && selectedCount === availableNozzleIds.length
+                        const someSelected = selectedCount > 0 && !allSelected
                         // Container styling: single-fuel islands get fuel-tinted background;
                         // mixed islands get a neutral container with per-nozzle coloured rows.
                         const containerClass = group.mixed
@@ -1656,16 +1670,27 @@ export default function Shifts() {
                             ? 'border-fuel-petrol-border bg-fuel-petrol-light/30'
                             : 'border-fuel-diesel-border bg-fuel-diesel-light/30'
                         return (
-                          <div key={group.island_id} className={`p-3 rounded-lg border ${containerClass}`}>
-                            <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                          <div key={group.island_id} className={`p-3 rounded-lg border ${containerClass} ${islandFullyTaken ? 'opacity-60' : ''}`}>
+                            <label className={`flex items-center gap-2 mb-2 ${islandFullyTaken ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                              title={islandFullyTaken ? 'All nozzles on this island are assigned to other attendants' : 'Select / deselect all available nozzles on this island'}>
                               <input
                                 type="checkbox"
                                 checked={allSelected}
                                 ref={(el) => { if (el) el.indeterminate = someSelected }}
                                 onChange={(e) => handleIslandToggle(attendant.user_id, group.island_id, e.target.checked)}
                                 className="form-checkbox"
+                                disabled={islandFullyTaken}
                               />
                               <span className="text-sm font-semibold">{group.island_name}</span>
+                              {islandFullyTaken ? (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-status-error-light text-status-error border border-status-error">
+                                  Fully assigned
+                                </span>
+                              ) : takenCount > 0 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-status-warning-light text-status-warning">
+                                  {takenCount} taken
+                                </span>
+                              )}
                               {/* Single-fuel: one pill with abbrev. Mixed: two pills, one per fuel. */}
                               {group.mixed ? (
                                 <span className="flex gap-1">
@@ -1685,7 +1710,7 @@ export default function Shifts() {
                                   group.product_type === 'Petrol' ? 'bg-fuel-petrol-light text-fuel-petrol' : 'bg-fuel-diesel-light text-fuel-diesel'
                                 }`}>{group.fuel_type_abbrev}</span>
                               ) : null}
-                              <span className="text-xs text-content-secondary ml-auto">{selectedCount}/{allIslandNozzleIds.length}</span>
+                              <span className="text-xs text-content-secondary ml-auto">{selectedCount}/{availableNozzleIds.length}</span>
                             </label>
                             {/* Mixed islands: per-nozzle row layout (each row has its own fuel tint).
                                 Single-fuel islands: keep the compact 2/4-column grid. */}
