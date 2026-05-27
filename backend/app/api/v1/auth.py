@@ -419,6 +419,38 @@ def list_users(ctx: dict = Depends(get_station_context)):
     ]
 
 
+def _next_staff_id() -> str:
+    """
+    Next STFNNN id based on the MAX existing number, not a count.
+
+    Using a count breaks after any deletion: e.g. with STF001/STF002/STF004 the
+    count is 3, so count+1 regenerates STF004 — an existing id — and the INSERT
+    fails with a duplicate-primary-key error (surfaced as a 500). Taking max+1
+    (and skipping any taken id) keeps generated ids unique regardless of history.
+    """
+    existing = set()
+    if _USE_DB():
+        try:
+            from ...database.db import db_get_all_users
+            existing = {u.get("user_id") for u in db_get_all_users()}
+        except Exception:
+            existing = set()
+    else:
+        existing = {u.get("user_id") for u in users_db.values()}
+
+    max_n = 0
+    for uid in existing:
+        if uid and uid.startswith("STF"):
+            try:
+                max_n = max(max_n, int(uid[3:]))
+            except ValueError:
+                pass
+    n = max_n + 1
+    while f"STF{n:03d}" in existing:
+        n += 1
+    return f"STF{n:03d}"
+
+
 @router.post("/users")
 def create_user(user_data: dict, current_user: dict = Depends(require_manager_or_owner)):
     """Create a new user (Manager/Owner). Managers can only create attendants and supervisors."""
@@ -439,23 +471,22 @@ def create_user(user_data: dict, current_user: dict = Depends(require_manager_or
         raise HTTPException(status_code=403, detail="Managers can only create attendant and supervisor accounts")
 
     if _USE_DB():
-        from ...database.db import (
-            db_get_user_by_username, db_create_user, db_count_users_by_prefix,
-        )
+        from ...database.db import db_get_user_by_username, db_create_user
         if db_get_user_by_username(username):
             raise HTTPException(status_code=400, detail="Username already exists")
 
-        count = db_count_users_by_prefix("STF") + 1
-        user_id = f"STF{count:03d}"
+        user_id = _next_staff_id()
         hashed = _hash_password(password)
-        db_create_user(user_id, username, hashed, full_name, role,
-                       station_id if role != "owner" else None)
+        try:
+            db_create_user(user_id, username, hashed, full_name, role,
+                           station_id if role != "owner" else None)
+        except Exception as e:
+            logger.error(f"[auth] create_user DB insert failed for {username}: {e}")
+            raise HTTPException(status_code=400, detail="Could not create user. Please try again.")
     else:
         if username in users_db:
             raise HTTPException(status_code=400, detail="Username already exists")
-        existing_ids = [u["user_id"] for u in users_db.values()]
-        user_count = len([uid for uid in existing_ids if uid.startswith("STF")]) + 1
-        user_id = f"STF{user_count:03d}"
+        user_id = _next_staff_id()
         hashed = _hash_password(password)
         users_db[username] = {
             "user_id": user_id, "username": username, "password": hashed,
