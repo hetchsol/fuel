@@ -1,6 +1,6 @@
 # Shift Closing / Review / Lifecycle — Improvements Plan
 
-**Status:** P0-1, P0-2, P0-3 implemented (2026-05-27). P1, P2 still to do.
+**Status:** P0-1, P0-2, P0-3, P1-4, P1-5, P1-6 implemented (2026-05-27). P2 remaining.
 **Date:** 2026-05-27
 **Scope:** The shift-closing → review → shift-status workflow (attendant Phase 1/2,
 manager review, shift lifecycle, daily close-off). Grounded against current code.
@@ -163,7 +163,17 @@ does; default unchanged.
 
 ---
 
-## P1-5 — Close the Phase-1 → Phase-2 gap (unreconciled readings)
+## P1-5 — Close the Phase-1 → Phase-2 gap (unreconciled readings) — ✅ IMPLEMENTED 2026-05-27
+
+**Done:** `review-queue` payload now returns `awaiting_closing` count and
+`awaiting_closing_handovers` (each annotated with `hours_waiting` + `is_stale`).
+New `notify_stale_readings(station_id)` escalates Phase-1 handovers stuck >
+`STALE_READINGS_HOURS` (4h) via a `STALE_READINGS` notification, deduped with a
+`stale_notified` flag; wired into startup (`main.py`) and the `/shifts/check-stale`
+endpoint. Frontend: an **Awaiting Closing** tab lists these as actionable rows
+("Complete closing →" → shift-closing) with a Stale badge. Covered by
+`tests/test_stale_readings.py`.
+
 
 **Problem.** Handovers stuck in `phase == "readings_verified"` (Phase 1 done,
 Phase 2 closing never submitted) are only **counted** as `stale_readings_count`
@@ -184,7 +194,13 @@ actionable row; a fresh one does not.
 
 ---
 
-## P1-6 — Single pipeline view for managers
+## P1-6 — Single pipeline view for managers — ✅ IMPLEMENTED 2026-05-27
+
+**Done (counts/buckets on existing page):** `handover-review.tsx` now shows a
+4-card pipeline summary (Awaiting Closing / Pending Review / Flagged / Approved
+Today) and a matching **Awaiting Closing** tab alongside All / Pending / Flagged
+/ Approved. Backed by the extended review-queue payload (P1-5). No new page.
+
 
 **Problem.** `review-queue` only returns `phase == "completed"` handovers
 (`:1402`); the rest of the funnel (Phase-1 pending → awaiting closing → in review
@@ -229,8 +245,8 @@ P0-1 and P0-2 are **prerequisites** for [[Shift_Selection_Across_App_Plan]]:
 1. ~~**P0-1, P0-2** — lifecycle wiring + endpoint guards + `assert_shift_editable`
    (unblocks the Shift Selection plan).~~ ✅ Done 2026-05-27.
 2. ~~**P0-3** — flagged-approval note.~~ ✅ Done 2026-05-27.
-3. **P1-4, P1-5, P1-6** — configurable threshold, stale-readings escalation,
-   pipeline view.
+3. ~~**P1-4, P1-5, P1-6** — configurable threshold, stale-readings escalation,
+   pipeline view.~~ ✅ Done 2026-05-27.
 4. **P2-7** — audit consistency + deploy/blueprint cleanup.
 
 ## Open questions — RESOLVED (2026-05-27)

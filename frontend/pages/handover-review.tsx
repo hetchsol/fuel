@@ -67,6 +67,9 @@ interface HandoverEntry {
   notes?: string | null
   created_at: string
   stock_snapshot?: any
+  // Present on "awaiting closing" (Phase-1) rows from the review-queue payload.
+  hours_waiting?: number
+  is_stale?: boolean
 }
 
 const REVIEW_STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
@@ -92,11 +95,13 @@ export default function HandoverReview() {
   const [summaryFlagged, setSummaryFlagged] = useState(0)
   const [summaryApprovedToday, setSummaryApprovedToday] = useState(0)
   const [staleReadingsCount, setStaleReadingsCount] = useState(0)
+  const [awaitingCount, setAwaitingCount] = useState(0)
+  const [awaitingClosing, setAwaitingClosing] = useState<HandoverEntry[]>([])
 
   // Filters
   const [filterDate, setFilterDate] = useState('')
   const [filterShift, setFilterShift] = useState('')
-  const [statusTab, setStatusTab] = useState<'all' | 'pending' | 'flagged' | 'approved'>('all')
+  const [statusTab, setStatusTab] = useState<'all' | 'pending' | 'flagged' | 'awaiting' | 'approved'>('all')
 
   // Expansion
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -142,6 +147,8 @@ export default function HandoverReview() {
         setSummaryFlagged(data.flagged || 0)
         setSummaryApprovedToday(data.approved_today || 0)
         setStaleReadingsCount(data.stale_readings_count || 0)
+        setAwaitingCount(data.awaiting_closing || 0)
+        setAwaitingClosing(data.awaiting_closing_handovers || [])
         setLoading(false)
       })
       .catch(err => {
@@ -286,10 +293,11 @@ export default function HandoverReview() {
         </div>
       )}
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Summary cards — the manager's pipeline at a glance */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Pending', value: summaryPending, color: 'var(--color-action-primary)' },
+          { label: 'Awaiting Closing', value: awaitingCount, color: 'var(--color-status-warning)' },
+          { label: 'Pending Review', value: summaryPending, color: 'var(--color-action-primary)' },
           { label: 'Flagged', value: summaryFlagged, color: 'var(--color-status-error)' },
           { label: 'Approved Today', value: summaryApprovedToday, color: 'var(--color-status-success)' },
         ].map(card => (
@@ -326,16 +334,22 @@ export default function HandoverReview() {
         <div className="flex-1" />
         {/* Status tabs */}
         <div className="flex gap-1">
-          {(['all', 'pending', 'flagged', 'approved'] as const).map(tab => (
+          {([
+            ['all', 'All'],
+            ['awaiting', 'Awaiting Closing'],
+            ['pending', 'Pending'],
+            ['flagged', 'Flagged'],
+            ['approved', 'Approved'],
+          ] as const).map(([tab, label]) => (
             <button key={tab} onClick={() => setStatusTab(tab)}
-              className="px-3 py-1 text-xs font-medium rounded-full transition-colors capitalize"
+              className="px-3 py-1 text-xs font-medium rounded-full transition-colors"
               style={{
                 backgroundColor: statusTab === tab ? 'var(--color-action-primary)' : 'transparent',
                 color: statusTab === tab ? '#fff' : theme.textSecondary,
                 borderWidth: statusTab === tab ? 0 : 1,
                 borderColor: theme.border,
               }}>
-              {tab}
+              {label}
             </button>
           ))}
         </div>
@@ -361,7 +375,58 @@ export default function HandoverReview() {
         </div>
       )}
 
+      {/* Awaiting Closing list — Phase-1 handovers not yet closed (no financials yet) */}
+      {statusTab === 'awaiting' && (
+        <div className="rounded-lg shadow overflow-x-auto"
+          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+          {awaitingClosing.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm" style={{ color: theme.textSecondary }}>
+              No shifts awaiting closing
+            </div>
+          ) : (
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr style={{ backgroundColor: theme.background }}>
+                  {['Date', 'Shift', 'Attendant', 'Waiting', '', 'Action'].map((h, i) => (
+                    <th key={i} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
+                      style={{ color: theme.textSecondary }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {awaitingClosing.map(h => (
+                  <tr key={h.handover_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.date}</td>
+                    <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{h.shift_type}</td>
+                    <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{h.attendant_name}</td>
+                    <td className="px-3 py-2 font-mono" style={{ color: theme.textSecondary }}>
+                      {h.hours_waiting != null ? `${h.hours_waiting}h` : '-'}
+                    </td>
+                    <td className="px-3 py-2">
+                      {h.is_stale && (
+                        <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold"
+                          style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+                          Stale
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <button onClick={() => router.push(`/shift-closing?shift_id=${encodeURIComponent(h.shift_id)}`)}
+                        className="px-2 py-1 text-xs font-medium rounded text-white"
+                        style={{ backgroundColor: 'var(--color-action-primary)' }}>
+                        Complete closing →
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       {/* Handover table */}
+      {statusTab !== 'awaiting' && (
       <div className="rounded-lg shadow overflow-x-auto"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
         <table className="min-w-full text-sm">
@@ -488,6 +553,7 @@ export default function HandoverReview() {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Return Modal */}
       {returnModalId && (

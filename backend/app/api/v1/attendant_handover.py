@@ -36,6 +36,11 @@ from .lubricants_daily import (
 
 router = APIRouter()
 
+# A Phase-1 handover (readings verified) that hasn't been closed (Phase 2)
+# within this many hours is considered "stale" — surfaced in the review queue
+# and escalated via a notification.
+STALE_READINGS_HOURS = 4
+
 
 def _load_handovers(station_id: str) -> dict:
     return load_station_json(station_id, 'attendant_handovers.json', default={})
@@ -43,6 +48,45 @@ def _load_handovers(station_id: str) -> dict:
 
 def _save_handovers(data: dict, station_id: str):
     save_station_json(station_id, 'attendant_handovers.json', data)
+
+
+def notify_stale_readings(station_id: str) -> int:
+    """
+    Escalate Phase-1 handovers stuck awaiting closing for > STALE_READINGS_HOURS.
+
+    Creates one notification per stale handover (deduped via a `stale_notified`
+    flag so repeated scans don't spam), and returns the number newly notified.
+    Safe to call repeatedly (startup, manual stale-check).
+    """
+    handovers = _load_handovers(station_id)
+    cutoff = datetime.now().timestamp() - (STALE_READINGS_HOURS * 3600)
+    notified = 0
+    for hid, h in handovers.items():
+        if h.get("phase") != "readings_verified" or h.get("stale_notified"):
+            continue
+        waited_since = datetime.fromisoformat(
+            h.get("phase_1_completed_at") or h.get("created_at", "2000-01-01")).timestamp()
+        if waited_since >= cutoff:
+            continue
+        try:
+            create_notification(
+                station_id=station_id,
+                type="STALE_READINGS",
+                severity="warning",
+                title="Shift readings awaiting closing",
+                message=f"Readings for shift {h.get('shift_id', '')} "
+                        f"({h.get('attendant_name', '')}) have been awaiting closing "
+                        f"for over {STALE_READINGS_HOURS}h.",
+                entity_type="handover",
+                entity_id=hid,
+            )
+        except Exception:
+            pass
+        h["stale_notified"] = True
+        notified += 1
+    if notified:
+        _save_handovers(handovers, station_id)
+    return notified
 
 
 def _get_fuel_type(nozzle_id: str, storage: dict = None) -> str:
@@ -1423,20 +1467,32 @@ async def get_review_queue(
 
     flagged_count = sum(1 for h in pending if h.get("review_status") == "flagged")
 
-    # Count stale Phase 1 handovers (readings_verified for > 4 hours)
-    stale_cutoff = (datetime.now().timestamp()) - (4 * 3600)
-    stale_readings = [
-        h for h in results
-        if h.get("phase") == "readings_verified"
-        and datetime.fromisoformat(h.get("phase_1_completed_at") or h.get("created_at", "2000-01-01")).timestamp() < stale_cutoff
-    ]
+    # Awaiting closing: Phase 1 done (readings_verified) but Phase 2 not yet
+    # submitted. Annotate each with how long it has waited and whether it's stale
+    # (> STALE_READINGS_HOURS) so the UI can show actionable rows, not just a count.
+    now_ts = datetime.now().timestamp()
+    stale_cutoff = now_ts - (STALE_READINGS_HOURS * 3600)
+    awaiting_closing = []
+    for h in results:
+        if h.get("phase") != "readings_verified":
+            continue
+        waited_since = datetime.fromisoformat(
+            h.get("phase_1_completed_at") or h.get("created_at", "2000-01-01")).timestamp()
+        row = dict(h)
+        row["hours_waiting"] = round((now_ts - waited_since) / 3600, 1)
+        row["is_stale"] = waited_since < stale_cutoff
+        awaiting_closing.append(row)
+    awaiting_closing.sort(key=lambda r: r["hours_waiting"], reverse=True)
+    stale_readings = [h for h in awaiting_closing if h["is_stale"]]
 
     return {
         "pending": len(pending),
         "flagged": flagged_count,
         "approved_today": len(approved_today),
+        "awaiting_closing": len(awaiting_closing),
         "stale_readings_count": len(stale_readings),
         "handovers": pending,
+        "awaiting_closing_handovers": awaiting_closing,
     }
 
 

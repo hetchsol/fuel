@@ -143,6 +143,8 @@ def startup():
         seed_station_defaults(storage)
         logger.info(f"[startup] Applied defaults/migrations for station {station_id}")
         check_and_close_stale_shifts(storage, station_id)
+        from app.api.v1.attendant_handover import notify_stale_readings
+        notify_stale_readings(station_id)
 
         # Load saved tank calibrations
         from app.api.v1.tank_calibrations import load_saved_calibrations

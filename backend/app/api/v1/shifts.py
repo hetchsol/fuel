@@ -42,14 +42,17 @@ def _get_attendants_from_db(station_id: str = None) -> list:
 @router.post("/check-stale", dependencies=[Depends(require_supervisor_or_owner)])
 def check_stale_shifts(ctx: dict = Depends(get_station_context)):
     """
-    On-demand check for stale shifts (active > 20 hours).
-    Marks them as auto-closed. Supervisor/owner only.
+    On-demand check for stale shifts (active > 20 hours) and stale Phase-1
+    readings (awaiting closing > 4 hours). Supervisor/owner only.
     """
     closed = check_and_close_stale_shifts(ctx["storage"], ctx["station_id"])
+    from .attendant_handover import notify_stale_readings
+    stale_readings_notified = notify_stale_readings(ctx["station_id"])
     return {
         "checked": True,
         "auto_closed_count": len(closed),
         "auto_closed_shift_ids": closed,
+        "stale_readings_notified": stale_readings_notified,
     }
 
 
