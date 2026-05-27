@@ -93,6 +93,41 @@ def test_dashboard_flags_reorder(mem):
 
 # ── API gating ──────────────────────────────────────────────────────
 
+def test_apply_daily_sales_decrements_forecourt_and_returns_empties(mem):
+    # Catalog: a lubricant, an LPG accessory, and 9kg full/empty cylinders, all
+    # stocked at the forecourt.
+    for cat, code, name in [
+        ("lubricant", "LUB-1", "Engine Oil 1L"),
+        ("lpg_accessory", "ACC-1", "Regulator"),
+        ("cylinder_full", "9kg", "9kg (full)"),
+        ("cylinder_empty", "9kg", "9kg (empty)"),
+    ]:
+        svc.upsert_item("ST", cat, code, name)
+    for key, qty in [("lubricant:LUB-1", 10), ("lpg_accessory:ACC-1", 10),
+                     ("cylinder_full:9kg", 10), ("cylinder_empty:9kg", 2)]:
+        svc.receive("ST", key, qty, "owner1")
+        svc.issue("ST", key, qty, "owner1")  # all to forecourt
+
+    handovers = {
+        "HO-1": {"date": "2026-05-27", "stock_snapshot": {
+            "lubricants": [{"product_code": "LUB-1", "sold": 3}],
+            "accessories": [{"product_code": "ACC-1", "sold": 2}],
+            "lpg_cylinders": [{"size_kg": 9, "sold_refill": 4, "sold_with_cylinder": 1}],
+        }},
+        # Different date — must be ignored.
+        "HO-2": {"date": "2026-05-26", "stock_snapshot": {
+            "lubricants": [{"product_code": "LUB-1", "sold": 99}],
+        }},
+    }
+    res = svc.apply_daily_sales("ST", "2026-05-27", handovers=handovers)
+    items = svc.load_items("ST")
+    assert items["lubricant:LUB-1"]["forecourt"] == 7          # 10 - 3
+    assert items["lpg_accessory:ACC-1"]["forecourt"] == 8      # 10 - 2
+    assert items["cylinder_full:9kg"]["forecourt"] == 5        # 10 - (4 refill + 1 with-cyl)
+    assert items["cylinder_empty:9kg"]["forecourt"] == 6       # 2 + 4 empties returned by refills
+    assert res["sales_applied"] == 3 and res["empty_returns_applied"] == 1
+
+
 def test_dashboard_forbidden_for_attendant(client, staff_headers):
     if staff_headers is None:
         pytest.skip("attendant account unavailable")

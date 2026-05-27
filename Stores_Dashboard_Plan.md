@@ -1,7 +1,7 @@
 # Stores / Stock Dashboard — Plan
 
-**Status:** Phase 1 (backend) + Phase 2 (dashboard UI) implemented 2026-05-27.
-Phase 3 (reconciliation linkage) and Phase 4 (inter-station) pending.
+**Status:** Phases 1–3 implemented 2026-05-27 (backend, dashboard UI,
+reconciliation linkage). Phase 4 (inter-station) deferred.
 **Audience:** Manager and Owner only.
 
 ## 1. Confirmed decisions
@@ -67,6 +67,12 @@ true remaining forecourt stock and surfaces replenish-from-stores needs.
 2. ~~Frontend dashboard + action modals.~~ ✅ Done — `stores.tsx` (summary cards,
    reorder alerts, items table, receive/issue/damage/adjust/add-item modals,
    movement history); nav link under Inventory & Sales (manager/owner).
-3. Reconciliation sale-decrement linkage — **pending** (`record_sale` exists; needs
-   wiring into Daily Close-Off to feed sold quantities per item).
+3. ~~Reconciliation sale-decrement linkage.~~ ✅ Done — `apply_daily_sales(station_id,
+   date)` reads the day's approved handover stock snapshots at Daily Close-Off and
+   decrements the forecourt bin (lubricants, LPG accessories, full cylinders =
+   refills + with-cylinder sales) and returns empties for refills
+   (`cylinder_empty` += refills). Lenient (clamps at zero, skips unknown items),
+   never blocks close-off. Covered in `tests/test_stores.py`.
+   *Note:* the generic `accessory` category has no auto-sales feed (handover
+   "accessories" map to LPG accessories) — tracked manually for now.
 4. (Later) inter-station transfers + cross-station view.

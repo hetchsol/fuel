@@ -233,6 +233,15 @@ async def close_day(
     shift_ids = [h.get("shift_id") for h in date_handovers.values() if h.get("shift_id")]
     reconcile_shifts_for_date(shift_ids, station_id, ctx["storage"], ctx.get("username", ""))
 
+    # Feed the day's reconciled sales into the Stores forecourt bins so stock
+    # levels reflect what was sold (and surface re-order needs). Never blocks close-off.
+    try:
+        from ...services.stock_service import apply_daily_sales
+        apply_daily_sales(station_id, data.date, handovers=date_handovers,
+                          performed_by=ctx.get("username", "system"))
+    except Exception:
+        pass
+
     # Audit trail
     try:
         log_audit_event(
