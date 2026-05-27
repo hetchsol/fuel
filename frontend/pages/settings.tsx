@@ -12,6 +12,7 @@ export default function Settings() {
     diesel_allowable_loss_percent: 0.3,
     petrol_allowable_loss_percent: 0.5,
     nozzle_allowable_loss_liters: 0.8,
+    cash_shortage_threshold: 500.0,
   })
   const [scheduledPrices, setScheduledPrices] = useState<any[]>([])
   const [scheduleForm, setScheduleForm] = useState({ fuel_type: 'Diesel', new_price_per_liter: '', effective_date: '', effective_time: '00:00' })
@@ -772,6 +773,25 @@ export default function Settings() {
                     required
                   />
                   <p className="text-xs text-content-secondary mt-1">Default: 0.8L — losses above this per nozzle will be flagged during shift handover</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-xl font-semibold text-content-primary mb-4">Cash Shortage Threshold</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Cash Shortage Threshold (ZMW)</label>
+                  <input
+                    type="number"
+                    step="50"
+                    min="0"
+                    value={settings.cash_shortage_threshold}
+                    onChange={(e) => setSettings({ ...settings, cash_shortage_threshold: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
+                  <p className="text-xs text-content-secondary mt-1">Default: K500 — a shift handover is flagged when cash is over/short by more than this amount</p>
                 </div>
               </div>
             </div>

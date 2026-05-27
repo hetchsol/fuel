@@ -388,10 +388,15 @@ def _process_credit_sales(credit_sale_items, storage, shift_id):
     return credit_total, credit_sale_details, new_items_to_create
 
 
+def _cash_shortage_threshold(storage: dict) -> float:
+    """Per-station cash-shortage flag threshold (ZMW). Defaults to 500."""
+    return storage.get('fuel_settings', {}).get('cash_shortage_threshold', 500)
+
+
 def _compute_auto_flags(difference, nozzle_summaries, stock_variance_flags, storage):
     """Compute auto-flag reasons. Returns (auto_flag_reasons, review_status)."""
     auto_flag_reasons = []
-    if abs(difference) > 500:
+    if abs(difference) > _cash_shortage_threshold(storage):
         auto_flag_reasons.append("cash_shortage")
     if any(ns.meter_deviation_flagged for ns in nozzle_summaries):
         auto_flag_reasons.append("meter_deviation")
@@ -1058,7 +1063,7 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     # Merge Phase 1 flags with Phase 2 cash flag
     phase1_flags = handover.get("auto_flag_reasons") or []
     all_flags = list(phase1_flags)
-    if abs(difference) > 500:
+    if abs(difference) > _cash_shortage_threshold(storage):
         all_flags.append("cash_shortage")
     review_status = "flagged" if all_flags else "submitted"
 
@@ -1118,7 +1123,7 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
         entity_type="handover", entity_id=data.handover_id, created_by=ctx["username"],
     )
 
-    if difference < -500:
+    if difference < -_cash_shortage_threshold(storage):
         create_notification(
             station_id=station_id, type="CASH_SHORTAGE", severity="critical",
             title="Cash Shortage Detected",
@@ -1276,7 +1281,7 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
         entity_type="handover", entity_id=handover_id, created_by=ctx["username"],
     )
 
-    if difference < -500:
+    if difference < -_cash_shortage_threshold(storage):
         create_notification(
             station_id=station_id, type="CASH_SHORTAGE", severity="critical",
             title="Cash Shortage Detected",

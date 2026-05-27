@@ -40,6 +40,7 @@ def update_fuel_settings(settings: FuelSettings, ctx: dict = Depends(get_station
     storage.setdefault('fuel_settings', {})["diesel_allowable_loss_percent"] = settings.diesel_allowable_loss_percent
     storage.setdefault('fuel_settings', {})["petrol_allowable_loss_percent"] = settings.petrol_allowable_loss_percent
     storage.setdefault('fuel_settings', {})["nozzle_allowable_loss_liters"] = settings.nozzle_allowable_loss_liters
+    storage.setdefault('fuel_settings', {})["cash_shortage_threshold"] = settings.cash_shortage_threshold
 
     log_audit_event(
         station_id=ctx["station_id"],

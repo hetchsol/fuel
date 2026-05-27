@@ -136,7 +136,15 @@ success, note persisted; approve unflagged without note → success.
 
 ---
 
-## P1-4 — Make the cash-shortage threshold configurable
+## P1-4 — Make the cash-shortage threshold configurable — ✅ IMPLEMENTED 2026-05-27
+
+**Done:** added `cash_shortage_threshold` (default 500 ZMW) to the `FuelSettings`
+model + `PUT /settings/fuel`; new `_cash_shortage_threshold(storage)` helper reads
+it, replacing all four hardcoded `500`/`-500` literals in `attendant_handover.py`
+(flag computation + cash-shortage notifications). Settings page gets a "Cash
+Shortage Threshold (ZMW)" field. Default preserves current behaviour. Covered by
+`tests/test_cash_shortage_threshold.py`.
+
 
 **Problem.** The `K500` cash-shortage threshold is **hardcoded in four places**
 (`attendant_handover.py:393, 1057, 1117, 1275`), while comparable thresholds are
