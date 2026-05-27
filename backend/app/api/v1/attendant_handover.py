@@ -1467,6 +1467,14 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
     if current_review in ("approved",):
         raise HTTPException(status_code=400, detail="Handover is already approved")
 
+    # Approving a FLAGGED handover (cash shortage / meter deviation) requires a
+    # written justification — flagged exceptions must never be rubber-stamped.
+    if data.action == "approve" and current_review == "flagged" and not (data.supervisor_note or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="A note is required to approve a flagged handover.",
+        )
+
     review_record = {
         "reviewed_by": ctx["user_id"],
         "reviewed_by_name": ctx["full_name"],
@@ -1552,6 +1560,7 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
 
     approved_count = 0
     skipped_count = 0
+    affected_shift_ids = set()
     now_iso = datetime.now().isoformat()
 
     for hid in handover_ids:
@@ -1569,6 +1578,8 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
             continue
 
         h["review_status"] = "approved"
+        if h.get("shift_id"):
+            affected_shift_ids.add(h["shift_id"])
         h["supervisor_review"] = {
             "reviewed_by": ctx["user_id"],
             "reviewed_by_name": ctx["full_name"],
@@ -1588,6 +1599,10 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
         )
 
     _save_handovers(handovers, station_id)
+
+    # Auto-advance any shift whose attendants are now all approved.
+    for sid in affected_shift_ids:
+        advance_shift_on_approval(sid, station_id, ctx["storage"], ctx["username"])
 
     return {
         "status": "success",

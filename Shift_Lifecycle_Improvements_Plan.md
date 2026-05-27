@@ -1,6 +1,6 @@
 # Shift Closing / Review / Lifecycle — Improvements Plan
 
-**Status:** P0-1 and P0-2 implemented (2026-05-27). P0-3, P1, P2 still to do.
+**Status:** P0-1, P0-2, P0-3 implemented (2026-05-27). P1, P2 still to do.
 **Date:** 2026-05-27
 **Scope:** The shift-closing → review → shift-status workflow (attendant Phase 1/2,
 manager review, shift lifecycle, daily close-off). Grounded against current code.
@@ -107,7 +107,17 @@ shift → 403.
 
 ---
 
-## P0-3 — Require justification when approving a *flagged* handover
+## P0-3 — Require justification when approving a *flagged* handover — ✅ IMPLEMENTED 2026-05-27
+
+**Done:** `review_handover` now rejects (400) an `approve` action on a `flagged`
+handover unless a non-blank `supervisor_note` is provided; the note is stored on
+the review record and audit event. `batch_approve` already skipped non-`submitted`
+handovers, so flagged items can't be batch-approved (no change needed there) —
+and it now also triggers the P0-1 auto-complete for affected shifts. Frontend
+`handover-review.tsx`: clicking **Approve** on a flagged row opens a required-note
+modal; clean handovers still approve in one click. Covered by
+`tests/test_handover_review.py`.
+
 
 **Problem.** In `review_handover` (`:1434`), **Return** requires a mandatory note
 (`:1446`) but **Approve** requires nothing (`:1474`). A `flagged` handover (cash
@@ -210,7 +220,7 @@ P0-1 and P0-2 are **prerequisites** for [[Shift_Selection_Across_App_Plan]]:
 
 1. ~~**P0-1, P0-2** — lifecycle wiring + endpoint guards + `assert_shift_editable`
    (unblocks the Shift Selection plan).~~ ✅ Done 2026-05-27.
-2. **P0-3** — flagged-approval note.
+2. ~~**P0-3** — flagged-approval note.~~ ✅ Done 2026-05-27.
 3. **P1-4, P1-5, P1-6** — configurable threshold, stale-readings escalation,
    pipeline view.
 4. **P2-7** — audit consistency + deploy/blueprint cleanup.

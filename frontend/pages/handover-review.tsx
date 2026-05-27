@@ -107,6 +107,9 @@ export default function HandoverReview() {
   // Return modal
   const [returnModalId, setReturnModalId] = useState<string | null>(null)
   const [returnNote, setReturnNote] = useState('')
+  // Approve-with-note modal (required for flagged handovers)
+  const [approveModalId, setApproveModalId] = useState<string | null>(null)
+  const [approveNote, setApproveNote] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
 
   // Auth check
@@ -176,18 +179,24 @@ export default function HandoverReview() {
     return [...handovers, ...extra]
   })()
 
-  const handleApprove = async (handoverId: string) => {
+  const handleApprove = async (handoverId: string, note?: string) => {
     setActionLoading(true)
     try {
       const res = await authFetch(`${BASE}/handover/review`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ handover_id: handoverId, action: 'approve' }),
+        body: JSON.stringify({
+          handover_id: handoverId,
+          action: 'approve',
+          ...(note ? { supervisor_note: note } : {}),
+        }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Approve failed' }))
         throw new Error(err.detail)
       }
+      setApproveModalId(null)
+      setApproveNote('')
       fetchQueue()
       setExpandedId(null)
     } catch (err: any) {
@@ -435,7 +444,15 @@ export default function HandoverReview() {
                     <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                       {canAct && (
                         <div className="flex gap-1">
-                          <button onClick={() => handleApprove(h.handover_id)} disabled={actionLoading}
+                          <button
+                            onClick={() => {
+                              if (rs === 'flagged') {
+                                setApproveModalId(h.handover_id); setApproveNote('')
+                              } else {
+                                handleApprove(h.handover_id)
+                              }
+                            }}
+                            disabled={actionLoading}
                             className="px-2 py-1 text-xs font-medium rounded text-white"
                             style={{ backgroundColor: 'var(--color-status-success)' }}>
                             Approve
@@ -499,6 +516,41 @@ export default function HandoverReview() {
                 className="px-4 py-2 text-sm font-medium rounded text-white disabled:opacity-50"
                 style={{ backgroundColor: 'var(--color-status-warning)' }}>
                 {actionLoading ? 'Returning...' : 'Confirm Return'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approve Flagged Modal — a justification note is required */}
+      {approveModalId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="rounded-lg shadow-lg p-6 w-full max-w-md"
+            style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+            <h3 className="text-lg font-semibold mb-3" style={{ color: theme.textPrimary }}>Approve Flagged Handover</h3>
+            <p className="text-sm mb-3" style={{ color: theme.textSecondary }}>
+              This handover was flagged (e.g. cash shortage or meter deviation).
+              A note explaining why you are approving it anyway is required and recorded in the audit trail.
+            </p>
+            <textarea
+              rows={4}
+              value={approveNote}
+              onChange={e => setApproveNote(e.target.value)}
+              placeholder="Justification for approving despite the flag (required)"
+              className="w-full px-3 py-2 text-sm rounded border resize-none"
+              style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => { setApproveModalId(null); setApproveNote('') }}
+                className="px-4 py-2 text-sm rounded"
+                style={{ color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
+                Cancel
+              </button>
+              <button onClick={() => handleApprove(approveModalId, approveNote.trim())}
+                disabled={!approveNote.trim() || actionLoading}
+                className="px-4 py-2 text-sm font-medium rounded text-white disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-status-success)' }}>
+                {actionLoading ? 'Approving...' : 'Confirm Approve'}
               </button>
             </div>
           </div>
