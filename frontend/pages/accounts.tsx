@@ -10,6 +10,16 @@ export default function Accounts() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Role + create-account state (creating accounts is manager/owner only)
+  const [userRole, setUserRole] = useState('')
+  const canManage = ['manager', 'owner'].includes(userRole)
+  const [showCreate, setShowCreate] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    account_name: '', account_type: 'Corporate', credit_limit: '',
+    contact_person: '', phone: '', default_price_per_liter: '',
+  })
+
   // Credit sale form state
   const [saleForm, setSaleForm] = useState({
     account_id: '',
@@ -32,7 +42,50 @@ export default function Accounts() {
 
   useEffect(() => {
     fetchAccounts()
+    try {
+      const u = localStorage.getItem('user')
+      if (u) setUserRole(JSON.parse(u).role || '')
+    } catch { /* ignore */ }
   }, [])
+
+  const handleCreateAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!createForm.account_name.trim()) { toast.error('Account name is required'); return }
+    setCreating(true)
+    try {
+      const payload = {
+        account_id: '',
+        account_name: createForm.account_name.trim(),
+        account_type: createForm.account_type,
+        credit_limit: parseFloat(createForm.credit_limit) || 0,
+        current_balance: 0,
+        contact_person: createForm.contact_person.trim() || null,
+        phone: createForm.phone.trim() || null,
+        default_price_per_liter: createForm.default_price_per_liter
+          ? parseFloat(createForm.default_price_per_liter) : null,
+      }
+      const res = await authFetch(`${BASE}/accounts/`, {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        const detail = Array.isArray(data.detail)
+          ? data.detail.map((d: any) => d.msg || d).join(', ')
+          : (typeof data.detail === 'string' ? data.detail : 'Failed to create account')
+        throw new Error(detail)
+      }
+      toast.success('Credit account created')
+      setShowCreate(false)
+      setCreateForm({ account_name: '', account_type: 'Corporate', credit_limit: '', contact_person: '', phone: '', default_price_per_liter: '' })
+      fetchAccounts()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create account')
+    } finally {
+      setCreating(false)
+    }
+  }
 
   const fetchAccounts = async () => {
     setLoading(true)
@@ -329,7 +382,17 @@ export default function Accounts() {
 
       {/* Account Holders List */}
       <div className="mb-8">
-        <h2 className="text-xl font-bold text-content-primary mb-4">💳 Account Holders</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-content-primary">💳 Account Holders</h2>
+          {canManage && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="px-3 py-2 text-sm font-semibold rounded-md bg-action-primary text-white hover:bg-action-primary-hover"
+            >
+              + Create Account
+            </button>
+          )}
+        </div>
 
         {loading && accounts.length === 0 ? (
           <LoadingSpinner text="Loading accounts..." />
@@ -430,6 +493,70 @@ export default function Accounts() {
           <li>• <strong>Payment Recording</strong> reduces account balance when customers pay</li>
         </ul>
       </div>
+
+      {/* Create Account Modal (manager/owner) */}
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg shadow-lg p-6 bg-surface-card border border-surface-border">
+            <h3 className="text-lg font-bold text-content-primary mb-4">Create Credit Account</h3>
+            <form onSubmit={handleCreateAccount} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Account Name *</label>
+                <input type="text" value={createForm.account_name}
+                  onChange={(e) => setCreateForm({ ...createForm, account_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  placeholder="e.g. Volcano Mining Ltd" required />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Account Type</label>
+                  <select value={createForm.account_type}
+                    onChange={(e) => setCreateForm({ ...createForm, account_type: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary">
+                    {['Corporate', 'Institution', 'Individual', 'POS'].map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Credit Limit (ZMW)</label>
+                  <input type="number" step="0.01" min="0" value={createForm.credit_limit}
+                    onChange={(e) => setCreateForm({ ...createForm, credit_limit: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    placeholder="0.00" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Contact Person</label>
+                  <input type="text" value={createForm.contact_person}
+                    onChange={(e) => setCreateForm({ ...createForm, contact_person: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Phone</label>
+                  <input type="text" value={createForm.phone}
+                    onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Custom Rate per Liter (optional)</label>
+                <input type="number" step="0.01" min="0" value={createForm.default_price_per_liter}
+                  onChange={(e) => setCreateForm({ ...createForm, default_price_per_liter: e.target.value })}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  placeholder="Leave blank to use global fuel price" />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setShowCreate(false)}
+                  className="px-4 py-2 text-sm rounded-md border border-surface-border text-content-secondary">Cancel</button>
+                <button type="submit" disabled={creating}
+                  className="px-4 py-2 text-sm font-semibold rounded-md bg-action-primary text-white disabled:opacity-50">
+                  {creating ? 'Creating...' : 'Create Account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
