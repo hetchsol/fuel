@@ -1,6 +1,6 @@
 # Shift Closing / Review / Lifecycle — Improvements Plan
 
-**Status:** P0-1, P0-2, P0-3, P1-4, P1-5, P1-6 implemented (2026-05-27). P2 remaining.
+**Status:** ✅ COMPLETE — all items (P0-1, P0-2, P0-3, P1-4, P1-5, P1-6, P2-7) implemented 2026-05-27.
 **Date:** 2026-05-27
 **Scope:** The shift-closing → review → shift-status workflow (attendant Phase 1/2,
 manager review, shift lifecycle, daily close-off). Grounded against current code.
@@ -219,7 +219,20 @@ in-review.
 
 ---
 
-## P2-7 — Cleanups surfaced during analysis
+## P2-7 — Cleanups surfaced during analysis — ✅ IMPLEMENTED 2026-05-27
+
+**Done (a) audit consistency:** `deactivate_shift` and `delete_shift` now persist
+via `save_station_storage` and log audit events (`shift_deactivated` /
+`shift_deleted`, with `previous_status`) — previously silent. Combined with P0-2
+(`shift_completed`/`shift_reconciled`) and auto-close (`shift_auto_close`), every
+shift-status mutation now leaves a consistent audit trail. Covered by
+`tests/test_shift_audit.py`.
+
+**Done (b) deploy drift:** `render.yaml` `CORS_ORIGINS` corrected from the dead
+`fuel-frontend.onrender.com` to the live `fuel-frontend-4wef.onrender.com`, with
+a header comment documenting the canonical live URLs (backend `fuel-api-wpdj`,
+frontend `fuel-frontend-4wef`) so the blueprint matches reality.
+
 
 - **Audit consistency:** ensure every shift-status mutation
   (`complete`/`reconcile`/`deactivate`/auto-close) logs an audit event with a
@@ -247,7 +260,7 @@ P0-1 and P0-2 are **prerequisites** for [[Shift_Selection_Across_App_Plan]]:
 2. ~~**P0-3** — flagged-approval note.~~ ✅ Done 2026-05-27.
 3. ~~**P1-4, P1-5, P1-6** — configurable threshold, stale-readings escalation,
    pipeline view.~~ ✅ Done 2026-05-27.
-4. **P2-7** — audit consistency + deploy/blueprint cleanup.
+4. ~~**P2-7** — audit consistency + deploy/blueprint cleanup.~~ ✅ Done 2026-05-27.
 
 ## Open questions — RESOLVED (2026-05-27)
 

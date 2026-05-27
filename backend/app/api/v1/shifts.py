@@ -370,6 +370,17 @@ def deactivate_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
         )
 
     shifts_data[shift_id]["status"] = "inactive"
+    save_station_storage(ctx["station_id"])
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="shift_deactivated",
+        performed_by=ctx["username"],
+        entity_type="shift",
+        entity_id=shift_id,
+        details={"previous_status": current_status},
+    )
+
     return {"status": "success", "shift_id": shift_id, "new_status": "inactive"}
 
 @router.delete("/{shift_id}", dependencies=[Depends(require_owner)])
@@ -395,6 +406,17 @@ def delete_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     validate_delete_operation('shifts', shift_id, storage=storage)
 
     del shifts_data[shift_id]
+    save_station_storage(ctx["station_id"])
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="shift_deleted",
+        performed_by=ctx["username"],
+        entity_type="shift",
+        entity_id=shift_id,
+        details={"previous_status": current_status},
+    )
+
     return {"status": "success", "shift_id": shift_id, "message": "Shift deleted permanently"}
 
 @router.put("/{shift_id}", response_model=Shift, dependencies=[Depends(require_supervisor_or_owner)])

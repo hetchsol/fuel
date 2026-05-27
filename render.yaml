@@ -1,3 +1,8 @@
+# Live services (created in the Render dashboard):
+#   Backend API : https://fuel-api-wpdj.onrender.com
+#   Frontend    : https://fuel-frontend-4wef.onrender.com   <-- the real frontend
+# NOTE: https://fuel-frontend.onrender.com is an OLD, unrelated service and is NOT used.
+# CORS_ORIGINS / BACKEND_URL below must reference the live URLs above.
 services:
   - type: web
     name: fuel-api
@@ -10,7 +15,7 @@ services:
       - key: PORT
         value: "10000"
       - key: CORS_ORIGINS
-        value: "https://fuel-frontend.onrender.com"
+        value: "https://fuel-frontend-4wef.onrender.com"
 
   - type: web
     name: fuel-frontend
