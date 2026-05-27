@@ -253,21 +253,23 @@ def record_forecourt_return(station_id: str, item_key: str, qty, performed_by: s
     return item
 
 
-def apply_daily_sales(station_id: str, date: str, handovers: Optional[dict] = None,
-                      performed_by: str = "system") -> dict:
+def apply_handover_sales(station_id: str, handover: dict, performed_by: str = "system") -> dict:
     """
-    Feed a day's reconciled sales into the forecourt bin (called at Daily
-    Close-Off). Reads the approved handovers' stock snapshots and:
-      - decrements forecourt by quantity sold (lubricants, LPG accessories,
-        full cylinders = refills + with-cylinder sales);
-      - returns empties to forecourt for each refill (full→empty swap).
+    Apply ONE handover's stock snapshot to the forecourt bins — called when the
+    handover is approved (per-shift, not at day close):
+      - decrement forecourt by quantity sold (lubricants, LPG accessories, full
+        cylinders = refills + with-cylinder sales);
+      - return empties to forecourt for each refill (full→empty swap).
 
-    Fully lenient — clamps at zero, skips unknown items — so it never blocks a
-    close-off. Idempotent in practice because a day can only be closed once.
+    Idempotent: sets `handover["stock_applied"] = True` and returns early if it
+    was already applied (the CALLER is responsible for persisting the handover so
+    the flag sticks). Fully lenient — clamps at zero, skips unknown items.
     """
-    if handovers is None:
-        handovers = load_station_json(station_id, "attendant_handovers.json", default={})
+    if not handover or handover.get("stock_applied"):
+        return {"applied": False}
 
+    snap = handover.get("stock_snapshot") or {}
+    ref = handover.get("handover_id", "")
     sold: dict = {}
     empties_in: dict = {}
 
@@ -275,29 +277,26 @@ def apply_daily_sales(station_id: str, date: str, handovers: Optional[dict] = No
         if key and qty:
             acc[key] = acc.get(key, 0) + qty
 
-    for h in handovers.values():
-        if h.get("date") != date:
+    for r in snap.get("lubricants", []) or []:
+        _add(sold, f"lubricant:{r.get('product_code')}", r.get("sold", 0) or 0)
+    for r in snap.get("accessories", []) or []:
+        _add(sold, f"lpg_accessory:{r.get('product_code')}", r.get("sold", 0) or 0)
+    for r in snap.get("lpg_cylinders", []) or []:
+        size = r.get("size_kg")
+        if size is None:
             continue
-        snap = h.get("stock_snapshot") or {}
-        for r in snap.get("lubricants", []) or []:
-            _add(sold, f"lubricant:{r.get('product_code')}", r.get("sold", 0) or 0)
-        for r in snap.get("accessories", []) or []:
-            _add(sold, f"lpg_accessory:{r.get('product_code')}", r.get("sold", 0) or 0)
-        for r in snap.get("lpg_cylinders", []) or []:
-            size = r.get("size_kg")
-            if size is None:
-                continue
-            total = r.get("total_sold")
-            if total is None:
-                total = (r.get("sold_refill", 0) or 0) + (r.get("sold_with_cylinder", 0) or 0)
-            _add(sold, f"cylinder_full:{size}kg", total or 0)
-            _add(empties_in, f"cylinder_empty:{size}kg", r.get("sold_refill", 0) or 0)
+        total = r.get("total_sold")
+        if total is None:
+            total = (r.get("sold_refill", 0) or 0) + (r.get("sold_with_cylinder", 0) or 0)
+        _add(sold, f"cylinder_full:{size}kg", total or 0)
+        _add(empties_in, f"cylinder_empty:{size}kg", r.get("sold_refill", 0) or 0)
 
     sales_applied = sum(1 for k, q in sold.items()
-                        if record_sale(station_id, k, q, performed_by, ref=date) is not None)
+                        if record_sale(station_id, k, q, performed_by, ref=ref) is not None)
     returns_applied = sum(1 for k, q in empties_in.items()
-                          if record_forecourt_return(station_id, k, q, performed_by, ref=date) is not None)
-    return {"date": date, "items_sold": len(sold), "sales_applied": sales_applied,
+                          if record_forecourt_return(station_id, k, q, performed_by, ref=ref) is not None)
+    handover["stock_applied"] = True
+    return {"applied": True, "items_sold": len(sold), "sales_applied": sales_applied,
             "empty_returns_applied": returns_applied}
 
 

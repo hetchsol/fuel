@@ -67,12 +67,14 @@ true remaining forecourt stock and surfaces replenish-from-stores needs.
 2. ~~Frontend dashboard + action modals.~~ ✅ Done — `stores.tsx` (summary cards,
    reorder alerts, items table, receive/issue/damage/adjust/add-item modals,
    movement history); nav link under Inventory & Sales (manager/owner).
-3. ~~Reconciliation sale-decrement linkage.~~ ✅ Done — `apply_daily_sales(station_id,
-   date)` reads the day's approved handover stock snapshots at Daily Close-Off and
+3. ~~Reconciliation sale-decrement linkage.~~ ✅ Done — **per-shift, on handover
+   approval** (not at day close). `apply_handover_sales(station_id, handover)`
+   runs in `attendant_handover.review_handover` (approve) and `batch_approve`:
    decrements the forecourt bin (lubricants, LPG accessories, full cylinders =
    refills + with-cylinder sales) and returns empties for refills
-   (`cylinder_empty` += refills). Lenient (clamps at zero, skips unknown items),
-   never blocks close-off. Covered in `tests/test_stores.py`.
+   (`cylinder_empty` += refills). Idempotent via the handover's `stock_applied`
+   flag; lenient (clamps at zero, skips unknown items). Covered in
+   `tests/test_stores.py`.
    *Note:* the generic `accessory` category has no auto-sales feed (handover
    "accessories" map to LPG accessories) — tracked manually for now.
 4. (Later) inter-station transfers + cross-station view.

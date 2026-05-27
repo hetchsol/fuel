@@ -20,6 +20,7 @@ from .auth import get_current_user, require_supervisor_or_owner, get_station_con
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
 from ...services.shift_status import assert_shift_editable, advance_shift_on_approval
+from ...services.stock_service import apply_handover_sales
 from ...database.station_files import load_station_json, save_station_json
 from .enter_readings import _load_readings as _load_enter_readings
 from .lpg_daily import (
@@ -1547,6 +1548,8 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
     if data.action == "approve":
         handover["review_status"] = "approved"
         handover["supervisor_review"] = review_record
+        # Update Stores forecourt stock from this shift's snapshot (once).
+        apply_handover_sales(station_id, handover, ctx["username"])
         _save_handovers(handovers, station_id)
 
         log_audit_event(
@@ -1639,6 +1642,7 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
             continue
 
         h["review_status"] = "approved"
+        apply_handover_sales(station_id, h, ctx["username"])
         if h.get("shift_id"):
             affected_shift_ids.add(h["shift_id"])
         h["supervisor_review"] = {
