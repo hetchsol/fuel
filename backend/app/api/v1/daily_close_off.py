@@ -12,6 +12,7 @@ from .auth import get_station_context, require_manager_or_owner
 from ...database.station_files import load_station_json, save_station_json
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
+from ...services.shift_status import reconcile_shifts_for_date
 
 router = APIRouter()
 
@@ -227,6 +228,10 @@ async def close_day(
         all_handovers[hid]["day_closed"] = True
         all_handovers[hid]["day_closed_at"] = now.isoformat()
     _save_handovers(station_id, all_handovers)
+
+    # Reconcile the shifts behind this day's handovers (final lock after banking).
+    shift_ids = [h.get("shift_id") for h in date_handovers.values() if h.get("shift_id")]
+    reconcile_shifts_for_date(shift_ids, station_id, ctx["storage"], ctx.get("username", ""))
 
     # Audit trail
     try:

@@ -13,6 +13,8 @@ from ...services.shift_validation import validate_shift_assignments, derive_isla
 from .auth import get_current_user, require_supervisor_or_owner, require_owner, get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.shift_auto_close import check_and_close_stale_shifts
+from ...services.shift_status import assert_shift_editable
+from ...database.storage import save_station_storage
 from ...database.db import DATABASE_URL
 
 router = APIRouter()
@@ -271,43 +273,78 @@ def get_attendants(ctx: dict = Depends(get_station_context)):
     """
     return {"attendants": _get_attendants_from_db(ctx.get("station_id"))}
 
-@router.put("/{shift_id}/complete")
+@router.put("/{shift_id}/complete", dependencies=[Depends(require_supervisor_or_owner)])
 def complete_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
-    Mark shift as completed
+    Mark shift as completed. Supervisor/owner only.
+
+    Note: the normal path advances a shift to 'completed' automatically once all
+    its handovers are approved (see services.shift_status). This endpoint is a
+    manual override and is guarded the same way.
     """
     storage = ctx["storage"]
     shifts_data = storage.get('shifts', {})
-    readings_data = storage.get('readings', [])
 
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
 
+    # Cannot complete a shift that is already locked (reconciled / inactive).
+    assert_shift_editable(shifts_data[shift_id])
+
     shifts_data[shift_id]["status"] = "completed"
+    shifts_data[shift_id]["completed_at"] = datetime.now().isoformat()
+    save_station_storage(ctx["station_id"])
 
     log_audit_event(
         station_id=ctx["station_id"],
-        action="shift_complete",
+        action="shift_completed",
         performed_by=ctx["username"],
         entity_type="shift",
         entity_id=shift_id,
+        details={"trigger": "manual"},
     )
 
     return {"status": "success", "shift_id": shift_id, "new_status": "completed"}
 
-@router.put("/{shift_id}/reconcile")
+@router.put("/{shift_id}/reconcile", dependencies=[Depends(require_supervisor_or_owner)])
 def reconcile_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     """
-    Mark shift as reconciled (after banking and cash verification)
+    Mark shift as reconciled (after banking and cash verification).
+    Supervisor/owner only. A shift must be 'completed' (or 'auto-closed') first,
+    enforcing the active → completed → reconciled ordering.
+
+    Note: the normal path reconciles a date's shifts automatically at Daily
+    Close-Off (see services.shift_status.reconcile_shifts_for_date). This
+    endpoint is a manual override.
     """
     storage = ctx["storage"]
     shifts_data = storage.get('shifts', {})
-    readings_data = storage.get('readings', [])
 
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
 
+    # Block re-reconciling a locked shift, and enforce ordering.
+    assert_shift_editable(shifts_data[shift_id])
+    current_status = shifts_data[shift_id].get("status", "active")
+    if current_status not in ("completed", "auto-closed"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Shift must be completed before it can be reconciled (current status: {current_status}).",
+        )
+
     shifts_data[shift_id]["status"] = "reconciled"
+    shifts_data[shift_id]["reconciled_at"] = datetime.now().isoformat()
+    save_station_storage(ctx["station_id"])
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="shift_reconciled",
+        performed_by=ctx["username"],
+        entity_type="shift",
+        entity_id=shift_id,
+        details={"trigger": "manual"},
+    )
+
     return {"status": "success", "shift_id": shift_id, "new_status": "reconciled"}
 
 @router.put("/{shift_id}/deactivate", dependencies=[Depends(require_supervisor_or_owner)])

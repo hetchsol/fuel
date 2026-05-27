@@ -19,6 +19,7 @@ from ...services.inventory import process_credit_sale
 from .auth import get_current_user, require_supervisor_or_owner, get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
+from ...services.shift_status import assert_shift_editable, advance_shift_on_approval
 from ...database.station_files import load_station_json, save_station_json
 from .enter_readings import _load_readings as _load_enter_readings
 from .lpg_daily import (
@@ -1041,6 +1042,9 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     credit_sales = data.credit_sales
     shift_id = handover.get("shift_id", "")
 
+    # Block closing edits to a finalized (reconciled / inactive) shift.
+    assert_shift_editable(storage.get("shifts", {}).get(shift_id))
+
     if data.credit_sale_items:
         credit_sales, credit_sale_details, new_items_to_create = \
             _process_credit_sales(data.credit_sale_items, storage, shift_id)
@@ -1493,6 +1497,11 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
             entity_type="handover",
             entity_id=data.handover_id,
             created_by=ctx["username"],
+        )
+
+        # Auto-advance the shift to 'completed' once all its handovers are approved.
+        advance_shift_on_approval(
+            handover.get("shift_id", ""), station_id, ctx["storage"], ctx["username"]
         )
     else:
         handover["review_status"] = "returned"
