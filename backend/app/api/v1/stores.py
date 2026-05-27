@@ -1,0 +1,165 @@
+"""
+Stores / Stock Dashboard API (manager & owner only).
+
+Two-bin inventory (stores + forecourt) sitting above the existing forecourt
+sales flows. See services/stock_service.py for the model.
+"""
+from typing import Optional
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+
+from .auth import get_station_context, require_manager_or_owner
+from ...database.station_files import load_station_json
+from ...services import stock_service as svc
+
+router = APIRouter()
+
+
+# ── request models ──────────────────────────────────────────────────
+
+class ItemInput(BaseModel):
+    category: str
+    product_code: str
+    name: str
+    unit: str = "ea"
+    reorder_level: float = 0
+    reorder_qty: float = 0
+    unit_cost: Optional[float] = None
+
+
+class ReceiveInput(BaseModel):
+    item_key: str
+    qty: float
+    note: str = ""
+    unit_cost: Optional[float] = None
+
+
+class IssueInput(BaseModel):
+    item_key: str
+    qty: float
+    note: str = ""
+
+
+class DamageInput(BaseModel):
+    item_key: str
+    qty: float
+    bin: str = "stores"
+    note: str
+
+
+class AdjustInput(BaseModel):
+    item_key: str
+    bin: str
+    new_qty: float
+    reason: str
+
+
+# ── reads ───────────────────────────────────────────────────────────
+
+@router.get("/dashboard", dependencies=[Depends(require_manager_or_owner)])
+def get_dashboard(ctx: dict = Depends(get_station_context)):
+    return svc.dashboard(ctx["station_id"])
+
+
+@router.get("/items", dependencies=[Depends(require_manager_or_owner)])
+def list_items(ctx: dict = Depends(get_station_context)):
+    return list(svc.load_items(ctx["station_id"]).values())
+
+
+@router.get("/movements", dependencies=[Depends(require_manager_or_owner)])
+def list_movements(item_key: str = None, type: str = None, limit: int = 200,
+                   ctx: dict = Depends(get_station_context)):
+    movements = svc.load_movements(ctx["station_id"])
+    if item_key:
+        movements = [m for m in movements if m.get("item_key") == item_key]
+    if type:
+        movements = [m for m in movements if m.get("type") == type]
+    movements.sort(key=lambda m: m.get("timestamp", ""), reverse=True)
+    return movements[:limit]
+
+
+# ── catalog + movements (writes) ────────────────────────────────────
+
+@router.post("/items", dependencies=[Depends(require_manager_or_owner)])
+def upsert_item(data: ItemInput, ctx: dict = Depends(get_station_context)):
+    return svc.upsert_item(
+        ctx["station_id"], data.category, data.product_code, data.name,
+        data.unit, data.reorder_level, data.reorder_qty, data.unit_cost,
+    )
+
+
+@router.post("/receive", dependencies=[Depends(require_manager_or_owner)])
+def receive(data: ReceiveInput, ctx: dict = Depends(get_station_context)):
+    return svc.receive(ctx["station_id"], data.item_key, data.qty,
+                       ctx["username"], data.note, data.unit_cost)
+
+
+@router.post("/issue", dependencies=[Depends(require_manager_or_owner)])
+def issue(data: IssueInput, ctx: dict = Depends(get_station_context)):
+    return svc.issue(ctx["station_id"], data.item_key, data.qty, ctx["username"], data.note)
+
+
+@router.post("/damage", dependencies=[Depends(require_manager_or_owner)])
+def damage(data: DamageInput, ctx: dict = Depends(get_station_context)):
+    return svc.damage(ctx["station_id"], data.item_key, data.qty, data.bin,
+                      ctx["username"], data.note)
+
+
+@router.post("/adjust", dependencies=[Depends(require_manager_or_owner)])
+def adjust(data: AdjustInput, ctx: dict = Depends(get_station_context)):
+    return svc.adjust(ctx["station_id"], data.item_key, data.bin, data.new_qty,
+                      ctx["username"], data.reason)
+
+
+# ── convenience: seed the catalog from existing product lists ───────
+
+# Common cylinder sizes (kg). Each becomes a full + empty stores item.
+_CYLINDER_SIZES = [3, 6, 9, 19, 45, 48]
+
+
+@router.post("/seed-catalog", dependencies=[Depends(require_manager_or_owner)])
+def seed_catalog(ctx: dict = Depends(get_station_context)):
+    """
+    Best-effort import of item definitions (zero balances) from the existing
+    lubricant / LPG-accessory catalogs + cylinder sizes. Existing items (and
+    their balances) are preserved. Returns the number of items created/updated.
+    """
+    station_id = ctx["station_id"]
+    created = 0
+
+    def _upsert(category, code, name, unit="ea"):
+        nonlocal created
+        try:
+            svc.upsert_item(station_id, category, str(code), name, unit)
+            created += 1
+        except Exception:
+            pass
+
+    # Cylinders (full + empty) by size
+    for size in _CYLINDER_SIZES:
+        _upsert("cylinder_full", f"{size}kg", f"{size}kg cylinder (full)", "cylinder")
+        _upsert("cylinder_empty", f"{size}kg", f"{size}kg cylinder (empty)", "cylinder")
+
+    # Lubricants
+    try:
+        lubes = load_station_json(station_id, "lubricant_products.json", default=[])
+        for p in (lubes.values() if isinstance(lubes, dict) else lubes):
+            code = p.get("product_code")
+            if code:
+                _upsert("lubricant", code, p.get("description", code))
+    except Exception:
+        pass
+
+    # LPG accessories
+    try:
+        accs = load_station_json(station_id, "lpg_accessories_daily.json", default=[])
+        for p in (accs.values() if isinstance(accs, dict) else accs):
+            code = p.get("product_code")
+            if code:
+                _upsert("lpg_accessory", code, p.get("description", code))
+    except Exception:
+        pass
+
+    return {"status": "success", "items_seeded": created,
+            "total_items": len(svc.load_items(station_id))}
