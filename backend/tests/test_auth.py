@@ -154,43 +154,37 @@ def _headers_for_station(owner_token, station_id):
 
 def test_list_users_scoped_to_current_station(client, owner_headers, owner_token):
     """
-    Viewing users from two different stations must only reveal that station's staff.
-    Owners viewing Kalulushi don't see Luanshya users and vice versa.
+    Strict per-station scoping (no overlap): viewing users from two different
+    stations only reveals that station's staff, even for owners. Owner accounts
+    (station_id=None) are cross-station and don't appear in station-scoped lists.
     """
-    # Create a second station
     res = client.post("/api/v1/stations/", headers=owner_headers, json={
-        "station_id": "ST042",
-        "name": "Kalulushi Test",
-        "location": "Copperbelt",
+        "station_id": "ST042", "name": "Kalulushi Test", "location": "Copperbelt",
     })
     assert res.status_code == 200, res.text
 
-    # Create one staff at each station
     h_st001 = _headers_for_station(owner_token, "ST001")
     h_st042 = _headers_for_station(owner_token, "ST042")
-
     r1 = client.post("/api/v1/auth/users", headers=h_st001, json={
         "username": "kalulushi_att", "full_name": "Kalulushi Attendant",
         "password": "pass1234", "role": "user", "station_id": "ST001",
     })
     assert r1.status_code == 200, r1.text
-
     r2 = client.post("/api/v1/auth/users", headers=h_st042, json={
         "username": "luanshya_att", "full_name": "Luanshya Attendant",
         "password": "pass1234", "role": "user", "station_id": "ST042",
     })
     assert r2.status_code == 200, r2.text
 
-    # /auth/users scoped to ST001
+    # Scoped to ST001 — only ST001 staff.
     res = client.get("/api/v1/auth/users", headers=h_st001)
     assert res.status_code == 200
     usernames = {u["username"] for u in res.json()}
     assert "kalulushi_att" in usernames
     assert "luanshya_att" not in usernames
-    # Owner accounts (station_id=None) are not shown in station-scoped lists
     assert "owner1" not in usernames
 
-    # /auth/users scoped to ST042
+    # Scoped to ST042 — only ST042 staff.
     res = client.get("/api/v1/auth/users", headers=h_st042)
     assert res.status_code == 200
     usernames = {u["username"] for u in res.json()}

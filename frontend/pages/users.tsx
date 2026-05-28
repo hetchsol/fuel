@@ -72,12 +72,17 @@ export default function UsersManagement() {
 
   const handleCreate = () => {
     setEditingUser(null)
+    // Default the Station to whatever station the user is currently viewing,
+    // so an owner who has switched to e.g. Luanshya can't accidentally create a
+    // user under ST001 by leaving the dropdown on its previous value.
+    const activeStation = (typeof window !== 'undefined'
+      ? localStorage.getItem('stationId') : null) || currentUserStationId || 'ST001'
     setFormData({
       username: '',
       password: '',
       full_name: '',
       role: 'user',
-      station_id: 'ST001'
+      station_id: activeStation,
     })
     setShowModal(true)
   }
@@ -304,7 +309,11 @@ export default function UsersManagement() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-content-secondary">
-                    {user.station_id || '-'}
+                    {user.station_id
+                      ? (stations.find(s => s.station_id === user.station_id)?.name
+                          ? `${stations.find(s => s.station_id === user.station_id)!.name} (${user.station_id})`
+                          : user.station_id)
+                      : '—'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                     <button

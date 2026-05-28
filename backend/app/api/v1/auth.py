@@ -379,14 +379,14 @@ def get_user_info(token: str):
 @router.get("/users", dependencies=[Depends(require_manager_or_owner)])
 def list_users(ctx: dict = Depends(get_station_context)):
     """
-    List users of the current station only.
+    List enrolled users for the CURRENT station context (with their roles).
 
-    Scoping rules (matches how the owner expects 'Users under Kalulushi' vs
-    'Users under Luanshya' to behave):
-      - Return only users whose station_id matches the current station context.
-      - Owner accounts (station_id = None) are cross-station and are NOT shown
-        in station-scoped lists — they are managed on their own surface.
-      - Managers additionally see only attendants and supervisors (no managers).
+    Strict per-station scoping — avoids cross-station overlap where a user
+    appears in another station's view:
+      - Returns only users whose station_id matches the current station context
+        (the X-Station-Id header / DEFAULT_STATION_ID). Owner accounts
+        (station_id = None) are cross-station and are not shown here.
+      - Managers additionally see only attendants and supervisors.
     """
     caller_role = ctx.get("role", "")
     if hasattr(caller_role, 'value'):
