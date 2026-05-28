@@ -419,6 +419,22 @@ def list_users(ctx: dict = Depends(get_station_context)):
     ]
 
 
+def _validate_station_id(station_id):
+    """
+    Reject a station_id that doesn't exist (or is disabled). No-op for empty
+    values (owner accounts intentionally have no station). Belt-and-suspenders
+    next to the frontend station dropdown — the UI can't be the only guard.
+    """
+    if not station_id:
+        return
+    from ...database import stations_registry
+    station = stations_registry.STATIONS.get(station_id)
+    if not station:
+        raise HTTPException(status_code=400, detail=f"Unknown station '{station_id}'.")
+    if station.get("status", "active") == "disabled":
+        raise HTTPException(status_code=400, detail=f"Station '{station_id}' is disabled.")
+
+
 def _next_staff_id() -> str:
     """
     Next STFNNN id based on the MAX existing number, not a count.
@@ -469,6 +485,11 @@ def create_user(user_data: dict, current_user: dict = Depends(require_manager_or
         caller_role = caller_role.value
     if caller_role == "manager" and role not in ["user", "supervisor"]:
         raise HTTPException(status_code=403, detail="Managers can only create attendant and supervisor accounts")
+
+    # Reject a station_id that doesn't exist (typed or sent by mistake). Owner
+    # accounts intentionally have no station, so skip validation in that case.
+    if role != "owner":
+        _validate_station_id(station_id)
 
     if _USE_DB():
         from ...database.db import db_get_user_by_username, db_create_user
@@ -541,6 +562,10 @@ def update_user(username: str, user_data: dict, current_user: dict = Depends(req
             raise HTTPException(status_code=403, detail="Managers cannot modify manager or owner accounts")
         if "role" in user_data and user_data["role"] not in ["user", "supervisor"]:
             raise HTTPException(status_code=403, detail="Managers can only assign attendant or supervisor roles")
+
+    # Validate any incoming station change against the real stations registry.
+    if "station_id" in user_data and user_data.get("role") != "owner":
+        _validate_station_id(user_data.get("station_id"))
 
     if _USE_DB():
         from ...database.db import db_get_user_by_username, db_update_user

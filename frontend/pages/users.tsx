@@ -37,14 +37,22 @@ export default function UsersManagement() {
   const [resetPasswordResult, setResetPasswordResult] = useState<{ username: string; password: string } | null>(null)
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<string>('')
+  const [currentUserStationId, setCurrentUserStationId] = useState<string>('')
+  const [stations, setStations] = useState<Array<{ station_id: string; name?: string; status?: string }>>([])
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
     if (userData) {
       const parsed = JSON.parse(userData)
       setCurrentUserRole(parsed.role || '')
+      setCurrentUserStationId(parsed.station_id || '')
     }
     fetchUsers()
+    // Real stations for the Station dropdown (no more typing free-text IDs).
+    authFetch(`${BASE}/stations/`, { headers: getHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setStations(Array.isArray(data) ? data : []))
+      .catch(() => setStations([]))
   }, [])
 
   const fetchUsers = async () => {
@@ -428,19 +436,36 @@ export default function UsersManagement() {
                   </select>
                 </div>
 
-                {formData.role !== 'owner' && (
-                  <div>
-                    <label className="block text-sm font-medium text-content-secondary mb-1">
-                      Station ID
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.station_id}
-                      onChange={(e) => setFormData({ ...formData, station_id: e.target.value })}
-                      className="w-full px-3 py-2 bg-surface-bg text-content-primary border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    />
-                  </div>
-                )}
+                {formData.role !== 'owner' && (() => {
+                  // Managers can only assign within their own station.
+                  const lockedToOwn = currentUserRole === 'manager'
+                  const visibleStations = stations.filter(s => (s.status || 'active') !== 'disabled')
+                  return (
+                    <div>
+                      <label className="block text-sm font-medium text-content-secondary mb-1">
+                        Station
+                      </label>
+                      <select
+                        value={lockedToOwn ? currentUserStationId : formData.station_id}
+                        onChange={(e) => setFormData({ ...formData, station_id: e.target.value })}
+                        disabled={lockedToOwn}
+                        className="w-full px-3 py-2 bg-surface-bg text-content-primary border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary disabled:opacity-70"
+                      >
+                        {!lockedToOwn && <option value="">Select a station…</option>}
+                        {visibleStations.map(s => (
+                          <option key={s.station_id} value={s.station_id}>
+                            {s.name ? `${s.name} (${s.station_id})` : s.station_id}
+                          </option>
+                        ))}
+                      </select>
+                      {lockedToOwn && (
+                        <p className="text-xs text-content-secondary mt-1">
+                          Locked to your station. Owners can assign across stations.
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
 
               <div className="mt-6 flex justify-end space-x-3">

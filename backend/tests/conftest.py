@@ -18,6 +18,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastapi.testclient import TestClient
 from app.main import app
+# TestClient doesn't fire startup, so seed only the default station the new
+# _validate_station_id helper expects to find. Don't call load_stations() —
+# that pulls in real disk state and collides with tests that create stations.
+from app.database.stations_registry import STATIONS
+STATIONS.setdefault("ST001", {
+    "station_id": "ST001", "name": "Default Station",
+    "location": "", "status": "active",
+})
 
 
 @pytest.fixture
