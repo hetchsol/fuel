@@ -111,26 +111,55 @@ async def upload_calibration(
         from openpyxl import load_workbook
         content = await file.read()
         wb = load_workbook(io.BytesIO(content), data_only=True)
-        ws = wb.active
 
-        # Extract dip/volume pairs
+        def _to_num(val):
+            """Best-effort numeric coercion. Handles ints/floats, plain numeric
+            strings, and comma-decimal locales (e.g. '10,5' -> 10.5)."""
+            if val is None:
+                return None
+            if isinstance(val, (int, float)):
+                try:
+                    return float(val)
+                except (ValueError, TypeError):
+                    return None
+            if isinstance(val, str):
+                s = val.strip().replace(',', '.')
+                if not s:
+                    return None
+                try:
+                    return float(s)
+                except ValueError:
+                    return None
+            return None
+
+        # Try every worksheet (not just the active one) and pick the sheet with
+        # the most dip/volume pairs, so a workbook with an extra info/legend
+        # sheet still parses correctly.
         chart = {}
-        for row in ws.iter_rows(min_row=1, max_col=2, values_only=True):
-            dip_val, vol_val = row
-            if dip_val is None or vol_val is None:
-                continue
-            if isinstance(dip_val, str) and not dip_val.replace('.', '').replace('-', '').isdigit():
-                continue
-            try:
-                dip = float(dip_val)
-                vol = float(vol_val)
-                if dip >= 0 and vol >= 0:
-                    chart[dip] = vol
-            except (ValueError, TypeError):
-                continue
+        for ws in wb.worksheets:
+            candidate = {}
+            for row in ws.iter_rows(min_row=1, max_col=2, values_only=True):
+                if not row or len(row) < 2:
+                    continue
+                dip = _to_num(row[0])
+                vol = _to_num(row[1])
+                if dip is None or vol is None:
+                    continue
+                if dip < 0 or vol < 0:
+                    continue
+                candidate[dip] = vol
+            if len(candidate) > len(chart):
+                chart = candidate
 
         if len(chart) < 5:
-            raise HTTPException(status_code=400, detail=f"Need at least 5 data points. Found {len(chart)}.")
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Need at least 5 data points (Dip in column A, Volume in "
+                    f"column B). Found {len(chart)}. Check that your data is in "
+                    f"the first two columns of a sheet, with numeric values only."
+                ),
+            )
 
         # Build sorted chart
         dips = sorted(chart.keys())

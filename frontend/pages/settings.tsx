@@ -1619,8 +1619,33 @@ function TankCalibrationTab() {
       .catch(() => {})
   }, [selectedTank])
 
-  const handleDownloadTemplate = () => {
-    window.open(`${BASE}/settings/tank-calibration/template`, '_blank')
+  const handleDownloadTemplate = async () => {
+    // Fetch the file and trigger a download with an explicit .xlsx filename so
+    // the browser can't drop the extension via the Next.js rewrite (which would
+    // otherwise save it as "template" — opening as an unreadable zip).
+    setError('')
+    try {
+      const token = localStorage.getItem('accessToken')
+      const stationId = localStorage.getItem('stationId')
+      const res = await fetch(`${BASE}/settings/tank-calibration/template`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(stationId ? { 'X-Station-Id': stationId } : {}),
+        },
+      })
+      if (!res.ok) throw new Error('Failed to download template')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'tank_calibration_template.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      setError(err.message || 'Failed to download template')
+    }
   }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
