@@ -18,9 +18,10 @@ from ...models.models import (
     LubricantDailyEntryInput,
     LubricantDailyEntryOutput,
 )
-from ...api.v1.auth import get_current_user, require_supervisor_or_owner
+from ...api.v1.auth import get_current_user, require_supervisor_or_owner, require_manager_or_owner
 from .auth import get_station_context
 from ...database.station_files import load_station_json, save_station_json
+from ...services.audit_service import log_audit_event
 
 router = APIRouter()
 
@@ -262,16 +263,28 @@ def submit_lubricant_entry(
     calculated_rows = []
     total_sales = 0.0
     total_items = 0
+    any_damage = False
 
     for row in entry_input.product_rows:
-        available = row.opening_stock + row.additions
-        if row.sold_or_drawn > available:
+        damaged = row.damaged or 0
+        if damaged < 0:
+            raise HTTPException(status_code=400, detail=f"Damaged cannot be negative for {row.description}.")
+        if damaged > 0 and not (row.damage_note or "").strip():
             raise HTTPException(
                 status_code=400,
-                detail=f"Sold quantity ({row.sold_or_drawn}) exceeds available stock ({available}) for {row.description}"
+                detail=f"A note is required when recording damaged units for {row.description}.",
             )
-        balance = available - row.sold_or_drawn
+        available = row.opening_stock + row.additions
+        # `sold + damaged` cannot exceed available; default damaged=0 reproduces today's check.
+        if row.sold_or_drawn + damaged > available:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Sold + damaged ({row.sold_or_drawn + damaged}) exceeds available stock ({available}) for {row.description}"
+            )
+        balance = available - row.sold_or_drawn - damaged
         sales_value = row.selling_price * row.sold_or_drawn
+        if damaged > 0:
+            any_damage = True
 
         calculated_rows.append(LubricantDailyRow(
             product_code=row.product_code,
@@ -282,6 +295,8 @@ def submit_lubricant_entry(
             opening_stock=row.opening_stock,
             additions=row.additions,
             sold_or_drawn=row.sold_or_drawn,
+            damaged=damaged,
+            damage_note=(row.damage_note or None),
             balance=balance,
             sales_value=sales_value,
         ))
@@ -301,12 +316,46 @@ def submit_lubricant_entry(
         recorded_by=entry_input.recorded_by,
         created_at=datetime.now().isoformat(),
         notes=entry_input.notes,
+        damage_status="pending" if any_damage else "none",
     )
 
     lubricant_daily_db[entry_id] = output.model_dump(mode='json')
     save_lubricant_daily(lubricant_daily_db, station_id)
 
     return output
+
+
+@router.post("/{entry_id}/authorise-damage", dependencies=[Depends(require_manager_or_owner)])
+def authorise_lubricant_damage(entry_id: str, ctx: dict = Depends(get_station_context)):
+    """
+    Manager / owner sign-off on the damaged units recorded in a lubricant entry.
+    No-op (400) when the entry has no pending damage. Audited.
+    """
+    station_id = ctx["station_id"]
+    db = load_lubricant_daily(station_id)
+    if entry_id not in db:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    entry = db[entry_id]
+    status = entry.get("damage_status", "none")
+    if status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Entry damage status is '{status}', not 'pending'. Nothing to authorise.",
+        )
+    now_iso = datetime.now().isoformat()
+    entry["damage_status"] = "approved"
+    entry["damage_authorised_by"] = ctx["username"]
+    entry["damage_authorised_at"] = now_iso
+    save_lubricant_daily(db, station_id)
+    try:
+        log_audit_event(
+            station_id=station_id, action="damage_authorise",
+            performed_by=ctx["username"], entity_type="lubricant_daily_entry",
+            entity_id=entry_id,
+        )
+    except Exception:
+        pass
+    return entry
 
 
 @router.get("/entries")

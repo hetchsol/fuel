@@ -21,9 +21,10 @@ from ...models.models import (
     LPGAccessoriesDailyInput,
     LPGAccessoriesDailyOutput,
 )
-from ...api.v1.auth import get_current_user, require_supervisor_or_owner
+from ...api.v1.auth import get_current_user, require_supervisor_or_owner, require_manager_or_owner
 from .auth import get_station_context
 from ...database.station_files import load_station_json, save_station_json
+from ...services.audit_service import log_audit_event
 
 router = APIRouter()
 
@@ -303,13 +304,24 @@ def submit_lpg_entry(
     # the filled-stock balance. It is reflected via closing_empty instead (see expected_closing_empty below).
     calculated_rows = []
     grand_total = 0.0
+    any_damage = False
 
     for row in entry_input.cylinder_rows:
         pricing = get_pricing_for_size(row.size_kg, lpg_pricing_db)
 
         t_in = traded_in_map.get(row.size_kg, 0)
         t_out = traded_out_map.get(row.size_kg, 0)
-        balance = row.opening_balance + row.receipts - row.sold_refill - row.sold_with_cylinder - t_out
+        damaged = row.damaged or 0
+        if damaged < 0:
+            raise HTTPException(status_code=400, detail=f"Damaged cannot be negative for {row.size_kg}kg.")
+        if damaged > 0 and not (row.damage_note or "").strip():
+            raise HTTPException(
+                status_code=400,
+                detail=f"A note is required when recording damaged cylinders ({row.size_kg}kg).",
+            )
+        if damaged > 0:
+            any_damage = True
+        balance = row.opening_balance + row.receipts - row.sold_refill - row.sold_with_cylinder - t_out - damaged
         value_refill = pricing['price_refill'] * row.sold_refill
         value_with_cyl = pricing['price_with_cylinder'] * row.sold_with_cylinder
         total_value = value_refill + value_with_cyl
@@ -323,6 +335,8 @@ def submit_lpg_entry(
             traded_out=t_out,
             sold_refill=row.sold_refill,
             sold_with_cylinder=row.sold_with_cylinder,
+            damaged=damaged,
+            damage_note=(row.damage_note or None),
             balance=balance,
             closing_empty=row.closing_empty,
             value_refill=value_refill,
@@ -365,6 +379,7 @@ def submit_lpg_entry(
         recorded_by=entry_input.recorded_by,
         created_at=datetime.now().isoformat(),
         notes=entry_input.notes,
+        damage_status="pending" if any_damage else "none",
         trades=processed_trades if processed_trades else None,
         total_trade_revenue=total_trade_revenue,
         warnings=warnings if warnings else None,
@@ -374,6 +389,36 @@ def submit_lpg_entry(
     save_lpg_daily(lpg_daily_db, station_id)
 
     return output
+
+
+@router.post("/{entry_id}/authorise-damage", dependencies=[Depends(require_manager_or_owner)])
+def authorise_lpg_damage(entry_id: str, ctx: dict = Depends(get_station_context)):
+    """Manager / owner sign-off on damaged cylinders recorded in an LPG entry."""
+    station_id = ctx["station_id"]
+    db = load_lpg_daily(station_id)
+    if entry_id not in db:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    entry = db[entry_id]
+    status = entry.get("damage_status", "none")
+    if status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Entry damage status is '{status}', not 'pending'. Nothing to authorise.",
+        )
+    now_iso = datetime.now().isoformat()
+    entry["damage_status"] = "approved"
+    entry["damage_authorised_by"] = ctx["username"]
+    entry["damage_authorised_at"] = now_iso
+    save_lpg_daily(db, station_id)
+    try:
+        log_audit_event(
+            station_id=station_id, action="damage_authorise",
+            performed_by=ctx["username"], entity_type="lpg_daily_entry",
+            entity_id=entry_id,
+        )
+    except Exception:
+        pass
+    return entry
 
 
 @router.get("/entries")
@@ -453,15 +498,26 @@ def submit_accessories_entry(
 
     calculated_rows = []
     total_sales = 0.0
+    any_damage = False
 
     for row in entry_input.product_rows:
-        available = row.opening_stock + row.additions
-        if row.sold > available:
+        damaged = row.damaged or 0
+        if damaged < 0:
+            raise HTTPException(status_code=400, detail=f"Damaged cannot be negative for {row.description}.")
+        if damaged > 0 and not (row.damage_note or "").strip():
             raise HTTPException(
                 status_code=400,
-                detail=f"Sold quantity ({row.sold}) exceeds available stock ({available}) for {row.description}"
+                detail=f"A note is required when recording damaged units for {row.description}.",
             )
-        balance = available - row.sold
+        if damaged > 0:
+            any_damage = True
+        available = row.opening_stock + row.additions
+        if row.sold + damaged > available:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Sold + damaged ({row.sold + damaged}) exceeds available stock ({available}) for {row.description}"
+            )
+        balance = available - row.sold - damaged
         sales_value = row.selling_price * row.sold
 
         calculated_rows.append(LPGAccessoryDailyRow(
@@ -471,6 +527,8 @@ def submit_accessories_entry(
             opening_stock=row.opening_stock,
             additions=row.additions,
             sold=row.sold,
+            damaged=damaged,
+            damage_note=(row.damage_note or None),
             balance=balance,
             sales_value=sales_value,
         ))
@@ -486,12 +544,43 @@ def submit_accessories_entry(
         recorded_by=entry_input.recorded_by,
         created_at=datetime.now().isoformat(),
         notes=entry_input.notes,
+        damage_status="pending" if any_damage else "none",
     )
 
     lpg_accessories_db[entry_id] = output.model_dump(mode='json')
     save_lpg_accessories(lpg_accessories_db, station_id)
 
     return output
+
+
+@router.post("/accessories/{entry_id}/authorise-damage", dependencies=[Depends(require_manager_or_owner)])
+def authorise_lpg_accessories_damage(entry_id: str, ctx: dict = Depends(get_station_context)):
+    """Manager / owner sign-off on damaged units recorded in an LPG accessories entry."""
+    station_id = ctx["station_id"]
+    db = load_lpg_accessories(station_id)
+    if entry_id not in db:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    entry = db[entry_id]
+    status = entry.get("damage_status", "none")
+    if status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Entry damage status is '{status}', not 'pending'. Nothing to authorise.",
+        )
+    now_iso = datetime.now().isoformat()
+    entry["damage_status"] = "approved"
+    entry["damage_authorised_by"] = ctx["username"]
+    entry["damage_authorised_at"] = now_iso
+    save_lpg_accessories(db, station_id)
+    try:
+        log_audit_event(
+            station_id=station_id, action="damage_authorise",
+            performed_by=ctx["username"], entity_type="lpg_accessories_entry",
+            entity_id=entry_id,
+        )
+    except Exception:
+        pass
+    return entry
 
 
 @router.get("/accessories/entries")

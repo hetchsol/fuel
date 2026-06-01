@@ -701,7 +701,9 @@ class LPGCylinderShiftRow(BaseModel):
     traded_out: int = 0     # Filled cylinders given away via trade (decreases filled stock of this size)
     sold_refill: int = 0
     sold_with_cylinder: int = 0
-    balance: int = 0  # Server-calculated filled balance: opening + receipts - sold_refill - sold_with_cylinder - traded_out
+    damaged: int = 0   # Filled cylinders written off; default 0 preserves today's balance math
+    damage_note: Optional[str] = None  # Required when damaged > 0
+    balance: int = 0  # Server-calculated filled balance: opening + receipts - sold_refill - sold_with_cylinder - traded_out - damaged
     closing_empty: int = 0          # Empty cylinders at shift end
     value_refill: float = 0.0  # Server-calculated: price_refill * sold_refill
     value_with_cylinder: float = 0.0  # Server-calculated: price_with_cyl * sold_with_cylinder
@@ -733,6 +735,11 @@ class LPGDailyEntryOutput(BaseModel):
     recorded_by: str
     created_at: str
     notes: Optional[str] = None
+    # Damage authorisation: "none" when no damages, "pending" until a manager
+    # authorises, then "approved". Default "none" preserves today's response shape.
+    damage_status: str = "none"
+    damage_authorised_by: Optional[str] = None
+    damage_authorised_at: Optional[str] = None
     trades: Optional[List[LPGCylinderTrade]] = None
     total_trade_revenue: float = 0.0
     warnings: Optional[List[str]] = None
@@ -745,7 +752,9 @@ class LPGAccessoryDailyRow(BaseModel):
     opening_stock: int = 0
     additions: int = 0
     sold: int = 0
-    balance: int = 0  # Server-calculated: opening + additions - sold
+    damaged: int = 0   # Units written off; default 0 preserves today's balance math
+    damage_note: Optional[str] = None  # Required when damaged > 0
+    balance: int = 0  # Server-calculated: opening + additions - sold - damaged
     sales_value: float = 0.0  # Server-calculated: selling_price * sold
 
 class LPGAccessoriesDailyInput(BaseModel):
@@ -764,6 +773,9 @@ class LPGAccessoriesDailyOutput(BaseModel):
     recorded_by: str
     created_at: str
     notes: Optional[str] = None
+    damage_status: str = "none"
+    damage_authorised_by: Optional[str] = None
+    damage_authorised_at: Optional[str] = None
 
 
 # ===== Lubricants Daily Operations Models =====
@@ -778,7 +790,9 @@ class LubricantDailyRow(BaseModel):
     opening_stock: int = 0
     additions: int = 0  # From buffer (Island 3) or from supplier (Buffer)
     sold_or_drawn: int = 0  # Sold (Island 3) or Drawn to Island 3 (Buffer)
-    balance: int = 0  # Server-calculated: opening + additions - sold_or_drawn
+    damaged: int = 0   # Units written off; default 0 preserves today's balance math
+    damage_note: Optional[str] = None  # Required when damaged > 0
+    balance: int = 0  # Server-calculated: opening + additions - sold_or_drawn - damaged
     sales_value: float = 0.0  # Server-calculated: selling_price * sold_or_drawn
 
 class LubricantDailyEntryInput(BaseModel):
@@ -800,6 +814,9 @@ class LubricantDailyEntryOutput(BaseModel):
     recorded_by: str
     created_at: str
     notes: Optional[str] = None
+    damage_status: str = "none"
+    damage_authorised_by: Optional[str] = None
+    damage_authorised_at: Optional[str] = None
 
 
 # ===== Attendant Shift Handover Models =====
