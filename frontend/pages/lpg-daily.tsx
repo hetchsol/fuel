@@ -16,6 +16,8 @@ interface CylinderRow {
   traded_out: number
   sold_refill: number
   sold_with_cylinder: number
+  damaged: number
+  damage_note: string
   balance: number
   closing_empty: number
   value_refill: number
@@ -44,6 +46,8 @@ interface AccessoryRow {
   opening_stock: number
   additions: number
   sold: number
+  damaged: number
+  damage_note: string
   balance: number
   sales_value: number
 }
@@ -74,6 +78,7 @@ export default function LPGDaily() {
       size_kg: s, opening_balance: 0, opening_empty: 0, receipts: 0,
       traded_in: 0, traded_out: 0,
       sold_refill: 0, sold_with_cylinder: 0,
+      damaged: 0, damage_note: '',
       balance: 0, closing_empty: 0, value_refill: 0, value_with_cylinder: 0, total_value: 0,
     }))
   )
@@ -104,6 +109,7 @@ export default function LPGDaily() {
 
   const canEditPricing = user?.role === 'supervisor' || user?.role === 'manager' || user?.role === 'owner'
   const canManageStock = user?.role === 'supervisor' || user?.role === 'manager' || user?.role === 'owner'
+  const canManage = user?.role === 'manager' || user?.role === 'owner'
   const lpgPricesConfigured = pricing.length > 0 && pricing.some((p: any) => p.price_refill > 0 || p.price_with_cylinder > 0)
 
   useEffect(() => {
@@ -176,6 +182,8 @@ export default function LPGDaily() {
         opening_stock: balances[p.product_code]?.balance ?? 0,
         additions: 0,
         sold: 0,
+        damaged: 0,
+        damage_note: '',
         balance: balances[p.product_code]?.balance ?? 0,
         sales_value: 0,
       })))
@@ -213,7 +221,7 @@ export default function LPGDaily() {
       if (!p) return row
       const t_in = tradedInMap[row.size_kg] || 0
       const t_out = tradedOutMap[row.size_kg] || 0
-      const balance = row.opening_balance + row.receipts + t_in - row.sold_refill - row.sold_with_cylinder - t_out
+      const balance = row.opening_balance + row.receipts + t_in - row.sold_refill - row.sold_with_cylinder - t_out - (row.damaged || 0)
       const value_refill = p.price_refill * row.sold_refill
       const value_with_cylinder = p.price_with_cylinder * row.sold_with_cylinder
       return {
@@ -226,16 +234,16 @@ export default function LPGDaily() {
         total_value: value_refill + value_with_cylinder,
       }
     }))
-  }, [pricing, trades, cylinderRows.map(r => `${r.opening_balance}-${r.receipts}-${r.sold_refill}-${r.sold_with_cylinder}`).join(',')])
+  }, [pricing, trades, cylinderRows.map(r => `${r.opening_balance}-${r.receipts}-${r.sold_refill}-${r.sold_with_cylinder}-${r.damaged || 0}`).join(',')])
 
   // Recalculate accessory balances
   useEffect(() => {
     setAccessoryRows(prev => prev.map(row => ({
       ...row,
-      balance: row.opening_stock + row.additions - row.sold,
+      balance: row.opening_stock + row.additions - row.sold - (row.damaged || 0),
       sales_value: row.selling_price * row.sold,
     })))
-  }, [accessoryRows.map(r => `${r.opening_stock}-${r.additions}-${r.sold}`).join(',')])
+  }, [accessoryRows.map(r => `${r.opening_stock}-${r.additions}-${r.sold}-${r.damaged || 0}`).join(',')])
 
   const updateCylinderField = (sizeKg: number, field: string, value: number) => {
     setCylinderRows(prev => prev.map(row =>
@@ -247,6 +255,12 @@ export default function LPGDaily() {
     setAccessoryRows(prev => prev.map(row =>
       row.product_code === code ? { ...row, [field]: value } : row
     ))
+  }
+  const updateCylinderFieldStr = (sizeKg: number, field: string, value: string) => {
+    setCylinderRows(prev => prev.map(row => row.size_kg === sizeKg ? { ...row, [field]: value } : row))
+  }
+  const updateAccessoryFieldStr = (code: string, field: string, value: string) => {
+    setAccessoryRows(prev => prev.map(row => row.product_code === code ? { ...row, [field]: value } : row))
   }
 
   // Trade helpers
@@ -314,6 +328,8 @@ export default function LPGDaily() {
             receipts: r.receipts,
             sold_refill: r.sold_refill,
             sold_with_cylinder: r.sold_with_cylinder,
+            damaged: r.damaged || 0,
+            damage_note: r.damage_note || null,
             closing_empty: r.closing_empty,
           })),
           trades: validTrades.length > 0 ? validTrades.map(t => ({
@@ -333,7 +349,7 @@ export default function LPGDaily() {
       }
 
       // Submit accessories entry
-      const hasAccessoryActivity = accessoryRows.some(r => r.additions > 0 || r.sold > 0)
+      const hasAccessoryActivity = accessoryRows.some(r => r.additions > 0 || r.sold > 0 || (r.damaged || 0) > 0)
       if (hasAccessoryActivity) {
         const accRes = await authFetch(`${BASE}/lpg-daily/accessories/entry`, {
           method: 'POST',
@@ -347,6 +363,8 @@ export default function LPGDaily() {
               opening_stock: r.opening_stock,
               additions: r.additions,
               sold: r.sold,
+              damaged: r.damaged || 0,
+              damage_note: r.damage_note || null,
             })),
             recorded_by: user?.user_id || 'unknown',
           }),
@@ -580,7 +598,7 @@ export default function LPGDaily() {
         <table className="min-w-full text-sm">
           <thead>
             <tr style={{ backgroundColor: theme.background }}>
-              {['Size (kg)', 'Opening Stock (Full)', 'Received (Deliveries)', 'Trade In (+)', 'Trade Out (-)', 'Sold (Refill Only)', 'Sold (New Cylinder)', 'Closing Stock (Full)', 'Refill Revenue', 'New Cyl Revenue', 'Total Revenue'].map(h => (
+              {['Size (kg)', 'Opening Stock (Full)', 'Received (Deliveries)', 'Trade In (+)', 'Trade Out (-)', 'Sold (Refill Only)', 'Sold (New Cylinder)', 'Damaged', 'Closing Stock (Full)', 'Refill Revenue', 'New Cyl Revenue', 'Total Revenue'].map(h => (
                 <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
                   style={{ color: theme.textSecondary }}>{h}</th>
               ))}
@@ -634,6 +652,20 @@ export default function LPGDaily() {
                     <input type="number" min={0} value={row.sold_with_cylinder}
                       onChange={e => updateCylinderField(row.size_kg, 'sold_with_cylinder', parseInt(e.target.value) || 0)}
                       className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input type="number" min={0} value={row.damaged || 0}
+                      onChange={e => updateCylinderField(row.size_kg, 'damaged', parseInt(e.target.value) || 0)}
+                      className="w-20 px-2 py-1 rounded border text-sm text-right"
+                      style={{ ...inputStyle, ...(row.damaged > 0 ? { borderColor: 'var(--color-status-warning)' } : {}) }} />
+                    {row.damaged > 0 && (
+                      <input type="text" value={row.damage_note || ''}
+                        onChange={e => updateCylinderFieldStr(row.size_kg, 'damage_note', e.target.value)}
+                        placeholder="Reason (required)"
+                        className="mt-1 w-44 px-2 py-1 rounded border text-xs"
+                        style={{ ...inputStyle,
+                          borderColor: (row.damage_note || '').trim() ? theme.border : 'var(--color-status-error)' }} />
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right font-medium" style={{
                     color: row.balance < 0 ? 'var(--color-status-error)' : theme.textPrimary
@@ -924,7 +956,7 @@ export default function LPGDaily() {
         <table className="min-w-full text-sm">
           <thead>
             <tr style={{ backgroundColor: theme.background }}>
-              {['Product', 'Price', 'Opening', 'Additions', 'Sold', 'Balance', 'Sales Value'].map(h => (
+              {['Product', 'Price', 'Opening', 'Additions', 'Sold', 'Damaged', 'Balance', 'Sales Value'].map(h => (
                 <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
                   style={{ color: theme.textSecondary }}>{h}</th>
               ))}
@@ -962,6 +994,20 @@ export default function LPGDaily() {
                   <input type="number" min={0} value={row.sold}
                     onChange={e => updateAccessoryField(row.product_code, 'sold', parseInt(e.target.value) || 0)}
                     className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                </td>
+                <td className="px-3 py-2">
+                  <input type="number" min={0} value={row.damaged || 0}
+                    onChange={e => updateAccessoryField(row.product_code, 'damaged', parseInt(e.target.value) || 0)}
+                    className="w-16 px-2 py-1 rounded border text-sm text-right"
+                    style={{ ...inputStyle, ...(row.damaged > 0 ? { borderColor: 'var(--color-status-warning)' } : {}) }} />
+                  {row.damaged > 0 && (
+                    <input type="text" value={row.damage_note || ''}
+                      onChange={e => updateAccessoryFieldStr(row.product_code, 'damage_note', e.target.value)}
+                      placeholder="Reason (required)"
+                      className="mt-1 w-40 px-2 py-1 rounded border text-xs"
+                      style={{ ...inputStyle,
+                        borderColor: (row.damage_note || '').trim() ? theme.border : 'var(--color-status-error)' }} />
+                  )}
                 </td>
                 <td className="px-3 py-2 text-right font-medium" style={{
                   color: row.balance < 0 ? 'var(--color-status-error)' : theme.textPrimary
@@ -1016,36 +1062,69 @@ export default function LPGDaily() {
           <table className="min-w-full text-sm">
             <thead>
               <tr style={{ backgroundColor: theme.background }}>
-                {['Entry ID', 'Shift', 'Salesperson', 'Grand Total', 'Trade Rev.', 'Pop. Diff', 'Time'].map(h => (
+                {['Entry ID', 'Shift', 'Salesperson', 'Grand Total', 'Trade Rev.', 'Pop. Diff', 'Time', 'Damage', 'Action'].map(h => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium uppercase"
                     style={{ color: theme.textSecondary }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {entries.map((e: any) => (
-                <tr key={e.entry_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                  <td className="px-4 py-2 font-mono text-xs" style={{ color: theme.textPrimary }}>{e.entry_id}</td>
-                  <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.shift_type}</td>
-                  <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.salesperson}</td>
-                  <td className="px-4 py-2 font-semibold" style={{ color: theme.primary }}>
-                    ZMW{(e.grand_total_value || 0).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-2" style={{
-                    color: (e.total_trade_revenue || 0) !== 0 ? theme.primary : theme.textSecondary
-                  }}>
-                    {(e.total_trade_revenue || 0) !== 0 ? `ZMW${(e.total_trade_revenue || 0).toLocaleString()}` : '-'}
-                  </td>
-                  <td className="px-4 py-2" style={{
-                    color: e.population_difference && e.population_difference !== 0 ? 'var(--color-status-error)' : theme.textSecondary
-                  }}>
-                    {e.population_difference ?? '-'}
-                  </td>
-                  <td className="px-4 py-2 text-xs" style={{ color: theme.textSecondary }}>
-                    {e.created_at ? new Date(e.created_at).toLocaleTimeString() : '-'}
-                  </td>
-                </tr>
-              ))}
+              {entries.map((e: any) => {
+                const dStatus = e.damage_status || 'none'
+                const badgeStyle = dStatus === 'pending'
+                  ? { backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }
+                  : dStatus === 'approved'
+                    ? { backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }
+                    : { backgroundColor: theme.background, color: theme.textSecondary }
+                const authorise = async () => {
+                  try {
+                    const res = await authFetch(`${BASE}/lpg-daily/${e.entry_id}/authorise-damage`,
+                      { method: 'POST', headers: getAuthHeaders() })
+                    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Failed') }
+                    setSuccess(`Damage authorised for ${e.entry_id}`)
+                  } catch (err: any) { setError(err.message) }
+                }
+                return (
+                  <tr key={e.entry_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <td className="px-4 py-2 font-mono text-xs" style={{ color: theme.textPrimary }}>{e.entry_id}</td>
+                    <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.shift_type}</td>
+                    <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.salesperson}</td>
+                    <td className="px-4 py-2 font-semibold" style={{ color: theme.primary }}>
+                      ZMW{(e.grand_total_value || 0).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-2" style={{
+                      color: (e.total_trade_revenue || 0) !== 0 ? theme.primary : theme.textSecondary
+                    }}>
+                      {(e.total_trade_revenue || 0) !== 0 ? `ZMW${(e.total_trade_revenue || 0).toLocaleString()}` : '-'}
+                    </td>
+                    <td className="px-4 py-2" style={{
+                      color: e.population_difference && e.population_difference !== 0 ? 'var(--color-status-error)' : theme.textSecondary
+                    }}>
+                      {e.population_difference ?? '-'}
+                    </td>
+                    <td className="px-4 py-2 text-xs" style={{ color: theme.textSecondary }}>
+                      {e.created_at ? new Date(e.created_at).toLocaleTimeString() : '-'}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-medium capitalize" style={badgeStyle}>
+                        {dStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      {dStatus === 'pending' && canManage && (
+                        <button onClick={authorise}
+                          className="px-2 py-1 text-xs font-medium rounded text-white"
+                          style={{ backgroundColor: 'var(--color-status-success)' }}>
+                          Authorise
+                        </button>
+                      )}
+                      {dStatus === 'approved' && e.damage_authorised_by && (
+                        <span className="text-xs" style={{ color: theme.textSecondary }}>by {e.damage_authorised_by}</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -15,6 +15,8 @@ interface ProductRow {
   opening_stock: number
   additions: number
   sold_or_drawn: number
+  damaged: number
+  damage_note: string
   balance: number
   sales_value: number
 }
@@ -59,6 +61,7 @@ export default function LubricantsDaily() {
   }, [])
 
   const canEditPricing = user?.role === 'supervisor' || user?.role === 'manager' || user?.role === 'owner'
+  const canManage = user?.role === 'manager' || user?.role === 'owner'
   const pricesConfigured = productRows.length > 0 && productRows.some(r => r.selling_price > 0)
   const isFirstEntry = productRows.length > 0 && productRows.every(r => r.opening_stock === 0)
 
@@ -87,6 +90,8 @@ export default function LubricantsDaily() {
               opening_stock: balances[p.product_code]?.balance ?? p.current_stock ?? 0,
               additions: 0,
               sold_or_drawn: 0,
+              damaged: 0,
+              damage_note: '',
               balance: balances[p.product_code]?.balance ?? p.current_stock ?? 0,
               sales_value: 0,
             }))
@@ -105,6 +110,8 @@ export default function LubricantsDaily() {
               opening_stock: p.current_stock || 0,
               additions: 0,
               sold_or_drawn: 0,
+              damaged: 0,
+              damage_note: '',
               balance: p.current_stock || 0,
               sales_value: 0,
             })))
@@ -127,12 +134,17 @@ export default function LubricantsDaily() {
   useEffect(() => {
     setProductRows(prev => prev.map(row => ({
       ...row,
-      balance: row.opening_stock + row.additions - row.sold_or_drawn,
+      balance: row.opening_stock + row.additions - row.sold_or_drawn - (row.damaged || 0),
       sales_value: row.selling_price * row.sold_or_drawn,
     })))
-  }, [productRows.map(r => `${r.opening_stock}-${r.additions}-${r.sold_or_drawn}`).join(',')])
+  }, [productRows.map(r => `${r.opening_stock}-${r.additions}-${r.sold_or_drawn}-${r.damaged || 0}`).join(',')])
 
   const updateField = (code: string, field: string, value: number) => {
+    setProductRows(prev => prev.map(row =>
+      row.product_code === code ? { ...row, [field]: value } : row
+    ))
+  }
+  const updateFieldStr = (code: string, field: string, value: string) => {
     setProductRows(prev => prev.map(row =>
       row.product_code === code ? { ...row, [field]: value } : row
     ))
@@ -224,6 +236,8 @@ export default function LubricantsDaily() {
             opening_stock: r.opening_stock,
             additions: r.additions,
             sold_or_drawn: r.sold_or_drawn,
+            damaged: r.damaged || 0,
+            damage_note: r.damage_note || null,
           })),
           recorded_by: user?.user_id || 'unknown',
         }),
@@ -477,7 +491,7 @@ export default function LubricantsDaily() {
               <table className="min-w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
-                    {['Product', 'Size', 'Price', 'Opening', 'Additions', actionLabel, 'Balance', 'Sales Value',
+                    {['Product', 'Size', 'Price', 'Opening', 'Additions', actionLabel, 'Damaged', 'Balance', 'Sales Value',
                       ...(transferMode ? ['Transfer Qty'] : [])
                     ].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
@@ -518,6 +532,20 @@ export default function LubricantsDaily() {
                         <input type="number" min={0} value={row.sold_or_drawn}
                           onChange={e => updateField(row.product_code, 'sold_or_drawn', parseInt(e.target.value) || 0)}
                           className="w-14 px-1 py-1 rounded border text-xs text-right" style={inputStyle} />
+                      </td>
+                      <td className="px-3 py-1">
+                        <input type="number" min={0} value={row.damaged || 0}
+                          onChange={e => updateField(row.product_code, 'damaged', parseInt(e.target.value) || 0)}
+                          className="w-14 px-1 py-1 rounded border text-xs text-right"
+                          style={{ ...inputStyle, ...(row.damaged > 0 ? { borderColor: 'var(--color-status-warning)' } : {}) }} />
+                        {row.damaged > 0 && (
+                          <input type="text" value={row.damage_note || ''}
+                            onChange={e => updateFieldStr(row.product_code, 'damage_note', e.target.value)}
+                            placeholder="Reason (required)"
+                            className="mt-1 w-44 px-1 py-1 rounded border text-xs"
+                            style={{ ...inputStyle,
+                              borderColor: (row.damage_note || '').trim() ? theme.border : 'var(--color-status-error)' }} />
+                        )}
                       </td>
                       <td className="px-3 py-1 text-right text-xs font-medium" style={{
                         color: row.balance < 0 ? 'var(--color-status-error)' : theme.textPrimary
@@ -590,26 +618,61 @@ export default function LubricantsDaily() {
           <table className="min-w-full text-sm">
             <thead>
               <tr style={{ backgroundColor: theme.background }}>
-                {['Entry ID', 'Location', 'Total Sales', 'Items Moved', 'Time'].map(h => (
+                {['Entry ID', 'Location', 'Total Sales', 'Items Moved', 'Time', 'Damage', 'Action'].map(h => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium uppercase"
                     style={{ color: theme.textSecondary }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {entries.map((e: any) => (
-                <tr key={e.entry_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                  <td className="px-4 py-2 font-mono text-xs" style={{ color: theme.textPrimary }}>{e.entry_id}</td>
-                  <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.location}</td>
-                  <td className="px-4 py-2 font-semibold" style={{ color: theme.primary }}>
-                    ZMW{(e.total_daily_sales_value || 0).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.total_items_moved || 0}</td>
-                  <td className="px-4 py-2 text-xs" style={{ color: theme.textSecondary }}>
-                    {e.created_at ? new Date(e.created_at).toLocaleTimeString() : '-'}
-                  </td>
-                </tr>
-              ))}
+              {entries.map((e: any) => {
+                const dStatus = e.damage_status || 'none'
+                const badgeStyle = dStatus === 'pending'
+                  ? { backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }
+                  : dStatus === 'approved'
+                    ? { backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }
+                    : { backgroundColor: theme.background, color: theme.textSecondary }
+                const authorise = async () => {
+                  try {
+                    const res = await authFetch(`${BASE}/lubricants-daily/${e.entry_id}/authorise-damage`,
+                      { method: 'POST', headers: getAuthHeaders() })
+                    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Failed') }
+                    setSuccess(`Damage authorised for ${e.entry_id}`)
+                  } catch (err: any) { setError(err.message) }
+                }
+                return (
+                  <tr key={e.entry_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <td className="px-4 py-2 font-mono text-xs" style={{ color: theme.textPrimary }}>{e.entry_id}</td>
+                    <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.location}</td>
+                    <td className="px-4 py-2 font-semibold" style={{ color: theme.primary }}>
+                      ZMW{(e.total_daily_sales_value || 0).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.total_items_moved || 0}</td>
+                    <td className="px-4 py-2 text-xs" style={{ color: theme.textSecondary }}>
+                      {e.created_at ? new Date(e.created_at).toLocaleTimeString() : '-'}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-medium capitalize" style={badgeStyle}>
+                        {dStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      {dStatus === 'pending' && canManage && (
+                        <button onClick={authorise}
+                          className="px-2 py-1 text-xs font-medium rounded text-white"
+                          style={{ backgroundColor: 'var(--color-status-success)' }}>
+                          Authorise
+                        </button>
+                      )}
+                      {dStatus === 'approved' && e.damage_authorised_by && (
+                        <span className="text-xs" style={{ color: theme.textSecondary }}>
+                          by {e.damage_authorised_by}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
