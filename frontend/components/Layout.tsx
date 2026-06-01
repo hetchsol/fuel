@@ -337,6 +337,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       children: [
         { path: '/inventory', label: 'Tank Levels', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/stores', label: 'Stores / Stock', roles: ['manager', 'owner'] },
+        { path: '/stock-takes', label: 'Stock Takes', roles: ['manager', 'owner'] },
         { path: '/sales', label: 'Sales', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/accounts', label: 'Credit Accounts', roles: ['supervisor', 'manager', 'owner'] },
       ]
