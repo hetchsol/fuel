@@ -25,6 +25,7 @@ from .notification_service import create_notification
 
 ITEMS_FILE = "stock_items.json"
 MOVEMENTS_FILE = "stock_movements.json"
+TAKES_FILE = "stock_takes.json"
 
 CATEGORIES = ("lubricant", "lpg_accessory", "cylinder_full", "cylinder_empty", "accessory")
 BINS = ("stores", "forecourt")
@@ -298,6 +299,189 @@ def apply_handover_sales(station_id: str, handover: dict, performed_by: str = "s
     handover["stock_applied"] = True
     return {"applied": True, "items_sold": len(sold), "sales_applied": sales_applied,
             "empty_returns_applied": returns_applied}
+
+
+# ── stock-take sessions ─────────────────────────────────────────────
+
+def load_takes(station_id: str) -> dict:
+    return load_station_json(station_id, TAKES_FILE, default={})
+
+
+def save_takes(station_id: str, takes: dict):
+    save_station_json(station_id, TAKES_FILE, takes)
+
+
+def _take_status_or_400(take: Optional[dict], expected: str) -> dict:
+    if not take:
+        raise HTTPException(status_code=404, detail="Stock take not found.")
+    if take.get("status") != expected:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Stock take is '{take.get('status')}', not '{expected}'.",
+        )
+    return take
+
+
+def create_stock_take(station_id: str, bin: str = "stores",
+                      scope_item_keys: Optional[list] = None,
+                      performed_by: str = "") -> dict:
+    """
+    Open a draft stock-take session. Snapshots the current `bin` quantity per
+    in-scope item — those become the baseline for variance, so concurrent
+    movements between create and submit don't invalidate the count.
+    """
+    if bin not in BINS:
+        raise HTTPException(status_code=400, detail=f"bin must be one of {BINS}.")
+    items = load_items(station_id)
+    if scope_item_keys:
+        scoped = {k: items[k] for k in scope_item_keys if k in items}
+    else:
+        scoped = items
+    if not scoped:
+        raise HTTPException(status_code=400, detail="No matching catalog items to count.")
+
+    now = datetime.now()
+    take_id = f"ST-{now.strftime('%Y%m%d')}-{now.strftime('%H%M%S')}"
+    take = {
+        "take_id": take_id,
+        "date": now.strftime("%Y-%m-%d"),
+        "bin": bin,
+        "scope_item_keys": list(scope_item_keys) if scope_item_keys else None,
+        "status": "draft",
+        "started_by": performed_by,
+        "started_at": now.isoformat(),
+        "submitted_by": None,
+        "submitted_at": None,
+        "approved_by": None,
+        "approved_at": None,
+        "lines": [
+            {
+                "item_key": k,
+                "name": it.get("name", ""),
+                "category": it.get("category", ""),
+                "system_qty_at_open": it.get(bin, 0),
+                "counted_qty": None,
+                "variance": None,
+                "note": "",
+            }
+            for k, it in scoped.items()
+        ],
+    }
+    takes = load_takes(station_id)
+    takes[take_id] = take
+    save_takes(station_id, takes)
+    try:
+        log_audit_event(
+            station_id=station_id, action="stock_take_create",
+            performed_by=performed_by, entity_type="stock_take",
+            entity_id=take_id,
+            details={"bin": bin, "line_count": len(take["lines"])},
+        )
+    except Exception:
+        pass
+    return take
+
+
+def upsert_stock_take_lines(station_id: str, take_id: str, counts: list) -> dict:
+    """
+    Update counted quantities (and optional per-line notes) on a draft take.
+    Each entry: {item_key, counted_qty?, note?}. counted_qty may be None to
+    clear it. Variance is recomputed against the line's baseline.
+    """
+    takes = load_takes(station_id)
+    take = _take_status_or_400(takes.get(take_id), "draft")
+    by_key = {ln["item_key"]: ln for ln in take["lines"]}
+    for c in counts or []:
+        key = c.get("item_key")
+        if not key or key not in by_key:
+            continue
+        line = by_key[key]
+        if "counted_qty" in c:
+            val = c.get("counted_qty")
+            if val is None or val == "":
+                line["counted_qty"] = None
+                line["variance"] = None
+            else:
+                try:
+                    cnt = float(val)
+                except (ValueError, TypeError):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"counted_qty for {key} must be a number.",
+                    )
+                if cnt < 0:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"counted_qty for {key} cannot be negative.",
+                    )
+                line["counted_qty"] = cnt
+                line["variance"] = round(cnt - (line.get("system_qty_at_open") or 0), 4)
+        if "note" in c:
+            line["note"] = c.get("note") or ""
+    save_takes(station_id, takes)
+    return take
+
+
+def submit_stock_take(station_id: str, take_id: str, performed_by: str = "") -> dict:
+    """
+    Apply counted quantities to the bin via `adjust` for each line where a
+    count was entered. The take becomes 'submitted'. Lines without a counted
+    value are skipped (treated as "not counted"). Idempotent in practice
+    because the take's status is gated.
+    """
+    takes = load_takes(station_id)
+    take = _take_status_or_400(takes.get(take_id), "draft")
+    bin = take["bin"]
+    applied = 0
+    skipped = 0
+    for line in take["lines"]:
+        if line.get("counted_qty") is None:
+            skipped += 1
+            continue
+        try:
+            adjust(
+                station_id, line["item_key"], bin, line["counted_qty"],
+                performed_by,
+                reason=f"Stock take {take_id} ({take['date']})"
+                       + (f" — {line['note']}" if line.get("note") else ""),
+            )
+            applied += 1
+        except HTTPException:
+            # Item deleted between open and submit, or another adjust precondition.
+            skipped += 1
+    take["status"] = "submitted"
+    take["submitted_by"] = performed_by
+    take["submitted_at"] = datetime.now().isoformat()
+    save_takes(station_id, takes)
+    try:
+        log_audit_event(
+            station_id=station_id, action="stock_take_submit",
+            performed_by=performed_by, entity_type="stock_take",
+            entity_id=take_id,
+            details={"applied": applied, "skipped": skipped, "bin": bin},
+        )
+    except Exception:
+        pass
+    return take
+
+
+def approve_stock_take(station_id: str, take_id: str, performed_by: str = "") -> dict:
+    """Owner sign-off on a submitted stock take."""
+    takes = load_takes(station_id)
+    take = _take_status_or_400(takes.get(take_id), "submitted")
+    take["status"] = "approved"
+    take["approved_by"] = performed_by
+    take["approved_at"] = datetime.now().isoformat()
+    save_takes(station_id, takes)
+    try:
+        log_audit_event(
+            station_id=station_id, action="stock_take_approve",
+            performed_by=performed_by, entity_type="stock_take",
+            entity_id=take_id,
+        )
+    except Exception:
+        pass
+    return take
 
 
 # ── dashboard ───────────────────────────────────────────────────────

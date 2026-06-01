@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from .auth import get_station_context, require_manager_or_owner
+from .auth import get_station_context, require_manager_or_owner, require_owner
 from ...database.station_files import load_station_json
 from ...services import stock_service as svc
 
@@ -53,6 +53,21 @@ class AdjustInput(BaseModel):
     bin: str
     new_qty: float
     reason: str
+
+
+class StockTakeCreateInput(BaseModel):
+    bin: str = "stores"
+    scope_item_keys: Optional[list] = None
+
+
+class StockTakeLineUpdate(BaseModel):
+    item_key: str
+    counted_qty: Optional[float] = None
+    note: Optional[str] = None
+
+
+class StockTakeLinesPatch(BaseModel):
+    counts: list[StockTakeLineUpdate]
 
 
 # ── reads ───────────────────────────────────────────────────────────
@@ -163,3 +178,56 @@ def seed_catalog(ctx: dict = Depends(get_station_context)):
 
     return {"status": "success", "items_seeded": created,
             "total_items": len(svc.load_items(station_id))}
+
+
+# ── stock-take sessions ─────────────────────────────────────────────
+
+@router.post("/stock-takes", dependencies=[Depends(require_manager_or_owner)])
+def create_take(data: StockTakeCreateInput, ctx: dict = Depends(get_station_context)):
+    """Open a draft stock-take session. Snapshots system_qty per in-scope item."""
+    return svc.create_stock_take(
+        ctx["station_id"], bin=data.bin,
+        scope_item_keys=data.scope_item_keys,
+        performed_by=ctx["username"],
+    )
+
+
+@router.get("/stock-takes", dependencies=[Depends(require_manager_or_owner)])
+def list_takes(status: Optional[str] = None,
+               ctx: dict = Depends(get_station_context)):
+    takes = list(svc.load_takes(ctx["station_id"]).values())
+    if status:
+        takes = [t for t in takes if t.get("status") == status]
+    takes.sort(key=lambda t: t.get("started_at", ""), reverse=True)
+    return takes
+
+
+@router.get("/stock-takes/{take_id}", dependencies=[Depends(require_manager_or_owner)])
+def get_take(take_id: str, ctx: dict = Depends(get_station_context)):
+    take = svc.load_takes(ctx["station_id"]).get(take_id)
+    if not take:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Stock take not found.")
+    return take
+
+
+@router.patch("/stock-takes/{take_id}/lines",
+              dependencies=[Depends(require_manager_or_owner)])
+def update_take_lines(take_id: str, data: StockTakeLinesPatch,
+                      ctx: dict = Depends(get_station_context)):
+    counts = [c.model_dump() for c in data.counts]
+    return svc.upsert_stock_take_lines(ctx["station_id"], take_id, counts)
+
+
+@router.post("/stock-takes/{take_id}/submit",
+             dependencies=[Depends(require_manager_or_owner)])
+def submit_take(take_id: str, ctx: dict = Depends(get_station_context)):
+    """Apply counted values via adjust() and flip the take to 'submitted'."""
+    return svc.submit_stock_take(ctx["station_id"], take_id, ctx["username"])
+
+
+@router.post("/stock-takes/{take_id}/approve",
+             dependencies=[Depends(require_owner)])
+def approve_take(take_id: str, ctx: dict = Depends(get_station_context)):
+    """Owner sign-off on a submitted stock take."""
+    return svc.approve_stock_take(ctx["station_id"], take_id, ctx["username"])
