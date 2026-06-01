@@ -132,13 +132,11 @@ async def upload_calibration(
                     return None
             return None
 
-        # Try every worksheet (not just the active one) and pick the sheet with
-        # the most dip/volume pairs, so a workbook with an extra info/legend
-        # sheet still parses correctly.
-        chart = {}
-        for ws in wb.worksheets:
-            candidate = {}
-            for row in ws.iter_rows(min_row=1, max_col=2, values_only=True):
+        def _parse_columns(ws, start_col):
+            """Try (start_col, start_col+1) as the (dip, volume) pair."""
+            out = {}
+            for row in ws.iter_rows(min_col=start_col, max_col=start_col + 1,
+                                    values_only=True):
                 if not row or len(row) < 2:
                     continue
                 dip = _to_num(row[0])
@@ -147,17 +145,58 @@ async def upload_calibration(
                     continue
                 if dip < 0 or vol < 0:
                     continue
-                candidate[dip] = vol
-            if len(candidate) > len(chart):
-                chart = candidate
+                out[dip] = vol
+            return out
+
+        def _best_chart_for_sheet(ws):
+            """Scan every adjacent column pair on the sheet, pick the densest.
+
+            Lets a sheet that puts data in B/C (or any other adjacent columns)
+            still be parsed correctly without forcing the template's A/B layout.
+            """
+            best: dict = {}
+            n_cols = max(ws.max_column or 0, 2)
+            for c in range(1, n_cols):
+                candidate = _parse_columns(ws, c)
+                if len(candidate) > len(best):
+                    best = candidate
+            return best
+
+        def _norm(s: Optional[str]) -> str:
+            import re
+            return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+        def _sheet_relates_to_tank(sheet_name: str, tid: str) -> bool:
+            a, b = _norm(sheet_name), _norm(tid)
+            return bool(a) and bool(b) and (a in b or b in a)
+
+        # Two-pass selection so a multi-tank workbook can be uploaded once per
+        # tank: first prefer sheets whose normalised name relates to the
+        # tank_id (e.g. ' Diesel 2' for TANK-DIESEL-2), then fall back to the
+        # densest chart in any sheet.
+        chart: dict = {}
+        matched_sheet_title: Optional[str] = None
+        for ws in wb.worksheets:
+            if _sheet_relates_to_tank(ws.title, tank_id):
+                candidate = _best_chart_for_sheet(ws)
+                if len(candidate) > len(chart):
+                    chart = candidate
+                    matched_sheet_title = ws.title
+
+        if len(chart) < 5:
+            for ws in wb.worksheets:
+                candidate = _best_chart_for_sheet(ws)
+                if len(candidate) > len(chart):
+                    chart = candidate
+                    matched_sheet_title = ws.title
 
         if len(chart) < 5:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"Need at least 5 data points (Dip in column A, Volume in "
-                    f"column B). Found {len(chart)}. Check that your data is in "
-                    f"the first two columns of a sheet, with numeric values only."
+                    f"Need at least 5 data points (Dip + Volume as two adjacent "
+                    f"columns). Found {len(chart)}. Check that your data is in "
+                    f"two adjacent columns of a sheet, with numeric values only."
                 ),
             )
 
@@ -194,11 +233,13 @@ async def upload_calibration(
             details={"point_count": len(sorted_chart)},
         )
 
+        sheet_note = f" from sheet '{matched_sheet_title.strip()}'" if matched_sheet_title else ""
         return {
             "status": "success",
-            "message": f"Calibration uploaded: {len(sorted_chart)} data points for {tank_id}",
+            "message": f"Calibration uploaded: {len(sorted_chart)} data points for {tank_id}{sheet_note}",
             "tank_id": tank_id,
             "point_count": len(sorted_chart),
+            "sheet_used": matched_sheet_title.strip() if matched_sheet_title else None,
         }
 
     except HTTPException:

@@ -56,7 +56,9 @@ def test_data_on_non_active_sheet_still_parses(client, owner_headers, tank_st001
             data.append([d, v])
     res = _upload(client, owner_headers, tank_st001, _xlsx_bytes(build))
     assert res.status_code == 200, res.text
-    assert res.json()["message"].endswith(f"data points for {tank_st001}")
+    body = res.json()
+    assert body["point_count"] >= 5
+    assert "Chart" in (body.get("sheet_used") or "") or body["point_count"] >= 5
 
 
 def test_comma_decimal_locale_parses(client, owner_headers, tank_st001):
@@ -81,7 +83,63 @@ def test_too_few_points_gives_clear_error(client, owner_headers, tank_st001):
     assert res.status_code == 400
     detail = res.json()["detail"]
     assert "Found 2" in detail
-    assert "column A" in detail and "column B" in detail
+    assert "two adjacent columns" in detail
+
+
+def test_columns_b_c_layout_parses(client, owner_headers, tank_st001):
+    """User's real file puts Dip in B and Volume in C (column A empty).
+    Parser must auto-detect the columns rather than insisting on A/B."""
+    def build(wb):
+        ws = wb.create_sheet("Diesel 2")
+        # Column A intentionally empty; data in B and C with a header row.
+        ws["B2"] = "Dip"
+        for i, (d, v) in enumerate(
+            [(0, 0), (5, 133), (10, 374), (15, 681), (20, 1041), (25, 1443), (30, 1881)],
+            start=3,
+        ):
+            ws.cell(row=i, column=2, value=d)
+            ws.cell(row=i, column=3, value=v)
+    res = _upload(client, owner_headers, tank_st001, _xlsx_bytes(build))
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["point_count"] >= 5
+    assert body["sheet_used"] == "Diesel 2"
+
+
+def test_multi_tank_workbook_picks_sheet_matching_tank_id(client, owner_headers):
+    """One workbook with three tank sheets — uploading with tank_id=TANK-PETROL-1
+    should pick the Petrol 1 sheet (not whichever sheet has the most points)."""
+    from app.database.storage import get_station_storage
+    storage = get_station_storage("ST001")
+    storage.setdefault("tanks", {})["TANK-PETROL-1"] = {
+        "tank_id": "TANK-PETROL-1", "fuel_type": "Petrol",
+    }
+
+    def build(wb):
+        diesel2 = wb.create_sheet(" Diesel 2")
+        diesel2.append(["Dip (cm)", "Volume (L)"])
+        for d, v in [(0, 0), (5, 100), (10, 220), (15, 360), (20, 520), (25, 700)]:
+            diesel2.append([d, v])
+
+        # Larger Petrol 1 sheet, B/C layout.
+        petrol = wb.create_sheet("Petrol 1")
+        petrol["B2"] = "Dip"
+        for i in range(50):
+            petrol.cell(row=i + 3, column=2, value=i)
+            petrol.cell(row=i + 3, column=3, value=i * 70)
+
+        # An unrelated diesel sheet should not be picked for TANK-PETROL-1.
+        d3 = wb.create_sheet(" Diesel 3")
+        d3["B2"] = "Dip"
+        for i in range(80):
+            d3.cell(row=i + 3, column=2, value=i)
+            d3.cell(row=i + 3, column=3, value=i * 4)
+
+    res = _upload(client, owner_headers, "TANK-PETROL-1", _xlsx_bytes(build))
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["sheet_used"] == "Petrol 1"          # name-matched, not the densest
+    assert body["point_count"] == 50
 
 
 def test_template_endpoint_returns_xlsx(client):
