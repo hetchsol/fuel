@@ -99,6 +99,7 @@ export default function LPGDaily() {
   // Accessories pricing editor state
   const [showAccPricingEditor, setShowAccPricingEditor] = useState(false)
   const [accEditPrices, setAccEditPrices] = useState<Record<string, string>>({})
+  const [accEditReorderLevels, setAccEditReorderLevels] = useState<Record<string, string>>({})
   const [accPricingSaving, setAccPricingSaving] = useState(false)
 
   const [showEmptyTracking, setShowEmptyTracking] = useState(false)
@@ -189,8 +190,13 @@ export default function LPGDaily() {
       })))
       // Populate editor
       const ep: Record<string, string> = {}
-      for (const p of products) ep[p.product_code] = String(p.selling_price || 0)
+      const er: Record<string, string> = {}
+      for (const p of products) {
+        ep[p.product_code] = String(p.selling_price || 0)
+        er[p.product_code] = String(p.reorder_level || 0)
+      }
       setAccEditPrices(ep)
+      setAccEditReorderLevels(er)
     }).catch(() => {})
   }, [date])
 
@@ -421,6 +427,7 @@ export default function LPGDaily() {
       const items = Object.entries(accEditPrices).map(([code, price]) => ({
         product_code: code,
         selling_price: parseFloat(price) || 0,
+        reorder_level: parseInt(accEditReorderLevels[code] || '0') || 0,
       }))
       const res = await authFetch(`${BASE}/lpg-daily/accessories/pricing`, {
         method: 'PUT',
@@ -922,6 +929,13 @@ export default function LPGDaily() {
                         value={accEditPrices[row.product_code] || '0'}
                         onChange={e => setAccEditPrices({ ...accEditPrices, [row.product_code]: e.target.value })}
                         className="w-24 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
+                    </div>
+                    <div className="flex items-center gap-1" title="Re-order level (alert when balance ≤ this; 0 disables)">
+                      <span className="text-xs" style={{ color: theme.textSecondary }}>R/L</span>
+                      <input type="number" min={0} step={1}
+                        value={accEditReorderLevels[row.product_code] || '0'}
+                        onChange={e => setAccEditReorderLevels({ ...accEditReorderLevels, [row.product_code]: e.target.value })}
+                        className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
                     </div>
                   </div>
                 ))}

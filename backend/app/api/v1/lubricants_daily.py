@@ -22,6 +22,7 @@ from ...api.v1.auth import get_current_user, require_supervisor_or_owner, requir
 from .auth import get_station_context
 from ...database.station_files import load_station_json, save_station_json
 from ...services.audit_service import log_audit_event
+from ...services.notification_service import create_notification
 
 router = APIRouter()
 
@@ -259,6 +260,9 @@ def submit_lubricant_entry(
 
     station_id = ctx["station_id"]
     lubricant_daily_db = load_lubricant_daily(station_id)
+    # Per-SKU re-order levels (Phase C). Default 0 means no alert for that SKU.
+    catalog = load_product_catalog(station_id)
+    reorder_map = {p.get('product_code'): (p.get('reorder_level') or 0) for p in catalog if p.get('product_code')}
 
     calculated_rows = []
     total_sales = 0.0
@@ -302,6 +306,20 @@ def submit_lubricant_entry(
         ))
         total_sales += sales_value
         total_items += row.sold_or_drawn
+
+        # Phase C — per-SKU low-stock alert. Only fires when a re-order level is
+        # configured (> 0), so default catalogs preserve today's silent behaviour.
+        lvl = reorder_map.get(row.product_code, 0)
+        if lvl and balance <= lvl:
+            try:
+                create_notification(
+                    station_id=station_id, type="LOW_STOCK", severity="warning",
+                    title="Lubricant at/below re-order level",
+                    message=f"{row.description}: balance {balance} (re-order level {lvl}).",
+                    entity_type="lubricant_product", entity_id=row.product_code,
+                )
+            except Exception:
+                pass
 
     loc_prefix = "LI3" if entry_input.location == "Island 3" else "LBF"
     entry_id = f"LUB-{loc_prefix}-{entry_input.date}-{uuid.uuid4().hex[:8]}"
@@ -485,19 +503,44 @@ def get_product_pricing(ctx: dict = Depends(get_station_context)):
     return load_product_catalog(ctx["station_id"])
 
 
-@router.put("/products/pricing")
-def update_product_pricing(items: List[dict], ctx: dict = Depends(require_supervisor_or_owner)):
-    """Update lubricant product prices (supervisor/owner only)."""
+@router.put("/products/pricing", dependencies=[Depends(require_supervisor_or_owner)])
+def update_product_pricing(items: List[dict], ctx: dict = Depends(get_station_context)):
+    """
+    Update lubricant product prices and optional per-SKU re-order levels.
+    Each item may carry `selling_price` and/or `reorder_level` (omitted -> kept).
+    Supervisor / owner only.
+    """
     station_id = ctx["station_id"]
     catalog = load_product_catalog(station_id)
-    price_map = {item['product_code']: item['selling_price'] for item in items if 'product_code' in item and 'selling_price' in item}
+
+    # Validate every input up-front so bad values are caught even for SKUs that
+    # don't (yet) exist in the catalog.
+    by_code: dict = {}
+    for item in items:
+        code = item.get('product_code')
+        if not code:
+            continue
+        if 'selling_price' in item:
+            sp = item['selling_price']
+            if not isinstance(sp, (int, float)) or sp < 0:
+                raise HTTPException(status_code=400, detail=f"Invalid price for {code}")
+        if 'reorder_level' in item and item['reorder_level'] is not None:
+            try:
+                lvl = int(item['reorder_level'])
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail=f"Invalid reorder_level for {code}")
+            if lvl < 0:
+                raise HTTPException(status_code=400, detail=f"reorder_level for {code} cannot be negative")
+        by_code[code] = item
 
     for product in catalog:
-        if product['product_code'] in price_map:
-            new_price = price_map[product['product_code']]
-            if not isinstance(new_price, (int, float)) or new_price < 0:
-                raise HTTPException(status_code=400, detail=f"Invalid price for {product['product_code']}")
-            product['selling_price'] = new_price
+        upd = by_code.get(product['product_code'])
+        if not upd:
+            continue
+        if 'selling_price' in upd:
+            product['selling_price'] = upd['selling_price']
+        if 'reorder_level' in upd and upd['reorder_level'] is not None:
+            product['reorder_level'] = int(upd['reorder_level'])
 
     save_product_catalog(station_id, catalog)
-    return {"status": "success", "message": "Product prices updated", "count": len(price_map)}
+    return {"status": "success", "message": "Product catalog updated", "count": len(by_code)}

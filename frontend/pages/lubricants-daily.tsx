@@ -53,6 +53,7 @@ export default function LubricantsDaily() {
   // Pricing editor state
   const [showPricingEditor, setShowPricingEditor] = useState(false)
   const [editPrices, setEditPrices] = useState<Record<string, string>>({})
+  const [editReorderLevels, setEditReorderLevels] = useState<Record<string, string>>({})
   const [pricingSaving, setPricingSaving] = useState(false)
 
   useEffect(() => {
@@ -97,8 +98,13 @@ export default function LubricantsDaily() {
             }))
             setProductRows(rows)
             const ep: Record<string, string> = {}
-            for (const p of products) ep[p.product_code] = String(p.selling_price || 0)
+            const er: Record<string, string> = {}
+            for (const p of products) {
+              ep[p.product_code] = String(p.selling_price || 0)
+              er[p.product_code] = String(p.reorder_level || 0)
+            }
             setEditPrices(ep)
+            setEditReorderLevels(er)
           })
           .catch(() => {
             setProductRows(products.map((p: any) => ({
@@ -196,6 +202,7 @@ export default function LubricantsDaily() {
       const items = Object.entries(editPrices).map(([code, price]) => ({
         product_code: code,
         selling_price: parseFloat(price) || 0,
+        reorder_level: parseInt(editReorderLevels[code] || '0') || 0,
       }))
       const res = await authFetch(`${BASE}/lubricants-daily/products/pricing`, {
         method: 'PUT',
@@ -430,6 +437,13 @@ export default function LubricantsDaily() {
                               value={editPrices[p.product_code] || '0'}
                               onChange={e => setEditPrices({ ...editPrices, [p.product_code]: e.target.value })}
                               className="w-20 px-1.5 py-0.5 rounded border text-xs text-right" style={inputStyle} />
+                          </div>
+                          <div className="flex items-center gap-0.5 shrink-0" title="Re-order level (alert when balance ≤ this; 0 disables)">
+                            <span className="text-xs" style={{ color: theme.textSecondary }}>R/L</span>
+                            <input type="number" min={0} step={1}
+                              value={editReorderLevels[p.product_code] || '0'}
+                              onChange={e => setEditReorderLevels({ ...editReorderLevels, [p.product_code]: e.target.value })}
+                              className="w-14 px-1.5 py-0.5 rounded border text-xs text-right" style={inputStyle} />
                           </div>
                         </div>
                       ))}
