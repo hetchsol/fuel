@@ -471,6 +471,39 @@ export default function MyShift() {
     && allStockVarianceNotesProvided && noStockOutViolations && !submitting
     && (!hasDeviationFlags || notes.trim() !== '')
 
+  // Plain-language list of what still blocks submission (read-only; mirrors the
+  // existing canProceedToReview / canSubmit gates — item 4).
+  const pendingItems: string[] = (() => {
+    const items: string[] = []
+    const n = (count: number, one: string, many: string) => count === 1 ? one : `${count} ${many}`
+    const closingsMissing = nozzleRows.filter(r => !(r.closing_reading !== '' && r.closing_verified)).length
+    if (closingsMissing > 0) items.push(`${n(closingsMissing, 'A closing reading', 'closing readings')} still to enter`)
+    const mechMissing = nozzleRows.filter(r => !(r.mechanical_closing !== '' && r.mech_closing_verified)).length
+    if (mechMissing > 0) items.push(`${n(mechMissing, 'A mechanical reading', 'mechanical readings')} still to enter`)
+    const invalidCount = nozzleComputations.filter(c => !(c.valid || c.volume === 0) || c.mechValid === false).length
+    if (invalidCount > 0) items.push(`${n(invalidCount, 'A reading', 'readings')} look wrong (closing below opening)`)
+    const stockOuts = [...lpgComputations, ...accComputations, ...lubComputations].filter(c => c.soldExceedsOpening).length
+    if (stockOuts > 0) items.push(`${n(stockOuts, 'An item', 'items')} sold more than the opening stock`)
+    const stockNotesMissing =
+      lpgComputations.filter((c, i) => c.hasVariance && lpgRows[i].variance_note.trim() === '').length +
+      accComputations.filter((c, i) => c.hasVariance && accessoryRows[i].variance_note.trim() === '').length +
+      lubComputations.filter((c, i) => c.hasVariance && lubricantRows[i].variance_note.trim() === '').length
+    if (stockNotesMissing > 0) items.push(`${n(stockNotesMissing, 'A stock variance', 'stock variances')} need a note`)
+    const devNotesMissing = nozzleRows.filter((row, i) => {
+      const c = nozzleComputations[i]
+      return (c?.flagged || c?.lossExceedsThreshold) && row.deviation_note.trim() === ''
+    }).length
+    if (devNotesMissing > 0) items.push(`${n(devNotesMissing, 'A meter deviation', 'meter deviations')} need a note`)
+    if (hasDeviationFlags && notes.trim() === '') items.push('A shift note is required (deviations were flagged)')
+    return items
+  })()
+
+  // A returned/reopened handover for this shift, if any (item 6 — read-only surfacing).
+  const returnedHandover: any = isAttendant
+    ? (pastHandovers as any[]).find(h =>
+        h.shift_id === shiftInfo?.shift_id && (h.review_status === 'returned' || h.status === 'reopened'))
+    : null
+
   // Which closing reading (if any) is currently being double-entered.
   const [activeEntry, setActiveEntry] = useState<{ nozzleId: string; field: 'electronic' | 'mechanical' } | null>(null)
 
@@ -898,6 +931,24 @@ export default function MyShift() {
         </div>
       )}
 
+      {/* Handover returned by supervisor — surface the note (item 6, read-only) */}
+      {isAttendant && returnedHandover && (
+        <div className="rounded-lg shadow p-4 mb-6"
+          style={{ backgroundColor: 'var(--color-status-warning-light)', borderColor: 'var(--color-status-warning)', borderWidth: 2 }}>
+          <h3 className="font-semibold text-sm" style={{ color: 'var(--color-status-warning)' }}>
+            Handover returned by supervisor
+          </h3>
+          <p className="text-sm mt-1" style={{ color: 'var(--color-status-warning)' }}>
+            {returnedHandover.supervisor_review?.note
+              ? `“${returnedHandover.supervisor_review.note}”`
+              : 'Your handover was sent back for correction.'}
+          </p>
+          <p className="text-xs mt-2" style={{ color: 'var(--color-status-warning)' }}>
+            Handover ID: {returnedHandover.handover_id}. Please correct the issue and resubmit as instructed.
+          </p>
+        </div>
+      )}
+
       {/* Phase 1 already submitted banner */}
       {readingsVerifiedHandover && !handoverResult && (
         <div className="rounded-lg shadow p-4 mb-6"
@@ -1052,6 +1103,30 @@ export default function MyShift() {
       {/* ============================================= */}
       {currentStep === 1 && !handoverResult && (
         <>
+          {/* What's left to submit — live checklist of the existing submit gates (item 4) */}
+          <div className="rounded-lg shadow p-4 mb-6"
+            style={{ backgroundColor: theme.cardBg, borderColor: pendingItems.length === 0 ? 'var(--color-status-success)' : theme.border, borderWidth: 1 }}>
+            {pendingItems.length === 0 ? (
+              <p className="text-sm font-medium" style={{ color: 'var(--color-status-success)' }}>
+                Everything is entered. Tap &ldquo;Review my entries&rdquo; below.
+              </p>
+            ) : (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: theme.textSecondary }}>
+                  Still needed before you can submit
+                </p>
+                <ul className="space-y-1.5">
+                  {pendingItems.map((item, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm" style={{ color: theme.textPrimary }}>
+                      <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-status-warning)' }} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+
           {/* Price change banner */}
           {priceChangeDetected && (
             <div className="rounded-lg p-3 mb-4 text-sm"

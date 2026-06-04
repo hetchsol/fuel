@@ -1,6 +1,6 @@
 # Attendant Usability Simplification — Master Plan
 
-**Status:** Phase 1 (items 1 + 3) implemented on branch `simplify/attendant-flow`. Remaining items not started.
+**Status:** Phases 1–2 (items 1, 3, 4, 6) implemented on branch `simplify/attendant-flow`. Items 5 + 2 remain (2 gated on §12).
 **Date:** 2026-06-04
 **Scope:** Make the **attendant** (`role === 'user'`) experience easier end-to-end —
 clearer wayfinding, an obvious step sequence, a shorter form on a forecourt
@@ -147,6 +147,15 @@ routes to `/shift-closing`; step labels don't alter gating.
 
 ## 6. Item 4 — Open-short stock sections + "what's left" checklist
 
+> **Implemented (2026-06-04).** Open-short was already satisfied — LPG /
+> Accessories / Lubricants sections already default to collapsed (`showLpg` /
+> `showAccessories` / `showLubs` = `useState(false)`); Nozzles stay open. Added a
+> live **"Still needed before you can submit"** checklist at the top of Step 1,
+> derived read-only from the existing `canProceedToReview`/`canSubmit` gates
+> (missing closings/mech, invalid readings, stock-outs, missing variance/deviation
+> notes, missing shift note). Shows a green "Everything is entered" line when clear.
+
+
 **Today.** Nozzles + LPG + Accessories + Lubricants stack into a long scroll on a
 forecourt phone. The only "what's blocking submit" signal is the disabled
 button's changing text (`my-shift.tsx:~1675`).
@@ -190,6 +199,16 @@ guard intact.
 ---
 
 ## 8. Item 6 — Loud "Returned — redo" status
+
+> **Implemented (2026-06-04).** Landing-card half shipped in item 1 ("Readings
+> returned — action needed"). Added a read-only in-page warning banner on
+> `/my-shift` showing the supervisor's return note (detected from the attendant's
+> own `/handover/entries` for the current shift). Deliberately **no redo CTA wired
+> here**: a returned handover is `status=reopened`/`review_status=returned` with
+> phase still `completed`, so its redo path differs from the phase-1
+> `redo-readings` flow — surfacing the status is safe; wiring a redo button risks a
+> 400. The existing redo affordance is unchanged.
+
 
 **Today.** A returned handover shows only as an in-page banner + "Redo Readings"
 inside `/my-shift` (`my-shift.tsx:~919`); easy to miss, and the supervisor's note
