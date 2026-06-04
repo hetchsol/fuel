@@ -196,6 +196,11 @@ export default function MyShift() {
   const [currentStep, setCurrentStep] = useState<1 | 2>(1)
   const [readingsVerifiedHandover, setReadingsVerifiedHandover] = useState<any>(null)
   const [priceChangeDetected, setPriceChangeDetected] = useState(false)
+  // Start-of-shift opening verification (two-mode). Default true so the closing
+  // flow never flashes before the shift loads; set from the backend on load.
+  const [openingVerified, setOpeningVerified] = useState(true)
+  const [verifyingOpening, setVerifyingOpening] = useState(false)
+  const [openingDiscrepancyNote, setOpeningDiscrepancyNote] = useState('')
   // Review confirmation modal
   const [showReviewModal, setShowReviewModal] = useState(false)
 
@@ -264,6 +269,7 @@ export default function MyShift() {
         setMeterThreshold(shiftData.meter_discrepancy_threshold ?? 0.5)
         setNozzleLossThreshold(shiftData.nozzle_allowable_loss_liters ?? 0.8)
         setReadingsVerifiedHandover(shiftData.readings_verified_handover || null)
+        setOpeningVerified(!!shiftData.opening_verified)
 
         // Fetch credit accounts for line-item entry
         authFetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
@@ -504,6 +510,11 @@ export default function MyShift() {
         h.shift_id === shiftInfo?.shift_id && (h.review_status === 'returned' || h.status === 'reopened'))
     : null
 
+  // Two-mode: a fresh shift starts in "verify opening" mode until the attendant
+  // confirms the carried-forward opening. In-flight shifts (handover exists) are
+  // already opening_verified, so they go straight to the closing flow.
+  const inStartMode = isAttendant && shiftFound && !openingVerified && !handoverResult
+
   // Which closing reading (if any) is currently being double-entered.
   const [activeEntry, setActiveEntry] = useState<{ nozzleId: string; field: 'electronic' | 'mechanical' } | null>(null)
 
@@ -734,6 +745,33 @@ export default function MyShift() {
   const stepSubtitles: Record<number, string> = {
     1: 'Enter closing readings and stock counts for your shift',
     2: 'Review your entries before submitting',
+  }
+
+  // Start-of-shift: record the attendant's verification of the carried-forward
+  // opening readings/stock, then move into the closing flow.
+  const handleVerifyOpening = async () => {
+    if (!shiftInfo?.shift_id) return
+    setVerifyingOpening(true)
+    setError('')
+    try {
+      const res = await authFetch(`${BASE}/handover/verify-opening`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          shift_id: shiftInfo.shift_id,
+          discrepancy_note: openingDiscrepancyNote.trim() || null,
+        }),
+      })
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({ detail: 'Failed to verify opening' }))
+        throw new Error(e.detail || 'Failed to verify opening')
+      }
+      setOpeningVerified(true)
+    } catch (err: any) {
+      setError(err.message || 'Failed to verify opening')
+    } finally {
+      setVerifyingOpening(false)
+    }
   }
 
   const handleRedoReadings = async () => {
@@ -1053,8 +1091,104 @@ export default function MyShift() {
         </div>
       )}
 
+      {/* Start of shift: verify the carried-forward opening readings & stock */}
+      {inStartMode && (
+        <div className="space-y-6">
+          <div className="rounded-lg shadow p-4" style={{ backgroundColor: 'var(--color-action-primary-light)', borderColor: 'var(--color-action-primary)', borderWidth: 1 }}>
+            <h2 className="text-lg font-bold" style={{ color: 'var(--color-action-primary)' }}>Start of shift — verify your opening</h2>
+            <p className="text-sm mt-1" style={{ color: 'var(--color-action-primary)' }}>
+              These opening figures carry over from the previous shift&rsquo;s close. Check them against the pumps and stock, then confirm to begin. If anything doesn&rsquo;t match, note it below.
+            </p>
+          </div>
+
+          {/* Opening readings (read-only) */}
+          <div className="rounded-lg shadow overflow-hidden" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+            <div className="p-4 font-semibold text-sm" style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
+              Opening meter readings
+            </div>
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr style={{ backgroundColor: theme.background }}>
+                  {['Nozzle', 'Fuel', 'Electronic opening', 'Mechanical opening'].map(h => (
+                    <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {nozzleRows.map(row => (
+                  <tr key={row.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{row.display_label || row.nozzle_id}</td>
+                    <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{row.fuel_type}</td>
+                    <td className="px-3 py-2 font-mono" style={{ color: theme.textPrimary }}>{Number(row.opening_reading || 0).toLocaleString(undefined, { minimumFractionDigits: 3 })}</td>
+                    <td className="px-3 py-2 font-mono" style={{ color: theme.textPrimary }}>{Number(row.mechanical_opening || 0).toLocaleString(undefined, { minimumFractionDigits: 3 })}</td>
+                  </tr>
+                ))}
+                {nozzleRows.length === 0 && (
+                  <tr><td colSpan={4} className="px-3 py-6 text-center text-sm" style={{ color: theme.textSecondary }}>No nozzles assigned</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Opening stock summary (read-only) — only items carried with stock */}
+          {(() => {
+            const lpgOpen = lpgRows.filter(r => (r.opening_full || 0) > 0 || (r.opening_empty || 0) > 0)
+            const accOpen = accessoryRows.filter(r => (r.opening_stock || 0) > 0)
+            const lubOpen = lubricantRows.filter(r => (r.opening_stock || 0) > 0)
+            if (lpgOpen.length === 0 && accOpen.length === 0 && lubOpen.length === 0) return null
+            return (
+              <div className="rounded-lg shadow p-4" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+                <div className="font-semibold text-sm mb-3" style={{ color: theme.textPrimary }}>Opening stock</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                  {lpgOpen.map(r => (
+                    <div key={`lpg-${r.size_kg}`} className="flex justify-between">
+                      <span style={{ color: theme.textSecondary }}>{r.size_kg}kg cylinders</span>
+                      <span className="font-mono" style={{ color: theme.textPrimary }}>{r.opening_full} full{(r.opening_empty || 0) > 0 ? ` / ${r.opening_empty} empty` : ''}</span>
+                    </div>
+                  ))}
+                  {accOpen.map(r => (
+                    <div key={`acc-${r.product_code}`} className="flex justify-between">
+                      <span style={{ color: theme.textSecondary }}>{r.description}</span>
+                      <span className="font-mono" style={{ color: theme.textPrimary }}>{r.opening_stock}</span>
+                    </div>
+                  ))}
+                  {lubOpen.map(r => (
+                    <div key={`lub-${r.product_code}`} className="flex justify-between">
+                      <span style={{ color: theme.textSecondary }}>{r.description}</span>
+                      <span className="font-mono" style={{ color: theme.textPrimary }}>{r.opening_stock}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Optional discrepancy note + confirm */}
+          <div className="rounded-lg shadow p-4" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+            <label className="block text-sm font-medium mb-1" style={{ color: theme.textSecondary }}>
+              Discrepancy note (optional)
+            </label>
+            <textarea
+              rows={2}
+              value={openingDiscrepancyNote}
+              onChange={e => setOpeningDiscrepancyNote(e.target.value)}
+              placeholder="e.g. UNL 1A pump shows 12350 but handover says 12345"
+              className="w-full px-3 py-2 text-sm rounded border"
+              style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}
+            />
+            <button
+              onClick={handleVerifyOpening}
+              disabled={verifyingOpening}
+              className="mt-3 w-full sm:w-auto px-6 py-3 rounded-lg text-base font-semibold text-white disabled:opacity-50"
+              style={{ backgroundColor: theme.primary }}>
+              {verifyingOpening ? 'Confirming...' : 'Confirm opening & begin shift'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Step Indicator — visible to attendants only, before submission, with active shift */}
-      {isAttendant && shiftFound && !handoverResult && (
+      {isAttendant && shiftFound && !handoverResult && openingVerified && (
         <div className="rounded-lg shadow p-4 mb-6 flex items-center justify-center"
           style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
           {/* Step 1 */}
@@ -1101,7 +1235,7 @@ export default function MyShift() {
       {/* STEP 1: Enter Readings & Stock Counts         */}
       {/* Financial columns (Price, Revenue, Value) hidden */}
       {/* ============================================= */}
-      {currentStep === 1 && !handoverResult && (
+      {currentStep === 1 && !handoverResult && !inStartMode && (
         <>
           {/* What's left to submit — live checklist of the existing submit gates (item 4) */}
           <div className="rounded-lg shadow p-4 mb-6"
@@ -1763,7 +1897,7 @@ export default function MyShift() {
       {/* ============================================= */}
       {/* STEP 2: Review & Confirm (read-only, no money)*/}
       {/* ============================================= */}
-      {currentStep === 2 && !handoverResult && (
+      {currentStep === 2 && !handoverResult && !inStartMode && (
         <>
           {/* Nozzle Readings Review */}
           <div className="rounded-lg shadow mb-6 overflow-x-auto"

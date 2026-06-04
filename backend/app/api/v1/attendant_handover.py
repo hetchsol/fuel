@@ -3,7 +3,8 @@ Attendant Shift Handover API
 Allows attendants to submit closing readings and cash handover at end of shift
 """
 from fastapi import APIRouter, HTTPException, Depends
-from typing import List
+from pydantic import BaseModel
+from typing import List, Optional
 from datetime import datetime
 import json
 import os
@@ -49,6 +50,16 @@ def _load_handovers(station_id: str) -> dict:
 
 def _save_handovers(data: dict, station_id: str):
     save_station_json(station_id, 'attendant_handovers.json', data)
+
+
+# Start-of-shift opening verification (additive — does not touch the handover
+# pipeline). Keyed by f"{shift_id}-{attendant_id}".
+def _load_opening_verifications(station_id: str) -> dict:
+    return load_station_json(station_id, 'opening_verifications.json', default={})
+
+
+def _save_opening_verifications(data: dict, station_id: str):
+    save_station_json(station_id, 'opening_verifications.json', data)
 
 
 def notify_stale_readings(station_id: str) -> int:
@@ -809,12 +820,18 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
     # Check for existing Phase 1 handover (readings_verified)
     handovers = _load_handovers(ctx["station_id"])
     readings_verified_handover = None
+    has_any_handover = False
     for ho in handovers.values():
-        if (ho.get("shift_id") == shift_id
-            and ho.get("attendant_id") == user_id
-            and ho.get("phase") == "readings_verified"):
-            readings_verified_handover = ho
-            break
+        if ho.get("shift_id") == shift_id and ho.get("attendant_id") == user_id:
+            has_any_handover = True
+            if ho.get("phase") == "readings_verified":
+                readings_verified_handover = ho
+
+    # Start-of-shift opening verification (additive). A shift that already has a
+    # handover (readings/closing in progress) is treated as verified so in-flight
+    # shifts are never forced back into the start-of-shift step.
+    opening_verification = _load_opening_verifications(ctx["station_id"]).get(f"{shift_id}-{user_id}")
+    opening_verified = bool(opening_verification) or has_any_handover
 
     return {
         "found": True,
@@ -836,8 +853,52 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
         "enter_readings_submitted": enter_readings_submitted,
         "enter_readings_closing": enter_readings_closing,
         "readings_verified_handover": readings_verified_handover,
+        "opening_verified": opening_verified,
+        "opening_verification": opening_verification,
         "price_change_detected": price_change_detected,
     }
+
+
+class VerifyOpeningInput(BaseModel):
+    shift_id: str
+    discrepancy_note: Optional[str] = None
+
+
+@router.post("/verify-opening")
+async def verify_opening(data: VerifyOpeningInput, ctx: dict = Depends(get_station_context)):
+    """
+    Record an attendant's start-of-shift verification of the carried-forward
+    opening readings and stock. Additive: it does not create or modify any
+    handover, nozzle reading, or stock record — it only stores an acknowledgment
+    (with an optional discrepancy note) so the UI can move from the start-of-shift
+    step to the closing step, and so the verification is auditable.
+    """
+    storage = ctx["storage"]
+    station_id = ctx["station_id"]
+    # Reuse the standard assignment guard (active shift, caller assigned).
+    _validate_shift_and_assignment(data.shift_id, ctx, storage)
+
+    verifications = _load_opening_verifications(station_id)
+    key = f"{data.shift_id}-{ctx['user_id']}"
+    record = {
+        "shift_id": data.shift_id,
+        "attendant_id": ctx["user_id"],
+        "attendant_name": ctx["full_name"],
+        "verified_at": datetime.now().isoformat(),
+        "discrepancy_note": (data.discrepancy_note or "").strip() or None,
+    }
+    verifications[key] = record
+    _save_opening_verifications(verifications, station_id)
+
+    log_audit_event(
+        station_id=station_id,
+        action="opening_verified",
+        performed_by=ctx["username"],
+        entity_type="shift",
+        entity_id=data.shift_id,
+        details={"discrepancy_note": record["discrepancy_note"]},
+    )
+    return {"status": "success", "opening_verification": record}
 
 
 @router.get("/stock-opening")

@@ -1,6 +1,17 @@
 # Attendant Usability Simplification — Master Plan
 
-**Status:** All items (1–7) implemented on branch `simplify/attendant-flow`. §12 open question resolved: `/my-shift` confirmed canonical (opening readings come from the nozzle record, not `/enter-readings`).
+**Status:** All items (1–7) implemented + maximal nav (land on `/my-shift`) + **two-mode `/my-shift`** (verify-opening at start, record-closing at end). §12 open question resolved: `/my-shift` confirmed canonical (opening readings come from the nozzle record, not `/enter-readings`).
+
+> **Two-mode `/my-shift` (2026-06-04).** Models the real shift lifecycle —
+> *start:* verify the carried-forward opening readings + opening stock (with an
+> optional discrepancy note); *end:* record closing readings + stock (existing
+> flow) → which become the next shift's opening (already wired via
+> `_update_nozzle_state`). **Additive backend:** new `opening_verifications.json`
+> store, `POST /handover/verify-opening` (records acknowledgment + note + audit),
+> and `GET /handover/my-shift` now returns `opening_verified`. A shift that
+> already has a handover is treated as verified, so **in-flight shifts are never
+> forced back into the start step**. No existing handover/submit/nozzle/stock
+> logic was changed; the closing flow is byte-for-byte the same once verified.
 **Date:** 2026-06-04
 **Scope:** Make the **attendant** (`role === 'user'`) experience easier end-to-end —
 clearer wayfinding, an obvious step sequence, a shorter form on a forecourt
