@@ -512,14 +512,13 @@ export default function MyShift() {
     : null
 
   // Two-mode, driven by the nav items "Start Shift" (?mode=start) and "End Shift"
-  // (?mode=end). With no mode (e.g. landing redirect), a fresh shift defaults to
-  // the start step until opening is verified; in-flight shifts go to closing.
+  // (?mode=end). Opening must be verified before the shift can be ended (gate):
+  // until then, Start Shift shows the verify screen and End Shift shows a prompt
+  // to start first. Once verified (or in-flight), the closing flow shows.
   const shiftMode = router.query.mode
-  const inStartMode = isAttendant && shiftFound && !handoverResult && (
-    shiftMode === 'end' ? false :
-    shiftMode === 'start' ? true :
-    !openingVerified
-  )
+  const needsOpening = isAttendant && shiftFound && !handoverResult && !openingVerified
+  const inStartMode = needsOpening && shiftMode !== 'end'
+  const mustStartFirst = needsOpening && shiftMode === 'end'
 
   // Which closing reading (if any) is currently being double-entered.
   const [activeEntry, setActiveEntry] = useState<{ nozzleId: string; field: 'electronic' | 'mechanical' } | null>(null)
@@ -1195,6 +1194,21 @@ export default function MyShift() {
         </div>
       )}
 
+      {/* Gate: tried to End Shift before verifying the opening */}
+      {mustStartFirst && (
+        <div className="rounded-lg shadow p-6 text-center" style={{ backgroundColor: theme.cardBg, borderColor: 'var(--color-status-warning)', borderWidth: 2 }}>
+          <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-status-warning)' }}>Start your shift first</h2>
+          <p className="text-sm mb-4" style={{ color: theme.textSecondary }}>
+            Before you can end your shift, verify the opening readings and stock you&rsquo;re taking over.
+          </p>
+          <Link href="/my-shift?mode=start"
+            className="inline-block px-6 py-3 rounded-lg text-base font-semibold text-white"
+            style={{ backgroundColor: theme.primary }}>
+            Go to Start Shift
+          </Link>
+        </div>
+      )}
+
       {/* Step Indicator — visible to attendants only, before submission, with active shift */}
       {isAttendant && shiftFound && !handoverResult && openingVerified && (
         <div className="rounded-lg shadow p-4 mb-6 flex items-center justify-center"
@@ -1243,7 +1257,7 @@ export default function MyShift() {
       {/* STEP 1: Enter Readings & Stock Counts         */}
       {/* Financial columns (Price, Revenue, Value) hidden */}
       {/* ============================================= */}
-      {currentStep === 1 && !handoverResult && !inStartMode && (
+      {currentStep === 1 && !handoverResult && !inStartMode && !mustStartFirst && (
         <>
           {/* What's left to submit — live checklist of the existing submit gates (item 4) */}
           <div className="rounded-lg shadow p-4 mb-6"
@@ -1905,7 +1919,7 @@ export default function MyShift() {
       {/* ============================================= */}
       {/* STEP 2: Review & Confirm (read-only, no money)*/}
       {/* ============================================= */}
-      {currentStep === 2 && !handoverResult && !inStartMode && (
+      {currentStep === 2 && !handoverResult && !inStartMode && !mustStartFirst && (
         <>
           {/* Nozzle Readings Review */}
           <div className="rounded-lg shadow mb-6 overflow-x-auto"
@@ -2400,6 +2414,8 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
   const [expandedDeposits, setExpandedDeposits] = useState<Record<string, boolean>>({})
   // attendant_id -> review_status of their handover on the current active shift(s)
   const [attendantStatus, setAttendantStatus] = useState<Record<string, string>>({})
+  // Keys "shift_id-attendant_id" that have verified their opening (started shift).
+  const [startedKeys, setStartedKeys] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const headers = { 'Content-Type': 'application/json', ...getHeaders() }
@@ -2408,12 +2424,14 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
       authFetch(`${BASE}/auth/staff`, { headers }).then(r => r.ok ? r.json() : []),
       authFetch(`${BASE}/islands/?status=active`, { headers }).then(r => r.ok ? r.json() : []),
       authFetch(`${BASE}/handover/entries`, { headers }).then(r => r.ok ? r.json() : []),
+      authFetch(`${BASE}/handover/opening-verifications`, { headers }).then(r => r.ok ? r.json() : {}),
     ])
-      .then(([shifts, staff, islandsData, entries]) => {
+      .then(([shifts, staff, islandsData, entries, openingVerifs]) => {
         const active = Array.isArray(shifts) ? shifts.filter((s: any) => s.status === 'active') : []
         setActiveShifts(active)
         setAllStaff(Array.isArray(staff) ? staff : [])
         setIslands(Array.isArray(islandsData) ? islandsData : [])
+        setStartedKeys(new Set(Object.keys(openingVerifs || {})))
         // Map each attendant's handover status on the active shift(s) for progress badges
         const activeIds = new Set(active.map((s: any) => s.shift_id))
         const statusMap: Record<string, string> = {}
@@ -2543,7 +2561,16 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
                           </div>
                         </div>
                         {(() => {
-                          const m = attendantStatusMeta(assignment.attendant_id)
+                          const attId = assignment.attendant_id
+                          const hStatus = attendantStatus[attId]
+                          const started = startedKeys.has(`${shift.shift_id}-${attId}`)
+                          // Handover status wins; else show started / not-started.
+                          let m: { label: string; bg: string; color: string } | null = attendantStatusMeta(attId)
+                          if (!hStatus) {
+                            m = started
+                              ? { label: 'Started', bg: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }
+                              : { label: 'Not started', bg: theme.background, color: theme.textSecondary }
+                          }
                           return m ? (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
                               style={{ backgroundColor: m.bg, color: m.color }}>{m.label}</span>

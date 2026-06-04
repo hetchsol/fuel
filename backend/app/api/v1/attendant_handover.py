@@ -901,6 +901,15 @@ async def verify_opening(data: VerifyOpeningInput, ctx: dict = Depends(get_stati
     return {"status": "success", "opening_verification": record}
 
 
+@router.get("/opening-verifications")
+async def get_opening_verifications(ctx: dict = Depends(get_station_context)):
+    """
+    Opening-verification (shift-start) records for this station, keyed by
+    f"{shift_id}-{attendant_id}". Lets supervisors see who has started their shift.
+    """
+    return _load_opening_verifications(ctx["station_id"])
+
+
 @router.get("/stock-opening")
 async def get_stock_opening(ctx: dict = Depends(get_station_context)):
     """
@@ -1042,11 +1051,23 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
 
     # Prevent duplicate Phase 1 submissions
     handovers = _load_handovers(station_id)
+    has_handover = False
     for ho in handovers.values():
         if (ho.get("shift_id") == data.shift_id
-            and ho.get("attendant_id") == user_id
-            and ho.get("phase") == "readings_verified"):
-            raise HTTPException(status_code=409, detail="Readings already submitted for this shift. Use redo-readings to replace.")
+            and ho.get("attendant_id") == user_id):
+            has_handover = True
+            if ho.get("phase") == "readings_verified":
+                raise HTTPException(status_code=409, detail="Readings already submitted for this shift. Use redo-readings to replace.")
+
+    # Gate: the attendant must have started the shift (verified the carried-forward
+    # opening) before ending it. A shift that already has a handover (e.g. a redo)
+    # is exempt so in-flight work is never blocked.
+    opening_started = f"{data.shift_id}-{user_id}" in _load_opening_verifications(station_id)
+    if not opening_started and not has_handover:
+        raise HTTPException(
+            status_code=400,
+            detail="Start your shift first — verify your opening readings before ending the shift.",
+        )
 
     nozzle_summaries, fuel_revenue, had_er_closing = _process_nozzle_readings(
         data.nozzle_readings, storage, station_id, data.shift_id, user_id, allowed_nozzle_ids,
