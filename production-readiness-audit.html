@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Production Readiness Audit Report — Fuel Management System</title>
+<style>
+  :root {
+    --color-showstopper: #7f1d1d;
+    --color-critical: #dc2626;
+    --color-high: #ea580c;
+    --color-medium: #ca8a04;
+    --color-low: #16a34a;
+    --color-bg-showstopper: #fef2f2;
+    --color-bg-critical: #fff5f5;
+    --color-bg-high: #fff7ed;
+    --color-bg-medium: #fefce8;
+    --color-bg-low: #f0fdf4;
+    --color-border: #e5e7eb;
+    --color-text: #1f2937;
+    --color-text-muted: #6b7280;
+    --color-heading: #111827;
+    --color-accent: #1e40af;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  @page {
+    size: A4;
+    margin: 20mm 15mm;
+  }
+
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: var(--color-text);
+    line-height: 1.6;
+    background: #f9fafb;
+    padding: 0;
+  }
+
+  .container {
+    max-width: 1000px;
+    margin: 0 auto;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  /* ---- Cover / Header ---- */
+  .cover {
+    background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+    color: #fff;
+    padding: 60px 50px;
+    page-break-after: always;
+  }
+  .cover h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+  .cover .subtitle {
+    font-size: 18px;
+    color: #94a3b8;
+    margin-bottom: 40px;
+  }
+  .cover-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 30px;
+  }
+  .cover-meta-item { }
+  .cover-meta-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #64748b;
+    margin-bottom: 4px;
+  }
+  .cover-meta-value {
+    font-size: 15px;
+    color: #e2e8f0;
+  }
+
+  .cover-summary {
+    margin-top: 50px;
+    padding: 24px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .cover-summary h3 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #94a3b8;
+    margin-bottom: 16px;
+  }
+  .verdict {
+    font-size: 20px;
+    font-weight: 600;
+    color: #f87171;
+    margin-bottom: 12px;
+  }
+  .verdict-detail {
+    font-size: 14px;
+    color: #cbd5e1;
+    line-height: 1.7;
+  }
+
+  .severity-counts {
+    display: flex;
+    gap: 16px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+  .severity-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .severity-chip.showstopper { background: #991b1b; color: #fecaca; }
+  .severity-chip.critical { background: #7f1d1d; color: #fca5a5; }
+  .severity-chip.high { background: #7c2d12; color: #fed7aa; }
+  .severity-chip.medium { background: #713f12; color: #fef08a; }
+  .severity-chip.low { background: #14532d; color: #bbf7d0; }
+
+  /* ---- Content ---- */
+  .content {
+    padding: 40px 50px;
+  }
+
+  h2 {
+    font-size: 22px;
+    color: var(--color-heading);
+    margin: 40px 0 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--color-accent);
+    page-break-after: avoid;
+  }
+  h2:first-child { margin-top: 0; }
+
+  h3 {
+    font-size: 16px;
+    color: var(--color-heading);
+    margin: 28px 0 12px;
+    page-break-after: avoid;
+  }
+
+  p { margin-bottom: 10px; }
+
+  /* ---- Issue Cards ---- */
+  .issue-card {
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    page-break-inside: avoid;
+  }
+  .issue-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .issue-header .issue-id {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    font-weight: 500;
+    min-width: 28px;
+  }
+  .issue-body {
+    padding: 0 18px 16px;
+    font-size: 14px;
+  }
+  .issue-body p { margin-bottom: 8px; }
+
+  .issue-card.showstopper .issue-header { background: #450a0a; color: #fecaca; }
+  .issue-card.showstopper { border-color: #991b1b; }
+  .issue-card.critical .issue-header { background: var(--color-bg-critical); color: var(--color-showstopper); }
+  .issue-card.critical { border-color: #fca5a5; }
+  .issue-card.high .issue-header { background: var(--color-bg-high); color: #9a3412; }
+  .issue-card.high { border-color: #fdba74; }
+  .issue-card.medium .issue-header { background: var(--color-bg-medium); color: #854d0e; }
+  .issue-card.medium { border-color: #fde047; }
+  .issue-card.low .issue-header { background: var(--color-bg-low); color: #166534; }
+  .issue-card.low { border-color: #86efac; }
+
+  .severity-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .severity-badge.showstopper { background: #991b1b; color: #fff; }
+  .severity-badge.critical { background: #dc2626; color: #fff; }
+  .severity-badge.high { background: #ea580c; color: #fff; }
+  .severity-badge.medium { background: #ca8a04; color: #fff; }
+  .severity-badge.low { background: #16a34a; color: #fff; }
+
+  .file-ref {
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+    background: #f1f5f9;
+    color: #475569;
+    padding: 2px 6px;
+    border-radius: 3px;
+    word-break: break-all;
+  }
+
+  .file-list {
+    margin: 8px 0;
+    padding-left: 0;
+    list-style: none;
+  }
+  .file-list li {
+    padding: 3px 0;
+    font-size: 13px;
+  }
+  .file-list li .file-ref { display: inline; }
+
+  .impact {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: #fef2f2;
+    border-left: 3px solid #ef4444;
+    border-radius: 0 4px 4px 0;
+    font-size: 13px;
+    color: #991b1b;
+  }
+  .issue-card.medium .impact,
+  .issue-card.low .impact {
+    background: #fffbeb;
+    border-left-color: #f59e0b;
+    color: #92400e;
+  }
+
+  .fix-options {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: #f0fdf4;
+    border-left: 3px solid #22c55e;
+    border-radius: 0 4px 4px 0;
+    font-size: 13px;
+    color: #166534;
+  }
+  .fix-options strong { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ---- Tables ---- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 13px;
+    page-break-inside: avoid;
+  }
+  thead th {
+    background: #1e293b;
+    color: #fff;
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: top;
+  }
+  tbody tr:nth-child(even) { background: #f8fafc; }
+  tbody tr:hover { background: #f1f5f9; }
+
+  /* ---- Recommendation List ---- */
+  .rec-list {
+    counter-reset: rec-counter;
+    list-style: none;
+    padding: 0;
+  }
+  .rec-list li {
+    counter-increment: rec-counter;
+    padding: 12px 16px 12px 50px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    position: relative;
+    font-size: 14px;
+    page-break-inside: avoid;
+  }
+  .rec-list li::before {
+    content: counter(rec-counter);
+    position: absolute;
+    left: 14px;
+    top: 12px;
+    width: 24px;
+    height: 24px;
+    background: var(--color-accent);
+    color: #fff;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 24px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .rec-list li strong { color: var(--color-heading); }
+  .rec-list li .rec-meta {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin-top: 4px;
+  }
+
+  /* ---- Crash Analysis ---- */
+  .crash-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .crash-box {
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    page-break-inside: avoid;
+  }
+  .crash-box.fatal {
+    border-color: #fca5a5;
+    background: #fef2f2;
+  }
+  .crash-box.degraded {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+  .crash-box h4 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+  .crash-box.fatal h4 { color: #991b1b; }
+  .crash-box.degraded h4 { color: #92400e; }
+  .crash-box ul {
+    padding-left: 18px;
+    font-size: 13px;
+  }
+  .crash-box li { margin-bottom: 6px; }
+
+  /* ---- Footer ---- */
+  .report-footer {
+    padding: 20px 50px;
+    background: #f8fafc;
+    border-top: 1px solid var(--color-border);
+    font-size: 12px;
+    color: var(--color-text-muted);
+    text-align: center;
+  }
+
+  /* ---- Section breaks ---- */
+  .page-break { page-break-before: always; }
+
+  /* ---- Print ---- */
+  @media print {
+    body { background: #fff; }
+    .container { box-shadow: none; }
+    .cover { padding: 40px 30px; }
+    .content { padding: 30px; }
+    .crash-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ==================== COVER PAGE ==================== -->
+<div class="cover">
+  <h1>Production Readiness Audit Report</h1>
+  <p class="subtitle">Fuel Management System (FMS)</p>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Date</div>
+      <div class="cover-meta-value">10 March 2026</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Repository</div>
+      <div class="cover-meta-value">C:\Projects\Fuel (branch: master)</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Deployment Target</div>
+      <div class="cover-meta-value">Render Free Tier</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Scope</div>
+      <div class="cover-meta-value">Full-stack audit (Backend + Frontend)</div>
+    </div>
+  </div>
+
+  <div class="cover-summary">
+    <h3>Executive Summary</h3>
+    <div class="verdict">NOT READY FOR PRODUCTION</div>
+    <p class="verdict-detail">
+      The audit identified <strong>18 issues</strong> across the backend and frontend.
+      Three are classified as <strong>SHOWSTOPPER</strong> &mdash; architectural gaps in storage,
+      authentication, and data persistence that make the system fundamentally unsuitable
+      for production use, regardless of other fixes applied.
+      Even with a perfect setup wizard, the owner would have to reconfigure the system
+      every time the Render instance restarts.
+    </p>
+    <div class="severity-counts">
+      <span class="severity-chip showstopper">3 Showstopper</span>
+      <span class="severity-chip critical">7 Critical</span>
+      <span class="severity-chip high">5 High</span>
+      <span class="severity-chip medium">8 Medium</span>
+      <span class="severity-chip low">6 Low</span>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TABLE OF CONTENTS ==================== -->
+<div class="content">
+  <h2>Table of Contents</h2>
+  <ol style="font-size:14px; line-height:2.2; padding-left:20px;">
+    <li><a href="#showstopper" style="color:var(--color-accent);">Showstopper Issues (3)</a></li>
+    <li><a href="#critical" style="color:var(--color-accent);">Critical Issues (7)</a></li>
+    <li><a href="#high" style="color:var(--color-accent);">High-Severity Issues (5)</a></li>
+    <li><a href="#medium" style="color:var(--color-accent);">Medium-Severity Issues (8)</a></li>
+    <li><a href="#low" style="color:var(--color-accent);">Low-Severity Issues</a></li>
+    <li><a href="#hardcoded" style="color:var(--color-accent);">Hardcoded Data Inventory</a></li>
+    <li><a href="#crash" style="color:var(--color-accent);">Crash &amp; Failure Analysis</a></li>
+    <li><a href="#architecture" style="color:var(--color-accent);">Architectural Concerns</a></li>
+    <li><a href="#recommendations" style="color:var(--color-accent);">Recommendations &amp; Next Steps</a></li>
+    <li><a href="#acceptance" style="color:var(--color-accent);">Production Acceptance Criteria</a></li>
+  </ol>
+</div>
+
+<!-- ==================== SHOWSTOPPER ISSUES ==================== -->
+<div class="content page-break" id="showstopper">
+  <h2>1. Showstopper Issues</h2>
+  <p style="margin-bottom:20px; color:var(--color-text-muted); font-size:14px;">
+    These issues make the system fundamentally unsuitable for production use.
+    They must be resolved before any other fixes are meaningful.
+  </p>
+
+  <!-- #16 -->
+  <div class="issue-card showstopper">
+    <div class="issue-header">
+      <span class="issue-id">#16</span>
+      <span class="severity-badge showstopper">Showstopper</span>
+      Ephemeral Filesystem on Render Free Tier
+    </div>
+    <div class="issue-body">
+      <p>The entire data storage uses in-memory Python dicts + JSON files on disk
+        (<span class="file-ref">backend/storage/stations/</span>). On Render free tier,
+        the service sleeps after 15 minutes of inactivity and wakes from a fresh deploy.
+        The filesystem is ephemeral &mdash; <strong>every restart/sleep wipes all JSON files</strong>.
+      </p>
+      <p>All station data, readings, shifts, sales, and tank levels are destroyed on every restart cycle.</p>
+      <div class="impact">
+        <strong>Impact:</strong> Even with a perfect setup wizard, the owner would have to re-run it
+        every time the server wakes up. Fundamentally incompatible with production use.
+      </div>
+      <div class="fix-options">
+        <strong>Fix Options:</strong><br>
+        A) Upgrade to Render paid tier (persistent disk) ~$7/month<br>
+        B) Add an external database (Render free PostgreSQL, or Supabase/Neon free tier)<br>
+        C) Use an external file store (S3, R2, etc.) for JSON persistence
+      </div>
+    </div>
+  </div>
+
+  <!-- #17 -->
+  <div class="issue-card showstopper">
+    <div class="issue-header">
+      <span class="issue-id">#17</span>
+      <span class="severity-badge showstopper">Showstopper</span>
+      Authentication Is Not Production-Grade
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/api/v1/auth.py</span> lines 15&ndash;97</li>
+      </ul>
+      <p>Critical authentication flaws:</p>
+      <ul style="padding-left:18px; font-size:14px; margin:8px 0;">
+        <li>Users hardcoded in Python &mdash; no user registration, no user table</li>
+        <li>Passwords use simple SHA-256 (no salt, no bcrypt)</li>
+        <li>Tokens are predictable: <code>token-{username}-{user_id}</code> &mdash; anyone can forge tokens</li>
+        <li>No token expiry, no refresh tokens</li>
+        <li>No way to create/delete users at runtime</li>
+      </ul>
+      <div class="impact">
+        <strong>Impact:</strong> Any user who knows the token format can impersonate any other user.
+        No ability to manage staff accounts in production.
+      </div>
+    </div>
+  </div>
+
+  <!-- #18 -->
+  <div class="issue-card showstopper">
+    <div class="issue-header">
+      <span class="issue-id">#18</span>
+      <span class="severity-badge showstopper">Showstopper</span>
+      No Data Persistence Layer
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/database/storage.py</span> line 59</li>
+      </ul>
+      <p><code>STORAGE = _make_empty_storage()</code> &mdash; everything lives in a Python dict.
+        <span class="file-ref">station_files.py</span> handles JSON file read/write for some data,
+        but not all data is persisted to disk on every write.</p>
+      <div class="impact">
+        <strong>Impact:</strong> If the process crashes mid-operation, data can be lost or corrupted.
+        No transactions, no locking, no backup mechanism.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== CRITICAL ISSUES ==================== -->
+<div class="content page-break" id="critical">
+  <h2>2. Critical Issues</h2>
+  <p style="margin-bottom:20px; color:var(--color-text-muted); font-size:14px;">
+    These issues will cause crashes, data corruption, or security failures in production.
+  </p>
+
+  <!-- #1 -->
+  <div class="issue-card critical">
+    <div class="issue-header">
+      <span class="issue-id">#1</span>
+      <span class="severity-badge critical">Critical</span>
+      Hardcoded Tank IDs in Backend Config
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/config.py</span> lines 68&ndash;69 &mdash; <code>TANK_ID_DIESEL = "TANK-DIESEL"</code>, <code>TANK_ID_PETROL = "TANK-PETROL"</code></li>
+        <li><span class="file-ref">backend/app/database/seed_defaults.py</span> lines 39&ndash;44, 98&ndash;114, 269&ndash;274</li>
+      </ul>
+      <div class="impact">
+        <strong>Impact:</strong> These constants are imported and used throughout the backend.
+        The helper function <code>get_tank_id()</code> (lines 156&ndash;175) returns these based on fuel type.
+        Cannot configure different tank IDs without code changes.
+      </div>
+    </div>
+  </div>
+
+  <!-- #2 -->
+  <div class="issue-card critical">
+    <div class="issue-header">
+      <span class="issue-id">#2</span>
+      <span class="severity-badge critical">Critical</span>
+      Hardcoded Station ID (ST001) Throughout
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/database/stations_registry.py</span> lines 26&ndash;34 &mdash; auto-seeds ST001</li>
+        <li><span class="file-ref">backend/app/main.py</span> lines 36, 45&ndash;46 &mdash; loads ST001 for backward compat</li>
+        <li><span class="file-ref">backend/app/api/v1/auth.py</span> line 217 &mdash; <code>get_station_context()</code> defaults to "ST001"</li>
+      </ul>
+      <div class="impact">
+        <strong>Impact:</strong> Every API endpoint depends on ST001. If no station exists,
+        all requests silently target a nonexistent station.
+      </div>
+    </div>
+  </div>
+
+  <!-- #3 -->
+  <div class="issue-card critical">
+    <div class="issue-header">
+      <span class="issue-id">#3</span>
+      <span class="severity-badge critical">Critical</span>
+      Hardcoded Island/Nozzle IDs
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/database/seed_defaults.py</span> lines 38&ndash;87 &mdash; seeds ISL-001 through ISL-006 with PS-001 through PS-006 and nozzle IDs ISL1-A/B through ISL6-A/B</li>
+        <li><span class="file-ref">backend/app/database/seed_defaults.py</span> lines 258&ndash;275 &mdash; migration logic checks for exact island IDs</li>
+      </ul>
+      <div class="impact">
+        <strong>Impact:</strong> Complete island/pump/nozzle tree is seeded with hardcoded identifiers.
+        All nozzle operations reference these IDs.
+      </div>
+    </div>
+  </div>
+
+  <!-- #4 -->
+  <div class="issue-card critical">
+    <div class="issue-header">
+      <span class="issue-id">#4</span>
+      <span class="severity-badge critical">Critical</span>
+      Hardcoded Account IDs
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/database/seed_defaults.py</span> lines 120&ndash;135 &mdash; seeds 15 default accounts (ACC-POS, ACC-GENSET, ACC-KAFUBU, etc.)</li>
+      </ul>
+      <div class="impact">
+        <strong>Impact:</strong> All accounts are created with specific IDs.
+        Any code referencing accounts by ID will fail if seeds are removed.
+      </div>
+    </div>
+  </div>
+
+  <!-- #5 -->
+  <div class="issue-card critical">
+    <div class="issue-header">
+      <span class="issue-id">#5</span>
+      <span class="severity-badge critical">Critical</span>
+      POST /sales Crash Path
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/api/v1/sales.py</span> lines 89, 94&ndash;96</li>
+      </ul>
+      <p>Uses <code>storage['tanks']</code> directly. Iterates to find tank by fuel_type.
+        If <code>storage['tanks']</code> is missing, throws <code>KeyError</code>.
+        If no tank matches fuel_type, <code>target_tank</code> stays <code>None</code> (line 96) but code
+        then attempts to access it (line 99).</p>
+      <div class="impact">
+        <strong>Impact:</strong> Production crash path &mdash; guaranteed 500 error when no tanks exist or fuel type doesn't match.
+      </div>
+    </div>
+  </div>
+
+  <!-- #6 -->
+  <div class="issue-card critical">
+    <div class="issue-header">
+      <span class="issue-id">#6</span>
+      <span class="severity-badge critical">Critical</span>
+      All Test Users Hardcoded to ST001
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/api/v1/auth.py</span> lines 22, 30, 47, 63, 71, 79, 95</li>
+      </ul>
+      <p>7+ hardcoded users (<code>user1</code>, <code>supervisor1</code>, <code>owner1</code>, staff members)
+        all with <code>"station_id": "ST001"</code>. No user registration, no user database table.</p>
+      <div class="impact">
+        <strong>Impact:</strong> If ST001 is removed or renamed, all test users become invalid.
+        No mechanism to add or remove staff in production.
+      </div>
+    </div>
+  </div>
+
+  <!-- #7 -->
+  <div class="issue-card critical">
+    <div class="issue-header">
+      <span class="issue-id">#7</span>
+      <span class="severity-badge critical">Critical</span>
+      ST001 Backward Compatibility in main.py
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/main.py</span> line 45</li>
+      </ul>
+      <p>Explicitly calls <code>get_station_storage("ST001")</code> on startup for backward compatibility.
+        This creates a hard dependency on ST001 existing at application startup.</p>
+      <div class="impact">
+        <strong>Impact:</strong> Application startup depends on ST001. Removing ST001 may prevent the application from starting.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== HIGH ISSUES ==================== -->
+<div class="content page-break" id="high">
+  <h2>3. High-Severity Issues</h2>
+  <p style="margin-bottom:20px; color:var(--color-text-muted); font-size:14px;">
+    These issues cause 500 errors, UI breakage, or incorrect behavior under realistic conditions.
+  </p>
+
+  <!-- #8 -->
+  <div class="issue-card high">
+    <div class="issue-header">
+      <span class="issue-id">#8</span>
+      <span class="severity-badge high">High</span>
+      Direct Dict Access Without .get() &mdash; 30+ Locations
+    </div>
+    <div class="issue-body">
+      <p>Across multiple API files, storage keys are accessed directly with bracket notation
+        (<code>storage['tanks']</code>, <code>storage['islands']</code>, etc.) instead of using
+        <code>.get()</code> with defaults. All throw <code>KeyError</code> (500 error) if the storage key does not exist.</p>
+      <table>
+        <thead>
+          <tr><th>File</th><th>Lines</th><th>Keys Accessed</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="file-ref">api/v1/tanks.py</span></td>
+            <td>22, 44, 69, 100</td>
+            <td><code>storage['tanks']</code>, <code>storage['delivery_history']</code>, <code>storage['dip_readings_data']</code></td>
+          </tr>
+          <tr>
+            <td><span class="file-ref">api/v1/islands.py</span></td>
+            <td>50, 63, 75, 91, 143, 206, 237, 271, 284, 334, 362</td>
+            <td><code>storage['islands']</code></td>
+          </tr>
+          <tr>
+            <td><span class="file-ref">api/v1/shifts.py</span></td>
+            <td>43, 44, 101, 102, 112, 127, 142, 175, 176, 206, 255, 295</td>
+            <td><code>storage['shifts']</code>, <code>storage['readings']</code></td>
+          </tr>
+          <tr>
+            <td><span class="file-ref">api/v1/accounts.py</span></td>
+            <td>21, 31, 43, 60, 75, 76, 98, 112, 127, 157, 159, 160</td>
+            <td><code>storage['accounts']</code>, <code>storage['credit_sales']</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="impact">
+        <strong>Impact:</strong> Approximately 30+ locations will throw 500 errors if the expected storage key doesn't exist.
+      </div>
+    </div>
+  </div>
+
+  <!-- #9 -->
+  <div class="issue-card high">
+    <div class="issue-header">
+      <span class="issue-id">#9</span>
+      <span class="severity-badge high">High</span>
+      Island-to-Tank Hardcoded Mapping
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/api/v1/islands.py</span> line 181</li>
+      </ul>
+      <p>Maps product type to tank: <code>"TANK-PETROL" if product == "Petrol" else "TANK-DIESEL"</code>.
+        Assumes these exact tank IDs exist.</p>
+      <div class="impact">
+        <strong>Impact:</strong> Breaks if tank IDs are different from the hardcoded values. No support for additional fuel types.
+      </div>
+    </div>
+  </div>
+
+  <!-- #10 -->
+  <div class="issue-card high">
+    <div class="issue-header">
+      <span class="issue-id">#10</span>
+      <span class="severity-badge high">High</span>
+      Dashboard Tank Cards Break with Missing Tanks
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">frontend/pages/index.tsx</span> lines 32&ndash;33, 87&ndash;108</li>
+      </ul>
+      <p>Finds tanks by <code>tanks?.find((t: any) =&gt; t.fuel_type === 'Diesel')</code>.
+        If no Diesel tank exists, <code>dieselTank</code> is <code>undefined</code>; the TankCard component
+        receives an undefined object, breaking UI rendering.</p>
+      <div class="impact">
+        <strong>Impact:</strong> Dashboard crashes or renders broken UI when expected tanks don't exist.
+      </div>
+    </div>
+  </div>
+
+  <!-- #11 -->
+  <div class="issue-card high">
+    <div class="issue-header">
+      <span class="issue-id">#11</span>
+      <span class="severity-badge high">High</span>
+      Inventory/Services May Assume Account Existence
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/services/inventory.py</span> (if exists)</li>
+      </ul>
+      <p>Likely has functions like <code>process_credit_sale()</code> that work with account IDs
+        and may assume certain accounts (e.g., ACC-POS) exist.</p>
+      <div class="impact">
+        <strong>Impact:</strong> Operations referencing specific account IDs will fail if seed accounts are removed.
+      </div>
+    </div>
+  </div>
+
+  <!-- #12 -->
+  <div class="issue-card high">
+    <div class="issue-header">
+      <span class="issue-id">#12</span>
+      <span class="severity-badge high">High</span>
+      Island Migration Logic Hardcoded
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/database/seed_defaults.py</span> lines 258&ndash;275</li>
+      </ul>
+      <p>Migration logic assumes islands "ISL-001" through "ISL-006" exist in exact form
+        and assigns product types to them. Breaks if island IDs differ.</p>
+      <div class="impact">
+        <strong>Impact:</strong> Data migration will fail or produce incorrect results for non-default island configurations.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MEDIUM ISSUES ==================== -->
+<div class="content page-break" id="medium">
+  <h2>4. Medium-Severity Issues</h2>
+
+  <!-- #13 -->
+  <div class="issue-card medium">
+    <div class="issue-header">
+      <span class="issue-id">#13</span>
+      <span class="severity-badge medium">Medium</span>
+      Frontend Hardcodes 'TANK-DIESEL' Default
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">frontend/pages/daily-tank-reading.tsx</span> line 21</li>
+      </ul>
+      <p><code>const [selectedTank, setSelectedTank] = useState('TANK-DIESEL')</code>.
+        If API returns no diesel tank, form won't populate nozzle data; submission will fail.</p>
+    </div>
+  </div>
+
+  <!-- #14 -->
+  <div class="issue-card medium">
+    <div class="issue-header">
+      <span class="issue-id">#14</span>
+      <span class="severity-badge medium">Medium</span>
+      Layout.tsx Defaults to 'ST001'
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">frontend/components/Layout.tsx</span> lines 14, 27</li>
+      </ul>
+      <p><code>const [activeStationId, setActiveStationId] = useState&lt;string&gt;('ST001')</code>
+        and fallback in localStorage assignment. If ST001 doesn't exist, everything silently targets
+        a nonexistent station.</p>
+    </div>
+  </div>
+
+  <!-- #15 -->
+  <div class="issue-card medium">
+    <div class="issue-header">
+      <span class="issue-id">#15</span>
+      <span class="severity-badge medium">Medium</span>
+      Reconciliation Uses Hardcoded Prices
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/api/v1/reconciliation.py</span> line 9</li>
+      </ul>
+      <p>Imports <code>PETROL_PRICE_PER_LITER</code>, <code>DIESEL_PRICE_PER_LITER</code> directly from
+        config instead of using <code>resolve_fuel_price()</code> from runtime settings.
+        Runtime price changes via settings API won't affect reconciliation calculations.</p>
+    </div>
+  </div>
+
+  <!-- #M1 -->
+  <div class="issue-card medium">
+    <div class="issue-header">
+      <span class="issue-id">#M1</span>
+      <span class="severity-badge medium">Medium</span>
+      Hardcoded Fuel Types (Only Diesel/Petrol)
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/config.py</span> lines 76&ndash;77, 112&ndash;153, 156&ndash;175</li>
+        <li><span class="file-ref">backend/app/api/v1/tanks.py</span> lines 417&ndash;418 &mdash; validates <code>fuel_type not in ["Diesel", "Petrol"]</code></li>
+        <li><span class="file-ref">frontend/pages/index.tsx</span> lines 32&ndash;33</li>
+        <li><span class="file-ref">frontend/pages/daily-tank-reading.tsx</span> lines 26&ndash;32</li>
+      </ul>
+      <p>System only supports "Diesel" and "Petrol". Cannot add a third fuel type (e.g., LPG) without code changes.</p>
+    </div>
+  </div>
+
+  <!-- #M2 -->
+  <div class="issue-card medium">
+    <div class="issue-header">
+      <span class="issue-id">#M2</span>
+      <span class="severity-badge medium">Medium</span>
+      Auth/Middleware Station Defaulting
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/api/v1/auth.py</span> lines 209&ndash;219, 157, 260, 289, 342</li>
+      </ul>
+      <p><code>get_station_context()</code> defaults to "ST001". Users with <code>station_id: null</code>
+        (owner role) rely on X-Station-Id header. If station_id points to a non-existent station,
+        auth still succeeds but API calls to that station will fail with unexpected errors.</p>
+    </div>
+  </div>
+
+  <!-- #M3 -->
+  <div class="issue-card medium">
+    <div class="issue-header">
+      <span class="issue-id">#M3</span>
+      <span class="severity-badge medium">Medium</span>
+      Frontend API Station ID Implicit Default
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">frontend/lib/api.ts</span> (implicit in <code>getHeaders()</code>)</li>
+      </ul>
+      <p>Station ID passed via X-Station-Id header or localStorage, defaults to ST001 in middleware.
+        If no station exists, all API requests silently target ST001.</p>
+    </div>
+  </div>
+
+  <!-- #M4 -->
+  <div class="issue-card medium">
+    <div class="issue-header">
+      <span class="issue-id">#M4</span>
+      <span class="severity-badge medium">Medium</span>
+      Dashboard Hardcoded Dash Indicators
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">frontend/pages/index.tsx</span> lines 168&ndash;178</li>
+      </ul>
+      <p>"Total Nozzles" and "Today's Sales" show hardcoded "-" dash instead of dynamic data from the API.</p>
+    </div>
+  </div>
+
+  <!-- #M5 -->
+  <div class="issue-card medium">
+    <div class="issue-header">
+      <span class="issue-id">#M5</span>
+      <span class="severity-badge medium">Medium</span>
+      Credit Sale Validation May Fail
+    </div>
+    <div class="issue-body">
+      <ul class="file-list">
+        <li><span class="file-ref">backend/app/api/v1/accounts.py</span> lines 68&ndash;89</li>
+      </ul>
+      <p><code>POST /credit-sales</code> calls <code>validate_create('credit_sales', sale.dict())</code>
+        which validates foreign keys. May fail if the referenced account doesn't exist in the system.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== LOW ISSUES ==================== -->
+<div class="content page-break" id="low">
+  <h2>5. Low-Severity Issues</h2>
+  <p style="margin-bottom:20px; color:var(--color-text-muted); font-size:14px;">
+    These issues have minimal impact &mdash; the system degrades gracefully or they represent cosmetic concerns.
+  </p>
+
+  <div class="issue-card low">
+    <div class="issue-header">
+      <span class="severity-badge low">Low</span>
+      Graceful Empty States (Safe Behavior)
+    </div>
+    <div class="issue-body">
+      <ul style="padding-left:18px; font-size:14px;">
+        <li><strong>Shift creation with missing nozzles</strong> (<span class="file-ref">shifts.py</span> lines 37&ndash;93): Validation fails with 400 error (expected behavior)</li>
+        <li><strong>Tank levels GET with no tanks</strong> (<span class="file-ref">tanks.py</span> lines 16&ndash;35): Returns empty list (safe)</li>
+        <li><strong>Islands GET with no islands</strong> (<span class="file-ref">islands.py</span> lines 40&ndash;56): Returns empty list (safe)</li>
+        <li><strong>Reports with empty data</strong>: Iterate over empty collections, return empty results (safe)</li>
+        <li><strong>Config constants not reloading at runtime</strong> (<span class="file-ref">tanks.py</span>, <span class="file-ref">enter_readings.py</span>): If config changes, already-loaded modules won't pick up changes until restart</li>
+        <li><strong>Sensible regulatory defaults</strong> (VAT 16%, fuel levy 1.44 ZMW, tank conversion factor 785.4 L/cm): These are regulatory/physical constants and acceptable to keep in config</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== HARDCODED DATA INVENTORY ==================== -->
+<div class="content page-break" id="hardcoded">
+  <h2>6. Hardcoded Data Inventory</h2>
+  <p style="margin-bottom:16px; color:var(--color-text-muted); font-size:14px;">
+    Complete inventory of all hardcoded data that should be configurable at runtime.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Data Type</th><th>Hardcoded Values</th><th>File Locations</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Tank IDs</strong></td>
+        <td><code>TANK-DIESEL</code>, <code>TANK-PETROL</code></td>
+        <td>
+          <span class="file-ref">config.py:68-69</span>,
+          <span class="file-ref">seed_defaults.py:39-44, 98-114, 269-274</span>,
+          <span class="file-ref">islands.py:181</span>,
+          <span class="file-ref">daily-tank-reading.tsx:21</span>
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Station ID</strong></td>
+        <td><code>ST001</code></td>
+        <td>
+          <span class="file-ref">stations_registry.py:26-34</span>,
+          <span class="file-ref">main.py:36, 45-46</span>,
+          <span class="file-ref">auth.py:217, 22-95</span>,
+          <span class="file-ref">Layout.tsx:14</span>,
+          <span class="file-ref">lib/api.ts</span>
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Island IDs</strong></td>
+        <td><code>ISL-001</code> through <code>ISL-006</code></td>
+        <td><span class="file-ref">seed_defaults.py:38-87, 258-275</span></td>
+      </tr>
+      <tr>
+        <td><strong>Nozzle IDs</strong></td>
+        <td><code>ISL1-A/B</code> through <code>ISL6-A/B</code></td>
+        <td><span class="file-ref">seed_defaults.py:38-87</span></td>
+      </tr>
+      <tr>
+        <td><strong>Pump Station Names</strong></td>
+        <td><code>PS-001</code> through <code>PS-006</code></td>
+        <td><span class="file-ref">seed_defaults.py:38-87</span></td>
+      </tr>
+      <tr>
+        <td><strong>Account IDs</strong></td>
+        <td><code>ACC-POS</code>, <code>ACC-GENSET</code>, <code>ACC-KAFUBU</code>, etc. (15 accounts)</td>
+        <td><span class="file-ref">seed_defaults.py:120-135</span></td>
+      </tr>
+      <tr>
+        <td><strong>Fuel Types</strong></td>
+        <td><code>"Diesel"</code>, <code>"Petrol"</code></td>
+        <td>
+          <span class="file-ref">config.py:76-77</span>,
+          <span class="file-ref">tanks.py:417-418</span>,
+          <span class="file-ref">index.tsx:32-33</span>,
+          <span class="file-ref">daily-tank-reading.tsx:26-32</span>
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Fuel Prices</strong></td>
+        <td>Diesel: 26.98 ZMW/L, Petrol: 29.92 ZMW/L</td>
+        <td>
+          <span class="file-ref">config.py</span>,
+          <span class="file-ref">reconciliation.py:9</span>,
+          <span class="file-ref">seed_defaults.py:167-170</span>
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Tank Capacities</strong></td>
+        <td>20,000 L, 25,000 L</td>
+        <td><span class="file-ref">seed_defaults.py</span></td>
+      </tr>
+      <tr>
+        <td><strong>Users</strong></td>
+        <td><code>user1</code>, <code>supervisor1</code>, <code>owner1</code>, + staff (7+ users)</td>
+        <td><span class="file-ref">auth.py:15-97</span></td>
+      </tr>
+      <tr>
+        <td><strong>User Passwords</strong></td>
+        <td>SHA-256 hashed, no salt</td>
+        <td><span class="file-ref">auth.py</span></td>
+      </tr>
+      <tr>
+        <td><strong>User Tokens</strong></td>
+        <td><code>token-{username}-{user_id}</code> (predictable pattern)</td>
+        <td><span class="file-ref">auth.py</span></td>
+      </tr>
+      <tr>
+        <td><strong>Station Name</strong></td>
+        <td><code>"Luanshya Station"</code></td>
+        <td><span class="file-ref">stations_registry.py</span></td>
+      </tr>
+      <tr style="background:#f0fdf4;">
+        <td><strong>Regulatory Constants</strong> (acceptable)</td>
+        <td>VAT 16%, Fuel Levy 1.44 ZMW, Tank Conversion Factor 785.4 L/cm</td>
+        <td><span class="file-ref">config.py</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== CRASH ANALYSIS ==================== -->
+<div class="content page-break" id="crash">
+  <h2>7. Crash &amp; Failure Analysis</h2>
+
+  <div class="crash-grid">
+    <div class="crash-box fatal">
+      <h4>Immediate Failures (500 Errors)</h4>
+      <ul>
+        <li><strong>POST /sales</strong> &mdash; <code>storage['tanks']</code> empty, crashes when iterating to find tank by fuel type (<span class="file-ref">sales.py:89</span>)</li>
+        <li><strong>Dashboard Tank Cards</strong> &mdash; <code>findDieselTank</code> / <code>findPetrolTank</code> undefined, rendering breaks (<span class="file-ref">index.tsx:32-33</span>)</li>
+        <li><strong>Auth with test users</strong> &mdash; users hardcoded to ST001; if ST001 deleted, their station_id is invalid</li>
+        <li><strong>Manual operations by ID</strong> &mdash; direct dict access <code>storage['tanks'][id]</code> throws KeyError on missing data</li>
+        <li><strong>All storage['key'] access</strong> &mdash; ~30+ locations across tanks.py, islands.py, shifts.py, accounts.py throw KeyError</li>
+      </ul>
+    </div>
+    <div class="crash-box degraded">
+      <h4>Graceful Degradation (Features Broken)</h4>
+      <ul>
+        <li><strong>Shift creation</strong> &mdash; if no nozzles exist, assignment validation fails (returns 400, expected)</li>
+        <li><strong>Infrastructure page</strong> &mdash; fetches islands/tanks, gets empty arrays, displays empty tables</li>
+        <li><strong>Daily summary</strong> &mdash; shows zeros</li>
+        <li><strong>Reports</strong> &mdash; iterate over empty collections, return empty results</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== ARCHITECTURAL CONCERNS ==================== -->
+<div class="content" id="architecture">
+  <h2>8. Architectural Concerns</h2>
+
+  <h3>8.1 Storage Architecture</h3>
+  <div class="issue-card showstopper" style="border-color:#64748b;">
+    <div class="issue-body" style="padding-top:16px;">
+      <ul style="padding-left:18px; font-size:14px;">
+        <li>Everything lives in Python dicts in memory (<code>storage.py:59</code> &mdash; <code>STORAGE = _make_empty_storage()</code>)</li>
+        <li>JSON files on disk for some persistence, but not all writes are immediate</li>
+        <li>Render free tier's ephemeral filesystem means all data is lost on restart/sleep (every 15 min of inactivity)</li>
+        <li>No transactions, no locking, no backup mechanism</li>
+        <li>No data integrity guarantees if process crashes mid-operation</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>8.2 Authentication Architecture</h3>
+  <div class="issue-card showstopper" style="border-color:#64748b;">
+    <div class="issue-body" style="padding-top:16px;">
+      <ul style="padding-left:18px; font-size:14px;">
+        <li>Users hardcoded in Python source code &mdash; no database table</li>
+        <li>SHA-256 password hashing with no salt (vulnerable to rainbow tables)</li>
+        <li>Tokens are predictable/forgeable: <code>token-{username}-{user_id}</code></li>
+        <li>No token expiry or refresh token mechanism</li>
+        <li>No runtime user management (create/delete/update users)</li>
+        <li>No password reset capability</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>8.3 Persistence Architecture</h3>
+  <div class="issue-card showstopper" style="border-color:#64748b;">
+    <div class="issue-body" style="padding-top:16px;">
+      <ul style="padding-left:18px; font-size:14px;">
+        <li><code>station_files.py</code> handles JSON file read/write for some data</li>
+        <li>Not all data is persisted to disk on every write operation</li>
+        <li>No write-ahead log or journaling</li>
+        <li>Corrupt JSON files = total data loss for that entity</li>
+        <li>No backup/restore capability</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== RECOMMENDATIONS ==================== -->
+<div class="content page-break" id="recommendations">
+  <h2>9. Recommendations &amp; Next Steps</h2>
+
+  <h3>9.1 Prioritized Mitigation Plan</h3>
+
+  <table>
+    <thead>
+      <tr><th>#</th><th>Mitigation</th><th>Severity</th><th>Files Affected</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>Remove all auto-seeded data (tanks, islands, accounts, LPG, lubricants, prices)</td>
+        <td><span class="severity-badge critical">Critical</span></td>
+        <td><span class="file-ref">seed_defaults.py</span>, <span class="file-ref">stations_registry.py</span></td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>Build setup wizard API + frontend flow</td>
+        <td><span class="severity-badge critical">Critical</span></td>
+        <td>New endpoint + new page</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>Replace all <code>storage['key']</code> with <code>.get('key', {})</code> or <code>.get('key', [])</code></td>
+        <td><span class="severity-badge critical">Critical</span></td>
+        <td><span class="file-ref">tanks.py</span>, <span class="file-ref">islands.py</span>, <span class="file-ref">shifts.py</span>, <span class="file-ref">accounts.py</span>, <span class="file-ref">sales.py</span> (~30+ lines)</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>Guard <code>POST /sales</code> against missing tanks</td>
+        <td><span class="severity-badge critical">Critical</span></td>
+        <td><span class="file-ref">sales.py</span></td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>Remove hardcoded test/demo users</td>
+        <td><span class="severity-badge critical">Critical</span></td>
+        <td><span class="file-ref">auth.py</span>, <span class="file-ref">login.tsx</span></td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>Remove ST001 fallback from <code>get_station_context()</code></td>
+        <td><span class="severity-badge critical">Critical</span></td>
+        <td><span class="file-ref">auth.py</span></td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td>Remove ST001 backward compat from <code>main.py</code> startup</td>
+        <td><span class="severity-badge critical">Critical</span></td>
+        <td><span class="file-ref">main.py</span></td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td>Remove <code>'ST001'</code> default from Layout.tsx and api.ts</td>
+        <td><span class="severity-badge high">High</span></td>
+        <td><span class="file-ref">Layout.tsx</span>, <span class="file-ref">lib/api.ts</span></td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td>Frontend: handle empty tanks on dashboard</td>
+        <td><span class="severity-badge high">High</span></td>
+        <td><span class="file-ref">index.tsx</span></td>
+      </tr>
+      <tr>
+        <td>10</td>
+        <td>Frontend: remove hardcoded <code>'TANK-DIESEL'</code> default</td>
+        <td><span class="severity-badge high">High</span></td>
+        <td><span class="file-ref">daily-tank-reading.tsx</span></td>
+      </tr>
+      <tr>
+        <td>11</td>
+        <td>Frontend route protection &mdash; block ops pages until setup done</td>
+        <td><span class="severity-badge high">High</span></td>
+        <td>Multiple pages</td>
+      </tr>
+      <tr>
+        <td>12</td>
+        <td>Fix <code>reconciliation.py</code> to use runtime prices</td>
+        <td><span class="severity-badge medium">Medium</span></td>
+        <td><span class="file-ref">reconciliation.py</span></td>
+      </tr>
+      <tr>
+        <td>13</td>
+        <td>Delete <code>seed_test_data.py</code> from production</td>
+        <td><span class="severity-badge medium">Medium</span></td>
+        <td><span class="file-ref">seed_test_data.py</span></td>
+      </tr>
+      <tr>
+        <td>14</td>
+        <td>Keep sensible config defaults (VAT, levy, thresholds)</td>
+        <td><span class="severity-badge low">Low</span></td>
+        <td><span class="file-ref">config.py</span></td>
+      </tr>
+      <tr>
+        <td>15</td>
+        <td>Data validation on setup wizard inputs</td>
+        <td><span class="severity-badge low">Low</span></td>
+        <td>New endpoint</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>9.2 Revised Severity Ranking</h3>
+
+  <table>
+    <thead>
+      <tr><th>Priority</th><th>Issue</th><th>Impact</th></tr>
+    </thead>
+    <tbody>
+      <tr style="background:#fef2f2;">
+        <td><span class="severity-badge showstopper">Showstopper</span></td>
+        <td>Render ephemeral filesystem &mdash; all data lost on restart</td>
+        <td>Cannot use in production at all</td>
+      </tr>
+      <tr style="background:#fef2f2;">
+        <td><span class="severity-badge showstopper">Showstopper</span></td>
+        <td>No real user management &mdash; users hardcoded in code</td>
+        <td>Cannot add/remove staff</td>
+      </tr>
+      <tr style="background:#fef2f2;">
+        <td><span class="severity-badge showstopper">Showstopper</span></td>
+        <td>Tokens are forgeable &mdash; no security</td>
+        <td>Anyone can impersonate any user</td>
+      </tr>
+      <tr>
+        <td><span class="severity-badge critical">Critical</span></td>
+        <td>Remove seeded data + build setup wizard</td>
+        <td>Fake data in production</td>
+      </tr>
+      <tr>
+        <td><span class="severity-badge critical">Critical</span></td>
+        <td>Backend guards for empty data (30+ locations)</td>
+        <td>500 errors throughout</td>
+      </tr>
+      <tr>
+        <td><span class="severity-badge high">High</span></td>
+        <td>Frontend route protection</td>
+        <td>Confusing UX</td>
+      </tr>
+      <tr>
+        <td><span class="severity-badge medium">Medium</span></td>
+        <td>Config cleanup, test data removal</td>
+        <td>Code hygiene</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== ACCEPTANCE CRITERIA ==================== -->
+<div class="content page-break" id="acceptance">
+  <h2>10. Production Acceptance Criteria</h2>
+  <p style="margin-bottom:16px; color:var(--color-text-muted); font-size:14px;">
+    The system should not be considered production-ready until all of the following are met:
+  </p>
+
+  <ol class="rec-list">
+    <li>
+      <strong>Every <code>storage['key']</code> direct access must use <code>.get('key', {})</code> or <code>.get('key', [])</code></strong>
+      <div class="rec-meta">Prevents 500 errors from missing storage keys across ~30+ locations</div>
+    </li>
+    <li>
+      <strong>Frontend pages must handle empty tank/island arrays gracefully</strong>
+      <div class="rec-meta">Dashboard, tank readings, and infrastructure pages must render without crashing when data is empty</div>
+    </li>
+    <li>
+      <strong>Test users must be removed or have no hardcoded <code>station_id</code></strong>
+      <div class="rec-meta">No hardcoded users in source code; implement proper user database with bcrypt password hashing</div>
+    </li>
+    <li>
+      <strong>API endpoints must NOT auto-seed on first access</strong>
+      <div class="rec-meta">Force explicit configuration through a setup wizard; no implicit data creation</div>
+    </li>
+    <li>
+      <strong>Dashboard must not hardcode "TANK-DIESEL" / "TANK-PETROL" lookups</strong>
+      <div class="rec-meta">Tank display must be fully dynamic based on API-returned data</div>
+    </li>
+    <li>
+      <strong>Authentication tokens must be cryptographically secure</strong>
+      <div class="rec-meta">Use UUID4 or JWT with proper signing; implement token expiry and refresh</div>
+    </li>
+    <li>
+      <strong>Data must survive server restarts</strong>
+      <div class="rec-meta">Implement external database (PostgreSQL) or persistent storage solution</div>
+    </li>
+    <li>
+      <strong>Reconciliation must use runtime fuel prices</strong>
+      <div class="rec-meta">Use <code>resolve_fuel_price()</code> from settings instead of config constants</div>
+    </li>
+  </ol>
+
+  <div style="margin-top:40px; padding:24px; background:#1e293b; border-radius:8px; color:#e2e8f0;">
+    <h3 style="color:#f87171; margin:0 0 12px; font-size:16px;">Bottom Line</h3>
+    <p style="font-size:14px; line-height:1.8; margin:0;">
+      The 15 code-level mitigations address the seeded data problem, but the application has
+      <strong>3 architectural gaps</strong> (storage, auth, persistence) that make it
+      <strong>unsuitable for production regardless of code-level fixes</strong>.
+      The recommended path is to first resolve the showstopper issues (external database + proper auth),
+      then apply the code-level mitigations in priority order.
+    </p>
+    <p style="font-size:14px; line-height:1.8; margin:16px 0 0; color:#94a3b8;">
+      Total files affected: <strong>30+</strong> &nbsp;|&nbsp;
+      Estimated scope: Backend (15+ files) + Frontend (8+ files) + Infrastructure (database migration)
+    </p>
+  </div>
+</div>
+
+<!-- ==================== FOOTER ==================== -->
+<div class="report-footer">
+  <p>Production Readiness Audit Report &mdash; Fuel Management System &mdash; Generated 10 March 2026</p>
+  <p style="margin-top:4px;">This report was generated as part of the FMS production readiness review.</p>
+</div>
+
+</div><!-- /.container -->
+</body>
+</html>

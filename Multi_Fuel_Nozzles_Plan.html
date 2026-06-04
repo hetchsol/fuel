@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Multi-Fuel Nozzles &amp; Per-Nozzle Tank Assignment — Implementation Plan</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; max-width: 1180px; margin: 2em auto; padding: 0 1.5em; color: #222; line-height: 1.55; }
+  h1 { border-bottom: 3px solid #0b5394; padding-bottom: .3em; }
+  h2 { color: #0b5394; margin-top: 2.2em; border-bottom: 1px solid #cfd8dc; padding-bottom: .2em; }
+  h3 { color: #1a5276; margin-top: 1.5em; }
+  h4 { color: #2c3e50; margin-top: 1.2em; margin-bottom: .3em; }
+  code, pre { font-family: Consolas, "Courier New", monospace; }
+  code { background: #f1f3f5; padding: 1px 5px; border-radius: 3px; font-size: 0.92em; }
+  pre { background: #f8f9fa; border-left: 4px solid #0b5394; padding: .75em 1em; overflow-x: auto; font-size: 0.88em; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+  th, td { border: 1px solid #cfd8dc; padding: .55em .75em; text-align: left; vertical-align: top; }
+  th { background: #eceff1; }
+  tr:nth-child(even) { background: #fafafa; }
+  .ok { color: #1b5e20; font-weight: 600; }
+  .gap { color: #b71c1c; font-weight: 600; }
+  .partial { color: #e65100; font-weight: 600; }
+  .box { border: 1px solid #cfd8dc; border-radius: 6px; padding: .9em 1.2em; margin: 1em 0; background: #fafafa; }
+  .box.crit { border-color: #b71c1c; background: #fff5f5; }
+  .box.warn { border-color: #e65100; background: #fff8e1; }
+  .box.info { border-color: #0b5394; background: #e3f2fd; }
+  .box.good { border-color: #1b5e20; background: #f0fdf4; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.78em; font-weight: 600; }
+  .tag.crit { background: #b71c1c; color: #fff; }
+  .tag.high { background: #e65100; color: #fff; }
+  .tag.med  { background: #f9a825; color: #000; }
+  .tag.low  { background: #78909c; color: #fff; }
+  .tag.ok   { background: #2e7d32; color: #fff; }
+  .tag.new  { background: #0b5394; color: #fff; }
+  .kpi { display: inline-block; margin: .3em 1em .3em 0; padding: .4em .8em; background: #fff; border: 1px solid #cfd8dc; border-radius: 4px; font-size: 0.9em; }
+  .kpi b { color: #0b5394; }
+  .toc { background: #f8f9fa; border: 1px solid #cfd8dc; border-radius: 6px; padding: 1em 1.5em; margin: 1em 0; font-size: 0.95em; }
+  .toc ol { margin: .3em 0; padding-left: 1.4em; }
+  .small { font-size: 0.85em; color: #666; }
+  footer { margin-top: 3em; padding-top: 1em; border-top: 1px solid #cfd8dc; color: #666; font-size: 0.85em; }
+  .preset-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1em; margin: 1em 0; }
+  .preset-grid > div { border: 1px solid #cfd8dc; border-radius: 6px; padding: 1em; background: #fff; }
+  .preset-grid h4 { margin-top: 0; color: #0b5394; }
+</style>
+</head>
+<body>
+
+<h1>Multi-Fuel Nozzles &amp; Per-Nozzle Tank Assignment — Implementation Plan</h1>
+
+<div class="box info">
+  <b>Goals (from owner):</b><br>
+  1. Allow a single island to dispense multiple fuel types (e.g. one nozzle diesel, one petrol — multi-product dispenser).<br>
+  2. Allow each nozzle to be assigned to a specific tank, including the multi-tank case (2+ diesel tanks, 2+ petrol tanks).<br>
+  3. Owner shouldn't have to fiddle nozzle-by-nozzle — sensible presets per island, with picking only when ambiguous.<br>
+  <b>Constraint:</b> existing functionality, outputs, reports, and reconciliation numbers must remain 100% correct. No silent drift.
+</div>
+
+<div class="box good">
+  <b>Owner decisions — all locked in:</b> 8 design questions resolved (Section 14 below). Notable consequences baked into this plan:
+  <ul>
+    <li><b>Strict fuel/tank validation</b> (no <code>force=true</code> escape) — changing a nozzle's fuel requires changing its tank in the same atomic call.</li>
+    <li><b>Tank assignment is treated as permanent configuration</b> — no transfer-event machinery; reassignment is a rare admin action accepted with manual reconciliation if it ever happens.</li>
+    <li><b>Per-nozzle row layout</b> for mixed islands on the shift assignment grid (each nozzle is its own coloured row inside the island card).</li>
+    <li>Per-fuel label namespaces (<code>LSD 1A</code> + <code>UNL 1A</code> coexist), <code>Island.product_type</code> auto-computed, query-time recon, Phase 2 retirement of <code>PumpStation.tank_id</code>, Custom mode behind an Advanced expander.</li>
+  </ul>
+</div>
+
+<div>
+  <span class="kpi">Effort estimate: <b>~28 hours</b></span>
+  <span class="kpi">Implementation chunks: <b>6</b></span>
+  <span class="kpi">Test scenarios: <b>42</b></span>
+  <span class="kpi">Risks identified: <b>9</b></span>
+  <span class="kpi">Owner decisions: <b>8 / 8 locked</b></span>
+</div>
+
+<div class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#exec">Executive summary</a></li>
+    <li><a href="#decisions">Design decisions</a></li>
+    <li><a href="#preset">Preset system &amp; multi-tank logic</a></li>
+    <li><a href="#model">Data model changes</a></li>
+    <li><a href="#migration">Migration strategy</a></li>
+    <li><a href="#inventory">Current behavior inventory (inputs / outputs / relationships)</a></li>
+    <li><a href="#impact">File-by-file impact analysis</a></li>
+    <li><a href="#api">API changes</a></li>
+    <li><a href="#frontend">Frontend changes</a></li>
+    <li><a href="#tests">Test matrix (42 scenarios)</a></li>
+    <li><a href="#risks">Risk register &amp; mitigations</a></li>
+    <li><a href="#rollback">Rollback plan</a></li>
+    <li><a href="#chunks">Implementation chunks (sequencing)</a></li>
+    <li><a href="#decisions-needed">Owner decisions (locked)</a></li>
+  </ol>
+</div>
+
+<h2 id="exec">1. Executive Summary</h2>
+
+<p>The fuel station model today assumes <i>one island = one fuel</i>. The plan upgrades that to <i>any island can mix fuels at the nozzle level</i>, and each nozzle can be wired to a specific tank. The change is delivered as <b>preset templates</b> (All Diesel, All Petrol, Mixed) so 95% of stations never see a tank picker, while multi-tank stations get a small dropdown only when there's genuine ambiguity.</p>
+
+<p><b>Why this is low-risk:</b> the codebase is already 80% ready. <code>Nozzle.fuel_type</code> is already per-nozzle, <code>get_tank_id_for_nozzle()</code> already exists with a nozzle-first resolution path, sales records already carry <code>tank_id</code> frozen at sale time, reconciliation already uses a three-tier fallback (<code>sale.tank_id → nozzle→tank → fuel_type</code>). The refactor mostly <i>activates</i> what's already there.</p>
+
+<p><b>Backward compatibility guarantee:</b> for every existing station that does not deliberately configure a mixed-fuel island after upgrade, all outputs are <span class="ok">byte-identical</span> to today: same revenue numbers, same CSV/Excel rows, same reconciliation deltas, same labels. This is verified by the 42-scenario regression suite (Section 10).</p>
+
+<h2 id="decisions">2. Design Decisions</h2>
+
+<h3>D1 — Move <code>tank_id</code> authority from <code>PumpStation</code> to <code>Nozzle</code></h3>
+<div class="box">
+  <p><span class="tag new">DECIDED</span> Add <code>Nozzle.tank_id</code>; demote <code>PumpStation.tank_id</code> to a fallback default that's only consulted when a nozzle has no explicit tank.</p>
+  <p><b>Why:</b> a multi-product dispenser is physically <i>one pump head with two nozzles drawing from two tanks</i>. Modelling this as one <code>PumpStation</code> with mixed nozzles is faithful; modelling it as two <code>PumpStation</code>s would double every report row for an MPD.</p>
+  <p><b>Why not the alternative</b> (multiple pump stations per island)<b>:</b> ripples into every place that does <code>island.pump_station</code> (20+ call sites). Strictly more code churn for a worse physical model.</p>
+</div>
+
+<h3>D2 — Preset-first UI</h3>
+<div class="box">
+  <p><span class="tag new">DECIDED</span> Owner picks a preset per island (<i>All Diesel / All Petrol / Mixed</i>), with a "Custom..." escape hatch for edge cases. Backend wires nozzles to tanks automatically.</p>
+  <p><b>Why:</b> mirrors how owners think ("island 3 is the mixed pump"); impossible to wire a petrol nozzle to a diesel tank via presets; collapses 3+ form fields into one choice.</p>
+</div>
+
+<h3>D3 — Tank picker shown only on ambiguity</h3>
+<div class="box">
+  <p><span class="tag new">DECIDED</span> If a fuel has only one matching tank: auto-wire, no UI. If multiple tanks of that fuel exist: one dropdown per fuel slot in the chosen preset, filtered to matching fuel only.</p>
+</div>
+
+<h3>D4 — Nozzle fuel type strictly tied to tank</h3>
+<div class="box">
+  <p><span class="tag new">DECIDED</span> <code>nozzle.fuel_type</code> remains as a stored field (for code paths that already read it) but is enforced to equal <code>tanks[nozzle.tank_id].fuel_type</code>. Backend <b>always rejects</b> mismatched assignments with HTTP 400 — no <code>force</code> escape hatch.</p>
+  <p><b>Consequence:</b> changing a nozzle's fuel requires changing its tank in the same atomic call. The <code>PUT /islands/{id}/nozzle/{id}/fuel-type</code> endpoint requires both <code>fuel_type</code> and <code>tank_id</code> in its body. You cannot ever observe a nozzle whose fuel disagrees with its tank.</p>
+  <p><b>Why "stored not derived":</b> ~6 backend modules and ~5 frontend pages already read <code>nozzle.fuel_type</code>; making it derived means changing every read site. Storing it (and validating on write) is a smaller, safer change.</p>
+</div>
+
+<h3>D5 — Per-fuel label namespaces</h3>
+<div class="box">
+  <p><span class="tag new">DECIDED</span> Numbering becomes <i>per-fuel-within-island</i>. A mixed island (one diesel + one petrol nozzle) produces labels like <code>LSD 1A</code> and <code>UNL 1A</code> on the same physical island — no collision because the namespaces are separate. This preserves the spreadsheet mental model owners use today.</p>
+</div>
+
+<h3>D6 — <code>Island.product_type</code> becomes informational</h3>
+<div class="box">
+  <p><span class="tag new">DECIDED</span> Field stays in the model as an optional label hint. Computed automatically: <i>"Petrol" / "Diesel" / "Mixed" / null</i>, based on the actual nozzle composition. Never used as a gate for sale routing or filtering — every consumer walks nozzles instead.</p>
+</div>
+
+<h3>D7 — <code>PumpStation.tank_id</code> retained as fallback</h3>
+<div class="box">
+  <p><span class="tag new">DECIDED</span> Field becomes optional; resolution order is <i>nozzle.tank_id → pump.tank_id → fuel_type fallback</i>. Slated for removal in a Phase 2 cleanup once all stations are confirmed migrated.</p>
+</div>
+
+<h2 id="preset">3. Preset System &amp; Multi-Tank Logic</h2>
+
+<h3>3.1 The three presets</h3>
+
+<p>For an island with two nozzles (positions A and B):</p>
+
+<div class="preset-grid">
+  <div>
+    <h4>All Diesel</h4>
+    <p class="small">Both nozzles dispense diesel from the same diesel tank.</p>
+    <p>Writes: <code>nozzle_A.tank_id = T_DIESEL</code>, <code>nozzle_B.tank_id = T_DIESEL</code>, <code>island.product_type = "Diesel"</code></p>
+  </div>
+  <div>
+    <h4>All Petrol</h4>
+    <p class="small">Both nozzles dispense petrol from the same petrol tank.</p>
+    <p>Writes: <code>nozzle_A.tank_id = T_PETROL</code>, <code>nozzle_B.tank_id = T_PETROL</code>, <code>island.product_type = "Petrol"</code></p>
+  </div>
+  <div>
+    <h4>Mixed (MPD)</h4>
+    <p class="small">One nozzle petrol, one nozzle diesel. By convention nozzle A = petrol (left side), B = diesel.</p>
+    <p>Writes: <code>nozzle_A.tank_id = T_PETROL</code>, <code>nozzle_B.tank_id = T_DIESEL</code>, <code>island.product_type = "Mixed"</code></p>
+  </div>
+</div>
+
+<p>A fourth option <b>Custom…</b> (hidden behind an "Advanced" expander) reveals per-nozzle tank dropdowns. Used for stations with 3+ nozzles per island, LPG dispensers later, or load-balancing across multiple tanks of the same fuel.</p>
+
+<h3>3.2 Multi-tank tank-picking logic</h3>
+
+<p>When the owner chooses a preset, the wizard inspects the station's tank inventory:</p>
+
+<table>
+  <tr><th>Preset</th><th>Station has</th><th>UI shown</th><th>Default</th></tr>
+  <tr><td>All Diesel</td><td>1 diesel tank</td><td>(no dropdown)</td><td>Auto-wired to that tank</td></tr>
+  <tr><td>All Diesel</td><td>2+ diesel tanks</td><td>"Which diesel tank? [▾]"</td><td>First diesel tank by id-order</td></tr>
+  <tr><td>All Petrol</td><td>1 petrol tank</td><td>(no dropdown)</td><td>Auto-wired</td></tr>
+  <tr><td>All Petrol</td><td>2+ petrol tanks</td><td>"Which petrol tank? [▾]"</td><td>First petrol tank</td></tr>
+  <tr><td>Mixed</td><td>1 of each fuel</td><td>(no dropdown)</td><td>Auto-wired (P→petrol, D→diesel)</td></tr>
+  <tr><td>Mixed</td><td>2+ of either fuel</td><td>"Diesel from [▾]" + "Petrol from [▾]"</td><td>First of each fuel</td></tr>
+  <tr><td>Custom</td><td>Any</td><td>Per-nozzle tank dropdown</td><td>None — owner picks each</td></tr>
+</table>
+
+<p><b>Dropdown options are filtered to tanks of the matching fuel only.</b> Petrol tanks never appear in a "diesel" slot — that's how the fuel-type constraint is enforced at the UI level.</p>
+
+<h3>3.3 Per-nozzle tank override (Custom mode)</h3>
+
+<p>Real but rare scenario: island 1 has both nozzles diesel, but owner wants nozzle A to draw from <code>TANK-DIESEL-1</code> and nozzle B from <code>TANK-DIESEL-2</code> (load balancing across tanks). The Custom preset reveals two tank dropdowns instead of one. Same applies to multi-petrol load balancing.</p>
+
+<h3>3.4 Backend behavior on preset application</h3>
+
+<p>The preset endpoint (<code>POST /islands/{id}/preset</code>) is a single atomic write that:</p>
+
+<ol>
+  <li>Validates the preset name is one of <code>all_diesel | all_petrol | mixed | custom</code></li>
+  <li>For each nozzle, sets <code>nozzle.tank_id</code> and <code>nozzle.fuel_type</code> based on the preset + tank-picker output</li>
+  <li>Sets <code>pump_station.tank_id</code> to the dominant tank (for backward compat with code paths that still consult it)</li>
+  <li>Sets <code>island.product_type</code> to <code>"Petrol" | "Diesel" | "Mixed"</code></li>
+  <li>Re-runs <code>compute_display_labels(storage)</code> so labels reflect the new fuel composition</li>
+  <li>Persists via <code>save_station_storage</code></li>
+  <li>Emits an audit event with the before/after diff</li>
+</ol>
+
+<p>If any step fails, the entire write is rolled back (in-memory state restored from the deep-copy taken at step 1).</p>
+
+<h2 id="model">4. Data Model Changes</h2>
+
+<h3>4.1 <code>backend/app/models/models.py</code></h3>
+
+<table>
+  <tr><th>Model</th><th>Field</th><th>Today</th><th>After</th><th>Note</th></tr>
+  <tr>
+    <td><code>Nozzle</code> (line 167)</td>
+    <td><code>tank_id</code></td>
+    <td>—</td>
+    <td><code>Optional[str] = None</code></td>
+    <td>NEW — primary source of truth</td>
+  </tr>
+  <tr>
+    <td><code>Nozzle</code></td>
+    <td><code>fuel_type</code></td>
+    <td><code>str</code></td>
+    <td><code>str</code> (validated against tank)</td>
+    <td>Unchanged shape; new write-time constraint</td>
+  </tr>
+  <tr>
+    <td><code>Nozzle</code></td>
+    <td><code>fuel_type_abbrev</code></td>
+    <td>—</td>
+    <td><code>Optional[str] = None</code></td>
+    <td>NEW — set by <code>compute_display_labels</code></td>
+  </tr>
+  <tr>
+    <td><code>PumpStation</code> (line 177)</td>
+    <td><code>tank_id</code></td>
+    <td><code>str</code></td>
+    <td><code>Optional[str] = None</code></td>
+    <td>Demoted to fallback default</td>
+  </tr>
+  <tr>
+    <td><code>Island</code> (line 184)</td>
+    <td><code>product_type</code></td>
+    <td><code>Optional[str] = None</code></td>
+    <td><code>Optional[str] = None</code></td>
+    <td>Unchanged type; semantic shift to "informational"</td>
+  </tr>
+  <tr>
+    <td><code>Island</code></td>
+    <td><code>fuel_type_abbrev</code></td>
+    <td><code>Optional[str] = None</code></td>
+    <td>Same; <code>None</code> for mixed islands</td>
+    <td>Set to None when nozzles disagree</td>
+  </tr>
+</table>
+
+<p>All field additions are <b>strictly additive and backwards-compatible</b>. Old records without <code>nozzle.tank_id</code> still deserialize cleanly because the field defaults to <code>None</code>.</p>
+
+<h3>4.2 <code>backend/app/database/storage.py</code></h3>
+
+<p><b><code>get_tank_id_for_nozzle()</code> at line 237</b> — resolution order becomes:</p>
+<pre>1. nozzle.tank_id (if set)              — primary source of truth
+2. pump_station.tank_id (fallback)      — for legacy / unmigrated nozzles
+3. None                                 — caller falls back to fuel_type heuristics</pre>
+
+<p><b><code>get_nozzle_ids_for_tank()</code> at line 258</b> — match logic:</p>
+<pre>Include nozzle iff:
+  nozzle.tank_id == tank_id
+  OR (nozzle.tank_id is None AND pump.tank_id == tank_id)</pre>
+
+<p>This preserves the "default inheritance" semantic for unmigrated nozzles.</p>
+
+<h3>4.3 <code>backend/app/database/seed_defaults.py</code></h3>
+
+<ul>
+  <li><b>Line 70-88</b> (<code>_seed_islands</code>): each new nozzle dict gets <code>"tank_id": tank_id</code> stamped on creation.</li>
+  <li><b>Line 224-261</b> (<code>_migrate_islands_assign_product_types</code>): also stamps <code>nozzle["tank_id"] = tank_id</code> inside the existing loop.</li>
+  <li><b>NEW function</b> <code>_migrate_nozzles_propagate_tank_id(storage)</code> — see Section 5.</li>
+  <li><b>Wire-in:</b> add the new migration to <code>seed_station_defaults()</code> after the existing three migrations.</li>
+</ul>
+
+<h2 id="migration">5. Migration Strategy</h2>
+
+<h3>5.1 The migration function</h3>
+
+<pre>def _migrate_nozzles_propagate_tank_id(storage: dict) -> int:
+    """
+    Copy each pump_station.tank_id down to its nozzles' tank_id field.
+    Idempotent — guards against overwriting existing assignments.
+    Returns the number of nozzles migrated (0 if already migrated).
+    """
+    migrated = 0
+    skipped_no_pump_tank = 0
+    for island in storage.get('islands', {}).values():
+        pump = island.get('pump_station')
+        if not pump:
+            continue
+        pump_tank_id = pump.get('tank_id')
+        if not pump_tank_id:
+            skipped_no_pump_tank += 1
+            continue
+        for nozzle in pump.get('nozzles', []):
+            if nozzle.get('tank_id'):
+                continue  # already migrated, leave alone
+            nozzle['tank_id'] = pump_tank_id
+            migrated += 1
+    if skipped_no_pump_tank:
+        logger.warning(
+            f"[migration] Skipped {skipped_no_pump_tank} pump_stations "
+            f"with no tank_id; their nozzles fall back to fuel_type heuristics"
+        )
+    return migrated</pre>
+
+<h3>5.2 Trigger</h3>
+
+<p>Called from <code>seed_station_defaults()</code> as the fourth migration step, matching the pattern of the existing three. Runs lazily on first station load per session via <code>get_station_storage()</code>. No separate migration script needed; multi-tenant stations migrate independently on their own schedule.</p>
+
+<h3>5.3 Persistence</h3>
+
+<p>After <code>seed_station_defaults()</code> returns, the existing <code>save_station_storage(station_id)</code> path pushes changes to the JSON file or Postgres backing store. The migration is one in-memory pass plus one save — no separate transaction needed.</p>
+
+<h3>5.4 Failure modes &amp; resilience</h3>
+
+<table>
+  <tr><th>Failure</th><th>Outcome</th><th>Detection</th><th>Recovery</th></tr>
+  <tr>
+    <td>Process killed mid-migration (disk full, OOM)</td>
+    <td>Some nozzles migrated, others not. <code>get_tank_id_for_nozzle</code> falls back to <code>pump.tank_id</code> for unmigrated ones — no observable difference.</td>
+    <td>Log entry for migration count is missing or partial</td>
+    <td>Next station load completes the migration (idempotent guard skips already-set tank_ids)</td>
+  </tr>
+  <tr>
+    <td>Pump has no <code>tank_id</code> (malformed data)</td>
+    <td>Nozzle.tank_id stays None; warning logged; fuel_type fallback handles routing</td>
+    <td>Warning in logs</td>
+    <td>Owner uses preset UI to set tank_id explicitly</td>
+  </tr>
+  <tr>
+    <td>Migration writes correct value but save fails</td>
+    <td>In-memory state is correct, on-disk is stale. Next request reads stale state from disk on cold start.</td>
+    <td>Save error in logs</td>
+    <td>Migration re-runs on next load (idempotent), save retries</td>
+  </tr>
+</table>
+
+<h3>5.5 Rollback semantics</h3>
+
+<p>The migration is <b>strictly additive</b> — it only writes to a new field. Reverting the code would leave <code>nozzle.tank_id</code> as inert extra data. <code>PumpStation.tank_id</code> is never modified or removed. Zero risk of data loss.</p>
+
+<h2 id="inventory">6. Current Behavior Inventory</h2>
+
+<p>To guarantee 100% functional preservation, this section enumerates every input the system accepts, every output it produces, and every relationship the data model encodes today. The refactor must keep all of these intact.</p>
+
+<h3>6.1 Inputs (data the system accepts)</h3>
+
+<table>
+  <tr><th>Input</th><th>Endpoint / surface</th><th>Touches</th></tr>
+  <tr><td>Nozzle opening/closing readings</td><td><code>POST /handover/submit-readings</code></td><td>Per-nozzle, fuel-type derived from nozzle</td></tr>
+  <tr><td>Direct sale</td><td><code>POST /sales/</code></td><td><code>sale.nozzle_id</code>, <code>sale.tank_id</code>, <code>sale.fuel_type</code> all stored</td></tr>
+  <tr><td>Tank delivery</td><td><code>POST /tank-deliveries/</code></td><td>Per-tank — unchanged</td></tr>
+  <tr><td>Tank dip reading</td><td><code>POST /tank-readings/</code></td><td>Per-tank — unchanged</td></tr>
+  <tr><td>Shift creation</td><td><code>POST /shifts/</code></td><td>Assigns <code>nozzle_ids[]</code> per attendant</td></tr>
+  <tr><td>Island/nozzle config</td><td><code>POST /islands/</code>, <code>PUT /islands/{id}/...</code></td><td>Affected — see Section 8</td></tr>
+  <tr><td>Tank create/update/delete</td><td><code>POST /tanks/</code>, <code>DELETE /tanks/{id}</code></td><td>Delete guard extended (Section 8)</td></tr>
+</table>
+
+<h3>6.2 Outputs (what the system produces)</h3>
+
+<table>
+  <tr><th>Output</th><th>Source</th><th>Grouping key today</th><th>Risk</th></tr>
+  <tr>
+    <td>Per-nozzle revenue (handover)</td>
+    <td><code>attendant_handover.py:543</code></td>
+    <td><code>nozzle.fuel_type</code> (per-nozzle)</td>
+    <td><span class="ok">None</span> — already correct</td>
+  </tr>
+  <tr>
+    <td>Shift petrol_revenue / diesel_revenue / lpg_revenue</td>
+    <td><code>reconciliation.py:374-377</code></td>
+    <td><code>nozzle.fuel_type</code></td>
+    <td><span class="ok">None</span> — per-nozzle</td>
+  </tr>
+  <tr>
+    <td>Tank variance (movement vs sales)</td>
+    <td><code>reconciliation.py:246-263</code></td>
+    <td>Three-tier: <code>sale.tank_id → nozzle→tank → fuel_type</code></td>
+    <td><span class="ok">None</span> — already nozzle-first</td>
+  </tr>
+  <tr>
+    <td>Tank readings CSV/Excel</td>
+    <td><code>export_service.py:137-197</code></td>
+    <td><code>tank_id</code>, <code>fuel_type</code></td>
+    <td><span class="ok">None</span> — reads tank record directly</td>
+  </tr>
+  <tr>
+    <td>Sales CSV/Excel</td>
+    <td><code>export_service.py:212-259</code></td>
+    <td><code>sale.fuel_type</code></td>
+    <td><span class="ok">None</span> — sale records frozen at write time</td>
+  </tr>
+  <tr>
+    <td>Reconciliation CSV/Excel</td>
+    <td><code>export_service.py:274-321</code></td>
+    <td>Aggregated revenue buckets</td>
+    <td><span class="ok">None</span> — buckets unchanged</td>
+  </tr>
+  <tr>
+    <td>Product/staff/island reports</td>
+    <td><code>reporting.py:152, 449, 599-625</code></td>
+    <td><code>sale.fuel_type</code></td>
+    <td><span class="ok">None</span> — sale-level grouping</td>
+  </tr>
+  <tr>
+    <td>Nozzle report (per-nozzle revenue)</td>
+    <td><code>reporting.py:344-357</code></td>
+    <td><code>nozzle.fuel_type</code> from islands data</td>
+    <td><span class="ok">None</span> — per-nozzle already</td>
+  </tr>
+  <tr>
+    <td>Nozzle labels (LSD 1A etc.)</td>
+    <td><code>naming_convention.py:12-58</code></td>
+    <td><code>island.product_type</code> + nozzle position</td>
+    <td><span class="partial">MEDIUM</span> — assumes single fuel per island; refactored in Chunk 4</td>
+  </tr>
+  <tr>
+    <td>Dashboard tiles (fuel totals)</td>
+    <td>Frontend reads <code>fuel_revenue</code> from reconciliation</td>
+    <td>Pre-aggregated by handover</td>
+    <td><span class="ok">None</span></td>
+  </tr>
+</table>
+
+<h3>6.3 Dependencies and relationships</h3>
+
+<pre>Today's data graph:
+
+  Island ──1:1──> PumpStation ──1:1──> Tank
+                       │
+                       └──1:many──> Nozzle ─(fuel_type)
+                                       │
+                                       └─(reads sale records via nozzle_id)
+
+After refactor:
+
+  Island ──1:1──> PumpStation ──── tank_id (fallback default) ──> Tank
+                       │                                            ▲
+                       └──1:many──> Nozzle ─(fuel_type, validated) ─┤
+                                       │   ─(tank_id, primary) ─────┘
+                                       │
+                                       └─(reads sale records via nozzle_id)</pre>
+
+<p><b>Relationship invariants preserved:</b></p>
+<ul>
+  <li>Sales still attribute to <code>nozzle_id</code> + <code>tank_id</code> (frozen at sale time)</li>
+  <li>Tank dip readings still per-tank, untouched</li>
+  <li>Deliveries still per-tank, untouched</li>
+  <li>Shift assignments still <code>nozzle_id</code>-keyed</li>
+  <li>Reconciliation's three-tier fallback still applies</li>
+</ul>
+
+<p><b>New invariant added:</b></p>
+<ul>
+  <li><code>nozzle.fuel_type == tanks[nozzle.tank_id].fuel_type</code> (server-enforced on write)</li>
+</ul>
+
+<h2 id="impact">7. File-by-File Impact Analysis</h2>
+
+<table>
+  <tr><th>File</th><th>Line(s)</th><th>Today</th><th>After</th><th>Risk</th></tr>
+  <tr>
+    <td><code>backend/app/models/models.py</code></td>
+    <td>167-192</td>
+    <td>Nozzle has no tank_id; PumpStation.tank_id required</td>
+    <td>Add tank_id to Nozzle; PumpStation.tank_id optional</td>
+    <td><span class="tag low">LOW</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/database/storage.py</code></td>
+    <td>237, 258</td>
+    <td>Helpers resolve via pump.tank_id</td>
+    <td>Helpers check nozzle.tank_id first</td>
+    <td><span class="tag low">LOW</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/database/seed_defaults.py</code></td>
+    <td>29, 70-88, 224-261</td>
+    <td>New nozzles have no tank_id</td>
+    <td>New nozzles get tank_id stamped + new migration</td>
+    <td><span class="tag low">LOW</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/api/v1/islands.py</code></td>
+    <td>174 (PUT product), 281 (POST), 315 (PUT pump tank), 347 (POST nozzle)</td>
+    <td>PUT product wholesale-rewrites nozzle fuel_type and pump tank_id; no per-nozzle endpoints</td>
+    <td>PUT product becomes informational only; new per-nozzle endpoints; new preset endpoint</td>
+    <td><span class="tag med">MED</span> — UX-visible</td>
+  </tr>
+  <tr>
+    <td><code>backend/app/api/v1/tanks.py</code></td>
+    <td>527-531</td>
+    <td>Delete guard checks pump.tank_id only</td>
+    <td>Delete guard also checks nozzle.tank_id; lists offending nozzles in error</td>
+    <td><span class="tag low">LOW</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/api/v1/sales.py</code></td>
+    <td>79-108</td>
+    <td>Three-tier resolution; <code>get_tank_id_for_nozzle</code> already nozzle-first</td>
+    <td>Same — Step 4.2 makes the existing path actually use nozzle.tank_id</td>
+    <td><span class="ok">None</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/api/v1/reconciliation.py</code></td>
+    <td>246-263, 374-377</td>
+    <td>Already uses three-tier filter and per-nozzle fuel_type grouping</td>
+    <td>Comment update only — logic unchanged</td>
+    <td><span class="ok">None</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/api/v1/attendant_handover.py</code></td>
+    <td>47-52, 543-544</td>
+    <td><code>_get_fuel_type</code> reads per-nozzle</td>
+    <td>Unchanged</td>
+    <td><span class="ok">None</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/api/v1/enter_readings.py</code></td>
+    <td>756-794</td>
+    <td>Filters nozzles by <code>get_nozzle_ids_for_tank</code> with fuel_type fallback</td>
+    <td>Unchanged — fallback kicks in less often after migration</td>
+    <td><span class="ok">None</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/services/naming_convention.py</code></td>
+    <td>12-58</td>
+    <td>Groups islands by product_type; fails for mixed islands</td>
+    <td>Group nozzles by fuel_type within island; per-fuel namespaces</td>
+    <td><span class="tag med">MED</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/services/reporting.py</code></td>
+    <td>344-357</td>
+    <td>Reads <code>nozzle.fuel_type</code> via island walk</td>
+    <td>Unchanged</td>
+    <td><span class="ok">None</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/services/export_service.py</code></td>
+    <td>137-321</td>
+    <td>Reads sale/tank records directly</td>
+    <td>Unchanged</td>
+    <td><span class="ok">None</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/database/schema.py</code></td>
+    <td>69, 488-495</td>
+    <td>Schema doc strings; <code>product_nozzles</code> sample query</td>
+    <td>Update sample query to use <code>nozzle.fuel_type</code> instead of <code>product_type</code></td>
+    <td><span class="tag low">LOW</span> — reference material</td>
+  </tr>
+  <tr>
+    <td><code>frontend/pages/infrastructure.tsx</code></td>
+    <td>616-700</td>
+    <td>Single product dropdown + single tank dropdown per island</td>
+    <td>Preset selector + per-fuel tank dropdowns + Custom mode</td>
+    <td><span class="tag med">MED</span></td>
+  </tr>
+  <tr>
+    <td><code>frontend/pages/shifts.tsx</code></td>
+    <td>1639-1713</td>
+    <td>Single fuel pill per island; uses <code>island.fuel_type_abbrev</code></td>
+    <td>Dual pills for mixed islands; uses <code>nozzle.fuel_type_abbrev</code></td>
+    <td><span class="tag med">MED</span></td>
+  </tr>
+  <tr>
+    <td><code>frontend/pages/daily-tank-reading.tsx</code></td>
+    <td>164-166</td>
+    <td>Filters islands by <code>island.product_type</code></td>
+    <td>Filters nozzles by <code>nozzle.tank_id</code> (selected tank)</td>
+    <td><span class="tag med">MED</span></td>
+  </tr>
+  <tr>
+    <td><code>frontend/pages/my-shift.tsx</code></td>
+    <td>2422-2432</td>
+    <td>Shows single product label per island</td>
+    <td>Shows comma-separated products for mixed islands</td>
+    <td><span class="tag low">LOW</span></td>
+  </tr>
+  <tr>
+    <td><code>frontend/pages/enter-readings.tsx</code></td>
+    <td>30, 34-35</td>
+    <td>Reads <code>nozzle.fuel_type_abbrev</code> + <code>nozzle.display_label</code></td>
+    <td>Unchanged — naming convention update populates these correctly</td>
+    <td><span class="ok">None</span></td>
+  </tr>
+  <tr>
+    <td><code>frontend/pages/sales.tsx</code></td>
+    <td>59</td>
+    <td>Reads <code>nozzle.fuel_type</code></td>
+    <td>Unchanged</td>
+    <td><span class="ok">None</span></td>
+  </tr>
+</table>
+
+<h2 id="api">8. API Changes</h2>
+
+<h3>8.1 Modified endpoints</h3>
+
+<h4><code>PUT /islands/{id}/product</code> (islands.py:174)</h4>
+<table>
+  <tr><th>Aspect</th><th>Today</th><th>After</th></tr>
+  <tr><td>Sets island.product_type</td><td>Yes</td><td>Yes (informational)</td></tr>
+  <tr><td>Rewrites pump.tank_id</td><td>Yes — atomic</td><td>No — deprecated side effect</td></tr>
+  <tr><td>Rewrites nozzle.fuel_type</td><td>Yes — every nozzle</td><td>No — preserves nozzle config</td></tr>
+  <tr><td>Response header</td><td>—</td><td><code>X-Deprecation: Use POST /islands/{id}/preset instead</code></td></tr>
+</table>
+
+<h4><code>PUT /islands/{id}/pump-station/tank</code> (islands.py:315)</h4>
+<p>Behavior unchanged at the data level (sets <code>pump.tank_id</code>) but documentation rewritten: this is now the "default tank for nozzles that don't carry their own <code>tank_id</code>". Response includes <code>nozzles_inheriting</code> count for clarity.</p>
+
+<h4><code>POST /islands/</code> (islands.py:281) and <code>POST /islands/{id}/nozzle</code> (islands.py:347)</h4>
+<p>Now accept optional <code>tank_id</code> on nozzle objects. Validates: tank exists, tank.fuel_type matches nozzle.fuel_type. <b>400 on mismatch with no override</b> — caller must fix the payload.</p>
+
+<h4><code>DELETE /tanks/{id}</code> (tanks.py:527)</h4>
+<p>Extended guard:</p>
+<pre>blocking_pumps = [pump for pump in all_pumps if pump.tank_id == tank_id]
+blocking_nozzles = [nozzle for nozzle in all_nozzles if nozzle.tank_id == tank_id]
+if blocking_pumps or blocking_nozzles:
+    raise HTTPException(400, detail={
+        "message": "Tank is in use",
+        "blocking_pumps": [p.pump_station_id for p in blocking_pumps],
+        "blocking_nozzles": [n.nozzle_id for n in blocking_nozzles],
+    })</pre>
+
+<h3>8.2 New endpoints</h3>
+
+<h4><code>POST /islands/{id}/preset</code></h4>
+<pre>Body: {
+  "preset": "all_diesel" | "all_petrol" | "mixed" | "custom",
+  "tanks": {                            // optional, used when ambiguous
+    "diesel_tank_id": "TANK-DIESEL-1",  // required if preset uses diesel and 2+ diesel tanks
+    "petrol_tank_id": "TANK-PETROL-1"
+  },
+  "nozzle_assignments": [               // required iff preset == "custom"
+    { "nozzle_id": "NZ-001", "tank_id": "TANK-DIESEL-1" },
+    { "nozzle_id": "NZ-002", "tank_id": "TANK-DIESEL-2" }
+  ]
+}
+
+Response: {
+  "island_id": "ISL-001",
+  "preset": "mixed",
+  "applied_nozzles": [
+    { "nozzle_id": "NZ-001", "tank_id": "TANK-PETROL-1", "fuel_type": "Petrol" },
+    { "nozzle_id": "NZ-002", "tank_id": "TANK-DIESEL-1", "fuel_type": "Diesel" }
+  ],
+  "labels_recomputed": true
+}</pre>
+
+<h4><code>PUT /islands/{id}/nozzle/{nozzle_id}/tank</code></h4>
+<p>Body: <code>{"tank_id": "TANK-DIESEL-1"}</code>. Validates that <code>tanks[tank_id].fuel_type</code> matches <code>nozzle.fuel_type</code>. 400 on mismatch — caller must use the <code>fuel-type</code> endpoint instead to change both atomically. Returns the updated nozzle.</p>
+
+<h4><code>PUT /islands/{id}/nozzle/{nozzle_id}/fuel-type</code></h4>
+<p>Body: <code>{"fuel_type": "Diesel", "tank_id": "TANK-DIESEL-1"}</code>. <b>Both fields required.</b> Validates that <code>tanks[tank_id].fuel_type == fuel_type</code>. 400 on mismatch. Atomic update of both fields — there is no way (and no need) to bypass this check.</p>
+
+<h2 id="frontend">9. Frontend Changes</h2>
+
+<h3>9.1 <code>frontend/pages/infrastructure.tsx</code> — Primary configuration page</h3>
+
+<p><b>Today:</b> island card has one "Product Type" dropdown and one "Assigned Tank" dropdown for the pump station. Lines 616-700.</p>
+
+<p><b>After:</b></p>
+<ul>
+  <li>Top of island card: <b>Preset selector</b> as a row of pills: <code>[ All Diesel | All Petrol | Mixed | Custom ]</code>.</li>
+  <li>Below the pills: <b>tank dropdowns</b> shown conditionally:
+    <ul>
+      <li>If preset uses one fuel and only one tank of that fuel exists → no dropdown</li>
+      <li>If preset uses one fuel and 2+ tanks exist → one dropdown labelled "Diesel from [▾]" (or Petrol)</li>
+      <li>If preset is Mixed → two dropdowns ("Diesel from", "Petrol from"), each shown conditionally as above</li>
+    </ul>
+  </li>
+  <li><b>Nozzle preview row:</b> renders each nozzle as <code>[A] LSD 1A → TANK-DIESEL-1</code> showing the wired tank for confirmation.</li>
+  <li><b>Custom mode:</b> hidden behind an "Advanced..." expander; reveals per-nozzle tank dropdowns.</li>
+  <li>Saving calls <code>POST /islands/{id}/preset</code> with the chosen preset and tank picks.</li>
+</ul>
+
+<p><b>Type updates:</b> <code>Nozzle</code> interface gets <code>tank_id: string | null</code>. <code>Island</code> interface keeps <code>product_type</code> but treats it as a label hint.</p>
+
+<h3>9.2 <code>frontend/pages/shifts.tsx</code> — Shift assignment page</h3>
+
+<p><b>Lines 1639:</b> island card colour today is set by <code>group.product_type</code>. <b>Mixed islands switch to per-nozzle row layout</b> — each nozzle becomes its own coloured row inside the island card, with its own fuel-tinted background and label. Single-fuel islands keep today's compact layout (one card, one fuel colour).</p>
+
+<p><b>Layout sketch for a mixed island:</b></p>
+<pre>┌─ Island 3 ────────────────────────────────┐
+│ ┌── UNL 3A ────────────────────────────┐  │  ← petrol-tinted row
+│ │ ☑ Nozzle A (Petrol → TANK-PETROL-1)  │  │
+│ └──────────────────────────────────────┘  │
+│ ┌── LSD 3A ────────────────────────────┐  │  ← diesel-tinted row
+│ │ ☑ Nozzle B (Diesel → TANK-DIESEL-1)  │  │
+│ └──────────────────────────────────────┘  │
+└───────────────────────────────────────────┘</pre>
+
+<p><b>Line 1669:</b> nozzles already coloured by <code>nozzle.fuel_type</code> per-nozzle — extends naturally to row-level fuel tint.</p>
+
+<p><b>Lines 1712-1713:</b> the confirmation summary builds labels from <code>island.fuel_type_abbrev + nozzle.display_label</code>. Switch to <code>nozzle.fuel_type_abbrev + nozzle.display_label</code>. The nozzle abbrev comes from the naming convention refactor.</p>
+
+<p><b>Vertical real-estate:</b> a mixed island takes ~2x the height of a single-fuel one. Mitigation: keep the island header compact (single line) and use slim row padding so the difference is ~30% in practice, not 100%.</p>
+
+<h3>9.3 <code>frontend/pages/daily-tank-reading.tsx</code></h3>
+
+<p><b>Today:</b> filters islands by <code>island.product_type === fuelType</code> (lines 164-166). Misses mixed islands.</p>
+
+<p><b>After:</b> fetch all islands, walk every nozzle, keep only nozzles where <code>nozzle.tank_id === selectedTankId</code>. Optionally call a new lightweight endpoint <code>GET /tanks/{tank_id}/nozzles</code> for efficiency (~0.5h).</p>
+
+<h3>9.4 <code>frontend/pages/my-shift.tsx</code></h3>
+
+<p><b>Lines 2422:</b> "Product: {island.product_type}" — for mixed islands show "Products: Petrol, Diesel" or hide. Lines 2431-2432: switch to <code>nozzle.fuel_type_abbrev</code>.</p>
+
+<h3>9.5 <code>frontend/pages/enter-readings.tsx</code> + <code>sales.tsx</code></h3>
+
+<p>Both already read per-nozzle <code>fuel_type</code> / <code>fuel_type_abbrev</code>. No code change after Chunk 4 lands; they automatically render correctly.</p>
+
+<h2 id="tests">10. Test Matrix — 42 Scenarios</h2>
+
+<p>Every scenario below specifies a setup, an action, and a verification. The scenarios are organised by category. Categories A and F constitute the <b>regression suite</b> — these are the must-pass tests that prove no existing functionality has changed.</p>
+
+<h3>Category A — Legacy single-fuel station, before migration (regression)</h3>
+<table>
+  <tr><th>#</th><th>Setup</th><th>Action</th><th>Expected</th></tr>
+  <tr><td>A1</td><td>Default ST001 with 4 islands (2 diesel, 2 petrol), nozzle.tank_id unset</td><td><code>get_tank_id_for_nozzle(nozzle)</code></td><td>Returns pump.tank_id (fallback path)</td></tr>
+  <tr><td>A2</td><td>Same</td><td>POST /sales/ with valid nozzle</td><td>sale.tank_id resolves to correct tank; tank balance decreases</td></tr>
+  <tr><td>A3</td><td>Same; full shift with readings</td><td>POST /handover/submit-readings + closing</td><td>petrol_revenue and diesel_revenue match pre-refactor values exactly</td></tr>
+  <tr><td>A4</td><td>Same</td><td>GET /reports/sales for date range</td><td>Row count and totals identical to baseline snapshot</td></tr>
+</table>
+
+<h3>Category B — Migration</h3>
+<table>
+  <tr><th>#</th><th>Setup</th><th>Action</th><th>Expected</th></tr>
+  <tr><td>B1</td><td>Legacy station, no nozzle.tank_id</td><td>Trigger station load (lazy migration)</td><td>Every nozzle now has tank_id == its pump's tank_id; migration count logged</td></tr>
+  <tr><td>B2</td><td>Already-migrated station</td><td>Trigger station load again</td><td>Migration returns 0 (no writes)</td></tr>
+  <tr><td>B3</td><td>Inject failure: kill process between two nozzles</td><td>Restart and load station</td><td>Migration completes remaining nozzles; idempotent guard skips already-set ones</td></tr>
+  <tr><td>B4</td><td>Pump with no tank_id (malformed)</td><td>Run migration</td><td>Skip + warning logged; nozzle.tank_id stays null</td></tr>
+</table>
+
+<h3>Category C — Single-tank presets (most common)</h3>
+<table>
+  <tr><th>#</th><th>Setup</th><th>Action</th><th>Expected</th></tr>
+  <tr><td>C1</td><td>Station with 1 diesel + 1 petrol tank</td><td>POST /islands/{id}/preset with preset="all_diesel"</td><td>Both nozzles point at TANK-DIESEL; island.product_type="Diesel"; no tank picker shown in UI</td></tr>
+  <tr><td>C2</td><td>Same</td><td>preset="all_petrol"</td><td>Both nozzles point at TANK-PETROL; island.product_type="Petrol"</td></tr>
+  <tr><td>C3</td><td>Same</td><td>preset="mixed"</td><td>Nozzle A→TANK-PETROL, B→TANK-DIESEL; island.product_type="Mixed"; labels become LSD 1A + UNL 1A</td></tr>
+  <tr><td>C4</td><td>Island previously "all_diesel"</td><td>preset="mixed"</td><td>Reassignment proceeds; old nozzle.tank_id values updated; pump.tank_id updated to dominant; labels recomputed</td></tr>
+  <tr><td>C5</td><td>Island previously "mixed"</td><td>preset="all_diesel"</td><td>Both nozzles now diesel; petrol nozzle's old electronic_reading carries over but flagged for owner review (see D3 risk)</td></tr>
+</table>
+
+<h3>Category D — Multi-tank stations</h3>
+<table>
+  <tr><th>#</th><th>Setup</th><th>Action</th><th>Expected</th></tr>
+  <tr><td>D1</td><td>Station with 2 diesel + 1 petrol tank</td><td>preset="all_diesel" + tanks={diesel_tank_id: "TANK-DIESEL-2"}</td><td>Both nozzles → TANK-DIESEL-2</td></tr>
+  <tr><td>D2</td><td>Same; island already wired to TANK-DIESEL-1</td><td>preset="all_diesel" + tanks={diesel_tank_id: "TANK-DIESEL-2"}</td><td>Both nozzles move to TANK-DIESEL-2; legacy sales unaffected (sale.tank_id frozen)</td></tr>
+  <tr><td>D3</td><td>Station with 2 diesel + 2 petrol</td><td>preset="mixed" with both tanks chosen</td><td>Nozzle A→chosen petrol tank, B→chosen diesel tank</td></tr>
+  <tr><td>D4</td><td>Same</td><td>preset="custom" with nozzle A→TANK-DIESEL-1, B→TANK-DIESEL-2</td><td>Per-nozzle tank assignment respected; both nozzles fuel_type=Diesel; island.product_type="Diesel"</td></tr>
+  <tr><td>D5</td><td>preset="all_diesel" but tanks payload missing diesel_tank_id when 2+ exist</td><td>POST</td><td>400 with "tank_id required when multiple diesel tanks exist"</td></tr>
+</table>
+
+<h3>Category E — Validation</h3>
+<table>
+  <tr><th>#</th><th>Setup</th><th>Action</th><th>Expected</th></tr>
+  <tr><td>E1</td><td>Petrol nozzle existing</td><td>PUT /islands/{id}/nozzle/{nozzle_id}/tank with tank_id of a diesel tank</td><td>400 — fuel mismatch; error message references the fuel-type endpoint as the right way to change both atomically</td></tr>
+  <tr><td>E2</td><td>Petrol nozzle existing</td><td>PUT /islands/{id}/nozzle/{nozzle_id}/fuel-type with fuel_type=Diesel + tank_id of a diesel tank</td><td>200 — both updated atomically; nozzle.fuel_type=Diesel, nozzle.tank_id=diesel tank</td></tr>
+  <tr><td>E3</td><td>Tank with one nozzle assigned via nozzle.tank_id</td><td>DELETE /tanks/{id}</td><td>400 listing the offending nozzle_id</td></tr>
+  <tr><td>E4</td><td>Tank with no nozzle.tank_id but a pump.tank_id pointing at it</td><td>DELETE /tanks/{id}</td><td>400 listing the offending pump_station_id (existing behavior preserved)</td></tr>
+  <tr><td>E5</td><td>Custom preset with mismatched nozzle/tank fuel in payload</td><td>POST /islands/{id}/preset</td><td>400 — payload must be corrected; no override path</td></tr>
+  <tr><td>E6</td><td>Attempt to PUT fuel-type without tank_id</td><td>PUT /islands/{id}/nozzle/{nozzle_id}/fuel-type with only fuel_type</td><td>400 — both fields required</td></tr>
+</table>
+
+<h3>Category F — Output continuity (regression — must pass before ship)</h3>
+<table>
+  <tr><th>#</th><th>Setup</th><th>Action</th><th>Expected</th></tr>
+  <tr><td>F1</td><td>Snapshot pre-refactor: full station with 30 days of sales/handovers</td><td>Run migration; export tank_readings.csv</td><td>Row-by-row identical to pre-refactor export</td></tr>
+  <tr><td>F2</td><td>Same snapshot</td><td>Export sales.csv for the period</td><td>Row count + every fuel_type column value identical</td></tr>
+  <tr><td>F3</td><td>Same snapshot</td><td>Export reconciliation.csv</td><td>Identical petrol_revenue, diesel_revenue, lpg_revenue per shift</td></tr>
+  <tr><td>F4</td><td>Same snapshot</td><td>Re-run reconciliation calculation for each historical shift</td><td>petrol_revenue, diesel_revenue identical to stored values</td></tr>
+  <tr><td>F5</td><td>Same snapshot</td><td>Recompute display labels</td><td>Labels for single-fuel islands identical (LSD 1A == LSD 1A)</td></tr>
+  <tr><td>F6</td><td>Dashboard summary tile baseline values</td><td>Refresh dashboard after migration</td><td>Total fuel revenue, total volume, top product all identical</td></tr>
+</table>
+
+<h3>Category G — Reporting</h3>
+<table>
+  <tr><th>#</th><th>Setup</th><th>Action</th><th>Expected</th></tr>
+  <tr><td>G1</td><td>Mixed-fuel island with shift data</td><td>GET /reports/nozzle-report</td><td>Petrol nozzle and diesel nozzle each show their own revenue; no mixing</td></tr>
+  <tr><td>G2</td><td>Mixed island</td><td>GET /reports/island-report</td><td>Island row shows aggregate; breakdown by fuel within island visible</td></tr>
+  <tr><td>G3</td><td>Mixed island; tank reconciliation</td><td>GET /reconciliation/{shift_id}/tank-analysis</td><td>Diesel tank and petrol tank both reflect their nozzles' contributions</td></tr>
+  <tr><td>G4</td><td>Mixed island; daily tank reading</td><td>Open page; select diesel tank</td><td>Only the diesel nozzle of the mixed island appears</td></tr>
+</table>
+
+<h3>Category H — Naming / labels</h3>
+<table>
+  <tr><th>#</th><th>Setup</th><th>Action</th><th>Expected</th></tr>
+  <tr><td>H1</td><td>Single-fuel island with 2 diesel nozzles</td><td>Recompute labels</td><td>LSD 1A, LSD 1B (unchanged from today)</td></tr>
+  <tr><td>H2</td><td>Mixed island (1 diesel + 1 petrol)</td><td>Recompute labels</td><td>UNL 1A (petrol nozzle) + LSD 1A (diesel nozzle); per-fuel namespace</td></tr>
+  <tr><td>H3</td><td>2 single-fuel diesel islands + 1 mixed island</td><td>Recompute labels</td><td>LSD 1A, LSD 1B (island 1); LSD 2A, LSD 2B (island 2); LSD 3A + UNL 1A (island 3, mixed)</td></tr>
+  <tr><td>H4</td><td>Custom labels via owner override</td><td>Recompute labels</td><td>Custom labels preserved; auto-labels regenerated for non-overridden nozzles</td></tr>
+</table>
+
+<h3>Category I — Shift operations on mixed islands</h3>
+<table>
+  <tr><th>#</th><th>Setup</th><th>Action</th><th>Expected</th></tr>
+  <tr><td>I1</td><td>Mixed island with both nozzles</td><td>Create shift, assign both nozzles to one attendant</td><td>Shift accepts both nozzle_ids; assignment shows dual fuel pills</td></tr>
+  <tr><td>I2</td><td>Mixed shift active</td><td>Attendant submits handover with readings on both nozzles</td><td>nozzle_summaries[] has 2 entries with different fuel_type; revenue split correctly</td></tr>
+  <tr><td>I3</td><td>Mixed shift</td><td>Calculate shift reconciliation</td><td>petrol_revenue ← only the petrol nozzle's revenue; diesel_revenue ← only the diesel nozzle's revenue; total matches</td></tr>
+  <tr><td>I4</td><td>Mixed shift; price change mid-shift</td><td>Submit closing readings</td><td>Each nozzle's pre/post revenue uses its own fuel's price; no cross-contamination</td></tr>
+</table>
+
+<h3>Category J — Edge cases</h3>
+<table>
+  <tr><th>#</th><th>Setup</th><th>Action</th><th>Expected</th></tr>
+  <tr><td>J1</td><td>Island with no pump_station</td><td>Migration runs</td><td>No-op; no error</td></tr>
+  <tr><td>J2</td><td>Pump with empty nozzles list</td><td>Migration runs</td><td>No-op</td></tr>
+  <tr><td>J3</td><td>Nozzle with no tank_id and pump with no tank_id</td><td>Sale attempted on this nozzle</td><td>Three-tier fallback to fuel_type heuristic; sale completes with warning logged</td></tr>
+  <tr><td>J4</td><td>Delete tank, then create new tank with same id</td><td>Old nozzles still reference old tank id</td><td>New tank gets the references; flag if fuel_type differs (consistency check)</td></tr>
+  <tr><td>J5</td><td>Reassign nozzle's tank mid-shift</td><td>Submit handover after</td><td>Sale records before reassign keep old tank_id (frozen); after reassign use new tank_id</td></tr>
+  <tr><td>J6</td><td>Owner reassigns nozzle from TANK-DIESEL-1 to TANK-DIESEL-2</td><td>Run tank-analysis on next shift</td><td>Per the snapshot policy (D5): query-time mapping used, reflected in output</td></tr>
+</table>
+
+<h2 id="risks">11. Risk Register &amp; Mitigations</h2>
+
+<table>
+  <tr><th>#</th><th>Risk</th><th>Likelihood</th><th>Impact</th><th>Mitigation</th><th>Detection</th></tr>
+  <tr>
+    <td>R1</td>
+    <td>Migration silently writes wrong tank_id</td>
+    <td>Low</td>
+    <td>High</td>
+    <td>Idempotent guard skips nozzles that already have tank_id; log every migration with before/after counts; manual spot-check of sample station after first deploy</td>
+    <td>Test B1; Compare migration log against expected count</td>
+  </tr>
+  <tr>
+    <td>R2</td>
+    <td>PUT /islands/{id}/product still rewrites nozzle config (forgotten side effect)</td>
+    <td>Medium</td>
+    <td>Medium — could blow away owner's preset config</td>
+    <td>Code review checklist; explicit deprecation header; unit test</td>
+    <td>Test C4 + dedicated regression test that calls old endpoint and verifies nozzles untouched</td>
+  </tr>
+  <tr>
+    <td>R3</td>
+    <td>Mixed island label collision (LSD 1A + LSD 1A)</td>
+    <td>High before fix</td>
+    <td>Low — visual confusion only</td>
+    <td>Per-fuel namespace numbering; unit tests for each combo</td>
+    <td>Tests H1-H4</td>
+  </tr>
+  <tr>
+    <td>R4</td>
+    <td>Tank delete orphans nozzles via nozzle.tank_id</td>
+    <td>Medium</td>
+    <td>High — referential integrity loss</td>
+    <td>Extend delete guard; clear error message listing offending nozzles</td>
+    <td>Test E3</td>
+  </tr>
+  <tr>
+    <td>R5</td>
+    <td>Historical reconciliation recomputes differently after a tank reassignment</td>
+    <td>Low</td>
+    <td>Medium — could change historical reports</td>
+    <td>Tank-analysis is query-time today (matches current behavior); add "Snapshot taken at…" footer; OR optionally freeze tank assignment at shift close (owner decision)</td>
+    <td>Test J6</td>
+  </tr>
+  <tr>
+    <td>R6</td>
+    <td>Export CSV row count or values change post-migration</td>
+    <td>Low</td>
+    <td>High — accountancy reconciliation breaks</td>
+    <td>Snapshot-then-diff regression suite (Category F) before merge to main</td>
+    <td>Tests F1-F6</td>
+  </tr>
+  <tr>
+    <td>R7</td>
+    <td>Dashboard fuel totals drift</td>
+    <td>Low</td>
+    <td>High — owner perception issue</td>
+    <td>Pre/post-migration baseline; dashboard tile values pinned in regression test</td>
+    <td>Test F6</td>
+  </tr>
+  <tr>
+    <td>R8</td>
+    <td>Electronic reading continuity broken when nozzle reassigned to different tank</td>
+    <td>Low — owner confirmed tank assignment is permanent configuration</td>
+    <td>Medium — tank reconciliation variance spike (one-off)</td>
+    <td>No automatic handling; treated as a rare admin action. Owner explains the variance manually on the next reconciliation. Audit log records every reassignment for traceability.</td>
+    <td>Test J5; audit log review on any reassignment event</td>
+  </tr>
+  <tr>
+    <td>R9</td>
+    <td>Custom mode lets owner create invalid nozzle/tank combos</td>
+    <td>Low</td>
+    <td>Low — fuel-type mismatch impossible to commit</td>
+    <td>Server-side validation always enforced; <b>no override path exists</b>. Caller must fix the payload. UI dropdowns filtered to matching-fuel tanks only, so the owner can't even compose an invalid combo.</td>
+    <td>Tests E1, E2, E5, E6</td>
+  </tr>
+</table>
+
+<h2 id="rollback">12. Rollback Plan</h2>
+
+<div class="box good">
+  <p><b>Rollback triggers:</b></p>
+  <ul>
+    <li>Critical export/report bug: row count or value mismatch &gt; 0</li>
+    <li>Reconciliation number mismatch &gt; 0.01 ZMW vs pre-deploy baseline</li>
+    <li>Shift creation failure rate &gt; 1%</li>
+    <li>Owner-reported functional regression</li>
+    <li>Migration runs on &gt; 1 station and produces unexpected logs</li>
+  </ul>
+
+  <p><b>Rollback procedure:</b></p>
+  <ol>
+    <li><code>git revert</code> the merge commit and redeploy. <span class="ok">Zero schema changes</span> means no DB rollback step needed.</li>
+    <li><code>nozzle.tank_id</code> data already written stays in the JSON / DB row but is unused by the reverted code. Inert.</li>
+    <li><code>pump_station.tank_id</code> was never modified — still authoritative for reverted code path.</li>
+    <li>The migration that ran is idempotent: running again post-revert doesn't double-write.</li>
+    <li>Communicate to operators: "Mixed-fuel feature temporarily withdrawn; resume single-fuel preset workflow."</li>
+  </ol>
+
+  <p><b>Why this is safe:</b> the refactor is strictly additive at the data layer. No fields removed, no schemas migrated. Reverting is cheap.</p>
+</div>
+
+<h2 id="chunks">13. Implementation Chunks</h2>
+
+<p>Each chunk is independently shippable, tests run green at each chunk boundary, and partial deployments leave the system in a working state.</p>
+
+<h3>Chunk 1 — Foundation (zero UX change)</h3>
+<table>
+  <tr><th>Files</th><th>Tests gated</th><th>Effort</th><th>Ships independently?</th></tr>
+  <tr>
+    <td><code>models.py</code> (Nozzle, PumpStation), <code>storage.py</code> (helpers), <code>seed_defaults.py</code> (migration)</td>
+    <td>A1-A4, B1-B4</td>
+    <td>~5h</td>
+    <td><span class="ok">Yes</span> — single-fuel stations see zero change</td>
+  </tr>
+</table>
+
+<h3>Chunk 2 — Tank delete guard</h3>
+<table>
+  <tr><th>Files</th><th>Tests gated</th><th>Effort</th><th>Ships independently?</th></tr>
+  <tr>
+    <td><code>tanks.py:527</code></td>
+    <td>E3, E4</td>
+    <td>~1h</td>
+    <td><span class="ok">Yes</span></td>
+  </tr>
+</table>
+
+<h3>Chunk 3 — Backend APIs</h3>
+<table>
+  <tr><th>Files</th><th>Tests gated</th><th>Effort</th><th>Ships independently?</th></tr>
+  <tr>
+    <td><code>islands.py</code> (preset endpoint, nozzle endpoints, deprecate PUT product)</td>
+    <td>C1-C5, D1-D5, E1, E2, E5</td>
+    <td>~6h</td>
+    <td><span class="ok">Yes</span> — old endpoints still work; presets opt-in via UI</td>
+  </tr>
+</table>
+
+<h3>Chunk 4 — Naming convention refactor</h3>
+<table>
+  <tr><th>Files</th><th>Tests gated</th><th>Effort</th><th>Ships independently?</th></tr>
+  <tr>
+    <td><code>naming_convention.py</code> + add <code>nozzle.fuel_type_abbrev</code></td>
+    <td>H1-H4</td>
+    <td>~2h</td>
+    <td><span class="ok">Yes</span> — but must ship before mixed-fuel UI</td>
+  </tr>
+</table>
+
+<h3>Chunk 5 — Frontend</h3>
+<table>
+  <tr><th>Files</th><th>Tests gated</th><th>Effort</th><th>Ships independently?</th></tr>
+  <tr>
+    <td><code>infrastructure.tsx</code>, <code>shifts.tsx</code>, <code>daily-tank-reading.tsx</code>, <code>my-shift.tsx</code></td>
+    <td>I1-I4, G1-G4, end-to-end Cat C+D</td>
+    <td>~8h</td>
+    <td>Requires Chunks 1, 3, 4</td>
+  </tr>
+</table>
+
+<h3>Chunk 6 — Regression suite + output verification</h3>
+<table>
+  <tr><th>Files</th><th>Tests gated</th><th>Effort</th><th>Ships independently?</th></tr>
+  <tr>
+    <td><code>backend/tests/test_mixed_fuel_islands.py</code> (new); pre/post snapshot diff harness</td>
+    <td>F1-F6, J1-J6</td>
+    <td>~4h</td>
+    <td>Final gate before declaring feature done</td>
+  </tr>
+</table>
+
+<h3>Chunk dependencies (visual)</h3>
+<pre>Chunk 1 ──────────┐
+                  ├──> Chunk 5 (Frontend) ──> Chunk 6 (Regression)
+Chunk 2 ──────────┤
+                  │
+Chunk 3 ──────────┤
+                  │
+Chunk 4 ──────────┘</pre>
+
+<h3>Recommended ship order</h3>
+<ol>
+  <li>Chunks 1 + 2 — week 1, low-risk, zero UX impact</li>
+  <li>Chunks 3 + 4 — week 2, backend-only, opt-in via API</li>
+  <li>Chunk 5 — week 3, UI rollout</li>
+  <li>Chunk 6 — week 3, verification before announcing feature</li>
+</ol>
+
+<p><b>Total: ~28 hours</b> spread across 3 calendar weeks if shipped in 4 separate PRs, or ~5 working days if landed as a single big PR.</p>
+
+<h2 id="decisions-needed">14. Owner Decisions — LOCKED</h2>
+
+<p>All 8 design questions resolved on 2026-04-27. Decisions below are baked into Sections 2, 8, 9, 10, and 11 above.</p>
+
+<table>
+  <tr><th>#</th><th>Decision</th><th>Choice</th><th>Implication</th></tr>
+  <tr>
+    <td>1</td>
+    <td>Electronic reading on nozzle tank reassignment</td>
+    <td><b>Treat as permanent config</b> — no automatic handling</td>
+    <td>Reassignment is a rare admin event. No transfer-event log, no zero-reset. Audit log records the change; owner explains any one-off variance manually.</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>Labels on mixed islands</td>
+    <td><b>Per-fuel namespaces</b> — <code>LSD 1A</code> + <code>UNL 1A</code> coexist</td>
+    <td>Naming convention algorithm refactored to count nozzles per-fuel within an island, not per-island.</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>Petrol nozzle on diesel tank</td>
+    <td><b>Always reject</b> with HTTP 400 — no <code>force</code> override</td>
+    <td>Changing fuel requires changing tank in the same atomic call. The <code>fuel-type</code> endpoint requires both fields. UI dropdowns filtered to matching-fuel tanks so invalid combos are unreachable.</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>Tank-analysis recon timing</td>
+    <td><b>Query-time mapping</b> — current nozzle→tank wiring</td>
+    <td>Matches today's helper. "Snapshot taken at HH:MM" footer added to outputs for clarity.</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td><code>Island.product_type</code> after refactor</td>
+    <td><b>Optional + auto-computed</b> — set as "Petrol" / "Diesel" / "Mixed"</td>
+    <td>Informational only. Never used as a routing or filter gate. Backend computes from nozzle composition on every save.</td>
+  </tr>
+  <tr>
+    <td>6</td>
+    <td><code>PumpStation.tank_id</code> retirement</td>
+    <td><b>Phase 2 cleanup</b> — keep as fallback for ~3 months, then remove</td>
+    <td>Field stays as a safety net during the migration window. Once all stations are confirmed migrated, dropped in a follow-up PR.</td>
+  </tr>
+  <tr>
+    <td>7</td>
+    <td>Mixed-fuel visual on shift assignment cards</td>
+    <td><b>Per-nozzle rows</b> inside the island card</td>
+    <td>Each nozzle gets its own row with its own fuel colour. Vertical layout — slightly taller cards for mixed islands, but maximum visual clarity.</td>
+  </tr>
+  <tr>
+    <td>8</td>
+    <td>"Custom" mode visibility</td>
+    <td><b>Hidden behind an "Advanced…" expander</b> on the island card</td>
+    <td>Default UI shows three preset pills (All Diesel / All Petrol / Mixed). Power users open the Advanced expander to access per-nozzle tank selection.</td>
+  </tr>
+</table>
+
+<h2>Appendix A — Functional preservation checklist</h2>
+
+<p>The following must <b>each</b> produce identical output before and after the refactor for any station that hasn't deliberately enabled a mixed-fuel preset:</p>
+
+<ul>
+  <li><span class="ok">✓</span> Per-shift petrol_revenue, diesel_revenue, lpg_revenue values</li>
+  <li><span class="ok">✓</span> Per-tank closing dip - opening dip - deliveries + sales = 0 (variance check)</li>
+  <li><span class="ok">✓</span> Tank readings CSV row count and per-row values</li>
+  <li><span class="ok">✓</span> Sales CSV row count and per-row values</li>
+  <li><span class="ok">✓</span> Reconciliation CSV per-shift values</li>
+  <li><span class="ok">✓</span> Dashboard summary tile totals (today / this week / this month)</li>
+  <li><span class="ok">✓</span> Nozzle labels (LSD 1A, LSD 1B, UNL 1A, UNL 1B) for single-fuel islands</li>
+  <li><span class="ok">✓</span> Shift assignment UI rendering for single-fuel islands</li>
+  <li><span class="ok">✓</span> Login flow, permissions, station scoping</li>
+  <li><span class="ok">✓</span> Daily tank reading filter behavior (returns same nozzles as today)</li>
+  <li><span class="ok">✓</span> Audit logs and notifications</li>
+  <li><span class="ok">✓</span> Existing test suite (43 tests as of commit 4d7f6a9) all pass</li>
+</ul>
+
+<h2>Appendix B — Fields and constants reference</h2>
+
+<table>
+  <tr><th>Constant / Field</th><th>Location</th><th>Refactor status</th></tr>
+  <tr><td><code>FUEL_TYPE_ABBREVIATIONS</code></td><td><code>models.py:196</code></td><td>Unchanged — still maps Diesel→LSD, Petrol→UNL</td></tr>
+  <tr><td><code>FUEL_TYPE_FROM_ABBREV</code></td><td><code>models.py:197</code></td><td>Unchanged</td></tr>
+  <tr><td><code>nozzle.electronic_reading</code></td><td><code>models.py:172</code></td><td>Unchanged; reassignment policy per Decision 1</td></tr>
+  <tr><td><code>nozzle.mechanical_reading</code></td><td><code>models.py:173</code></td><td>Unchanged</td></tr>
+  <tr><td><code>nozzle.display_label</code></td><td><code>models.py:174</code></td><td>Unchanged shape; computed from per-fuel namespace</td></tr>
+  <tr><td><code>nozzle.custom_label</code></td><td><code>models.py:175</code></td><td>Unchanged; owner override preserved</td></tr>
+  <tr><td><code>island.display_number</code></td><td><code>models.py:191</code></td><td>Unchanged shape; computed by new naming algorithm</td></tr>
+  <tr><td><code>sale.tank_id</code></td><td>Sale records</td><td>Unchanged; frozen at write time</td></tr>
+  <tr><td><code>sale.fuel_type</code></td><td>Sale records</td><td>Unchanged</td></tr>
+</table>
+
+<footer>
+  Generated 2026-04-27 · Plan version <b>1.1</b> (decisions locked). Source files inspected: <code>models.py</code>, <code>storage.py</code>, <code>seed_defaults.py</code>, <code>islands.py</code>, <code>tanks.py</code>, <code>sales.py</code>, <code>reconciliation.py</code>, <code>attendant_handover.py</code>, <code>enter_readings.py</code>, <code>naming_convention.py</code>, <code>reporting.py</code>, <code>export_service.py</code>, <code>schema.py</code>, plus <code>infrastructure.tsx</code>, <code>shifts.tsx</code>, <code>daily-tank-reading.tsx</code>, <code>my-shift.tsx</code>, <code>enter-readings.tsx</code>, <code>sales.tsx</code>.
+</footer>
+
+</body>
+</html>

@@ -82,8 +82,8 @@ Click "Continue"
 ------------------------------------------------------------------------
 STEP 5: Pricing & Tax
 ------------------------------------------------------------------------
-  Diesel Price (ZMW/L):   26.98
-  Petrol Price (ZMW/L):   29.92
+  Diesel Price (ZMW/L):   23.25
+  Petrol Price (ZMW/L):   26.61
   VAT Rate (%):           16
   Fuel Levy (ZMW/L):      1.44
 

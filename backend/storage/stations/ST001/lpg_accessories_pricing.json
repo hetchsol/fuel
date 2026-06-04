@@ -1,0 +1,33 @@
+[
+  {
+    "product_code": "ACC-STOVE-1B",
+    "description": "1-Burner Stove",
+    "selling_price": 0,
+    "reorder_level": 3
+  },
+  {
+    "product_code": "ACC-STOVE-2B",
+    "description": "2-Burner Stove",
+    "selling_price": 0
+  },
+  {
+    "product_code": "ACC-COOKTOP",
+    "description": "Cooker Top",
+    "selling_price": 0
+  },
+  {
+    "product_code": "ACC-HOSE",
+    "description": "Gas Hose",
+    "selling_price": 0
+  },
+  {
+    "product_code": "ACC-REGULATOR",
+    "description": "Gas Regulator",
+    "selling_price": 0
+  },
+  {
+    "product_code": "ACC-CLIP",
+    "description": "Hose Clip",
+    "selling_price": 0
+  }
+]

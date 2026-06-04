@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LPG Reconciliation — Current System vs. Proposed Document</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; max-width: 1100px; margin: 2em auto; padding: 0 1.5em; color: #222; line-height: 1.55; }
+  h1 { border-bottom: 3px solid #0b5394; padding-bottom: .3em; }
+  h2 { color: #0b5394; margin-top: 2em; border-bottom: 1px solid #cfd8dc; padding-bottom: .2em; }
+  h3 { color: #1a5276; margin-top: 1.4em; }
+  code, pre { font-family: Consolas, "Courier New", monospace; }
+  code { background: #f1f3f5; padding: 1px 5px; border-radius: 3px; font-size: 0.95em; }
+  pre { background: #f8f9fa; border-left: 4px solid #0b5394; padding: .75em 1em; overflow-x: auto; font-size: 0.9em; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.95em; }
+  th, td { border: 1px solid #cfd8dc; padding: .55em .75em; text-align: left; vertical-align: top; }
+  th { background: #eceff1; }
+  tr:nth-child(even) { background: #fafafa; }
+  .ok { color: #1b5e20; font-weight: 600; }
+  .gap { color: #b71c1c; font-weight: 600; }
+  .partial { color: #e65100; font-weight: 600; }
+  .box { border: 1px solid #cfd8dc; border-radius: 6px; padding: .9em 1.2em; margin: 1em 0; background: #fafafa; }
+  .box.crit { border-color: #b71c1c; background: #fff5f5; }
+  .box.warn { border-color: #e65100; background: #fff8e1; }
+  .box.info { border-color: #0b5394; background: #e3f2fd; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; font-weight: 600; }
+  .tag.crit { background: #b71c1c; color: #fff; }
+  .tag.high { background: #e65100; color: #fff; }
+  .tag.med  { background: #f9a825; color: #000; }
+  .tag.low  { background: #78909c; color: #fff; }
+  .tag.ok   { background: #2e7d32; color: #fff; }
+  .kpi { display: inline-block; margin: .3em 1em .3em 0; padding: .4em .8em; background: #fff; border: 1px solid #cfd8dc; border-radius: 4px; font-size: 0.9em; }
+  .kpi b { color: #0b5394; }
+  footer { margin-top: 3em; padding-top: 1em; border-top: 1px solid #cfd8dc; color: #666; font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<h1>LPG Reconciliation — Current System vs. Proposed Document</h1>
+
+<div class="box info">
+  <b>Analysis of:</b> <code>LPG Recon.docx</code> (owner's requested LPG workflow)<br>
+  <b>Against:</b> Current Fuel Management app (<code>backend/app/api/v1/lpg_daily.py</code>, <code>attendant_handover.py</code>, <code>models/models.py</code>)<br>
+  <b>Date:</b> 2026-04-22<br>
+  <b>Bottom line:</b> The data model mostly matches. The <b>money math on upgrades is wrong</b>, <b>upgrade revenue is excluded from the shift total</b>, the <b>handover flow cannot capture upgrades at all</b>, and the <b>empty-cylinder balance formula has a sign bug</b>. Three of these silently understate revenue today.
+</div>
+
+<div>
+  <span class="kpi">Critical issues: <b>3</b></span>
+  <span class="kpi">High: <b>3</b></span>
+  <span class="kpi">Medium: <b>2</b></span>
+  <span class="kpi">Low: <b>1</b></span>
+  <span class="kpi">Fully correct as-is: <b>5</b></span>
+</div>
+
+<h2>1. What the document asks for</h2>
+
+<p>The owner's <code>LPG Recon.docx</code> describes how a fuel-station LPG reconciliation spreadsheet should behave. Three transaction types and two calculated columns.</p>
+
+<h3>1.1 Three transaction types</h3>
+<table>
+  <tr><th>Type</th><th>Customer behaviour</th><th>Charge the customer</th><th>Empty-cylinder effect</th></tr>
+  <tr>
+    <td><b>Refill</b></td>
+    <td>Brings their own empty, gets it refilled.</td>
+    <td><code>Size × RatePerKg</code></td>
+    <td><code>Empty[size] +1</code></td>
+  </tr>
+  <tr>
+    <td><b>New Issue</b></td>
+    <td>Buys a brand-new filled cylinder (no trade-in).</td>
+    <td><code>Size × RatePerKg + Deposit[size]</code></td>
+    <td><code>0</code> (nothing returned)</td>
+  </tr>
+  <tr>
+    <td><b>Upgrade</b></td>
+    <td>Brings a smaller empty, walks away with a larger filled cylinder.</td>
+    <td><code>NewSize × RatePerKg + (Deposit[New] − Deposit[Old])</code></td>
+    <td><code>Empty[Old] +1</code>, <code>Empty[New] −1</code></td>
+  </tr>
+</table>
+
+<h3>1.2 Two calculated columns</h3>
+<pre>EmptyCylinderChange =
+  IF(TransactionType = "Refill",   +1,
+  IF(TransactionType = "NewIssue",  0,
+  IF(TransactionType = "Upgrade",
+     IF(Size = OldSize, +1,
+     IF(Size = NewSize, −1, 0)),
+  0)))
+
+RunningEmptyBalance = OpeningBalance + SUM(EmptyCylinderChange up to current row)</pre>
+
+<p>In plain English: the empty-cylinder count must update <i>per transaction</i>, by size, with a running total the attendant can see after every line.</p>
+
+<h2>2. What the system can do today</h2>
+
+<p>Every file path below is anchored to <code>C:\Projects\Fuel\</code>.</p>
+
+<h3>2.1 Data model — <span class="ok">mostly present</span></h3>
+<p>Models in <code>backend/app/models/models.py</code>:</p>
+<ul>
+  <li><code>LPGCylinderShiftRow</code> (lines 689–703) — per-size, per-shift row with <code>opening_balance</code>, <code>opening_empty</code>, <code>receipts</code>, <code>traded_in</code>, <code>traded_out</code>, <code>sold_refill</code>, <code>sold_with_cylinder</code>, <code>closing_empty</code>, and derived <code>balance</code>, <code>value_refill</code>, <code>value_with_cylinder</code>, <code>total_value</code>.</li>
+  <li><code>LPGCylinderTrade</code> (lines 681–687) — one upgrade/downgrade line with <code>from_size_kg</code>, <code>to_size_kg</code>, <code>quantity</code>, derived <code>price_difference</code> and <code>trade_type</code>.</li>
+  <li><code>LPGDailyEntryInput/Output</code> (lines 705–733) — shift-level payload with a <code>trades</code> array and a <code>total_trade_revenue</code>.</li>
+  <li><code>LPGStockLineItem</code> (lines 838–879) — handover snapshot equivalent: <code>opening_full</code>, <code>opening_empty</code>, <code>closing_full</code>, <code>closing_empty</code>, <code>sold_refill</code>, <code>sold_with_cylinder</code>, <code>damaged</code>, <code>variance_note</code>.</li>
+</ul>
+
+<h3>2.2 Pricing — <span class="ok">configurable</span></h3>
+<p><code>lpg_daily.py:34–43, 94–109, 114–162</code>. Pricing is stored in <code>lpg_pricing.json</code> as <code>price_refill</code> and <code>price_full_cylinder</code> per size for the six sizes (3, 6, 9, 19, 45, 48 kg). Deposit is <i>implicit</i>: <code>deposit = price_full_cylinder − price_refill</code>. A supervisor-only <code>PUT /lpg-daily/pricing</code> endpoint exists. A backward-compatibility path for older <code>price_per_kg + deposits</code> format is also present.</p>
+
+<h3>2.3 Three transaction types — <span class="partial">two correct, one miscalculated</span></h3>
+<table>
+  <tr><th>Document</th><th>App implementation</th><th>Correct?</th></tr>
+  <tr><td>Refill → <code>Size × RatePerKg</code></td>
+      <td><code>value_refill = price_refill × sold_refill</code> (<code>lpg_daily.py:291</code>)</td>
+      <td class="ok">Yes</td></tr>
+  <tr><td>New Issue → <code>Gas + Deposit</code></td>
+      <td><code>value_with_cyl = price_with_cylinder × sold_with_cylinder</code> (<code>lpg_daily.py:292</code>)</td>
+      <td class="ok">Yes</td></tr>
+  <tr><td>Upgrade → <code>NewSize × RatePerKg + (Deposit[New] − Deposit[Old])</code></td>
+      <td><code>price_diff = price_refill[to] − price_refill[from]</code> (<code>lpg_daily.py:266</code>)</td>
+      <td class="gap">No — see §3.1</td></tr>
+</table>
+
+<h3>2.4 Empty cylinder tracking — <span class="partial">fields exist, logic manual</span></h3>
+<ul>
+  <li><code>opening_empty</code> / <code>closing_empty</code> stored per size per shift.</li>
+  <li>Previous-shift carry-forward works: <code>GET /lpg-daily/previous-shift</code> returns <code>cylinder_empty_balances</code> keyed by size (<code>lpg_daily.py:216–221</code>).</li>
+  <li><b>But</b> <code>closing_empty</code> is attendant-entered. The app does not compute an expected closing-empty from refills + upgrades and does not flag variance on empties (variance check is filled-stock only, <code>attendant_handover.py:234–235</code>).</li>
+</ul>
+
+<h3>2.5 Shift integration — <span class="ok">wired</span></h3>
+<ul>
+  <li>LPG revenue feeds shift reconciliation via <code>lpg_revenue</code> on <code>ShiftReconciliation</code> (<code>models.py:414–429</code>, endpoint at <code>reconciliation.py:74–133</code>).</li>
+  <li>Recent commit <code>1e683c9</code> adds <code>assigned_lpg</code> to <code>AttendantAssignment</code> so a shift can be flagged as an LPG shift at creation.</li>
+  <li>Handover snapshot auto-seeds the daily LPG entry via <code>_feed_daily_entries</code> (<code>attendant_handover.py:394+</code>).</li>
+</ul>
+
+<h2>3. Differences — side-by-side</h2>
+
+<h3>3.1 Upgrade pricing (CRITICAL)</h3>
+<div class="box crit">
+  <p><span class="tag crit">CRITICAL</span> &nbsp; <b>The app undercharges every upgrade transaction.</b></p>
+
+  <table>
+    <tr><th></th><th>Document formula</th><th>App formula (<code>lpg_daily.py:266</code>)</th></tr>
+    <tr><td>Charge</td>
+        <td><code>NewSize × rate + (Deposit[New] − Deposit[Old])</code></td>
+        <td><code>price_refill[to] − price_refill[from]</code></td></tr>
+    <tr><td>3kg → 6kg example<br><small>(rate≈33/kg; deposit 3kg=330, 6kg=500)</small></td>
+        <td><code>200 + (500 − 330) = <b>370 ZMW</b></code></td>
+        <td><code>200 − 147 = <b>53 ZMW</b></code></td></tr>
+    <tr><td>Shortfall per upgrade</td><td colspan="2"><b>317 ZMW undercharged</b> with default prices.</td></tr>
+  </table>
+
+  <p><b>Root cause:</b> The app treats an upgrade as "pay the gas-price difference" and omits the deposit difference entirely. The customer is walking out with a physically larger cylinder — that gap in deposit liability has to be settled.</p>
+
+  <p><b>Fix:</b></p>
+<pre>from_deposit = from_pricing['price_with_cylinder'] - from_pricing['price_refill']
+to_deposit   = to_pricing['price_with_cylinder']   - to_pricing['price_refill']
+price_diff   = to_pricing['price_refill'] + (to_deposit - from_deposit)</pre>
+</div>
+
+<h3>3.2 Upgrade revenue excluded from the grand total (CRITICAL)</h3>
+<div class="box crit">
+  <p><span class="tag crit">CRITICAL</span> &nbsp; <b>Shift reconciliation is missing upgrade revenue.</b></p>
+  <p>In <code>lpg_daily.py:281–310</code>, per-row <code>total_value = value_refill + value_with_cylinder</code>. <code>grand_total_value</code> (line 336) sums those rows. <code>total_trade_revenue</code> is computed at line 271 and stored separately on the output (line 344) — but <b>never added into <code>grand_total_value</code></b>. Downstream reconciliation pulls <code>grand_total</code>, so upgrade revenue is not counted toward the shift's expected cash.</p>
+  <p><b>Fix:</b> add <code>grand_total += total_trade_revenue</code> before assembling the output, or publish a <code>grand_total_with_trades</code> and switch reconciliation to that field.</p>
+</div>
+
+<h3>3.3 Handover flow cannot record upgrades at all (CRITICAL)</h3>
+<div class="box crit">
+  <p><span class="tag crit">CRITICAL</span> &nbsp; <b>Attendants have no way to record an upgrade in the shift handover.</b></p>
+  <ul>
+    <li><code>_process_stock_snapshot</code> computes <code>lpg_sales = value_refill + value_with_cyl</code> only (<code>attendant_handover.py:237–239</code>). No trade handling.</li>
+    <li><code>_feed_daily_entries</code> hard-codes <code>"traded_in": 0, "traded_out": 0</code> when seeding the daily entry from the snapshot (<code>attendant_handover.py:424</code>).</li>
+  </ul>
+  <p>Practical consequence: an upgrade has to be entered <i>twice</i> — once on the handover (as if it were a refill of the wrong size) and once via a separate <code>POST /lpg-daily/entry</code> with a <code>trades</code> array — or it is lost. Nobody will do that reliably.</p>
+  <p><b>Fix:</b> extend <code>StockSnapshotInput</code> with a <code>trades: List[LPGCylinderTrade]</code> field, extract the trade-processing block out of <code>lpg_daily.py:262–279</code> into a shared helper, call it from <code>_process_stock_snapshot</code>, and propagate <code>traded_in</code>/<code>traded_out</code> through <code>_feed_daily_entries</code>.</p>
+</div>
+
+<h3>3.4 Balance formula double-counts returned empties (HIGH)</h3>
+<div class="box warn">
+  <p><span class="tag high">HIGH</span> &nbsp; <b>Returned upgrade empties inflate the filled-stock balance.</b></p>
+  <p>Current formula (<code>lpg_daily.py:290</code>):</p>
+<pre>balance = opening_balance + receipts + traded_in
+        - sold_refill - sold_with_cylinder - traded_out</pre>
+  <p><code>traded_in</code> is the <i>empty</i> the customer handed back; adding it to the <b>filled</b> balance overstates filled stock by one unit per upgrade on the from-size. <code>traded_out</code> is correctly subtracted (the station did give away a filled larger cylinder).</p>
+  <p><b>Fix:</b></p>
+<pre>balance = opening_balance + receipts
+        - sold_refill - sold_with_cylinder - traded_out
+
+expected_closing_empty = opening_empty + sold_refill + traded_in - traded_out_new_fill</pre>
+  <p>Move <code>traded_in</code> out of the filled-balance line and into the expected-empty line (see §3.5).</p>
+</div>
+
+<h3>3.5 Empty-cylinder tally is manual, with no variance check (HIGH)</h3>
+<div class="box warn">
+  <p><span class="tag high">HIGH</span> &nbsp; <b>Empty balances are attendant-entered with no cross-check.</b></p>
+  <p>Document requires automatic per-transaction adjustment (§1.2). The app never derives an expected closing-empty, never flags a mismatch, and only variances the filled side (<code>attendant_handover.py:234–235, 242–243</code>).</p>
+  <p><b>Fix:</b></p>
+  <ol>
+    <li>Compute <code>expected_closing_empty[size] = opening_empty[size] + sold_refill[size] + traded_in[size] − traded_out_from_new_fill[size]</code>.</li>
+    <li>Flag variance exactly like the filled-stock check (<code>attendant_handover.py:242–243</code>), requiring a <code>variance_note</code> when non-zero.</li>
+    <li>Expose the expected value live on the attendant UI so data-entry errors are caught immediately.</li>
+  </ol>
+</div>
+
+<h3>3.6 Deposits are derived, not first-class config (MEDIUM)</h3>
+<div class="box">
+  <p><span class="tag med">MEDIUM</span> &nbsp; Deposit is inferred as <code>price_full_cylinder − price_refill</code>. The document assumes an explicit <code>DepositTable</code>. Problems:</p>
+  <ul>
+    <li>Supervisors cannot change just the deposit without recomputing <code>price_full_cylinder</code>.</li>
+    <li>The upgrade-pricing UI can't display "deposit difference = X" cleanly.</li>
+    <li>Historical revaluation is awkward because deposit and gas price are entangled in one snapshot.</li>
+  </ul>
+  <p><b>Fix:</b> add an explicit <code>deposit</code> field to each entry in <code>lpg_pricing.json</code>'s <code>prices</code> map, keep <code>price_full_cylinder</code> as a derived view for compatibility, and update <code>PUT /lpg-daily/pricing</code> validation (<code>lpg_daily.py:147–153</code>).</p>
+</div>
+
+<h3>3.7 Handover seeding bypasses previous-shift carry-forward (MEDIUM)</h3>
+<div class="box">
+  <p><span class="tag med">MEDIUM</span> &nbsp; <code>_feed_daily_entries</code> (<code>attendant_handover.py:394+</code>) builds a daily entry from the snapshot's <code>opening_*</code> values directly. The <code>GET /lpg-daily/previous-shift</code> endpoint is never consulted. If the attendant keys a wrong opening value on the handover screen, it propagates into the daily entry without cross-check.</p>
+  <p><b>Fix:</b> have <code>_feed_daily_entries</code> call the previous-shift lookup and warn if the snapshot opening values disagree.</p>
+</div>
+
+<h3>3.8 No hard stop / escalation on negative stock (LOW)</h3>
+<div class="box">
+  <p><span class="tag low">LOW</span> &nbsp; Oversell warnings exist for filled balance (<code>lpg_daily.py:312–316</code>) but there is no equivalent for negative empties and no supervisor-acknowledgement gate. Consider adding both.</p>
+</div>
+
+<h2>4. What the app already gets right</h2>
+<ul>
+  <li><span class="ok">Data model covers all three transaction types</span> — <code>sold_refill</code>, <code>sold_with_cylinder</code>, <code>trades[]</code>.</li>
+  <li><span class="ok">Per-size pricing is configurable</span> and role-gated to supervisors/owners.</li>
+  <li><span class="ok">Previous-shift carry-forward</span> for both filled and empty balances.</li>
+  <li><span class="ok">Filled-stock variance detection</span> with mandatory <code>variance_note</code>.</li>
+  <li><span class="ok">Shift-level integration</span> — LPG revenue flows into <code>ShiftReconciliation</code>; LPG assignment exists at shift creation.</li>
+</ul>
+
+<h2>5. Priority-ordered action list</h2>
+<table>
+  <tr><th>#</th><th>Issue</th><th>File : Line</th><th>Severity</th><th>Est. effort</th></tr>
+  <tr><td>1</td><td>Upgrade pricing misses deposit diff; charges gas diff only</td><td><code>lpg_daily.py:266</code></td><td><span class="tag crit">CRITICAL</span></td><td>~10 LOC</td></tr>
+  <tr><td>2</td><td>Trade revenue excluded from grand total</td><td><code>lpg_daily.py:310, 336</code></td><td><span class="tag crit">CRITICAL</span></td><td>~3 LOC</td></tr>
+  <tr><td>3</td><td>Handover flow cannot record upgrades</td><td><code>attendant_handover.py:220–253, 424</code></td><td><span class="tag crit">CRITICAL</span></td><td>~1–2 days (shared helper, snapshot field, UI)</td></tr>
+  <tr><td>4</td><td><code>+ traded_in</code> inflates filled balance</td><td><code>lpg_daily.py:290</code></td><td><span class="tag high">HIGH</span></td><td>~5 LOC + test</td></tr>
+  <tr><td>5</td><td>No expected-empty / variance for empties</td><td><code>lpg_daily.py:281–310</code>; <code>attendant_handover.py:231–253</code></td><td><span class="tag high">HIGH</span></td><td>~half-day</td></tr>
+  <tr><td>6</td><td>Make deposit an explicit, configurable field</td><td><code>lpg_daily.py:34–43, 94–109, 147–153</code></td><td><span class="tag med">MEDIUM</span></td><td>~half-day (+ UI)</td></tr>
+  <tr><td>7</td><td>Handover seeding bypasses previous-shift</td><td><code>attendant_handover.py:394+</code></td><td><span class="tag med">MEDIUM</span></td><td>~2 hrs</td></tr>
+  <tr><td>8</td><td>No warning on negative empties / no supervisor ack</td><td><code>lpg_daily.py:312–316</code></td><td><span class="tag low">LOW</span></td><td>~1 hr</td></tr>
+</table>
+
+<h2>6. Worked example — how the fixes change a real shift</h2>
+
+<p>Scenario: a single day shift with default pricing. Attendant records:</p>
+<ul>
+  <li>5 × refill of 6kg</li>
+  <li>1 × new-issue 9kg</li>
+  <li>3 × upgrade 3kg → 6kg</li>
+</ul>
+
+<table>
+  <tr><th>Figure</th><th>Current app</th><th>After fixes</th><th>Difference</th></tr>
+  <tr><td>Refill revenue (6kg × 5)</td><td>5 × 200 = <b>1,000</b></td><td>5 × 200 = <b>1,000</b></td><td>—</td></tr>
+  <tr><td>New-issue revenue (9kg × 1)</td><td>1 × 950 = <b>950</b></td><td>1 × 950 = <b>950</b></td><td>—</td></tr>
+  <tr><td>Upgrade revenue (3→6 × 3)</td><td>3 × 53 = <b>159</b></td><td>3 × 370 = <b>1,110</b></td><td class="gap">+951</td></tr>
+  <tr><td>Reported LPG grand total</td><td>1,000 + 950 = <b>1,950</b><br><small>(upgrades excluded entirely)</small></td><td>1,000 + 950 + 1,110 = <b>3,060</b></td><td class="gap">+1,110</td></tr>
+  <tr><td>Filled 3kg closing balance</td><td>opening + 3 (bad <code>+traded_in</code>)</td><td>opening (unchanged)</td><td>−3 correction</td></tr>
+  <tr><td>Empty 3kg expected</td><td>not computed</td><td>opening + 3</td><td>new check</td></tr>
+  <tr><td>Empty 6kg expected</td><td>not computed</td><td>opening + 5 − 3</td><td>new check</td></tr>
+</table>
+
+<p>With default prices, a <b>single shift</b> like this leaves <b>1,110 ZMW</b> unaccounted for on the reconciliation line, and filled-3kg stock is inflated by three units. Scaled to a month, that is easily material.</p>
+
+<h2>7. Recommended sequencing</h2>
+<ol>
+  <li><b>Day 1 (fixes 1, 2, 4):</b> three small backend patches + unit tests. Revenue starts counting correctly immediately.</li>
+  <li><b>Day 2–3 (fix 3):</b> extend handover to accept trades; update attendant UI. Removes the double-entry footgun.</li>
+  <li><b>Day 4 (fix 5):</b> expected-empty calculation and variance flag on both backend and UI.</li>
+  <li><b>Day 5 (fixes 6, 7, 8):</b> explicit deposit config, carry-forward cross-check, negative-empty guard.</li>
+</ol>
+
+<p>Want a patch set for steps 1–2 first? Those are the revenue-leak fixes and are small enough to ship on their own.</p>
+
+<footer>
+  Generated 2026-04-22 &middot; Sources: <code>LPG Recon.docx</code>, <code>backend/app/api/v1/lpg_daily.py</code>, <code>backend/app/api/v1/attendant_handover.py</code>, <code>backend/app/models/models.py</code>, commit <code>1e683c9</code>.
+</footer>
+
+</body>
+</html>

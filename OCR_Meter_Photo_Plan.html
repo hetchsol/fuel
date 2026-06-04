@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NextStop — Mechanical Meter Photo Evidence Plan</title>
+<style>
+  @media print { body { font-size: 11pt; } }
+  body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #1a1a2e; line-height: 1.6; }
+  h1 { color: #0A3D7A; border-bottom: 3px solid #0A3D7A; padding-bottom: 10px; font-size: 24px; }
+  h2 { color: #0F2847; margin-top: 30px; font-size: 18px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+  h3 { color: #1a1a2e; font-size: 14px; margin-top: 20px; }
+  code, pre { background: #f4f4f8; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 12px; }
+  code { padding: 2px 6px; }
+  pre { padding: 12px 16px; overflow-x: auto; border: 1px solid #e0e0e0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+  th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; font-size: 13px; }
+  th { background: #0A3D7A; color: white; }
+  tr:nth-child(even) { background: #f8f9fa; }
+  ul, ol { padding-left: 24px; }
+  li { margin-bottom: 4px; }
+  strong { color: #0F2847; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: #d4edda; color: #155724; }
+  .badge-red { background: #f8d7da; color: #721c24; }
+  .badge-blue { background: #cce5ff; color: #004085; }
+  .header-meta { color: #666; font-size: 13px; margin-top: -10px; }
+  .section-box { background: #f8f9fa; border-left: 4px solid #0A3D7A; padding: 12px 16px; margin: 10px 0; border-radius: 0 4px 4px 0; }
+</style>
+</head>
+<body>
+
+<h1>Mechanical Meter Photo Evidence</h1>
+<p class="header-meta">NextStop Fuel Management System — Future Phase Implementation Plan<br>
+Document Date: April 2026 &nbsp;|&nbsp; Status: <span class="badge badge-blue">PLANNED</span></p>
+
+<h2>1. Context</h2>
+<p>Attendants manually type mechanical meter readings. There is no way to verify they typed what the meter actually shows. Adding <strong>mandatory photo capture</strong> of the mechanical meter creates an evidence trail. The supervisor can visually verify the reading during handover review.</p>
+
+<h2>2. Industry SOP Alignment</h2>
+<div class="section-box">
+<ul>
+<li><strong>Electronic reading</strong> = primary sales record (typed from pump display)</li>
+<li><strong>Mechanical reading</strong> = backup verification (typed from analog meter)</li>
+<li><strong>Photo</strong> = timestamped evidence for audit/dispute (captured via camera)</li>
+<li><strong>OCR</strong> = background hint shown to supervisor (informational only, not used for flagging)</li>
+</ul>
+</div>
+
+<h2>3. What Changes</h2>
+
+<h3>For the Attendant</h3>
+<p><strong>Before:</strong> Type mechanical_closing number &rarr; done</p>
+<p><strong>After:</strong> Type mechanical_closing number &rarr; take photo of meter &rarr; done</p>
+<p>The photo is <strong>mandatory</strong> to proceed. No photo = can't submit handover. The attendant cannot fake a reading because the supervisor sees both the typed number and the actual photo.</p>
+
+<h3>For the Supervisor</h3>
+<p><strong>Before:</strong> See typed mechanical reading, trust the attendant</p>
+<p><strong>After:</strong> See typed mechanical reading + &ldquo;View Photo&rdquo; button. Click to see the actual meter. If the typed number doesn&rsquo;t match the photo &rarr; return handover. OCR hint shown as secondary info (greyed out, informational only).</p>
+
+<h2>4. Backend Implementation</h2>
+
+<h3>4.1 New Endpoint: POST /handover/meter-photo</h3>
+<p><strong>File:</strong> <code>backend/app/api/v1/attendant_handover.py</code></p>
+<pre>Input: UploadFile (photo) + nozzle_id + shift_id (query params)
+Process:
+  1. Save photo via attachments (permanent storage)
+  2. Run OCR in background (best effort, non-blocking)
+  3. Return { attachment_id, ocr_hint, ocr_confidence }
+
+- Photo saved permanently as evidence
+- OCR runs but result is informational only
+- If Tesseract unavailable, returns ocr_hint: null</pre>
+
+<h3>4.2 Extend Data Models</h3>
+<p><strong>File:</strong> <code>backend/app/models/models.py</code></p>
+<p>Add to HandoverNozzleReadingInput and HandoverNozzleReadingSummary:</p>
+<pre>meter_photo_id: Optional[str] = None       # Attachment ID of photo
+ocr_hint: Optional[float] = None           # OCR-extracted value (informational)
+ocr_confidence: Optional[float] = None     # 0-1 confidence score</pre>
+
+<h3>4.3 No Change to Deviation Logic</h3>
+<p>Electronic vs mechanical comparison stays exactly the same. OCR is not compared to anything for flagging purposes.</p>
+
+<h3>4.4 Install Tesseract on Render</h3>
+<pre>buildCommand: apt-get update && apt-get install -y tesseract-ocr && pip install -r requirements.txt</pre>
+<p>If install fails, app still works &mdash; OCR returns null.</p>
+
+<h2>5. Frontend Implementation</h2>
+
+<h3>5.1 Camera Button on Mechanical Reading</h3>
+<p><strong>File:</strong> <code>frontend/pages/my-shift.tsx</code></p>
+<p>Each nozzle row gets a camera icon button next to the mechanical_closing input:</p>
+<pre>| Mech Close: [____input____] [&#x1F4F7;] |</pre>
+<ul>
+<li>Click camera &rarr; opens device camera (mobile) or file picker (desktop)</li>
+<li>Photo captured &rarr; uploaded to <code>/handover/meter-photo</code></li>
+<li>Success: green checkmark replaces camera icon, shows &ldquo;Photo saved&rdquo;</li>
+<li>OCR hint value shown as small grey text below (informational)</li>
+</ul>
+
+<h3>5.2 Make Photo Mandatory</h3>
+<pre>const allPhotosUploaded = nozzleRows.every(r => r.meter_photo_id)
+const canProceedToReview = ... && allPhotosUploaded</pre>
+<p>Button text: &ldquo;Take photos of all meters to continue&rdquo; when photos missing.</p>
+
+<h3>5.3 Camera Capture Method</h3>
+<pre>&lt;input type="file" accept="image/*" capture="environment" /&gt;</pre>
+<p>Opens rear camera on mobile, file picker on desktop. Works on all browsers. No permissions API needed. Client-side compression to max 1280px, JPEG 80% quality (~200KB per photo).</p>
+
+<h3>5.4 Photo in Handover Review</h3>
+<p><strong>File:</strong> <code>frontend/pages/handover-review.tsx</code></p>
+<ul>
+<li>New &ldquo;Photo&rdquo; column in nozzle readings table</li>
+<li>&ldquo;View&rdquo; link &rarr; opens photo in modal/lightbox</li>
+<li>OCR hint shown below photo in grey text</li>
+<li>Supervisor visually compares typed value to photo</li>
+</ul>
+
+<h2>6. Files to Modify</h2>
+<table>
+<tr><th>File</th><th>Change</th></tr>
+<tr><td><code>backend/app/api/v1/attendant_handover.py</code></td><td>Add POST /meter-photo endpoint</td></tr>
+<tr><td><code>backend/app/models/models.py</code></td><td>Add meter_photo_id, ocr_hint, ocr_confidence fields</td></tr>
+<tr><td><code>backend/app/services/ocr.py</code></td><td>Ensure Tesseract path detection works on Render</td></tr>
+<tr><td><code>render.yaml</code></td><td>Add tesseract-ocr to build command</td></tr>
+<tr><td><code>frontend/pages/my-shift.tsx</code></td><td>Camera button, photo mandatory check, OCR hint display</td></tr>
+<tr><td><code>frontend/pages/handover-review.tsx</code></td><td>Photo view column + OCR hint in nozzle table</td></tr>
+</table>
+
+<h2>7. What This Does NOT Touch</h2>
+<ul>
+<li>Electronic reading capture &mdash; unchanged</li>
+<li>Manual mechanical reading capture &mdash; unchanged (still typed)</li>
+<li>Deviation calculation (electronic vs mechanical) &mdash; unchanged</li>
+<li>Inline deviation validation + mandatory explanation &mdash; unchanged</li>
+<li>Cash handover flow &mdash; unchanged</li>
+<li>LPG/lubricant/accessory sections &mdash; unchanged</li>
+<li>Safe deposits &mdash; unchanged</li>
+</ul>
+
+<h2>8. Potential Breaks & Mitigations</h2>
+<table>
+<tr><th>#</th><th>Risk</th><th>Mitigation</th></tr>
+<tr><td>1</td><td>Tesseract not available on Render</td><td>OCR hint returns null. Photo still saved. Feature works without OCR.</td></tr>
+<tr><td>2</td><td>Attendant can&rsquo;t take photo (broken camera)</td><td>File picker fallback. Upload from gallery. Emergency: supervisor overrides via return.</td></tr>
+<tr><td>3</td><td>Bad photo quality (blurry, dark)</td><td>Low OCR confidence shown. Supervisor relies on visual inspection.</td></tr>
+<tr><td>4</td><td>Large photos slow upload</td><td>Client-side compression (1280px, 80% JPEG). Under 200KB per photo.</td></tr>
+<tr><td>5</td><td>Storage growth from photos</td><td>~3.2MB/day = ~1.2GB/year. Cleanup for photos older than 90 days if needed.</td></tr>
+<tr><td>6</td><td>Old handovers have no photos</td><td>All fields Optional with default None. Photo column shows &ldquo;&mdash;&rdquo;.</td></tr>
+</table>
+
+<h2>9. Verification Checklist</h2>
+<ol>
+<li>Attendant enters mechanical closing &rarr; types number manually (unchanged)</li>
+<li>Taps camera icon &rarr; phone camera opens &rarr; takes photo of meter</li>
+<li>Photo uploads &rarr; green checkmark appears &rarr; OCR hint shown in grey</li>
+<li>All nozzles have photos &rarr; &ldquo;Review My Entries&rdquo; button enabled</li>
+<li>Missing any photo &rarr; button disabled: &ldquo;Take photos of all meters to continue&rdquo;</li>
+<li>Submit handover &rarr; photo IDs stored in handover record</li>
+<li>Supervisor opens handover review &rarr; sees &ldquo;View&rdquo; link in Photo column</li>
+<li>Clicks &ldquo;View&rdquo; &rarr; photo opens in modal</li>
+<li>OCR hint shown below photo (grey, informational)</li>
+<li>Old handovers &rarr; Photo column shows &ldquo;&mdash;&rdquo;, no errors</li>
+</ol>
+
+<h2>10. Storage Architecture</h2>
+<div class="section-box">
+<p>Photos stored via existing attachments system:</p>
+<ul>
+<li>Path: <code>storage/{uuid}.jpg</code></li>
+<li>Referenced by <code>meter_photo_id</code> in handover record</li>
+<li>Permanent &mdash; survives shift close, daily close-off, etc.</li>
+<li>~200KB per photo &times; 8 nozzles &times; 2 shifts/day = ~3.2MB/day</li>
+</ul>
+</div>
+
+<br>
+<hr>
+<p style="text-align: center; color: #999; font-size: 11px;">NextStop Fuel Management System &mdash; Implementation Plan &mdash; April 2026</p>
+
+</body>
+</html>

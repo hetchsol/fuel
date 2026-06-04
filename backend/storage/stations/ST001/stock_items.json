@@ -1,0 +1,13 @@
+{
+  "accessory:ACC-B": {
+    "item_key": "accessory:ACC-B",
+    "category": "accessory",
+    "product_code": "ACC-B",
+    "stores": 0,
+    "forecourt": 0,
+    "name": "Phase B item",
+    "unit": "ea",
+    "reorder_level": 0,
+    "reorder_qty": 0
+  }
+}

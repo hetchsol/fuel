@@ -1,0 +1,28 @@
+{
+  "prices": {
+    "3": {
+      "price_refill": 147,
+      "price_full_cylinder": 477
+    },
+    "6": {
+      "price_refill": 200,
+      "price_full_cylinder": 700
+    },
+    "9": {
+      "price_refill": 300,
+      "price_full_cylinder": 950
+    },
+    "19": {
+      "price_refill": 650,
+      "price_full_cylinder": 2100
+    },
+    "45": {
+      "price_refill": 1500,
+      "price_full_cylinder": 4500
+    },
+    "48": {
+      "price_refill": 1600,
+      "price_full_cylinder": 4800
+    }
+  }
+}

@@ -1,10 +1,32 @@
 {
   "ST001": {
     "station_id": "ST001",
-    "name": "My Station",
+    "name": "Default Station",
     "location": "",
+    "status": "active"
+  },
+  "ST042": {
+    "station_id": "ST042",
+    "name": "Kalulushi Test",
+    "location": "Copperbelt",
     "status": "active",
-    "created_by": "system",
-    "created_at": "2026-02-09T19:03:16.649518"
+    "created_by": "O001",
+    "created_at": "2026-06-01T16:59:38.923682"
+  },
+  "ST043": {
+    "station_id": "ST043",
+    "name": "Scope Test 2",
+    "location": "x",
+    "status": "active",
+    "created_by": "O001",
+    "created_at": "2026-06-01T16:59:39.071205"
+  },
+  "ST999": {
+    "station_id": "ST999",
+    "name": "Test Station 999",
+    "location": "Test Location",
+    "status": "active",
+    "created_by": "O001",
+    "created_at": "2026-06-01T16:59:43.734257"
   }
 }

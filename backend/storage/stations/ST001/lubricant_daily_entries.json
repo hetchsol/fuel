@@ -1,0 +1,785 @@
+{
+  "LUB-LI3-2026-06-01-8f28e421": {
+    "entry_id": "LUB-LI3-2026-06-01-8f28e421",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 11,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T14:00:10.870161",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-9b4f939b": {
+    "entry_id": "LUB-LI3-2026-06-01-9b4f939b",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 2,
+        "damage_note": "dropped box",
+        "balance": 9,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T14:00:11.012000",
+    "notes": null,
+    "damage_status": "approved",
+    "damage_authorised_by": "owner1",
+    "damage_authorised_at": "2026-06-01T14:00:11.048901"
+  },
+  "LUB-LI3-2026-06-01-58a82715": {
+    "entry_id": "LUB-LI3-2026-06-01-58a82715",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 1,
+        "damage_note": "leak",
+        "balance": 10,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T14:00:11.589467",
+    "notes": null,
+    "damage_status": "pending",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-2efc35d2": {
+    "entry_id": "LUB-LI3-2026-06-01-2efc35d2",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 11,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T14:12:13.361085",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-63c00391": {
+    "entry_id": "LUB-LI3-2026-06-01-63c00391",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 2,
+        "damage_note": "dropped box",
+        "balance": 9,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T14:12:13.468672",
+    "notes": null,
+    "damage_status": "approved",
+    "damage_authorised_by": "owner1",
+    "damage_authorised_at": "2026-06-01T14:12:13.495551"
+  },
+  "LUB-LI3-2026-06-01-f9ee3702": {
+    "entry_id": "LUB-LI3-2026-06-01-f9ee3702",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 1,
+        "damage_note": "leak",
+        "balance": 10,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T14:12:13.734445",
+    "notes": null,
+    "damage_status": "pending",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-cc4a5509": {
+    "entry_id": "LUB-LI3-2026-06-01-cc4a5509",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 11,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T15:55:15.938312",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-d61c7ff2": {
+    "entry_id": "LUB-LI3-2026-06-01-d61c7ff2",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 2,
+        "damage_note": "dropped box",
+        "balance": 9,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T15:55:16.067684",
+    "notes": null,
+    "damage_status": "approved",
+    "damage_authorised_by": "owner1",
+    "damage_authorised_at": "2026-06-01T15:55:16.088640"
+  },
+  "LUB-LI3-2026-06-01-36a3c838": {
+    "entry_id": "LUB-LI3-2026-06-01-36a3c838",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 1,
+        "damage_note": "leak",
+        "balance": 10,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T15:55:16.239514",
+    "notes": null,
+    "damage_status": "pending",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-928dd54a": {
+    "entry_id": "LUB-LI3-2026-06-01-928dd54a",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 11,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:11:59.770836",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-98a3c581": {
+    "entry_id": "LUB-LI3-2026-06-01-98a3c581",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 2,
+        "damage_note": "dropped box",
+        "balance": 9,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:11:59.805810",
+    "notes": null,
+    "damage_status": "approved",
+    "damage_authorised_by": "owner1",
+    "damage_authorised_at": "2026-06-01T16:11:59.814914"
+  },
+  "LUB-LI3-2026-06-01-8ab8d8eb": {
+    "entry_id": "LUB-LI3-2026-06-01-8ab8d8eb",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 1,
+        "damage_note": "leak",
+        "balance": 10,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:11:59.897315",
+    "notes": null,
+    "damage_status": "pending",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-eec6ceed": {
+    "entry_id": "LUB-LI3-2026-06-01-eec6ceed",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "TEST-LUB-DEFAULT",
+        "description": "Test Default Lub",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 1,
+        "additions": 0,
+        "sold_or_drawn": 1,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 0,
+        "sales_value": 100.0
+      }
+    ],
+    "total_daily_sales_value": 100.0,
+    "total_items_moved": 1,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:34:43.492665",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-608f3ccc": {
+    "entry_id": "LUB-LI3-2026-06-01-608f3ccc",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "TEST-LUB-REORDER",
+        "description": "Test Reorder Lub",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 0,
+        "sold_or_drawn": 6,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 4,
+        "sales_value": 600.0
+      }
+    ],
+    "total_daily_sales_value": 600.0,
+    "total_items_moved": 6,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:34:43.527297",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-557c5fff": {
+    "entry_id": "LUB-LI3-2026-06-01-557c5fff",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "TEST-LUB-DEFAULT",
+        "description": "Test Default Lub",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 1,
+        "additions": 0,
+        "sold_or_drawn": 1,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 0,
+        "sales_value": 100.0
+      }
+    ],
+    "total_daily_sales_value": 100.0,
+    "total_items_moved": 1,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:39:03.987436",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-1a72b8bf": {
+    "entry_id": "LUB-LI3-2026-06-01-1a72b8bf",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "TEST-LUB-REORDER",
+        "description": "Test Reorder Lub",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 0,
+        "sold_or_drawn": 6,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 4,
+        "sales_value": 600.0
+      }
+    ],
+    "total_daily_sales_value": 600.0,
+    "total_items_moved": 6,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:39:04.010754",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-e5777da1": {
+    "entry_id": "LUB-LI3-2026-06-01-e5777da1",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "TEST-LUB-DEFAULT",
+        "description": "Test Default Lub",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 1,
+        "additions": 0,
+        "sold_or_drawn": 1,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 0,
+        "sales_value": 100.0
+      }
+    ],
+    "total_daily_sales_value": 100.0,
+    "total_items_moved": 1,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:42:52.662130",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-77a2c4d5": {
+    "entry_id": "LUB-LI3-2026-06-01-77a2c4d5",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "TEST-LUB-REORDER",
+        "description": "Test Reorder Lub",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 0,
+        "sold_or_drawn": 6,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 4,
+        "sales_value": 600.0
+      }
+    ],
+    "total_daily_sales_value": 600.0,
+    "total_items_moved": 6,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:42:52.704230",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-8f16d64f": {
+    "entry_id": "LUB-LI3-2026-06-01-8f16d64f",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "TEST-LUB-REORDER",
+        "description": "Test Reorder Lub",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 0,
+        "sold_or_drawn": 6,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 4,
+        "sales_value": 600.0
+      }
+    ],
+    "total_daily_sales_value": 600.0,
+    "total_items_moved": 6,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:43:21.880140",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-8a428450": {
+    "entry_id": "LUB-LI3-2026-06-01-8a428450",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "TEST-LUB-DEFAULT",
+        "description": "Test Default Lub",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 1,
+        "additions": 0,
+        "sold_or_drawn": 1,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 0,
+        "sales_value": 100.0
+      }
+    ],
+    "total_daily_sales_value": 100.0,
+    "total_items_moved": 1,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:54:57.371178",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-05e718ea": {
+    "entry_id": "LUB-LI3-2026-06-01-05e718ea",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "TEST-LUB-DEFAULT",
+        "description": "Test Default Lub",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 1,
+        "additions": 0,
+        "sold_or_drawn": 1,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 0,
+        "sales_value": 100.0
+      }
+    ],
+    "total_daily_sales_value": 100.0,
+    "total_items_moved": 1,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:59:13.778535",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-2daf0d79": {
+    "entry_id": "LUB-LI3-2026-06-01-2daf0d79",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "EO-SAE30-1L",
+        "description": "SAE 30 Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 0.0,
+        "opening_stock": 10,
+        "additions": 0,
+        "sold_or_drawn": 6,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 4,
+        "sales_value": 0.0
+      }
+    ],
+    "total_daily_sales_value": 0.0,
+    "total_items_moved": 6,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:59:13.810747",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-b88c0db2": {
+    "entry_id": "LUB-LI3-2026-06-01-b88c0db2",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 11,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:59:39.263322",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-ab972a8b": {
+    "entry_id": "LUB-LI3-2026-06-01-ab972a8b",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 2,
+        "damage_note": "dropped box",
+        "balance": 9,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:59:39.297338",
+    "notes": null,
+    "damage_status": "approved",
+    "damage_authorised_by": "owner1",
+    "damage_authorised_at": "2026-06-01T16:59:39.310924"
+  },
+  "LUB-LI3-2026-06-01-cdad0778": {
+    "entry_id": "LUB-LI3-2026-06-01-cdad0778",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "LUB-1",
+        "description": "Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 10,
+        "additions": 5,
+        "sold_or_drawn": 4,
+        "damaged": 1,
+        "damage_note": "leak",
+        "balance": 10,
+        "sales_value": 400.0
+      }
+    ],
+    "total_daily_sales_value": 400.0,
+    "total_items_moved": 4,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:59:39.409347",
+    "notes": null,
+    "damage_status": "pending",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-c49667aa": {
+    "entry_id": "LUB-LI3-2026-06-01-c49667aa",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "TEST-LUB-DEFAULT",
+        "description": "Test Default Lub",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 100.0,
+        "opening_stock": 1,
+        "additions": 0,
+        "sold_or_drawn": 1,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 0,
+        "sales_value": 100.0
+      }
+    ],
+    "total_daily_sales_value": 100.0,
+    "total_items_moved": 1,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:59:41.310973",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  },
+  "LUB-LI3-2026-06-01-d19ac4ca": {
+    "entry_id": "LUB-LI3-2026-06-01-d19ac4ca",
+    "date": "2026-06-01",
+    "location": "Island 3",
+    "product_rows": [
+      {
+        "product_code": "EO-SAE30-1L",
+        "description": "SAE 30 Engine Oil 1L",
+        "category": "Engine Oil",
+        "unit_size": null,
+        "selling_price": 0.0,
+        "opening_stock": 10,
+        "additions": 0,
+        "sold_or_drawn": 6,
+        "damaged": 0,
+        "damage_note": null,
+        "balance": 4,
+        "sales_value": 0.0
+      }
+    ],
+    "total_daily_sales_value": 0.0,
+    "total_items_moved": 6,
+    "recorded_by": "owner1",
+    "created_at": "2026-06-01T16:59:41.356580",
+    "notes": null,
+    "damage_status": "none",
+    "damage_authorised_by": null,
+    "damage_authorised_at": null
+  }
+}

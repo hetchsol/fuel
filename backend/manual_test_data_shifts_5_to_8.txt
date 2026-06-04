@@ -1,0 +1,223 @@
+================================================================================
+  MANUAL TEST DATA — SHIFTS 5 TO 8
+  Continues from seeded Shifts 1-4 (Apr 7-8)
+  Prices: Diesel K23.25/L  |  Petrol K26.61/L
+================================================================================
+
+
+================================================================================
+  SHIFT 5 — APRIL 9, DAY SHIFT (CLEAN)
+================================================================================
+
+Attendants: Katongo (Diesel — ISL1) + Mweene (Petrol — ISL4)
+
+TANK DIP READINGS:
+  Tank      | Opening Dip (cm) | Closing Dip (cm)
+  ----------|------------------|------------------
+  Diesel    |     28.86        |     25.40
+  Petrol    |     33.42        |     29.80
+
+DELIVERIES: None
+
+--- Katongo (Diesel) ---
+
+  Nozzle  | Elec Open    | Elec Close   | Mech Open  | Mech Close
+  --------|--------------|--------------|------------|------------
+  ISL1-A  | 204,225.2    | 205,680.2    | 204,223    | 205,678
+  ISL1-B  | 207,892.0    | 208,827.0    | 207,889    | 208,824
+
+  ISL1-A volume: 1,455.0 L  ->  Revenue: K33,828.75
+  ISL1-B volume:   935.0 L  ->  Revenue: K21,738.75
+  Total Revenue: K55,567.50
+  Cash to hand in: K55,567.50 (CLEAN — no shortage)
+
+  Safe Deposits:
+    08:00  ->  K13,900.00
+    10:30  ->  K13,900.00
+    13:00  ->  K13,900.00
+    16:00  ->  K13,867.50
+
+--- Mweene (Petrol) ---
+
+  Nozzle  | Elec Open    | Elec Close   | Mech Open  | Mech Close
+  --------|--------------|--------------|------------|------------
+  ISL4-A  | 153,621.3    | 155,061.3    | 153,620    | 155,059
+  ISL4-B  | 162,101.4    | 162,891.4    | 162,095    | 162,885
+
+  ISL4-A volume: 1,440.0 L  ->  Revenue: K38,318.40
+  ISL4-B volume:   790.0 L  ->  Revenue: K21,021.90
+  Total Revenue: K59,340.30
+  Cash to hand in: K59,340.30 (CLEAN)
+
+  Safe Deposits:
+    07:45  ->  K14,835.00
+    10:00  ->  K14,835.00
+    12:30  ->  K14,835.00
+    15:45  ->  K14,835.30
+
+
+================================================================================
+  SHIFT 6 — APRIL 9, NIGHT SHIFT (SURPLUS + 1 DELIVERY)
+================================================================================
+
+Attendants: Sunzu (Diesel — ISL1) + Mayuka (Petrol — ISL4)
+
+TANK DIP READINGS:
+  Tank      | Opening Dip (cm) | Closing Dip (cm)
+  ----------|------------------|------------------
+  Diesel    |     25.40        |     36.20
+  Petrol    |     29.80        |     28.50
+
+DELIVERY:
+  Time   | Supplier             | Tank   | Invoice        | Ordered  | Flowmeter | Dip Change
+  -------|----------------------|--------|----------------|----------|-----------|----------
+  20:00  | Puma Energy Zambia   | Diesel | PEZ-2026-4520  | 12,000 L | 11,950 L  | 11,900 L
+
+--- Sunzu (Diesel) ---
+
+  Nozzle  | Elec Open    | Elec Close   | Mech Open  | Mech Close
+  --------|--------------|--------------|------------|------------
+  ISL1-A  | 205,680.2    | 206,290.2    | 205,678    | 206,298
+  ISL1-B  | 208,827.0    | 209,182.0    | 208,824    | 209,179
+
+  ISL1-A volume: 610.0 L  ->  Revenue: K14,182.50
+  ISL1-B volume: 355.0 L  ->  Revenue:  K8,253.75
+  Total Revenue: K22,436.25
+  Cash to hand in: K22,700.00 (SURPLUS of K263.75)
+
+  Safe Deposits:
+    19:00  ->  K11,200.00
+    22:30  ->  K11,500.00
+
+--- Mayuka (Petrol) ---
+
+  Nozzle  | Elec Open    | Elec Close   | Mech Open  | Mech Close
+  --------|--------------|--------------|------------|------------
+  ISL4-A  | 155,061.3    | 155,531.3    | 155,059    | 155,528
+  ISL4-B  | 162,891.4    | 163,166.4    | 162,885    | 163,160
+
+  ISL4-A volume: 470.0 L  ->  Revenue: K12,506.70
+  ISL4-B volume: 275.0 L  ->  Revenue:  K7,317.75
+  Total Revenue: K19,824.45
+  Cash to hand in: K19,824.45 (CLEAN)
+
+  Safe Deposits:
+    19:15  ->  K9,912.00
+    22:00  ->  K9,912.45
+
+
+================================================================================
+  SHIFT 7 — APRIL 10, DAY SHIFT (SHORTAGE + METER DEVIATION)
+================================================================================
+
+Attendants: Katongo (Diesel — ISL1) + Mayuka (Petrol — ISL4)
+
+TANK DIP READINGS:
+  Tank      | Opening Dip (cm) | Closing Dip (cm)
+  ----------|------------------|------------------
+  Diesel    |     36.20        |     32.50
+  Petrol    |     28.50        |     24.90
+
+DELIVERIES: None
+
+--- Katongo (Diesel) ---
+
+  Nozzle  | Elec Open    | Elec Close   | Mech Open  | Mech Close
+  --------|--------------|--------------|------------|------------
+  ISL1-A  | 206,290.2    | 208,100.2    | 206,298    | 208,105
+  ISL1-B  | 209,182.0    | 210,282.0    | 209,179    | 210,270
+
+  ISL1-A volume: 1,810.0 L  ->  Revenue: K42,082.50
+  ISL1-B volume: 1,100.0 L  ->  Revenue: K25,575.00
+  ** ISL1-B METER DEVIATION: 9.0 L (FLAGGED) **
+     Explanation: "Meter slipping, reported to maintenance"
+  Total Revenue: K67,657.50
+  Cash to hand in: K60,000.00 (SHORTAGE of K7,657.50)
+
+  Safe Deposits:
+    08:00  ->  K15,000.00
+    10:15  ->  K15,000.00
+    13:45  ->  K15,000.00
+    16:30  ->  K15,000.00
+
+--- Mayuka (Petrol) ---
+
+  Nozzle  | Elec Open    | Elec Close   | Mech Open  | Mech Close
+  --------|--------------|--------------|------------|------------
+  ISL4-A  | 155,531.3    | 157,131.3    | 155,528    | 157,128
+  ISL4-B  | 163,166.4    | 164,046.4    | 163,160    | 164,040
+
+  ISL4-A volume: 1,600.0 L  ->  Revenue: K42,576.00
+  ISL4-B volume:   880.0 L  ->  Revenue: K23,416.80
+  Total Revenue: K65,992.80
+  Cash to hand in: K65,992.80 (CLEAN)
+
+  Safe Deposits:
+    08:30  ->  K16,500.00
+    10:45  ->  K16,500.00
+    14:00  ->  K16,500.00
+    16:00  ->  K16,492.80
+
+
+================================================================================
+  SHIFT 8 — APRIL 10, NIGHT SHIFT (CLEAN + 1 DELIVERY)
+================================================================================
+
+Attendants: Sunzu (Diesel — ISL1) + Mweene (Petrol — ISL4)
+
+TANK DIP READINGS:
+  Tank      | Opening Dip (cm) | Closing Dip (cm)
+  ----------|------------------|------------------
+  Diesel    |     32.50        |     31.30
+  Petrol    |     24.90        |     34.10
+
+DELIVERY:
+  Time   | Supplier               | Tank   | Invoice        | Ordered  | Flowmeter | Dip Change
+  -------|------------------------|--------|----------------|----------|-----------|----------
+  21:30  | Oryx Energies Zambia   | Petrol | ORX-2026-7850  | 9,000 L  | 8,970 L   | 8,940 L
+
+--- Sunzu (Diesel) ---
+
+  Nozzle  | Elec Open    | Elec Close   | Mech Open  | Mech Close
+  --------|--------------|--------------|------------|------------
+  ISL1-A  | 208,100.2    | 208,600.2    | 208,105    | 208,605
+  ISL1-B  | 210,282.0    | 210,632.0    | 210,270    | 210,620
+
+  ISL1-A volume: 500.0 L  ->  Revenue: K11,625.00
+  ISL1-B volume: 350.0 L  ->  Revenue:  K8,137.50
+  Total Revenue: K19,762.50
+  Cash to hand in: K19,762.50 (CLEAN)
+
+  Safe Deposits:
+    19:30  ->  K9,880.00
+    22:00  ->  K9,882.50
+
+--- Mweene (Petrol) ---
+
+  Nozzle  | Elec Open    | Elec Close   | Mech Open  | Mech Close
+  --------|--------------|--------------|------------|------------
+  ISL4-A  | 157,131.3    | 157,531.3    | 157,128    | 157,528
+  ISL4-B  | 164,046.4    | 164,366.4    | 164,040    | 164,360
+
+  ISL4-A volume: 400.0 L  ->  Revenue: K10,644.00
+  ISL4-B volume: 320.0 L  ->  Revenue:  K8,515.20
+  Total Revenue: K19,159.20
+  Cash to hand in: K19,159.20 (CLEAN)
+
+  Safe Deposits:
+    20:00  ->  K9,580.00
+    23:00  ->  K9,579.20
+
+
+================================================================================
+  SCENARIO SUMMARY
+================================================================================
+
+  Shift | Date   | Type  | Flags
+  ------|--------|-------|----------------------------------------------
+    5   | Apr 9  | Day   | Clean
+    6   | Apr 9  | Night | Cash surplus K263.75 (Sunzu), 1 delivery
+    7   | Apr 10 | Day   | Cash shortage K7,657.50 (Katongo), Meter deviation ISL1-B 9.0L
+    8   | Apr 10 | Night | Clean, 1 delivery
+
+================================================================================

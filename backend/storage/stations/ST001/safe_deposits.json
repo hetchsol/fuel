@@ -1,0 +1,1832 @@
+{
+  "2026-04-08-DepTest": {
+    "shift_id": "2026-04-08-DepTest",
+    "deposits": [
+      {
+        "deposit_id": "DEP-876b52f9",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-08T09:30:00",
+        "recorded_at": "2026-04-08T09:46:45.990730",
+        "note": "Test deposit"
+      },
+      {
+        "deposit_id": "DEP-42d5fea9",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-08T09:30:00",
+        "recorded_at": "2026-04-08T09:51:01.468083",
+        "note": "Test deposit"
+      }
+    ]
+  },
+  "2026-04-08-MyDepTest": {
+    "shift_id": "2026-04-08-MyDepTest",
+    "deposits": [
+      {
+        "deposit_id": "DEP-dbcf253c",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-08T08:00:00",
+        "recorded_at": "2026-04-08T09:46:46.039301",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-78bb9b92",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-08T09:15:00",
+        "recorded_at": "2026-04-08T09:46:46.045171",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-89c8d0c8",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-08T08:00:00",
+        "recorded_at": "2026-04-08T09:51:01.728376",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-a65f445b",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-08T09:15:00",
+        "recorded_at": "2026-04-08T09:51:01.734791",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-18557c39": {
+    "shift_id": "DEP-18557c39",
+    "deposits": [
+      {
+        "deposit_id": "DEP-6473216a",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-08T09:30:00",
+        "recorded_at": "2026-04-08T09:55:16.283941",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-1347daf6": {
+    "shift_id": "DEP-1347daf6",
+    "deposits": [
+      {
+        "deposit_id": "DEP-214437fb",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-08T08:00:00",
+        "recorded_at": "2026-04-08T09:55:16.341712",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-c2b66204",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-08T09:15:00",
+        "recorded_at": "2026-04-08T09:55:16.348323",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-dcdce80b": {
+    "shift_id": "DEP-dcdce80b",
+    "deposits": [
+      {
+        "deposit_id": "DEP-b1b20497",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-08T09:30:00",
+        "recorded_at": "2026-04-08T12:48:31.860868",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-abf419cf": {
+    "shift_id": "DEP-abf419cf",
+    "deposits": [
+      {
+        "deposit_id": "DEP-87f1af47",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-08T08:00:00",
+        "recorded_at": "2026-04-08T12:48:31.912436",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-9acc690a",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-08T09:15:00",
+        "recorded_at": "2026-04-08T12:48:31.918476",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-224cfafc": {
+    "shift_id": "DEP-224cfafc",
+    "deposits": [
+      {
+        "deposit_id": "DEP-3b1ec588",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-08T09:30:00",
+        "recorded_at": "2026-04-08T15:28:15.608370",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-c4e8cd97": {
+    "shift_id": "DEP-c4e8cd97",
+    "deposits": [
+      {
+        "deposit_id": "DEP-4ba96a86",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-08T08:00:00",
+        "recorded_at": "2026-04-08T15:28:15.672163",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-a2026390",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-08T09:15:00",
+        "recorded_at": "2026-04-08T15:28:15.680405",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-5f4d0703": {
+    "shift_id": "DEP-5f4d0703",
+    "deposits": [
+      {
+        "deposit_id": "DEP-0f248a19",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-22T09:30:00",
+        "recorded_at": "2026-04-22T14:54:08.486915",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-cb820896": {
+    "shift_id": "DEP-cb820896",
+    "deposits": [
+      {
+        "deposit_id": "DEP-7155d5a2",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-22T08:00:00",
+        "recorded_at": "2026-04-22T14:54:08.538871",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-88702a90",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-22T09:15:00",
+        "recorded_at": "2026-04-22T14:54:08.545025",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-8c3a90c5": {
+    "shift_id": "DEP-8c3a90c5",
+    "deposits": [
+      {
+        "deposit_id": "DEP-67aa4981",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-22T09:30:00",
+        "recorded_at": "2026-04-22T14:59:46.130266",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-4ef77ce7": {
+    "shift_id": "DEP-4ef77ce7",
+    "deposits": [
+      {
+        "deposit_id": "DEP-dbf29ca7",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-22T08:00:00",
+        "recorded_at": "2026-04-22T14:59:46.182101",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-c07dbd61",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-22T09:15:00",
+        "recorded_at": "2026-04-22T14:59:46.188300",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-17337ebd": {
+    "shift_id": "DEP-17337ebd",
+    "deposits": [
+      {
+        "deposit_id": "DEP-3ac48629",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-22T09:30:00",
+        "recorded_at": "2026-04-22T16:27:49.700301",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-23e07695": {
+    "shift_id": "DEP-23e07695",
+    "deposits": [
+      {
+        "deposit_id": "DEP-34cb312a",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-22T08:00:00",
+        "recorded_at": "2026-04-22T16:27:49.877958",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-c350540e",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-22T09:15:00",
+        "recorded_at": "2026-04-22T16:27:49.907009",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-d06e81b6": {
+    "shift_id": "DEP-d06e81b6",
+    "deposits": [
+      {
+        "deposit_id": "DEP-b87300e5",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-27T09:30:00",
+        "recorded_at": "2026-04-27T14:27:51.796606",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-5b97c0f4": {
+    "shift_id": "DEP-5b97c0f4",
+    "deposits": [
+      {
+        "deposit_id": "DEP-38123ebb",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-27T08:00:00",
+        "recorded_at": "2026-04-27T14:27:51.857700",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-6271cdb8",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-27T09:15:00",
+        "recorded_at": "2026-04-27T14:27:51.864107",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-3e2c133f": {
+    "shift_id": "DEP-3e2c133f",
+    "deposits": [
+      {
+        "deposit_id": "DEP-f1aefd22",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-27T09:30:00",
+        "recorded_at": "2026-04-27T14:31:00.706178",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-724fba25": {
+    "shift_id": "DEP-724fba25",
+    "deposits": [
+      {
+        "deposit_id": "DEP-152cb6f7",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-27T08:00:00",
+        "recorded_at": "2026-04-27T14:31:00.769640",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-7ad06093",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-27T09:15:00",
+        "recorded_at": "2026-04-27T14:31:00.777329",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-1ded084b": {
+    "shift_id": "DEP-1ded084b",
+    "deposits": [
+      {
+        "deposit_id": "DEP-67a8c834",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-27T09:30:00",
+        "recorded_at": "2026-04-27T16:12:46.610310",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-ecfe256f": {
+    "shift_id": "DEP-ecfe256f",
+    "deposits": [
+      {
+        "deposit_id": "DEP-08adc823",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-27T08:00:00",
+        "recorded_at": "2026-04-27T16:12:46.671419",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-5542af47",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-27T09:15:00",
+        "recorded_at": "2026-04-27T16:12:46.678363",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-01519b3b": {
+    "shift_id": "DEP-01519b3b",
+    "deposits": [
+      {
+        "deposit_id": "DEP-4f8406e3",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-27T09:30:00",
+        "recorded_at": "2026-04-27T16:32:32.753519",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-43f16e76": {
+    "shift_id": "DEP-43f16e76",
+    "deposits": [
+      {
+        "deposit_id": "DEP-cbaf86bc",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-27T08:00:00",
+        "recorded_at": "2026-04-27T16:32:32.822174",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-c070f632",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-27T09:15:00",
+        "recorded_at": "2026-04-27T16:32:32.829357",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-d86ff34b": {
+    "shift_id": "DEP-d86ff34b",
+    "deposits": [
+      {
+        "deposit_id": "DEP-5a74d098",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-27T09:30:00",
+        "recorded_at": "2026-04-27T16:39:58.291363",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-32f2a289": {
+    "shift_id": "DEP-32f2a289",
+    "deposits": [
+      {
+        "deposit_id": "DEP-6a73a350",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-27T08:00:00",
+        "recorded_at": "2026-04-27T16:39:58.356937",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-60878e0c",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-27T09:15:00",
+        "recorded_at": "2026-04-27T16:39:58.364069",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-810a0518": {
+    "shift_id": "DEP-810a0518",
+    "deposits": [
+      {
+        "deposit_id": "DEP-03577e4a",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-27T09:30:00",
+        "recorded_at": "2026-04-27T16:46:46.011976",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-0da692b3": {
+    "shift_id": "DEP-0da692b3",
+    "deposits": [
+      {
+        "deposit_id": "DEP-b2ea77d2",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-27T08:00:00",
+        "recorded_at": "2026-04-27T16:46:46.076785",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-503996fa",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-27T09:15:00",
+        "recorded_at": "2026-04-27T16:46:46.084201",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-b615eed9": {
+    "shift_id": "DEP-b615eed9",
+    "deposits": [
+      {
+        "deposit_id": "DEP-58829416",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-27T09:30:00",
+        "recorded_at": "2026-04-27T17:01:36.973179",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-367cc4ae": {
+    "shift_id": "DEP-367cc4ae",
+    "deposits": [
+      {
+        "deposit_id": "DEP-bcf828fb",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-27T08:00:00",
+        "recorded_at": "2026-04-27T17:01:37.042602",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-c402c49e",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-27T09:15:00",
+        "recorded_at": "2026-04-27T17:01:37.050840",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-de412f10": {
+    "shift_id": "DEP-de412f10",
+    "deposits": [
+      {
+        "deposit_id": "DEP-2a1f5271",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-29T09:30:00",
+        "recorded_at": "2026-04-29T11:11:48.707521",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-309ca440": {
+    "shift_id": "DEP-309ca440",
+    "deposits": [
+      {
+        "deposit_id": "DEP-affd2147",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-29T08:00:00",
+        "recorded_at": "2026-04-29T11:11:48.786953",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-3955ca03",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-29T09:15:00",
+        "recorded_at": "2026-04-29T11:11:48.794626",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-560a2bca": {
+    "shift_id": "DEP-560a2bca",
+    "deposits": [
+      {
+        "deposit_id": "DEP-2d007409",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-29T09:30:00",
+        "recorded_at": "2026-04-29T11:35:29.141963",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-74cc93db": {
+    "shift_id": "DEP-74cc93db",
+    "deposits": [
+      {
+        "deposit_id": "DEP-b7a75a7a",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-29T08:00:00",
+        "recorded_at": "2026-04-29T11:35:29.207942",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-a4f680f8",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-29T09:15:00",
+        "recorded_at": "2026-04-29T11:35:29.215217",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-b0a4b9d2": {
+    "shift_id": "DEP-b0a4b9d2",
+    "deposits": [
+      {
+        "deposit_id": "DEP-ccefd7a1",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-29T09:30:00",
+        "recorded_at": "2026-04-29T12:32:36.806812",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-a6a3b0db": {
+    "shift_id": "DEP-a6a3b0db",
+    "deposits": [
+      {
+        "deposit_id": "DEP-dca1cc65",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-29T08:00:00",
+        "recorded_at": "2026-04-29T12:32:36.875431",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-c47f8730",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-29T09:15:00",
+        "recorded_at": "2026-04-29T12:32:36.883264",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-82b71dd3": {
+    "shift_id": "DEP-82b71dd3",
+    "deposits": [
+      {
+        "deposit_id": "DEP-1343d086",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-04-29T09:30:00",
+        "recorded_at": "2026-04-29T13:12:36.193036",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-d6bdd9d1": {
+    "shift_id": "DEP-d6bdd9d1",
+    "deposits": [
+      {
+        "deposit_id": "DEP-e942231e",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-04-29T08:00:00",
+        "recorded_at": "2026-04-29T13:12:36.263358",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-961d95b8",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-04-29T09:15:00",
+        "recorded_at": "2026-04-29T13:12:36.271344",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-8b3a87f2": {
+    "shift_id": "DEP-8b3a87f2",
+    "deposits": [
+      {
+        "deposit_id": "DEP-d559abb1",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-27T09:30:00",
+        "recorded_at": "2026-05-27T10:23:21.622040",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-95ce5b83": {
+    "shift_id": "DEP-95ce5b83",
+    "deposits": [
+      {
+        "deposit_id": "DEP-f69cc08d",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-27T08:00:00",
+        "recorded_at": "2026-05-27T10:23:21.811277",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-76e12ce1",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-27T09:15:00",
+        "recorded_at": "2026-05-27T10:23:21.831941",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-29f7626e": {
+    "shift_id": "DEP-29f7626e",
+    "deposits": [
+      {
+        "deposit_id": "DEP-7aa1ea0d",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-27T09:30:00",
+        "recorded_at": "2026-05-27T10:43:01.279525",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-334ceb0f": {
+    "shift_id": "DEP-334ceb0f",
+    "deposits": [
+      {
+        "deposit_id": "DEP-432b8872",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-27T08:00:00",
+        "recorded_at": "2026-05-27T10:43:01.658820",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-7cbe556b",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-27T09:15:00",
+        "recorded_at": "2026-05-27T10:43:01.689907",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-2b79f8d0": {
+    "shift_id": "DEP-2b79f8d0",
+    "deposits": [
+      {
+        "deposit_id": "DEP-8084e17a",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-27T09:30:00",
+        "recorded_at": "2026-05-27T11:16:42.789310",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-842e4d05": {
+    "shift_id": "DEP-842e4d05",
+    "deposits": [
+      {
+        "deposit_id": "DEP-edaff24c",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-27T08:00:00",
+        "recorded_at": "2026-05-27T11:16:43.138388",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-48d3b043",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-27T09:15:00",
+        "recorded_at": "2026-05-27T11:16:43.174058",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-3efc5b78": {
+    "shift_id": "DEP-3efc5b78",
+    "deposits": [
+      {
+        "deposit_id": "DEP-f9cdfca3",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-27T09:30:00",
+        "recorded_at": "2026-05-27T11:34:14.716966",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-49fbdae5": {
+    "shift_id": "DEP-49fbdae5",
+    "deposits": [
+      {
+        "deposit_id": "DEP-77b81b6f",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-27T08:00:00",
+        "recorded_at": "2026-05-27T11:34:14.978351",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-484a3b48",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-27T09:15:00",
+        "recorded_at": "2026-05-27T11:34:15.000695",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-8ca8254b": {
+    "shift_id": "DEP-8ca8254b",
+    "deposits": [
+      {
+        "deposit_id": "DEP-e1d10a53",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-27T09:30:00",
+        "recorded_at": "2026-05-27T12:19:06.023780",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-20d8cc7d": {
+    "shift_id": "DEP-20d8cc7d",
+    "deposits": [
+      {
+        "deposit_id": "DEP-c4907a18",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-27T08:00:00",
+        "recorded_at": "2026-05-27T12:19:06.260402",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-da3f3005",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-27T09:15:00",
+        "recorded_at": "2026-05-27T12:19:06.285999",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-1cca181a": {
+    "shift_id": "DEP-1cca181a",
+    "deposits": [
+      {
+        "deposit_id": "DEP-cfd32878",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-27T09:30:00",
+        "recorded_at": "2026-05-27T12:35:30.966576",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-d31dfaf8": {
+    "shift_id": "DEP-d31dfaf8",
+    "deposits": [
+      {
+        "deposit_id": "DEP-14ffc905",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-27T08:00:00",
+        "recorded_at": "2026-05-27T12:35:31.215432",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-c0f07f60",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-27T09:15:00",
+        "recorded_at": "2026-05-27T12:35:31.240375",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-1cb5d0b1": {
+    "shift_id": "DEP-1cb5d0b1",
+    "deposits": [
+      {
+        "deposit_id": "DEP-97db326f",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-27T09:30:00",
+        "recorded_at": "2026-05-27T13:14:25.694525",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-043730a0": {
+    "shift_id": "DEP-043730a0",
+    "deposits": [
+      {
+        "deposit_id": "DEP-864cd480",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-27T08:00:00",
+        "recorded_at": "2026-05-27T13:14:25.834262",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-94fb77f7",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-27T09:15:00",
+        "recorded_at": "2026-05-27T13:14:25.848474",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-73a2a44e": {
+    "shift_id": "DEP-73a2a44e",
+    "deposits": [
+      {
+        "deposit_id": "DEP-0ff1ebb4",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-27T09:30:00",
+        "recorded_at": "2026-05-27T14:03:47.444209",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-d1fc90cd": {
+    "shift_id": "DEP-d1fc90cd",
+    "deposits": [
+      {
+        "deposit_id": "DEP-2ab38f6e",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-27T08:00:00",
+        "recorded_at": "2026-05-27T14:03:47.541678",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-7cef6be8",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-27T09:15:00",
+        "recorded_at": "2026-05-27T14:03:47.552484",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-cac0f764": {
+    "shift_id": "DEP-cac0f764",
+    "deposits": [
+      {
+        "deposit_id": "DEP-b478e5a4",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-27T09:30:00",
+        "recorded_at": "2026-05-27T14:23:11.251638",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-4bfeb41f": {
+    "shift_id": "DEP-4bfeb41f",
+    "deposits": [
+      {
+        "deposit_id": "DEP-6e780fb6",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-27T08:00:00",
+        "recorded_at": "2026-05-27T14:23:11.339254",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-004bdd9c",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-27T09:15:00",
+        "recorded_at": "2026-05-27T14:23:11.347229",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-7129e9ae": {
+    "shift_id": "DEP-7129e9ae",
+    "deposits": [
+      {
+        "deposit_id": "DEP-952b5e4d",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-27T09:30:00",
+        "recorded_at": "2026-05-27T14:39:23.451258",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-5e07ea96": {
+    "shift_id": "DEP-5e07ea96",
+    "deposits": [
+      {
+        "deposit_id": "DEP-b0097397",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-27T08:00:00",
+        "recorded_at": "2026-05-27T14:39:23.541175",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-94019dac",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-27T09:15:00",
+        "recorded_at": "2026-05-27T14:39:23.549596",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-efc870fd": {
+    "shift_id": "DEP-efc870fd",
+    "deposits": [
+      {
+        "deposit_id": "DEP-33a154ac",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-27T09:30:00",
+        "recorded_at": "2026-05-27T15:06:28.637590",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-826b2583": {
+    "shift_id": "DEP-826b2583",
+    "deposits": [
+      {
+        "deposit_id": "DEP-3b52e3aa",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-27T08:00:00",
+        "recorded_at": "2026-05-27T15:06:28.896835",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-c5d67987",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-27T09:15:00",
+        "recorded_at": "2026-05-27T15:06:28.920409",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-54a7d2a8": {
+    "shift_id": "DEP-54a7d2a8",
+    "deposits": [
+      {
+        "deposit_id": "DEP-f8df76c5",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-27T09:30:00",
+        "recorded_at": "2026-05-27T16:30:09.930766",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-a7f821f4": {
+    "shift_id": "DEP-a7f821f4",
+    "deposits": [
+      {
+        "deposit_id": "DEP-466ba642",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-27T08:00:00",
+        "recorded_at": "2026-05-27T16:30:10.112860",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-0bbeb6e7",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-27T09:15:00",
+        "recorded_at": "2026-05-27T16:30:10.134429",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-b1b3c526": {
+    "shift_id": "DEP-b1b3c526",
+    "deposits": [
+      {
+        "deposit_id": "DEP-829722eb",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-28T09:30:00",
+        "recorded_at": "2026-05-28T09:14:12.747928",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-bc5a68bd": {
+    "shift_id": "DEP-bc5a68bd",
+    "deposits": [
+      {
+        "deposit_id": "DEP-1214b8b7",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-28T08:00:00",
+        "recorded_at": "2026-05-28T09:14:12.985817",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-8584683f",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-28T09:15:00",
+        "recorded_at": "2026-05-28T09:14:13.002668",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-19be8db6": {
+    "shift_id": "DEP-19be8db6",
+    "deposits": [
+      {
+        "deposit_id": "DEP-8e7c5d82",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-28T09:30:00",
+        "recorded_at": "2026-05-28T09:15:25.649407",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-c846b613": {
+    "shift_id": "DEP-c846b613",
+    "deposits": [
+      {
+        "deposit_id": "DEP-a9daaa7d",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-28T08:00:00",
+        "recorded_at": "2026-05-28T09:15:25.808510",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-f730cf26",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-28T09:15:00",
+        "recorded_at": "2026-05-28T09:15:25.823234",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-2af3e9e0": {
+    "shift_id": "DEP-2af3e9e0",
+    "deposits": [
+      {
+        "deposit_id": "DEP-d742c088",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-28T09:30:00",
+        "recorded_at": "2026-05-28T09:18:46.191382",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-b055b525": {
+    "shift_id": "DEP-b055b525",
+    "deposits": [
+      {
+        "deposit_id": "DEP-2749fda4",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-28T08:00:00",
+        "recorded_at": "2026-05-28T09:18:46.405287",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-f9f6b93c",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-28T09:15:00",
+        "recorded_at": "2026-05-28T09:18:46.424214",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-94317134": {
+    "shift_id": "DEP-94317134",
+    "deposits": [
+      {
+        "deposit_id": "DEP-b2f5615e",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-28T09:30:00",
+        "recorded_at": "2026-05-28T09:21:17.192674",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-f69d0ed0": {
+    "shift_id": "DEP-f69d0ed0",
+    "deposits": [
+      {
+        "deposit_id": "DEP-fd9a1cd1",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-28T08:00:00",
+        "recorded_at": "2026-05-28T09:21:17.344468",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-a5eede0b",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-28T09:15:00",
+        "recorded_at": "2026-05-28T09:21:17.358069",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-a853218e": {
+    "shift_id": "DEP-a853218e",
+    "deposits": [
+      {
+        "deposit_id": "DEP-297e30b1",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-28T09:30:00",
+        "recorded_at": "2026-05-28T09:24:11.540044",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-2ce8fbde": {
+    "shift_id": "DEP-2ce8fbde",
+    "deposits": [
+      {
+        "deposit_id": "DEP-8c7b2a52",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-28T08:00:00",
+        "recorded_at": "2026-05-28T09:24:11.785426",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-a9c0dfe6",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-28T09:15:00",
+        "recorded_at": "2026-05-28T09:24:11.804529",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-56a77fbc": {
+    "shift_id": "DEP-56a77fbc",
+    "deposits": [
+      {
+        "deposit_id": "DEP-9f287568",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-28T09:30:00",
+        "recorded_at": "2026-05-28T09:28:39.498221",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-23e11268": {
+    "shift_id": "DEP-23e11268",
+    "deposits": [
+      {
+        "deposit_id": "DEP-9b048998",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-28T08:00:00",
+        "recorded_at": "2026-05-28T09:28:39.656782",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-c758b090",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-28T09:15:00",
+        "recorded_at": "2026-05-28T09:28:39.670863",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-63c91e11": {
+    "shift_id": "DEP-63c91e11",
+    "deposits": [
+      {
+        "deposit_id": "DEP-b6237a36",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-28T09:30:00",
+        "recorded_at": "2026-05-28T10:02:53.657648",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-fc7b01b8": {
+    "shift_id": "DEP-fc7b01b8",
+    "deposits": [
+      {
+        "deposit_id": "DEP-02711a15",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-28T08:00:00",
+        "recorded_at": "2026-05-28T10:02:53.827376",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-c6f7ddea",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-28T09:15:00",
+        "recorded_at": "2026-05-28T10:02:53.843259",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-a347739c": {
+    "shift_id": "DEP-a347739c",
+    "deposits": [
+      {
+        "deposit_id": "DEP-d82b64be",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-28T09:30:00",
+        "recorded_at": "2026-05-28T10:10:02.428916",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-bc587307": {
+    "shift_id": "DEP-bc587307",
+    "deposits": [
+      {
+        "deposit_id": "DEP-8de45e09",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-28T08:00:00",
+        "recorded_at": "2026-05-28T10:10:02.618097",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-00ad04c1",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-28T09:15:00",
+        "recorded_at": "2026-05-28T10:10:02.631760",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-d46268df": {
+    "shift_id": "DEP-d46268df",
+    "deposits": [
+      {
+        "deposit_id": "DEP-fba91415",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-28T09:30:00",
+        "recorded_at": "2026-05-28T11:57:54.104190",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-3e50b1c6": {
+    "shift_id": "DEP-3e50b1c6",
+    "deposits": [
+      {
+        "deposit_id": "DEP-8931fd6a",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-28T08:00:00",
+        "recorded_at": "2026-05-28T11:57:54.341971",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-68019bf2",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-28T09:15:00",
+        "recorded_at": "2026-05-28T11:57:54.362502",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-5bb4e75d": {
+    "shift_id": "DEP-5bb4e75d",
+    "deposits": [
+      {
+        "deposit_id": "DEP-d2d5a5c4",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-05-28T09:30:00",
+        "recorded_at": "2026-05-28T15:23:27.534956",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-11e5167f": {
+    "shift_id": "DEP-11e5167f",
+    "deposits": [
+      {
+        "deposit_id": "DEP-4654c13f",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-05-28T08:00:00",
+        "recorded_at": "2026-05-28T15:23:27.885630",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-055223a0",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-05-28T09:15:00",
+        "recorded_at": "2026-05-28T15:23:27.916044",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-4325aa2d": {
+    "shift_id": "DEP-4325aa2d",
+    "deposits": [
+      {
+        "deposit_id": "DEP-4e1628d9",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-06-01T09:30:00",
+        "recorded_at": "2026-06-01T12:32:54.780961",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-6f4d19de": {
+    "shift_id": "DEP-6f4d19de",
+    "deposits": [
+      {
+        "deposit_id": "DEP-786ee7c9",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-06-01T08:00:00",
+        "recorded_at": "2026-06-01T12:32:55.111274",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-2853e34f",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-06-01T09:15:00",
+        "recorded_at": "2026-06-01T12:32:55.139324",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-2deff529": {
+    "shift_id": "DEP-2deff529",
+    "deposits": [
+      {
+        "deposit_id": "DEP-f7bf9796",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-06-01T09:30:00",
+        "recorded_at": "2026-06-01T14:12:18.378338",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-80f1ad4a": {
+    "shift_id": "DEP-80f1ad4a",
+    "deposits": [
+      {
+        "deposit_id": "DEP-bf6b0455",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-06-01T08:00:00",
+        "recorded_at": "2026-06-01T14:12:18.808003",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-6ca3c178",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-06-01T09:15:00",
+        "recorded_at": "2026-06-01T14:12:18.852686",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-9155c8f8": {
+    "shift_id": "DEP-9155c8f8",
+    "deposits": [
+      {
+        "deposit_id": "DEP-99b7192a",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-06-01T09:30:00",
+        "recorded_at": "2026-06-01T15:55:18.701050",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-f6de9e35": {
+    "shift_id": "DEP-f6de9e35",
+    "deposits": [
+      {
+        "deposit_id": "DEP-98565a5d",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-06-01T08:00:00",
+        "recorded_at": "2026-06-01T15:55:18.981768",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-47471936",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-06-01T09:15:00",
+        "recorded_at": "2026-06-01T15:55:19.009333",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-13120deb": {
+    "shift_id": "DEP-13120deb",
+    "deposits": [
+      {
+        "deposit_id": "DEP-bfbf3257",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-06-01T09:30:00",
+        "recorded_at": "2026-06-01T16:12:01.762018",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-6190b748": {
+    "shift_id": "DEP-6190b748",
+    "deposits": [
+      {
+        "deposit_id": "DEP-51f509dc",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-06-01T08:00:00",
+        "recorded_at": "2026-06-01T16:12:01.950107",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-01744738",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-06-01T09:15:00",
+        "recorded_at": "2026-06-01T16:12:01.967143",
+        "note": ""
+      }
+    ]
+  },
+  "DEP-dd62854a": {
+    "shift_id": "DEP-dd62854a",
+    "deposits": [
+      {
+        "deposit_id": "DEP-cb009eb2",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1500.0,
+        "time": "09:30",
+        "timestamp": "2026-06-01T09:30:00",
+        "recorded_at": "2026-06-01T16:59:41.534258",
+        "note": "Test"
+      }
+    ]
+  },
+  "DEP-d7e6b42f": {
+    "shift_id": "DEP-d7e6b42f",
+    "deposits": [
+      {
+        "deposit_id": "DEP-c1e8dd6e",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 1000.0,
+        "time": "08:00",
+        "timestamp": "2026-06-01T08:00:00",
+        "recorded_at": "2026-06-01T16:59:41.733870",
+        "note": ""
+      },
+      {
+        "deposit_id": "DEP-66340f43",
+        "attendant_id": "O001",
+        "attendant_name": "Business Owner",
+        "amount": 2000.0,
+        "time": "09:15",
+        "timestamp": "2026-06-01T09:15:00",
+        "recorded_at": "2026-06-01T16:59:41.747605",
+        "note": ""
+      }
+    ]
+  }
+}

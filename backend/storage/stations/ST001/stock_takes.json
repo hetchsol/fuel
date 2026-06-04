@@ -1,0 +1,74 @@
+{
+  "ST-20260601-161129": {
+    "take_id": "ST-20260601-161129",
+    "date": "2026-06-01",
+    "bin": "stores",
+    "scope_item_keys": null,
+    "status": "approved",
+    "started_by": "mgr_phaseb",
+    "started_at": "2026-06-01T16:11:29.673785",
+    "submitted_by": "mgr_phaseb",
+    "submitted_at": "2026-06-01T16:11:29.768272",
+    "approved_by": "owner1",
+    "approved_at": "2026-06-01T16:11:29.864404",
+    "lines": [
+      {
+        "item_key": "accessory:ACC-B",
+        "name": "Phase B item",
+        "category": "accessory",
+        "system_qty_at_open": 0,
+        "counted_qty": null,
+        "variance": null,
+        "note": ""
+      }
+    ]
+  },
+  "ST-20260601-161204": {
+    "take_id": "ST-20260601-161204",
+    "date": "2026-06-01",
+    "bin": "stores",
+    "scope_item_keys": null,
+    "status": "approved",
+    "started_by": "mgr_phaseb",
+    "started_at": "2026-06-01T16:12:04.073068",
+    "submitted_by": "mgr_phaseb",
+    "submitted_at": "2026-06-01T16:12:04.160367",
+    "approved_by": "owner1",
+    "approved_at": "2026-06-01T16:12:04.263976",
+    "lines": [
+      {
+        "item_key": "accessory:ACC-B",
+        "name": "Phase B item",
+        "category": "accessory",
+        "system_qty_at_open": 0,
+        "counted_qty": null,
+        "variance": null,
+        "note": ""
+      }
+    ]
+  },
+  "ST-20260601-165944": {
+    "take_id": "ST-20260601-165944",
+    "date": "2026-06-01",
+    "bin": "stores",
+    "scope_item_keys": null,
+    "status": "approved",
+    "started_by": "mgr_phaseb",
+    "started_at": "2026-06-01T16:59:44.128954",
+    "submitted_by": "mgr_phaseb",
+    "submitted_at": "2026-06-01T16:59:44.257940",
+    "approved_by": "owner1",
+    "approved_at": "2026-06-01T16:59:44.380056",
+    "lines": [
+      {
+        "item_key": "accessory:ACC-B",
+        "name": "Phase B item",
+        "category": "accessory",
+        "system_qty_at_open": 0,
+        "counted_qty": null,
+        "variance": null,
+        "note": ""
+      }
+    ]
+  }
+}

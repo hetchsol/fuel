@@ -1,0 +1,1231 @@
+[
+  {
+    "timestamp": "2026-05-27T10:16:04.771058",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "SH1",
+    "details": {
+      "trigger": "all_handovers_approved",
+      "handover_count": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T10:16:04.773355",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T10:22:47.412021",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_handovers_approved",
+      "handover_count": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T10:22:47.417742",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T10:23:22.698316",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_handovers_approved",
+      "handover_count": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T10:23:22.703212",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T10:42:05.040805",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T10:42:05.046772",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T10:42:05.055461",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T10:43:03.099393",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T10:43:03.112194",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T10:43:03.127532",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T11:15:28.529377",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T11:15:28.535826",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T11:15:28.545186",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T11:16:44.412252",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T11:16:44.424746",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T11:16:44.440544",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T11:34:16.275252",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T11:34:16.287373",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T11:34:16.303704",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T12:19:07.604771",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T12:19:07.618779",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T12:19:07.637993",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T12:35:33.041127",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T12:35:33.050230",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T12:35:33.061642",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T13:14:26.622991",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T13:14:26.630604",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T13:14:26.645863",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T14:03:48.039580",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T14:03:48.042699",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T14:03:48.046613",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T14:23:11.812531",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T14:23:11.818787",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T14:23:11.823609",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T14:39:24.030762",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T14:39:24.033792",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T14:39:24.037653",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T15:06:30.011998",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T15:06:30.021036",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T15:06:30.033493",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T16:30:11.269021",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T16:30:11.276042",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-27T16:30:11.284410",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:14:14.013807",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:14:14.020614",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:14:14.028752",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:15:26.592103",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:15:26.597723",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:15:26.604383",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:18:47.508343",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:18:47.515917",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:18:47.525943",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:21:18.106124",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:21:18.111634",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:21:18.118337",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:24:13.174562",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:24:13.184495",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:24:13.203867",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:28:40.613750",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:28:40.623191",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T09:28:40.632915",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T10:02:54.692819",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T10:02:54.698324",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T10:02:54.705348",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T10:10:03.448480",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T10:10:03.454338",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T10:10:03.461249",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T11:57:55.581012",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T11:57:55.590012",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T11:57:55.601221",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T15:23:29.619708",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T15:23:29.639038",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-05-28T15:23:29.649608",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T12:32:56.276557",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T12:32:56.284757",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T12:32:56.296165",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T14:12:21.619369",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T14:12:21.637393",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T14:12:21.654577",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T15:55:20.555563",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T15:55:20.567656",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T15:55:20.591518",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T16:12:03.142224",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T16:12:03.149064",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T16:12:03.157827",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "B,A",
+    "details": {
+      "reconciled_shift_ids": [
+        "B",
+        "A"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T16:59:42.834755",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 0
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T16:59:42.844678",
+    "action": "shift_completed",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "S",
+    "details": {
+      "trigger": "all_attendants_approved",
+      "handover_count": 2,
+      "assigned_attendants": 2
+    },
+    "notes": null
+  },
+  {
+    "timestamp": "2026-06-01T16:59:42.858619",
+    "action": "shift_reconciled",
+    "performed_by": "u",
+    "entity_type": "shift",
+    "entity_id": "A,B",
+    "details": {
+      "reconciled_shift_ids": [
+        "A",
+        "B"
+      ],
+      "trigger": "daily_close_off"
+    },
+    "notes": null
+  }
+]
