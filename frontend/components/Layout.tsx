@@ -313,7 +313,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'My Shift',
       roles: ['user', 'supervisor', 'manager', 'owner'],
       children: [
-        { path: '/my-shift', label: 'Readings Verification', roles: ['user', 'supervisor'] },
+        { path: '/my-shift', label: 'My Shift Readings', roles: ['user', 'supervisor'] },
         { path: '/shift-closing', label: 'Close Shift', roles: ['user', 'supervisor', 'manager', 'owner'] },
       ]
     },
@@ -321,10 +321,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Operations',
       roles: ['user', 'supervisor', 'owner'],
       children: [
-        { path: '/shifts', label: 'Shifts', roles: ['user', 'supervisor', 'owner'] },
-        { path: '/enter-readings', label: 'Enter Readings', roles: ['user', 'supervisor'] },
+        { path: '/shifts', label: 'Shifts', roles: ['supervisor', 'owner'] },
+        { path: '/enter-readings', label: 'Enter Readings', roles: ['supervisor'] },
         { path: '/handover-review', label: 'Handover Review', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/readings', label: 'OCR Reading Entry', roles: ['user', 'supervisor'], disabled: true },
+        { path: '/readings', label: 'OCR Reading Entry', roles: ['supervisor'], disabled: true },
         { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/fuel-operations', label: 'Fuel Operations', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/lpg-daily', label: 'LPG Daily Operations', roles: ['supervisor', 'manager', 'owner'] },

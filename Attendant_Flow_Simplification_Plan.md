@@ -1,6 +1,6 @@
 # Attendant Usability Simplification — Master Plan
 
-**Status:** Phases 1–2 (items 1, 3, 4, 6) implemented on branch `simplify/attendant-flow`. Items 5 + 2 remain (2 gated on §12).
+**Status:** All items (1–7) implemented on branch `simplify/attendant-flow`. §12 open question resolved: `/my-shift` confirmed canonical (opening readings come from the nozzle record, not `/enter-readings`).
 **Date:** 2026-06-04
 **Scope:** Make the **attendant** (`role === 'user'`) experience easier end-to-end —
 clearer wayfinding, an obvious step sequence, a shorter form on a forecourt
@@ -91,6 +91,18 @@ hidden for non-attendants.
 
 ## 4. Item 2 — One canonical reading-entry page + attendant-friendly nav
 
+> **Implemented (2026-06-04).** Confirmed `/my-shift` (handover pipeline) is
+> canonical — `/handover/my-shift` sources `opening_reading` from the nozzle
+> record (`electronic_reading`), not from `/enter-readings`, so `/my-shift` is
+> self-sufficient. In `Layout.tsx`: renamed the attendant link "Readings
+> Verification" → "My Shift Readings", and removed `'user'` from the Operations
+> children `/shifts`, `/enter-readings`, and the disabled OCR item — which leaves
+> Operations with no attendant-visible children, so it collapses away. Attendant
+> nav is now Dashboard + My Shift (My Shift Readings, Close Shift). **Nav-only:**
+> `middleware.ts` access is unchanged (direct URLs still work), so this is fully
+> reversible and breaks no functionality.
+
+
 **Today.** An attendant sees **two** reading-entry routes that hit **different
 backends**: My Shift → **"Readings Verification"** (`/my-shift` → `/handover/*`)
 and Operations → **"Enter Readings"** (`/enter-readings` → `/enter-readings/*`),
@@ -179,6 +191,12 @@ exactly to the existing blockers and clear as they're satisfied.
 ---
 
 ## 7. Item 5 — Double-entry keying polish (keep the control)
+
+> **Implemented (2026-06-04).** `DoubleEntryModal.tsx`: larger touch targets
+> (input `text-2xl py-3`, buttons `py-3 text-base`), clearer "Entry 1 of 2 / 2 of
+> 2" labels, and the "→" glyph removed from the Next button. The enter-twice-and-
+> must-match logic, min-value guard, and onConfirm contract are unchanged.
+
 
 **Today.** Blind double-entry on each nozzle closing (electronic *and*
 mechanical) is a deliberate accuracy control (`DoubleEntryModal.tsx`) — ~4 modal

@@ -89,10 +89,10 @@ export default function DoubleEntryModal({ title, unit, minValue, onConfirm, onC
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}
       >
         <h3 className="text-base font-bold mb-1" style={{ color: theme.textPrimary }}>{title}</h3>
-        <p className="text-xs mb-3" style={{ color: theme.textSecondary }}>
+        <p className="text-sm font-medium mb-3" style={{ color: theme.textSecondary }}>
           {phase === 'first'
-            ? 'Step 1 of 2 — Enter the reading'
-            : 'Step 2 of 2 — Re-enter to confirm (first entry hidden)'}
+            ? 'Entry 1 of 2 — type the reading'
+            : 'Entry 2 of 2 — type it again to confirm (first entry hidden)'}
         </p>
 
         <div className="flex items-center gap-2">
@@ -113,7 +113,7 @@ export default function DoubleEntryModal({ title, unit, minValue, onConfirm, onC
               }
             }}
             placeholder="0.000"
-            className="flex-1 px-3 py-2 rounded border text-right font-mono text-lg"
+            className="flex-1 px-4 py-3 rounded border text-right font-mono text-2xl"
             style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}
           />
           {unit && <span className="text-sm" style={{ color: theme.textSecondary }}>{unit}</span>}
@@ -127,7 +127,7 @@ export default function DoubleEntryModal({ title, unit, minValue, onConfirm, onC
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 rounded text-sm"
+            className="px-5 py-3 rounded text-base"
             style={{ backgroundColor: theme.border, color: theme.textSecondary }}
           >
             Cancel
@@ -136,16 +136,16 @@ export default function DoubleEntryModal({ title, unit, minValue, onConfirm, onC
             <button
               type="button"
               onClick={handleNext}
-              className="px-4 py-2 rounded text-sm font-semibold text-white"
+              className="px-5 py-3 rounded text-base font-semibold text-white"
               style={{ backgroundColor: theme.primary }}
             >
-              Next →
+              Next
             </button>
           ) : (
             <button
               type="button"
               onClick={handleConfirm}
-              className="px-4 py-2 rounded text-sm font-semibold text-white"
+              className="px-5 py-3 rounded text-base font-semibold text-white"
               style={{ backgroundColor: theme.primary }}
             >
               Confirm
