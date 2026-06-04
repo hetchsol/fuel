@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
+import { useWorkingDay } from '../contexts/WorkingDayContext'
 import { getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
@@ -31,7 +32,7 @@ function getAuthHeaders() {
 export default function LubricantsDaily() {
   const { theme } = useTheme()
   const [user, setUser] = useState<any>(null)
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const { date, setDate } = useWorkingDay()  // shared working day (item 2)
   const [location, setLocation] = useState<'Island 3' | 'Buffer'>('Island 3')
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')

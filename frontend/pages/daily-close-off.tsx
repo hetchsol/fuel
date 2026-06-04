@@ -6,6 +6,7 @@ import { getHeaders, authFetch } from '../lib/api'
 import Link from 'next/link'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
+import { useWorkingDay } from '../contexts/WorkingDayContext'
 
 const BASE = '/api/v1'
 
@@ -13,10 +14,9 @@ const fmt = (n: number) => `K${n.toLocaleString(undefined, { minimumFractionDigi
 
 export default function DailyCloseOff() {
   const router = useRouter()
-  const today = new Date().toISOString().split('T')[0]
+  const { date: selectedDate, setDate: setSelectedDate } = useWorkingDay()  // shared working day (item 2)
 
   const [userRole, setUserRole] = useState('')
-  const [selectedDate, setSelectedDate] = useState(today)
   const [loading, setLoading] = useState(true)
   const [closing, setClosing] = useState(false)
   const [summary, setSummary] = useState<any>(null)

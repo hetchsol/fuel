@@ -6,6 +6,7 @@ import Head from 'next/head'
 import Layout from '../components/Layout'
 import ErrorBoundary from '../components/ErrorBoundary'
 import { ThemeProvider } from '../contexts/ThemeContext'
+import { WorkingDayProvider } from '../contexts/WorkingDayContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { Toaster } from 'react-hot-toast'
 
@@ -33,6 +34,7 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <ErrorBoundary>
     <ThemeProvider>
+    <WorkingDayProvider>
       <Head>
         <title>NextStop</title>
       </Head>
@@ -78,6 +80,7 @@ export default function App({ Component, pageProps }: AppProps) {
           </div>
         )}
       </Layout>
+    </WorkingDayProvider>
     </ThemeProvider>
     </ErrorBoundary>
   )

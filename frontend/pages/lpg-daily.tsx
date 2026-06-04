@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
+import { useWorkingDay } from '../contexts/WorkingDayContext'
 import { getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
@@ -62,8 +63,7 @@ function getAuthHeaders() {
 export default function LPGDaily() {
   const { theme } = useTheme()
   const [user, setUser] = useState<any>(null)
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [shiftType, setShiftType] = useState('Day')
+  const { date, setDate, shiftType, setShiftType } = useWorkingDay()  // shared working day (item 2)
   const [salesperson, setSalesperson] = useState(() => {
     if (typeof window !== 'undefined') {
       const userData = localStorage.getItem('user')
@@ -561,7 +561,7 @@ export default function LPGDaily() {
         </div>
         <div>
           <label className="block text-sm font-medium mb-1" style={{ color: theme.textSecondary }}>Shift</label>
-          <select value={shiftType} onChange={e => setShiftType(e.target.value)}
+          <select value={shiftType} onChange={e => setShiftType(e.target.value as 'Day' | 'Night')}
             className="w-full px-3 py-2 rounded border text-sm" style={inputStyle}>
             <option value="Day">Day Shift</option>
             <option value="Night">Night Shift</option>

@@ -2,6 +2,7 @@ import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
+import { useWorkingDay } from '../contexts/WorkingDayContext'
 import { useTanks } from '../hooks/useTanks'
 
 
@@ -18,6 +19,9 @@ interface NozzleReading {
 
 export default function DailyTankReading() {
   const router = useRouter()
+  // Shared working day (item 2) — seeds the date/shift pickers from the day the
+  // user picked elsewhere, and is updated when they change it here.
+  const { date: workingDate, shiftType: workingShift, setDate: setWorkingDate, setShiftType: setWorkingShift } = useWorkingDay()
   const [user, setUser] = useState<any>(null)
   const [selectedTank, setSelectedTank] = useState('')
   const [activeSection, setActiveSection] = useState(1)
@@ -64,9 +68,9 @@ export default function DailyTankReading() {
   }, [])
 
   // Form state matching Excel structure
-  const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
-    shift_type: 'Day',
+  const [formData, setFormData] = useState(() => ({
+    date: workingDate,
+    shift_type: workingShift,
 
     // Tank Dip Readings (Columns AF, AG, AH)
     opening_dip_cm: '',
@@ -94,7 +98,7 @@ export default function DailyTankReading() {
     actual_cash_banked: '', // Manually entered after adjustments
 
     notes: ''
-  })
+  }))
 
   const [calculatedValues, setCalculatedValues] = useState<any>(null)
   const [loading, setLoading] = useState(false)
@@ -1077,7 +1081,7 @@ export default function DailyTankReading() {
               <input
                 type="date"
                 value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                onChange={(e) => { setFormData({ ...formData, date: e.target.value }); setWorkingDate(e.target.value) }}
                 className="w-full px-4 py-2 rounded-md focus:ring-2 transition-colors duration-300"
                 style={{
                   backgroundColor: theme.cardBg,
@@ -1091,7 +1095,7 @@ export default function DailyTankReading() {
               <label className="block text-sm font-medium mb-2 transition-colors duration-300" style={{ color: theme.textPrimary }}>Shift Type</label>
               <select
                 value={formData.shift_type}
-                onChange={(e) => setFormData({ ...formData, shift_type: e.target.value })}
+                onChange={(e) => { setFormData({ ...formData, shift_type: e.target.value as 'Day' | 'Night' }); setWorkingShift(e.target.value as 'Day' | 'Night') }}
                 className="w-full px-4 py-2 rounded-md focus:ring-2 transition-colors duration-300"
                 style={{
                   backgroundColor: theme.cardBg,

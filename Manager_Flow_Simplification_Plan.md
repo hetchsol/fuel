@@ -121,6 +121,28 @@ only reads and routes.
 
 ## 4. Item 2 — Shared working day + shift context
 
+> **Implemented (2026-06-04, UX slice).** Frontend-only: `contexts/WorkingDayContext.tsx`
+> (`WorkingDayProvider` + `useWorkingDay`) holds the working date + shift type,
+> backed by **sessionStorage** (survives reloads within the session, resets next
+> session so the app never opens on a stale past date). Wired into the
+> **single-day** pages so the day is picked once and carried across navigation:
+> dashboard (`index.tsx`), `daily-close-off`, `daily-tank-reading`, `lpg-daily`,
+> `lubricants-daily`. Each still owns its picker and the user can override it on
+> any page. Because the dashboard date *is* the working day, the launchpad's
+> Close-off link now lands on the same day automatically (no query param needed).
+>
+> **Deliberately NOT wired:** `handover-review` (its date filter defaults to
+> "all days" — a single-day default would hide unapproved/stale handovers from
+> prior days, a safety regression); and the shift-*selection* pages
+> (`my-shift`, `shift-closing`, `enter-readings`), which belong to the larger
+> `Shift_Selection_Across_App_Plan.md`. This item does NOT implement that plan's
+> backend (resolve_target_shift / assert_shift_editable / /shifts/selectable).
+>
+> **Known interaction (see §13):** viewing a *past* day's close-off history sets
+> the working day to that date, which then carries to the data-entry pages. The
+> date is always visible on each page; sessionStorage reset mitigates it.
+
+
 **Today.** `enter-readings`, `my-shift`, `shift-closing`, `daily-tank-reading`,
 `handover-review`, `lpg-daily`, `lubricants-daily` each own a date/shift picker
 that resets on navigation, so the manager re-selects the same day repeatedly.

@@ -5,6 +5,7 @@ import { getDaily, getFlags, getTankLevels, getHeaders, authFetch, isManagerOrAb
 import TankCard from '../components/TankCard'
 import DayChecklist from '../components/DayChecklist'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { useWorkingDay } from '../contexts/WorkingDayContext'
 
 /* ── Empty State Illustration ─────────────────────── */
 function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
@@ -25,8 +26,7 @@ function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
 }
 
 export default function Home() {
-  const today = new Date().toISOString().split('T')[0]
-  const [date, setDate] = useState(today)
+  const { date, setDate } = useWorkingDay()  // shared working day (item 2)
   const [userRole, setUserRole] = useState<string>('')
   const [savingDips, setSavingDips] = useState(false)
 
