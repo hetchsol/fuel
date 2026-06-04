@@ -155,6 +155,21 @@ changes, and the user can still change it.
 
 ## 5. Item 3 — Auto-sync banners (kill the forgettable buttons)
 
+> **Implemented (2026-06-04).** Investigation found two of the three loaders
+> *already* auto-run on load with provenance banners: the shift-dip pull
+> (`fetchShiftDipReadings`, banner "Dip readings pulled from Shift…" + "Clear &
+> enter manually") and the previous-shift opening carry-over
+> (`fetchPreviousShiftData`, auto-fetched when opening values are empty). The one
+> genuinely manual, forgettable loader was **Pull from Enter Readings**
+> (`fetchFromEnterReadings`) — now auto-run once per tank/date/shift via a guarded
+> effect, but **only while closing readings are still untouched** so it never
+> clobbers in-progress edits, and **silent** when there's nothing to pull. The
+> banner now reads "synced from attendant submissions (HH:MM) — edit any field as
+> needed" with an **Undo** that restores the pre-pull nozzle snapshot. Also fixed
+> the manual button, which passed the click event as the new `auto` arg. All
+> loader logic and the submit payload are byte-for-byte unchanged.
+
+
 **Today.** Cross-page carry-over already exists but is hidden behind manual
 buttons that are easy to forget: `daily-tank-reading.tsx:381` "Pull from Enter
 Readings" and `:1119` "Load Previous Shift"; opening-dip auto-fill on

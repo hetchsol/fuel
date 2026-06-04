@@ -1,5 +1,5 @@
 import { authFetch, BASE, getHeaders } from '../lib/api'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
 import { useTanks } from '../hooks/useTanks'
@@ -139,6 +139,11 @@ export default function DailyTankReading() {
   const [pullingFromER, setPullingFromER] = useState(false)
   const [erPulled, setErPulled] = useState(false)
   const [erPullError, setErPullError] = useState('')
+  const [erPulledAt, setErPulledAt] = useState('')
+  // Snapshot of nozzle rows taken right before an ER pull, so it can be undone.
+  const preErPullNozzlesRef = useRef<NozzleReading[] | null>(null)
+  // Guards the one-shot auto-pull so it runs once per tank/date/shift, not in a loop.
+  const [autoErAttemptedKey, setAutoErAttemptedKey] = useState('')
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -377,8 +382,10 @@ export default function DailyTankReading() {
     }
   }
 
-  // Pull nozzle readings from Enter Readings (attendant submissions)
-  const fetchFromEnterReadings = async () => {
+  // Pull nozzle readings from Enter Readings (attendant submissions).
+  // `auto` = invoked automatically on load (stays silent when there's nothing
+  // to pull); `false` = the user clicked the button (surfaces errors).
+  const fetchFromEnterReadings = async (auto = false) => {
     const shiftId = `${formData.date}-${formData.shift_type}`
     setPullingFromER(true)
     setErPullError('')
@@ -394,12 +401,14 @@ export default function DailyTankReading() {
       }
       const data = await res.json()
       if (!data.nozzle_readings || data.nozzle_readings.length === 0) {
-        setErPullError('No attendant readings found for this shift and tank.')
+        if (!auto) setErPullError('No attendant readings found for this shift and tank.')
         return
       }
 
       // Auto-fill nozzle rows by matching internal_nozzle_id
       setFormData(prev => {
+        // Snapshot the rows as they were before this pull so Undo can restore them.
+        preErPullNozzlesRef.current = prev.nozzles
         const updatedNozzles = [...prev.nozzles]
         for (const er of data.nozzle_readings) {
           // Match on internal_nozzle_id (e.g. ISL1-A) or display label (e.g. 1A)
@@ -420,12 +429,24 @@ export default function DailyTankReading() {
         }
         return { ...prev, nozzles: updatedNozzles }
       })
+      setErPulledAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
       setErPulled(true)
     } catch (err: any) {
-      setErPullError(err.message || 'Failed to pull readings')
+      if (!auto) setErPullError(err.message || 'Failed to pull readings')
+      else console.error('Auto-pull from Enter Readings failed:', err)
     } finally {
       setPullingFromER(false)
     }
+  }
+
+  // Restore the nozzle rows to their pre-pull state (Undo for the ER pull).
+  const undoErPull = () => {
+    if (preErPullNozzlesRef.current) {
+      const snapshot = preErPullNozzlesRef.current
+      setFormData(prev => ({ ...prev, nozzles: snapshot }))
+    }
+    setErPulled(false)
+    setErPulledAt('')
   }
 
   // NEW: Auto-fetch previous shift data when tank, date, or shift changes
@@ -441,6 +462,23 @@ export default function DailyTankReading() {
       }
     }
   }, [selectedTank, formData.date, formData.shift_type, islandsLoaded])
+
+  // Auto-pull attendant readings on load (item 3 — Manager_Flow_Simplification_Plan.md).
+  // Runs the existing pull once per tank/date/shift, but ONLY while closing
+  // readings are still untouched, so it never clobbers in-progress edits. If
+  // there's nothing to pull it stays silent. The result is fully editable and
+  // can be reverted via Undo on the banner.
+  useEffect(() => {
+    if (!selectedTank || !formData.date || !formData.shift_type || !islandsLoaded) return
+    if (formData.nozzles.length === 0) return
+    const key = `${formData.date}-${formData.shift_type}-${selectedTank}`
+    if (autoErAttemptedKey === key) return
+
+    const hasClosing = formData.nozzles.some(n => n.electronic_closing || n.mechanical_closing)
+    setAutoErAttemptedKey(key)
+    if (hasClosing || erPulled) return
+    fetchFromEnterReadings(true)
+  }, [selectedTank, formData.date, formData.shift_type, islandsLoaded, formData.nozzles.length])
 
   // NEW: Get current tank reading estimate for new delivery
   const getCurrentTankReading = () => {
@@ -1371,7 +1409,7 @@ export default function DailyTankReading() {
                 {!erPulled && (
                   <button
                     type="button"
-                    onClick={fetchFromEnterReadings}
+                    onClick={() => fetchFromEnterReadings(false)}
                     disabled={pullingFromER}
                     className="px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
                     style={{ backgroundColor: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)', border: '1px solid var(--color-action-primary)' }}
@@ -1401,15 +1439,15 @@ export default function DailyTankReading() {
                   <div className="flex items-center gap-2">
                     <span className="text-action-primary text-lg">&#x21BB;</span>
                     <span className="text-action-primary text-sm font-medium">
-                      Nozzle readings pulled from attendant submissions (Enter Readings)
+                      Nozzle readings synced from attendant submissions{erPulledAt ? ` (${erPulledAt})` : ''} — edit any field as needed
                     </span>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setErPulled(false)}
+                    onClick={undoErPull}
                     className="text-action-primary hover:text-action-primary text-sm underline"
                   >
-                    Pull again
+                    Undo
                   </button>
                 </div>
               )}
