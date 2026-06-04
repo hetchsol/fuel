@@ -103,6 +103,7 @@ export default function HandoverReview() {
   // Filters
   const [filterDate, setFilterDate] = useState('')
   const [filterShift, setFilterShift] = useState('')
+  const [filterAttendant, setFilterAttendant] = useState('')  // attendant_id, set when opened from a person card
   const [statusTab, setStatusTab] = useState<'all' | 'pending' | 'flagged' | 'awaiting' | 'approved'>('all')
 
   // Expansion
@@ -131,6 +132,20 @@ export default function HandoverReview() {
       router.push('/login')
     }
   }, [router])
+
+  // Pre-filter when opened from a card on another page (e.g. My Shift).
+  // attendant_id → that person's handovers across shifts (active + past);
+  // shift_id → that shift's handovers.
+  useEffect(() => {
+    if (!router.isReady) return
+    if (typeof router.query.attendant_id === 'string') {
+      setFilterAttendant(router.query.attendant_id)
+      setStatusTab('all')  // show active + past for this person
+    }
+    if (typeof router.query.shift_id === 'string') {
+      setFilterShift(router.query.shift_id)
+    }
+  }, [router.isReady, router.query.attendant_id, router.query.shift_id])
 
   const fetchQueue = useCallback(() => {
     const params = new URLSearchParams()
@@ -179,14 +194,32 @@ export default function HandoverReview() {
 
   // Compute displayed list based on tab
   const displayedHandovers = (() => {
-    if (statusTab === 'pending') return handovers.filter(h => (h.review_status || 'submitted') === 'submitted')
-    if (statusTab === 'flagged') return handovers.filter(h => h.review_status === 'flagged')
-    if (statusTab === 'approved') return allHandovers.filter(h => h.review_status === 'approved')
-    // "all" tab: show queue items + approved/returned from allHandovers
-    const queueIds = new Set(handovers.map(h => h.handover_id))
-    const extra = allHandovers.filter(h => !queueIds.has(h.handover_id))
-    return [...handovers, ...extra]
+    let list: HandoverEntry[]
+    if (statusTab === 'pending') list = handovers.filter(h => (h.review_status || 'submitted') === 'submitted')
+    else if (statusTab === 'flagged') list = handovers.filter(h => h.review_status === 'flagged')
+    else if (statusTab === 'approved') list = allHandovers.filter(h => h.review_status === 'approved')
+    else {
+      // "all" tab: show queue items + approved/returned from allHandovers
+      const queueIds = new Set(handovers.map(h => h.handover_id))
+      const extra = allHandovers.filter(h => !queueIds.has(h.handover_id))
+      list = [...handovers, ...extra]
+    }
+    // When opened for one attendant, narrow to their handovers (active + past).
+    if (filterAttendant) list = list.filter(h => h.attendant_id === filterAttendant)
+    return list
   })()
+
+  // Display name for the attendant banner, derived from the filtered rows.
+  const filterAttendantName = filterAttendant
+    ? (displayedHandovers[0]?.attendant_name
+        || allHandovers.find(h => h.attendant_id === filterAttendant)?.attendant_name
+        || 'this attendant')
+    : ''
+
+  const clearAttendantFilter = () => {
+    setFilterAttendant('')
+    router.replace('/handover-review', undefined, { shallow: true })
+  }
 
   const handleApprove = async (handoverId: string, note?: string) => {
     setActionLoading(true)
@@ -287,6 +320,16 @@ export default function HandoverReview() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Handover Review</h1>
+
+      {/* Attendant focus banner — set when opened from a person card on My Shift */}
+      {filterAttendant && (
+        <div className="rounded-lg p-3 flex items-center justify-between" style={{ backgroundColor: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)', borderWidth: 1, borderColor: 'var(--color-action-primary)' }}>
+          <span className="text-sm font-medium">
+            Showing <strong>{filterAttendantName}</strong>&rsquo;s shifts (current &amp; past)
+          </span>
+          <button onClick={clearAttendantFilter} className="text-sm underline">Show all</button>
+        </div>
+      )}
 
       {error && (
         <div className="p-3 rounded text-sm" style={{ backgroundColor: 'var(--color-status-error-light, #fde8e8)', color: 'var(--color-status-error)' }}>

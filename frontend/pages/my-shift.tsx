@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import DoubleEntryModal from '../components/DoubleEntryModal'
@@ -2166,12 +2167,15 @@ export default function MyShift() {
 }
 
 function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandovers: HandoverResult[] }) {
+  const router = useRouter()
   const [activeShifts, setActiveShifts] = useState<any[]>([])
   const [allStaff, setAllStaff] = useState<any[]>([])
   const [islands, setIslands] = useState<any[]>([])
   const [dashLoading, setDashLoading] = useState(true)
   const [shiftDeposits, setShiftDeposits] = useState<Record<string, any>>({})
   const [expandedDeposits, setExpandedDeposits] = useState<Record<string, boolean>>({})
+  // attendant_id -> review_status of their handover on the current active shift(s)
+  const [attendantStatus, setAttendantStatus] = useState<Record<string, string>>({})
 
   useEffect(() => {
     const headers = { 'Content-Type': 'application/json', ...getHeaders() }
@@ -2179,12 +2183,20 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
       authFetch(`${BASE}/shifts/`, { headers }).then(r => r.ok ? r.json() : []),
       authFetch(`${BASE}/auth/staff`, { headers }).then(r => r.ok ? r.json() : []),
       authFetch(`${BASE}/islands/?status=active`, { headers }).then(r => r.ok ? r.json() : []),
+      authFetch(`${BASE}/handover/entries`, { headers }).then(r => r.ok ? r.json() : []),
     ])
-      .then(([shifts, staff, islandsData]) => {
+      .then(([shifts, staff, islandsData, entries]) => {
         const active = Array.isArray(shifts) ? shifts.filter((s: any) => s.status === 'active') : []
         setActiveShifts(active)
         setAllStaff(Array.isArray(staff) ? staff : [])
         setIslands(Array.isArray(islandsData) ? islandsData : [])
+        // Map each attendant's handover status on the active shift(s) for progress badges
+        const activeIds = new Set(active.map((s: any) => s.shift_id))
+        const statusMap: Record<string, string> = {}
+        ;(Array.isArray(entries) ? entries : []).forEach((e: any) => {
+          if (e.attendant_id && activeIds.has(e.shift_id)) statusMap[e.attendant_id] = e.review_status || 'submitted'
+        })
+        setAttendantStatus(statusMap)
         // Fetch deposits for each active shift
         active.forEach(shift => {
           authFetch(`${BASE}/safe-deposits/${shift.shift_id}`)
@@ -2223,6 +2235,21 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
   const getNozzleDisplayName = (nozzle: any) => {
     if (nozzle.fuel_type_abbrev && nozzle.display_label) return `${nozzle.fuel_type_abbrev} ${nozzle.display_label}`
     return nozzle.display_label || nozzle.nozzle_id
+  }
+
+  // Readings/handover progress for an attendant on the active shift.
+  const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
+    approved: { label: 'Approved', bg: 'var(--color-status-success-light)', color: 'var(--color-status-success)' },
+    submitted: { label: 'Pending review', bg: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' },
+    flagged: { label: 'Flagged', bg: 'var(--color-status-error-light, #fde8e8)', color: 'var(--color-status-error)' },
+    returned: { label: 'Returned', bg: 'var(--color-status-warning-light, #fff8e1)', color: 'var(--color-status-warning)' },
+    reopened: { label: 'Reopened', bg: 'var(--color-status-warning-light, #fff8e1)', color: 'var(--color-status-warning)' },
+  }
+  const attendantStatusMeta = (attId?: string) => {
+    if (!attId) return null
+    const st = attendantStatus[attId]
+    if (!st) return { label: 'No readings yet', bg: theme.background, color: theme.textSecondary }
+    return STATUS_META[st] || { label: st, bg: theme.background, color: theme.textSecondary }
   }
 
   if (dashLoading) {
@@ -2271,19 +2298,33 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {shift.assignments.map((assignment: any, idx: number) => (
-                    <div key={idx} className="rounded-lg p-4"
+                    <div key={idx}
+                      onClick={() => router.push(`/handover-review?attendant_id=${encodeURIComponent(assignment.attendant_id || '')}`)}
+                      role="button" tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/handover-review?attendant_id=${encodeURIComponent(assignment.attendant_id || '')}`) }}
+                      title={`Open ${assignment.attendant_name || 'this attendant'}'s shifts in Handover Review`}
+                      className="rounded-lg p-4 cursor-pointer transition-shadow hover:shadow-md"
                       style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                          style={{ backgroundColor: theme.primary }}>
-                          {(assignment.attendant_name || '?')[0].toUpperCase()}
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                            style={{ backgroundColor: theme.primary }}>
+                            {(assignment.attendant_name || '?')[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm" style={{ color: theme.textPrimary }}>
+                              {assignment.attendant_name || 'Unknown'}
+                            </p>
+                            <p className="text-xs" style={{ color: theme.textSecondary }}>Attendant</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-semibold text-sm" style={{ color: theme.textPrimary }}>
-                            {assignment.attendant_name || 'Unknown'}
-                          </p>
-                          <p className="text-xs" style={{ color: theme.textSecondary }}>Attendant</p>
-                        </div>
+                        {(() => {
+                          const m = attendantStatusMeta(assignment.attendant_id)
+                          return m ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
+                              style={{ backgroundColor: m.bg, color: m.color }}>{m.label}</span>
+                          ) : null
+                        })()}
                       </div>
 
                       {/* Islands */}
@@ -2343,7 +2384,7 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
                         const depKey = `${shift.shift_id}-${assignment.attendant_id}`
                         return (
                           <div className="mt-3 pt-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                            <button onClick={() => setExpandedDeposits(prev => ({ ...prev, [depKey]: !prev[depKey] }))}
+                            <button onClick={(e) => { e.stopPropagation(); setExpandedDeposits(prev => ({ ...prev, [depKey]: !prev[depKey] })) }}
                               className="w-full flex justify-between items-center text-left">
                               <span className="text-xs flex items-center gap-1" style={{ color: theme.textSecondary }}>
                                 Safe Deposits: <strong style={{ color: theme.textPrimary }}>{attDep.count}</strong>
@@ -2395,19 +2436,33 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
                 <p className="text-sm italic" style={{ color: theme.textSecondary }}>No staff currently on shift</p>
               ) : (
                 <div className="space-y-2">
-                  {assignedStaff.map(staff => (
-                    <div key={staff.user_id} className="flex items-center gap-3 rounded-lg p-3"
+                  {assignedStaff.map(staff => {
+                    const m = attendantStatusMeta(staff.user_id)
+                    return (
+                    <div key={staff.user_id}
+                      onClick={() => router.push(`/handover-review?attendant_id=${encodeURIComponent(staff.user_id)}`)}
+                      role="button" tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/handover-review?attendant_id=${encodeURIComponent(staff.user_id)}`) }}
+                      title={`Open ${staff.full_name}'s shifts in Handover Review`}
+                      className="flex items-center justify-between gap-3 rounded-lg p-3 cursor-pointer transition-shadow hover:shadow-md"
                       style={{ backgroundColor: 'var(--color-status-success-light)', borderColor: 'var(--color-status-success)', borderWidth: 1 }}>
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                        style={{ backgroundColor: 'var(--color-status-success)' }}>
-                        {(staff.full_name || '?')[0].toUpperCase()}
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                          style={{ backgroundColor: 'var(--color-status-success)' }}>
+                          {(staff.full_name || '?')[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm" style={{ color: theme.textPrimary }}>{staff.full_name}</p>
+                          <p className="text-xs" style={{ color: theme.textSecondary }}>{staff.username}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-sm" style={{ color: theme.textPrimary }}>{staff.full_name}</p>
-                        <p className="text-xs" style={{ color: theme.textSecondary }}>{staff.username}</p>
-                      </div>
+                      {m && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
+                          style={{ backgroundColor: m.bg, color: m.color }}>{m.label}</span>
+                      )}
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -2422,16 +2477,24 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
               ) : (
                 <div className="space-y-2">
                   {availableStaff.map(staff => (
-                    <div key={staff.user_id} className="flex items-center gap-3 rounded-lg p-3"
+                    <div key={staff.user_id}
+                      onClick={() => router.push('/shifts')}
+                      role="button" tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter') router.push('/shifts') }}
+                      title={`Assign ${staff.full_name} to a shift`}
+                      className="flex items-center justify-between gap-3 rounded-lg p-3 cursor-pointer transition-shadow hover:shadow-md"
                       style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-                        style={{ backgroundColor: theme.border, color: theme.textSecondary }}>
-                        {(staff.full_name || '?')[0].toUpperCase()}
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+                          style={{ backgroundColor: theme.border, color: theme.textSecondary }}>
+                          {(staff.full_name || '?')[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm" style={{ color: theme.textPrimary }}>{staff.full_name}</p>
+                          <p className="text-xs" style={{ color: theme.textSecondary }}>{staff.username}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-sm" style={{ color: theme.textPrimary }}>{staff.full_name}</p>
-                        <p className="text-xs" style={{ color: theme.textSecondary }}>{staff.username}</p>
-                      </div>
+                      <span className="text-[10px] font-semibold whitespace-nowrap" style={{ color: theme.primary }}>Assign →</span>
                     </div>
                   ))}
                 </div>
@@ -2451,7 +2514,12 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
           <div className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {islands.map(island => (
-                <div key={island.island_id} className="rounded-lg p-4"
+                <div key={island.island_id}
+                  onClick={() => router.push('/shifts')}
+                  role="button" tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter') router.push('/shifts') }}
+                  title="Manage assignments for this island"
+                  className="rounded-lg p-4 cursor-pointer transition-shadow hover:shadow-md"
                   style={{
                     backgroundColor: theme.background,
                     borderWidth: 2,
@@ -2496,15 +2564,18 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
 
                         // Check if this nozzle is assigned in any active shift
                         let assignedTo: string | null = null
+                        let assignedAttId: string | null = null
                         for (const shift of activeShifts) {
                           for (const a of shift.assignments || []) {
                             if (a.nozzle_ids?.includes(nozzle.nozzle_id)) {
                               assignedTo = a.attendant_name
+                              assignedAttId = a.attendant_id
                               break
                             }
                           }
                           if (assignedTo) break
                         }
+                        const nozzleStatus = assignedAttId ? attendantStatusMeta(assignedAttId) : null
 
                         return (
                           <div key={nozzle.nozzle_id} className="px-2 py-1 rounded text-xs"
@@ -2516,7 +2587,11 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
                             }}>
                             <span className="font-semibold">{displayName}</span>
                             {assignedTo && (
-                              <span className="block text-[10px] mt-0.5" style={{ opacity: 0.8 }}>
+                              <span className="text-[10px] mt-0.5 flex items-center gap-1" style={{ opacity: 0.85 }}>
+                                {nozzleStatus && (
+                                  <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+                                    style={{ backgroundColor: nozzleStatus.color }} title={`Readings: ${nozzleStatus.label}`} />
+                                )}
                                 {assignedTo}
                               </span>
                             )}
