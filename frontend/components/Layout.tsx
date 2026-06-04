@@ -308,13 +308,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   const allNavItems = [
-    { path: '/', label: 'Dashboard', roles: ['user', 'supervisor', 'owner'] },
+    { path: '/', label: 'Dashboard', roles: ['supervisor', 'owner'] },
     {
       label: 'My Shift',
       roles: ['user', 'supervisor', 'manager', 'owner'],
       children: [
         { path: '/my-shift', label: 'My Shift Readings', roles: ['user', 'supervisor'] },
-        { path: '/shift-closing', label: 'Close Shift', roles: ['user', 'supervisor', 'manager', 'owner'] },
+        { path: '/shift-closing', label: 'Close Shift', roles: ['supervisor', 'manager', 'owner'] },
       ]
     },
     {
@@ -389,6 +389,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           return true
         }
         return false
+      })
+      // Collapse a menu that has only one visible child into a direct link —
+      // fewer clicks, no pointless dropdown (e.g. attendant's "My Shift").
+      .map((item: any) => {
+        if (item.children && item.children.length === 1) {
+          const only = item.children[0]
+          return { path: only.path, label: only.label, roles: item.roles, disabled: only.disabled }
+        }
+        return item
       })
     : []
 

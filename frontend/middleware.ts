@@ -113,6 +113,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/initializing', request.url))
   }
 
+  // Attendants have a single workspace — send them straight to it (no dashboard).
+  // Nav-only convenience: /my-shift is still freely accessible to them, and other
+  // roles keep the dashboard. /my-shift is not redirected, so there's no loop.
+  if (pathname === '/' && role === 'user') {
+    return NextResponse.redirect(new URL('/my-shift', request.url))
+  }
+
   // Owner-only routes
   if (OWNER_ROUTES.includes(pathname) && role !== 'owner') {
     const homeUrl = new URL('/', request.url)
