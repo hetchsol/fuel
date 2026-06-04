@@ -336,6 +336,18 @@ onward link.
 
 ## 9. Item 7 — Single Stores action modal
 
+> **Implemented (2026-06-04).** The four per-row buttons (Receive / Issue /
+> Damage / Adjust) are replaced by a single **"Manage stock"** button per row.
+> The existing `ActionModal` now takes `initialAction` and holds the action in
+> local state with a **selector** (segmented buttons) at the top, so the user
+> switches action without leaving the modal; switching resets qty + note (bin is
+> retained) to avoid carrying a value whose meaning changed (e.g. adjust =
+> absolute count). Add/Edit Item stays a separate top-level trigger (different
+> intent) and shows no selector. Every action's fields, validation (required
+> reason on damage/adjust, absolute-count adjust), reason chips, and POST
+> endpoint are unchanged.
+
+
 **Today.** Stores has five separate modals (Receive / Issue / Damage / Adjust /
 Add-Edit), each a distinct button per row (`stores.tsx:186`), so the manager
 hunts for the right one.

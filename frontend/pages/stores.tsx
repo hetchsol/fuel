@@ -177,19 +177,11 @@ export default function StoresDashboard() {
                   )}
                 </td>
                 <td className="px-3 py-2">
-                  <div className="flex gap-1 flex-wrap">
-                    {([
-                      ['receive', 'Receive'],
-                      ['issue', 'Issue'],
-                      ['damage', 'Damage'],
-                      ['adjust', 'Adjust'],
-                    ] as [Action, string][]).map(([action, label]) => (
-                      <button key={action} onClick={() => setModal({ action, item })}
-                        className="px-2 py-1 text-xs font-medium rounded border border-surface-border text-content-secondary hover:bg-surface-bg">
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                  {/* One entry point; the action is chosen inside the modal (item 7) */}
+                  <button onClick={() => setModal({ action: 'receive', item })}
+                    className="px-3 py-1 text-xs font-medium rounded border border-surface-border text-content-secondary hover:bg-surface-bg">
+                    Manage stock
+                  </button>
                 </td>
               </tr>
             ))}
@@ -235,7 +227,7 @@ export default function StoresDashboard() {
 
       {modal && (
         <ActionModal
-          action={modal.action}
+          initialAction={modal.action}
           item={modal.item}
           busy={busy}
           setBusy={setBusy}
@@ -249,14 +241,16 @@ export default function StoresDashboard() {
 
 // ── Action modal ──────────────────────────────────────────────────
 
-function ActionModal({ action, item, busy, setBusy, onClose, onDone }: {
-  action: Action
+function ActionModal({ initialAction, item, busy, setBusy, onClose, onDone }: {
+  initialAction: Action
   item: StockItem | null
   busy: boolean
   setBusy: (b: boolean) => void
   onClose: () => void
   onDone: () => void
 }) {
+  // The action is selectable inside the modal (item 7); seeded from the trigger.
+  const [action, setAction] = useState<Action>(initialAction)
   const [qty, setQty] = useState('')
   const [note, setNote] = useState('')
   const [bin, setBin] = useState<Bin>('stores')
@@ -326,6 +320,29 @@ function ActionModal({ action, item, busy, setBusy, onClose, onDone }: {
       <div className="rounded-lg shadow-lg p-6 w-full max-w-md bg-surface-card border border-surface-border">
         <h3 className="text-lg font-semibold mb-1 text-content-primary">{titles[action]}</h3>
         {item && <p className="text-sm mb-4 text-content-secondary">{item.name} — stores {item.stores}, forecourt {item.forecourt}</p>}
+
+        {/* Action selector — switch between the stock actions without leaving the modal (item 7) */}
+        {action !== 'additem' && (
+          <div className="flex gap-1 mb-4">
+            {([
+              ['receive', 'Receive'],
+              ['issue', 'Issue'],
+              ['damage', 'Damage'],
+              ['adjust', 'Adjust'],
+            ] as [Action, string][]).map(([a, label]) => (
+              <button key={a} type="button"
+                onClick={() => { setAction(a); setQty(''); setNote('') }}
+                className="flex-1 px-2 py-1.5 text-xs font-medium rounded border"
+                style={{
+                  backgroundColor: action === a ? 'var(--color-action-primary)' : 'transparent',
+                  color: action === a ? '#fff' : 'var(--color-text-secondary)',
+                  borderColor: action === a ? 'var(--color-action-primary)' : 'var(--color-border)',
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {action === 'additem' ? (
           <div className="space-y-3">
