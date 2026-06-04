@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { getDaily, getFlags, getTankLevels, getHeaders, authFetch, isManagerOrAbove } from '../lib/api'
 import TankCard from '../components/TankCard'
 import DayChecklist from '../components/DayChecklist'
+import AttendantShiftCard from '../components/AttendantShiftCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { useWorkingDay } from '../contexts/WorkingDayContext'
 
@@ -106,6 +107,13 @@ export default function Home() {
       {isManagerOrAbove(userRole) && (
         <div className="mb-6 animate-fade-in-up-2">
           <DayChecklist date={date} />
+        </div>
+      )}
+
+      {/* Attendant "start / continue your shift" landing card */}
+      {userRole === 'user' && (
+        <div className="mb-6 animate-fade-in-up-2">
+          <AttendantShiftCard />
         </div>
       )}
 

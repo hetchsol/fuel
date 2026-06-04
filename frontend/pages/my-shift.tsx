@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
+import Link from 'next/link'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import DoubleEntryModal from '../components/DoubleEntryModal'
@@ -912,6 +913,12 @@ export default function MyShift() {
               <p className="text-xs mt-2" style={{ color: 'var(--color-status-success)' }}>
                 Handover ID: {readingsVerifiedHandover.handover_id} | Total Expected: K{(readingsVerifiedHandover.total_expected || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </p>
+              {/* Step 2 of the day's flow — make the next hop obvious (item 3) */}
+              <Link href="/shift-closing"
+                className="inline-block mt-3 px-4 py-2 text-sm font-semibold rounded-lg text-white"
+                style={{ backgroundColor: 'var(--color-status-success)' }}>
+                Next: Close Shift
+              </Link>
             </div>
             <button
               onClick={handleRedoReadings}
@@ -1012,7 +1019,7 @@ export default function MyShift() {
             </div>
             <span className="text-sm font-medium hidden sm:inline"
               style={{ color: currentStep === 1 ? theme.textPrimary : theme.textSecondary }}>
-              Enter Data
+              Step 1: Enter readings
             </span>
           </div>
 
@@ -1032,7 +1039,7 @@ export default function MyShift() {
             </div>
             <span className="text-sm font-medium hidden sm:inline"
               style={{ color: currentStep === 2 ? theme.textPrimary : theme.textSecondary }}>
-              Review
+              Step 2: Review &amp; submit
             </span>
           </div>
 
@@ -2494,7 +2501,7 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
                           <p className="text-xs" style={{ color: theme.textSecondary }}>{staff.username}</p>
                         </div>
                       </div>
-                      <span className="text-[10px] font-semibold whitespace-nowrap" style={{ color: theme.primary }}>Assign →</span>
+                      <span className="text-[10px] font-semibold whitespace-nowrap" style={{ color: theme.primary }}>Assign</span>
                     </div>
                   ))}
                 </div>
