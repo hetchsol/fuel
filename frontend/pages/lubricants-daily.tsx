@@ -74,6 +74,11 @@ export default function LubricantsDaily() {
       .then(r => r.json())
       .then(data => {
         setCategories(data.categories || [])
+        // Open compact: collapse all category sections by default so the long
+        // catalog opens short and the user expands only the category they're
+        // working on. Rows are preserved behind the existing accordion — no
+        // filter or submit-semantics change.
+        setCollapsedCategories(new Set(data.categories || []))
         const products = data.products || []
         // Now fetch previous day to set opening stock
         authFetch(`${BASE}/lubricants-daily/previous-day?current_date=${date}&location=${encodeURIComponent(location)}`, {

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ReasonChips, { REASON_PRESETS } from '../components/ReasonChips'
 import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
@@ -564,6 +565,7 @@ export default function HandoverReview() {
             <p className="text-sm mb-3" style={{ color: theme.textSecondary }}>
               Provide a reason for returning this handover. The attendant will be notified.
             </p>
+            <ReasonChips presets={REASON_PRESETS.returnHandover} value={returnNote} onSelect={setReturnNote} className="mb-2" />
             <textarea
               rows={4}
               value={returnNote}
@@ -598,6 +600,7 @@ export default function HandoverReview() {
               This handover was flagged (e.g. cash shortage or meter deviation).
               A note explaining why you are approving it anyway is required and recorded in the audit trail.
             </p>
+            <ReasonChips presets={REASON_PRESETS.approveFlagged} value={approveNote} onSelect={setApproveNote} className="mb-2" />
             <textarea
               rows={4}
               value={approveNote}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ReasonChips, { REASON_PRESETS } from '../components/ReasonChips'
 import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
@@ -362,6 +363,11 @@ function ActionModal({ action, item, busy, setBusy, onClose, onDone }: {
               <label className="block text-xs font-medium text-content-secondary mb-1">
                 {noteRequired ? 'Reason (required)' : 'Note (optional)'}
               </label>
+              {noteRequired && (
+                <ReasonChips
+                  presets={action === 'damage' ? REASON_PRESETS.damage : REASON_PRESETS.adjust}
+                  value={note} onSelect={setNote} className="mb-2" />
+              )}
               <textarea rows={2} value={note} onChange={e => setNote(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded border border-surface-border bg-surface-bg text-content-primary resize-none" />
             </div>
