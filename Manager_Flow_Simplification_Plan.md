@@ -300,6 +300,20 @@ hidden permanently; totals span every row as today.
 
 ## 8. Item 6 — Forward navigation ("Next →")
 
+> **Implemented (2026-06-04).** Contextual "Next →" links added to the
+> dead-end result/completion states, following the day's chain:
+> - `shift-closing` result card → **"Next: Handover Review →"** (always, once a
+>   shift is closed — a manager reviews next).
+> - `handover-review` → **"Next: Daily Close-Off →"**, shown only when the day is
+>   fully reviewed (`pending===0 && flagged===0 && awaiting===0 && approvedToday>0`),
+>   reusing the page's existing summary state.
+> - `daily-tank-reading` submit-success banner → **"Next: Three-Way Reconciliation →"**.
+>
+> All are plain `next/link` navigations — no logic, data, or submit behaviour
+> changes; they only surface the next step the manager would otherwise navigate
+> to by hand.
+
+
 **Today.** `shift-closing.tsx` and `daily-tank-reading.tsx` dead-end on a result
 screen; the manager must navigate manually to the next step. Approving the last
 handover doesn't suggest closing the day.

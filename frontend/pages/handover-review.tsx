@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
+import Link from 'next/link'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ReasonChips, { REASON_PRESETS } from '../components/ReasonChips'
@@ -309,6 +310,18 @@ export default function HandoverReview() {
           </div>
         ))}
       </div>
+
+      {/* All reviewed → nudge to close the day (item 6) */}
+      {summaryPending === 0 && summaryFlagged === 0 && awaitingCount === 0 && summaryApprovedToday > 0 && (
+        <div className="rounded-lg p-3 flex items-center justify-between" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)', borderWidth: 1, borderColor: 'var(--color-status-success)' }}>
+          <span className="text-sm font-medium">All handovers reviewed — nothing outstanding.</span>
+          <Link href="/daily-close-off"
+            className="px-4 py-2 text-sm font-medium rounded-lg text-white"
+            style={{ backgroundColor: 'var(--color-status-success)' }}>
+            Next: Daily Close-Off →
+          </Link>
+        </div>
+      )}
 
       {/* Stale readings warning */}
       {staleReadingsCount > 0 && (

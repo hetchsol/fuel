@@ -1,6 +1,7 @@
 import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
+import Link from 'next/link'
 import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
 import { useWorkingDay } from '../contexts/WorkingDayContext'
 import { useTanks } from '../hooks/useTanks'
@@ -1113,8 +1114,14 @@ export default function DailyTankReading() {
 
         {/* Success/Error Messages */}
         {success && (
-          <div className="bg-status-success-light border border-status-success rounded-md p-4 mb-6">
+          <div className="bg-status-success-light border border-status-success rounded-md p-4 mb-6 flex items-center justify-between gap-4">
             <p className="text-status-success">{success}</p>
+            {/* Next step in the day's chain (item 6) */}
+            <Link href="/three-way-reconciliation"
+              className="shrink-0 px-4 py-2 text-sm font-medium rounded-lg text-white"
+              style={{ backgroundColor: 'var(--color-status-success)' }}>
+              Next: Three-Way Reconciliation →
+            </Link>
           </div>
         )}
         {error && (

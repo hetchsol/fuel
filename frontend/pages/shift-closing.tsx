@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getHeaders, authFetch } from '../lib/api'
@@ -276,6 +277,15 @@ export default function ShiftClosing() {
               <span className="font-semibold">Flags:</span> {result.auto_flag_reasons.join(', ')}
             </div>
           )}
+          {/* Next step in the day's chain (item 6) */}
+          <div className="mt-5 pt-4 flex items-center justify-between" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+            <span className="text-sm" style={{ color: theme.textSecondary }}>Shift closed. A manager now reviews the handover.</span>
+            <Link href="/handover-review"
+              className="px-4 py-2 text-sm font-medium rounded-lg text-white"
+              style={{ backgroundColor: 'var(--color-action-primary)' }}>
+              Next: Handover Review →
+            </Link>
+          </div>
         </div>
       )}
 
