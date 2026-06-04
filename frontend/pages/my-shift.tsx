@@ -119,6 +119,7 @@ function getAuthHeaders() {
 
 export default function MyShift() {
   const { theme } = useTheme()
+  const router = useRouter()
 
   // Determine user role for visibility control
   const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null
@@ -510,10 +511,15 @@ export default function MyShift() {
         h.shift_id === shiftInfo?.shift_id && (h.review_status === 'returned' || h.status === 'reopened'))
     : null
 
-  // Two-mode: a fresh shift starts in "verify opening" mode until the attendant
-  // confirms the carried-forward opening. In-flight shifts (handover exists) are
-  // already opening_verified, so they go straight to the closing flow.
-  const inStartMode = isAttendant && shiftFound && !openingVerified && !handoverResult
+  // Two-mode, driven by the nav items "Start Shift" (?mode=start) and "End Shift"
+  // (?mode=end). With no mode (e.g. landing redirect), a fresh shift defaults to
+  // the start step until opening is verified; in-flight shifts go to closing.
+  const shiftMode = router.query.mode
+  const inStartMode = isAttendant && shiftFound && !handoverResult && (
+    shiftMode === 'end' ? false :
+    shiftMode === 'start' ? true :
+    !openingVerified
+  )
 
   // Which closing reading (if any) is currently being double-entered.
   const [activeEntry, setActiveEntry] = useState<{ nozzleId: string; field: 'electronic' | 'mechanical' } | null>(null)
@@ -767,6 +773,8 @@ export default function MyShift() {
         throw new Error(e.detail || 'Failed to verify opening')
       }
       setOpeningVerified(true)
+      // Move from Start Shift into the closing (End Shift) view.
+      router.replace('/my-shift?mode=end')
     } catch (err: any) {
       setError(err.message || 'Failed to verify opening')
     } finally {

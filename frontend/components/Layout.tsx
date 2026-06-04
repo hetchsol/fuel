@@ -31,6 +31,11 @@ const icons: Record<string, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
+  "Today's Shift": (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
   Operations: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -310,10 +315,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const allNavItems = [
     { path: '/', label: 'Dashboard', roles: ['supervisor', 'owner'] },
     {
-      label: 'My Shift',
-      roles: ['user', 'supervisor', 'manager', 'owner'],
+      // Attendant: their whole job — Start the shift (verify auto-fetched opening)
+      // and End the shift (record closing + send to supervisor).
+      label: "Today's Shift",
+      roles: ['user'],
       children: [
-        { path: '/my-shift', label: 'My Shift Readings', roles: ['user', 'supervisor'] },
+        { path: '/my-shift?mode=start', label: 'Start Shift', roles: ['user'] },
+        { path: '/my-shift?mode=end', label: 'End Shift', roles: ['user'] },
+      ]
+    },
+    {
+      label: 'My Shift',
+      roles: ['supervisor', 'manager', 'owner'],
+      children: [
+        { path: '/my-shift', label: 'Readings Verification', roles: ['supervisor'] },
         { path: '/shift-closing', label: 'Close Shift', roles: ['supervisor', 'manager', 'owner'] },
       ]
     },
