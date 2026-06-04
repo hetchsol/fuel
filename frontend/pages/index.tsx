@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import toast from 'react-hot-toast'
-import { getDaily, getFlags, getTankLevels, getHeaders, authFetch } from '../lib/api'
+import { getDaily, getFlags, getTankLevels, getHeaders, authFetch, isManagerOrAbove } from '../lib/api'
 import TankCard from '../components/TankCard'
+import DayChecklist from '../components/DayChecklist'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 /* ── Empty State Illustration ─────────────────────── */
@@ -100,6 +101,13 @@ export default function Home() {
           className="block w-full sm:w-auto px-3 py-2 border border-surface-border rounded-input shadow-sm focus:outline-none focus:ring-action-primary focus:border-action-primary"
         />
       </div>
+
+      {/* Today's Flow launchpad — read-only day-chain status for managers/owners */}
+      {isManagerOrAbove(userRole) && (
+        <div className="mb-6 animate-fade-in-up-2">
+          <DayChecklist date={date} />
+        </div>
+      )}
 
       {/* Tank Cards */}
       <div className="grid gap-6 mb-6 animate-fade-in-up-2" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 320px), 1fr))` }}>

@@ -69,6 +69,17 @@ These hold for **every item** in this plan:
 
 ## 3. Item 1 — "Today" daily-operations launchpad (highest leverage)
 
+> **Implemented (2026-06-04, v1).** `frontend/components/DayChecklist.tsx`
+> created and mounted on the dashboard (`index.tsx`) for manager/owner only. It
+> composes three read-only GETs client-side — `/shifts/`, `/handover/review-queue`,
+> `/daily-close-off/summary` (plus `/shifts/{id}/tank-dip-readings` for the dip
+> step) — into a 4-step chain checklist (shift → dips → handovers → close) with a
+> deep link per step. It deliberately avoids `/shifts/current/active` (that GET
+> *creates* a shift as a side effect); it issues only GETs and mutates nothing.
+> **Deferred to item 2:** links don't yet carry `date`/`shift_id` through to the
+> target pages (those pages don't consume a date query yet) — plain links for now.
+
+
 **Today.** There is no single view of the day's progress. The manager must open
 Shifts, then My Shift / Handover Review, then Daily Tank Reading, then Daily
 Close-Off in turn to discover what's done and what's outstanding, re-selecting
