@@ -36,6 +36,21 @@ const icons: Record<string, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
+  Day: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  ),
+  'Stock & Sales': (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+    </svg>
+  ),
+  Admin: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    </svg>
+  ),
   Operations: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -312,7 +327,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     )
   }
 
-  const allNavItems = [
+  const DEFAULT_NAV = [
     { path: '/', label: 'Dashboard', roles: ['supervisor', 'owner'] },
     {
       // Attendant: their whole job — Start the shift (verify auto-fetched opening)
@@ -390,6 +405,57 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       ]
     },
   ]
+
+  // Manager-only menu: a leaner, task-focused 4-group layout. Same pages and the
+  // same middleware permissions — only the grouping/labels differ. The launchpad
+  // (landed on at "/") remains the manager's home for the daily chain.
+  const MANAGER_NAV = [
+    {
+      label: 'Day',
+      roles: ['manager'],
+      children: [
+        { path: '/handover-review', label: 'Handover Review', roles: ['manager'] },
+        { path: '/daily-close-off', label: 'Daily Close-Off', roles: ['manager'] },
+      ],
+    },
+    {
+      label: 'Stock & Sales',
+      roles: ['manager'],
+      children: [
+        { path: '/stores', label: 'Stores / Stock', roles: ['manager'] },
+        { path: '/stock-takes', label: 'Stock Takes', roles: ['manager'] },
+        { path: '/inventory', label: 'Tank Levels', roles: ['manager'] },
+        { path: '/sales', label: 'Sales', roles: ['manager'] },
+        { path: '/accounts', label: 'Credit Accounts', roles: ['manager'] },
+      ],
+    },
+    {
+      label: 'Reports',
+      roles: ['manager'],
+      children: [
+        { path: '/three-way-reconciliation', label: 'Three-Way Reconciliation', roles: ['manager'] },
+        { path: '/tank-analysis', label: 'Tank Analysis', roles: ['manager'] },
+        { path: '/reconciliation', label: 'Shift Reconciliation', roles: ['manager'] },
+        { path: '/reports', label: 'Sales Reports', roles: ['manager'] },
+        { path: '/tank-readings-report', label: 'Tank Readings & Monitor', roles: ['manager'] },
+        { path: '/advanced-reports', label: 'Advanced Reports', roles: ['manager'] },
+        { path: '/alerts', label: 'Anomaly Alerts', roles: ['manager'] },
+        { path: '/notifications', label: 'Notifications', roles: ['manager'] },
+      ],
+    },
+    {
+      label: 'Admin',
+      roles: ['manager'],
+      children: [
+        { path: '/settings', label: 'Settings', roles: ['manager'] },
+        { path: '/users', label: 'Users', roles: ['manager'] },
+        { path: '/audit', label: 'Audit Log', roles: ['manager'] },
+      ],
+    },
+  ]
+
+  // Managers get the leaner 4-group menu; everyone else keeps the default nav.
+  const allNavItems = user?.role === 'manager' ? MANAGER_NAV : DEFAULT_NAV
 
   const isSetupPage = ['/setup', '/initializing', '/login'].includes(router.pathname)
   const hideNav = setupPending || isSetupPage
