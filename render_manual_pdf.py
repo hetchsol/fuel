@@ -19,6 +19,7 @@ from reportlab.lib.units import cm
 from reportlab.lib.colors import HexColor
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle, KeepTogether,
+    PageBreak,
 )
 
 # Palette
@@ -46,14 +47,53 @@ BODY = ParagraphStyle("B", parent=_styles["Normal"], fontSize=10, leading=14.5,
 LI = ParagraphStyle("LI", parent=BODY, spaceAfter=3, leading=14)
 CALLOUT = ParagraphStyle("C", parent=BODY, fontSize=9.5, leading=13.5, textColor=GREY)
 
+# Cover-page styles (centered)
+COVER_BRAND = ParagraphStyle("CvBrand", parent=_styles["Normal"], fontName="Helvetica-Bold",
+                             fontSize=12, textColor=GREY, alignment=1, spaceAfter=2)
+COVER_TITLE = ParagraphStyle("CvTitle", parent=_styles["Heading1"], fontName="Helvetica-Bold",
+                             fontSize=34, leading=40, textColor=BLUE, alignment=1, spaceAfter=6)
+COVER_SUB = ParagraphStyle("CvSub", parent=_styles["Normal"], fontSize=14, leading=20,
+                           textColor=DARK, alignment=1, spaceAfter=2)
+COVER_META = ParagraphStyle("CvMeta", parent=_styles["Normal"], fontSize=10, textColor=GREY,
+                            alignment=1)
+
 CONTENT_W = A4[0] - 4 * cm
 _FOOTER = "Manual"
 
 
+def cover(title, subtitle):
+    """A standalone title page."""
+    return [
+        Spacer(1, 5.5 * cm),
+        Paragraph("NEXTSTOP", COVER_BRAND),
+        Spacer(1, 0.5 * cm),
+        HRFlowable(width=5 * cm, thickness=3, color=BLUE, hAlign="CENTER", spaceAfter=12),
+        Paragraph(inline(title), COVER_TITLE),
+        Paragraph(inline(subtitle), COVER_SUB) if subtitle else Spacer(1, 0),
+        Spacer(1, 0.3 * cm),
+        Paragraph("User Manual", COVER_SUB),
+        Spacer(1, 6 * cm),
+        Paragraph(f"Generated {date.today().isoformat()}", COVER_META),
+        PageBreak(),
+    ]
+
+
+# Map common typographic characters to plain ASCII. Using \u escapes so the
+# source file itself stays ASCII.
+_ASCII_MAP = {
+    "‐": "-", "‑": "-", "‒": "-", "–": "-",  # hyphens / dashes
+    "—": "-", "―": "-",                                 # em dash / bar
+    "‘": "'", "’": "'", "“": '"', "”": '"',   # curly quotes
+    "…": "...", " ": " ",                               # ellipsis / nbsp
+}
+
+
 def inline(text: str) -> str:
-    # Normalise fancy punctuation to ASCII so every glyph renders cleanly.
-    for k, v in {"—": "-", "–": "-", "‘": "'", "’": "'", "“": '"', "”": '"', "…": "..."}.items():
+    # Normalise known typographic characters, then hard-drop any remaining
+    # non-ASCII so the PDF can never render a missing-glyph box.
+    for k, v in _ASCII_MAP.items():
         text = text.replace(k, v)
+    text = "".join(ch for ch in text if ord(ch) < 128)
     text = html.escape(text, quote=False)
     text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
     text = re.sub(r"`([^`]+?)`", r'<font face="Courier" size="9">\1</font>', text)
@@ -74,7 +114,14 @@ def callout(text: str):
     return t
 
 
+def _cover_canvas(canvas, doc):
+    """First page is the cover — no footer."""
+    return
+
+
 def _on_page(canvas, doc):
+    # Content pages: footer with title and a page number (cover is page 1, so
+    # content starts at "Page 1").
     canvas.saveState()
     canvas.setStrokeColor(RULE)
     canvas.setLineWidth(0.5)
@@ -82,7 +129,7 @@ def _on_page(canvas, doc):
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(GREY)
     canvas.drawString(2 * cm, 1.0 * cm, _FOOTER)
-    canvas.drawRightString(A4[0] - 2 * cm, 1.0 * cm, f"Page {doc.page}")
+    canvas.drawRightString(A4[0] - 2 * cm, 1.0 * cm, f"Page {doc.page - 1}")
     canvas.restoreState()
 
 
@@ -92,15 +139,8 @@ def build(md_path, pdf_path, title, subtitle):
     with open(md_path, encoding="utf-8") as f:
         lines = f.read().splitlines()
 
-    # Title block
-    flow = [
-        Paragraph(inline(title), TITLE),
-        Paragraph(inline(subtitle), SUBTITLE) if subtitle else Spacer(1, 0),
-        Paragraph(f"Generated {date.today().isoformat()}", META),
-        Spacer(1, 6),
-        HRFlowable(width="100%", thickness=2, color=BLUE),
-        Spacer(1, 10),
-    ]
+    # Cover page, then the content begins on its own page.
+    flow = cover(title, subtitle)
 
     first_h1_skipped = False
     para_buf, quote_buf = [], []
@@ -170,7 +210,7 @@ def build(md_path, pdf_path, title, subtitle):
     doc = SimpleDocTemplate(pdf_path, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm,
                             topMargin=1.8 * cm, bottomMargin=2.0 * cm, title=title)
     n = len(flow)
-    doc.build(flow, onFirstPage=_on_page, onLaterPages=_on_page)
+    doc.build(flow, onFirstPage=_cover_canvas, onLaterPages=_on_page)
     print(f"Wrote {pdf_path} ({n} blocks)")
 
 
