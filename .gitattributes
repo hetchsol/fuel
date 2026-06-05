@@ -1,0 +1,10 @@
+# Treat binary assets as binary so Git never applies line-ending conversion
+# (which would corrupt them on checkout).
+*.pdf  binary
+*.xlsx binary
+*.xls  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
