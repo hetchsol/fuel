@@ -4,10 +4,12 @@ import Link from 'next/link'
 import { getHeaders, downloadExport, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
+import ThreeWayReconciliation from './three-way-reconciliation'
+import TankAnalysis from './tank-analysis'
 
 const BASE = '/api/v1'
 
-export default function Reconciliation() {
+function ShiftReconciliationView() {
   const router = useRouter()
   const today = new Date().toISOString().split('T')[0]
   const [selectedDate, setSelectedDate] = useState(today)
@@ -442,6 +444,55 @@ export default function Reconciliation() {
           <li>• <strong>Cumulative Difference</strong> = Running total of all variances for loss/gain tracking</li>
         </ul>
       </div>
+    </div>
+  )
+}
+
+// --- Reconciliation hub: one page, three tabs (Shift / Three-Way / Tank Analysis).
+// The three views remain their own components; this just surfaces them as tabs so
+// the menu carries a single "Reconciliation" item. Each view reads its own query
+// params (date / shiftId), preserved across tab switches.
+const RECON_TABS: { key: string; label: string }[] = [
+  { key: 'shift', label: 'Shift Reconciliation' },
+  { key: 'three-way', label: 'Three-Way' },
+  { key: 'tank-analysis', label: 'Tank Analysis' },
+]
+
+export default function ReconciliationHub() {
+  const router = useRouter()
+  const q = router.query.tab
+  const active = (typeof q === 'string' && RECON_TABS.some(t => t.key === q)) ? q : 'shift'
+
+  const setTab = (key: string) => {
+    router.replace(
+      { pathname: '/reconciliation', query: { ...router.query, tab: key } },
+      undefined,
+      { shallow: true },
+    )
+  }
+
+  return (
+    <div>
+      <div className="bg-surface-card border-b border-surface-border px-4">
+        <div className="max-w-7xl mx-auto flex gap-1">
+          {RECON_TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              style={{
+                borderColor: active === t.key ? 'var(--color-action-primary)' : 'transparent',
+                color: active === t.key ? 'var(--color-action-primary)' : 'var(--color-content-secondary)',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {active === 'shift' && <ShiftReconciliationView />}
+      {active === 'three-way' && <ThreeWayReconciliation />}
+      {active === 'tank-analysis' && <TankAnalysis />}
     </div>
   )
 }

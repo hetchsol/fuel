@@ -372,26 +372,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/accounts', label: 'Credit Accounts', roles: ['supervisor', 'manager', 'owner'] },
       ]
     },
-    {
-      label: 'Reconciliation',
-      roles: ['supervisor', 'manager', 'owner'],
-      children: [
-        { path: '/three-way-reconciliation', label: 'Three-Way Reconciliation', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/tank-analysis', label: 'Tank Analysis', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/reconciliation', label: 'Shift Reconciliation', roles: ['supervisor', 'manager', 'owner'] },
-      ]
-    },
-    {
-      label: 'Reports',
-      roles: ['supervisor', 'manager', 'owner'],
-      children: [
-        { path: '/reports', label: 'Sales Reports', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/tank-readings-report', label: 'Tank Readings & Monitor', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/advanced-reports', label: 'Advanced Reports', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/alerts', label: 'Anomaly Alerts', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/notifications', label: 'Notifications', roles: ['supervisor', 'manager', 'owner'] },
-      ]
-    },
+    // Consolidated analytical clusters (each is a single tabbed page).
+    { path: '/reconciliation', label: 'Reconciliation', roles: ['supervisor', 'manager', 'owner'] },
+    { path: '/reports', label: 'Reports', roles: ['supervisor', 'manager', 'owner'] },
+    { path: '/alerts', label: 'Alerts', roles: ['supervisor', 'manager', 'owner'] },
     {
       label: 'Administration',
       roles: ['manager', 'owner'],
@@ -429,20 +413,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/accounts', label: 'Credit Accounts', roles: ['manager'] },
       ],
     },
-    {
-      label: 'Reports',
-      roles: ['manager'],
-      children: [
-        { path: '/three-way-reconciliation', label: 'Three-Way Reconciliation', roles: ['manager'] },
-        { path: '/tank-analysis', label: 'Tank Analysis', roles: ['manager'] },
-        { path: '/reconciliation', label: 'Shift Reconciliation', roles: ['manager'] },
-        { path: '/reports', label: 'Sales Reports', roles: ['manager'] },
-        { path: '/tank-readings-report', label: 'Tank Readings & Monitor', roles: ['manager'] },
-        { path: '/advanced-reports', label: 'Advanced Reports', roles: ['manager'] },
-        { path: '/alerts', label: 'Anomaly Alerts', roles: ['manager'] },
-        { path: '/notifications', label: 'Notifications', roles: ['manager'] },
-      ],
-    },
+    // Same consolidated clusters as every other role.
+    { path: '/reconciliation', label: 'Reconciliation', roles: ['manager'] },
+    { path: '/reports', label: 'Reports', roles: ['manager'] },
+    { path: '/alerts', label: 'Alerts', roles: ['manager'] },
     {
       label: 'Admin',
       roles: ['manager'],

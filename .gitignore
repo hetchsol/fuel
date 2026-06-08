@@ -118,3 +118,10 @@ backend/*.xlsx
 
 # Import logs
 backend/import_log.txt
+
+# Reports golden-master sample dataset (regenerated locally via the harness; not shipped)
+backend/tests/golden/fixture_ST001.json
+backend/tests/golden/baseline/
+
+# Local DB backups / data dumps (never commit)
+/backup_*.json

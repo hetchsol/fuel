@@ -18,27 +18,20 @@ def _load_fuel_sales_from_handovers(station_id: str, storage: dict) -> List[dict
     Load fuel sales data from completed handovers (source of truth).
     Each handover nozzle summary becomes a sale record.
     """
-    handovers = load_station_json(station_id, 'attendant_handovers.json', default={})
+    from ...services.handover_sales import iter_completed_handover_nozzles
     sales = []
-    for ho in handovers.values():
-        if ho.get('phase', 'completed') != 'completed':
-            continue
-        date = ho.get('date', '')
-        shift_id = ho.get('shift_id', '')
-        shift_type = ho.get('shift_type', '')
-        attendant = ho.get('attendant_name', '')
-        for ns in ho.get('nozzle_summaries', []):
-            sales.append({
-                'date': date,
-                'shift_id': shift_id,
-                'shift_type': shift_type,
-                'attendant': attendant,
-                'nozzle_id': ns.get('nozzle_id', ''),
-                'fuel_type': ns.get('fuel_type', ''),
-                'volume': ns.get('volume_sold', 0),
-                'total_amount': ns.get('revenue', 0),
-                'price_per_liter': ns.get('price_per_liter', 0),
-            })
+    for ho, ns in iter_completed_handover_nozzles(station_id):
+        sales.append({
+            'date': ho.get('date', ''),
+            'shift_id': ho.get('shift_id', ''),
+            'shift_type': ho.get('shift_type', ''),
+            'attendant': ho.get('attendant_name', ''),
+            'nozzle_id': ns.get('nozzle_id', ''),
+            'fuel_type': ns.get('fuel_type', ''),
+            'volume': ns.get('volume_sold', 0),
+            'total_amount': ns.get('revenue', 0),
+            'price_per_liter': ns.get('price_per_liter', 0),
+        })
     return sales
 
 

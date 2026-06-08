@@ -27,50 +27,31 @@ def _load_readings_from_handovers(station_id: str, storage: dict) -> list:
         mechanical_opening, mechanical_closing,
         timestamp
     """
-    handovers = load_station_json(station_id, 'attendant_handovers.json', default={})
-    islands_data = storage.get('islands', {})
-
-    # Build nozzle→island lookup
-    nozzle_to_island = {}
-    for island_id, island in islands_data.items():
-        ps = island.get('pump_station')
-        if ps:
-            for nozzle in ps.get('nozzles', []):
-                nozzle_to_island[nozzle.get('nozzle_id')] = island_id
+    from ...services.handover_sales import iter_completed_handover_nozzles, build_nozzle_island_lookup
+    nozzle_to_island = build_nozzle_island_lookup(storage)
 
     records = []
-    for ho in handovers.values():
-        # Only include completed handovers (not readings_verified or superseded)
-        phase = ho.get('phase', 'completed')
-        if phase not in ('completed',):
-            continue
-
+    for ho, ns in iter_completed_handover_nozzles(station_id):
         attendant_name = ho.get('attendant_name', '')
-        date = ho.get('date', '')
-        shift_id = ho.get('shift_id', '')
-        shift_type = ho.get('shift_type', '')
-        timestamp = ho.get('created_at', '')
-
-        for ns in ho.get('nozzle_summaries', []):
-            records.append({
-                'nozzle_id': ns.get('nozzle_id', ''),
-                'fuel_type': ns.get('fuel_type', ''),
-                'product_type': ns.get('fuel_type', ''),
-                'volume': ns.get('volume_sold', 0),
-                'total_amount': ns.get('revenue', 0),
-                'attendant': attendant_name,
-                'staff_name': attendant_name,
-                'user': attendant_name,
-                'date': date,
-                'shift_id': shift_id,
-                'shift_type': shift_type,
-                'island_id': nozzle_to_island.get(ns.get('nozzle_id', ''), ''),
-                'electronic_opening': ns.get('opening_reading', 0),
-                'electronic_closing': ns.get('closing_reading', 0),
-                'mechanical_opening': ns.get('mechanical_opening', 0),
-                'mechanical_closing': ns.get('mechanical_closing', 0),
-                'timestamp': timestamp,
-            })
+        records.append({
+            'nozzle_id': ns.get('nozzle_id', ''),
+            'fuel_type': ns.get('fuel_type', ''),
+            'product_type': ns.get('fuel_type', ''),
+            'volume': ns.get('volume_sold', 0),
+            'total_amount': ns.get('revenue', 0),
+            'attendant': attendant_name,
+            'staff_name': attendant_name,
+            'user': attendant_name,
+            'date': ho.get('date', ''),
+            'shift_id': ho.get('shift_id', ''),
+            'shift_type': ho.get('shift_type', ''),
+            'island_id': nozzle_to_island.get(ns.get('nozzle_id', ''), ''),
+            'electronic_opening': ns.get('opening_reading', 0),
+            'electronic_closing': ns.get('closing_reading', 0),
+            'mechanical_opening': ns.get('mechanical_opening', 0),
+            'mechanical_closing': ns.get('mechanical_closing', 0),
+            'timestamp': ho.get('created_at', ''),
+        })
 
     return records
 

@@ -5,6 +5,8 @@ import Link from 'next/link';
 import DateRangePicker from '../components/DateRangePicker';
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
+import AdvancedReports from './advanced-reports'
+import TankReadingsReport from './tank-readings-report'
 
 interface Product {
     product_type: string;
@@ -63,7 +65,7 @@ interface DailySalesData {
     };
 }
 
-export default function Reports() {
+function SalesReportsView() {
     const router = useRouter();
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -620,4 +622,50 @@ export default function Reports() {
             </div>
         </div>
     );
+}
+
+// --- Reports hub: one page, three tabs (Sales / Advanced / Tank Readings).
+const REPORT_TABS: { key: string; label: string }[] = [
+  { key: 'sales', label: 'Sales Reports' },
+  { key: 'advanced', label: 'Advanced Reports' },
+  { key: 'tank-readings', label: 'Tank Readings' },
+]
+
+export default function ReportsHub() {
+  const router = useRouter()
+  const q = router.query.tab
+  const active = (typeof q === 'string' && REPORT_TABS.some(t => t.key === q)) ? q : 'sales'
+
+  const setTab = (key: string) => {
+    router.replace(
+      { pathname: '/reports', query: { ...router.query, tab: key } },
+      undefined,
+      { shallow: true },
+    )
+  }
+
+  return (
+    <div>
+      <div className="bg-surface-card border-b border-surface-border px-4">
+        <div className="max-w-7xl mx-auto flex gap-1">
+          {REPORT_TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              style={{
+                borderColor: active === t.key ? 'var(--color-action-primary)' : 'transparent',
+                color: active === t.key ? 'var(--color-action-primary)' : 'var(--color-content-secondary)',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {active === 'sales' && <SalesReportsView />}
+      {active === 'advanced' && <AdvancedReports />}
+      {active === 'tank-readings' && <TankReadingsReport />}
+    </div>
+  )
 }

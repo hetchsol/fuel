@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/router'
 import { getHeaders, BASE, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
+import NotificationsPage from './notifications'
 
 interface Anomaly {
   tank_id: string
@@ -40,7 +42,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 const LOOKBACK_OPTIONS = [7, 14, 30]
 
-export default function AlertsPage() {
+function AnomalyAlertsView() {
   const [anomalies, setAnomalies] = useState<Anomaly[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -211,6 +213,50 @@ export default function AlertsPage() {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+// --- Alerts hub: one inbox, two tabs (Anomaly Alerts / Notifications).
+const ALERT_TABS: { key: string; label: string }[] = [
+  { key: 'anomalies', label: 'Anomaly Alerts' },
+  { key: 'notifications', label: 'Notifications' },
+]
+
+export default function AlertsHub() {
+  const router = useRouter()
+  const q = router.query.tab
+  const active = (typeof q === 'string' && ALERT_TABS.some(t => t.key === q)) ? q : 'anomalies'
+
+  const setTab = (key: string) => {
+    router.replace(
+      { pathname: '/alerts', query: { ...router.query, tab: key } },
+      undefined,
+      { shallow: true },
+    )
+  }
+
+  return (
+    <div>
+      <div className="bg-surface-card border-b border-surface-border px-4">
+        <div className="max-w-7xl mx-auto flex gap-1">
+          {ALERT_TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              style={{
+                borderColor: active === t.key ? 'var(--color-action-primary)' : 'transparent',
+                color: active === t.key ? 'var(--color-action-primary)' : 'var(--color-content-secondary)',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {active === 'anomalies' && <AnomalyAlertsView />}
+      {active === 'notifications' && <NotificationsPage />}
     </div>
   )
 }

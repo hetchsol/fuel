@@ -487,37 +487,73 @@ def record_tank_dip_reading(shift_id: str, reading: TankDipReading, ctx: dict = 
     if 'tank_dip_readings' not in shift:
         shift['tank_dip_readings'] = []
 
-    # Find existing reading for this tank or create new one
-    existing_reading = None
+    # Find existing reading for this tank
+    existing_idx = None
     for idx, r in enumerate(shift['tank_dip_readings']):
-        if r['tank_id'] == reading.tank_id:
-            existing_reading = idx
+        if r.get('tank_id') == reading.tank_id:
+            existing_idx = idx
             break
+    existing = shift['tank_dip_readings'][existing_idx] if existing_idx is not None else {}
 
-    # Convert dip to volume
+    # Detect changes to an already-recorded value so a correction is logged.
+    changes = {}  # field -> (old, new)
+    for field in ("opening_dip_cm", "closing_dip_cm"):
+        incoming = getattr(reading, field)
+        if incoming is None:
+            continue  # not provided this time -> leave any existing value untouched
+        old = existing.get(field)
+        if old is not None and incoming != old:
+            changes[field] = (old, incoming)
+
+    # Merge: start from the existing reading and apply only the fields supplied
+    # this submission, recomputing volume for any dip provided.
+    merged = dict(existing)
+    merged["tank_id"] = reading.tank_id
     if reading.opening_dip_cm is not None:
-        reading.opening_volume_liters = reading.opening_dip_cm * TANK_CONVERSION_FACTOR
+        merged["opening_dip_cm"] = reading.opening_dip_cm
+        merged["opening_volume_liters"] = reading.opening_dip_cm * TANK_CONVERSION_FACTOR
     if reading.closing_dip_cm is not None:
-        reading.closing_volume_liters = reading.closing_dip_cm * TANK_CONVERSION_FACTOR
+        merged["closing_dip_cm"] = reading.closing_dip_cm
+        merged["closing_volume_liters"] = reading.closing_dip_cm * TANK_CONVERSION_FACTOR
 
-    # Add audit fields
-    reading.recorded_at = datetime.now().isoformat()
-    reading.recorded_by = ctx.get("user_id", "")
+    now_iso = datetime.now().isoformat()
+    actor = ctx.get("username") or ctx.get("user_id", "")
 
-    reading_dict = reading.dict()
+    # First-time provenance, then keep "last updated" fresh on every save.
+    if not merged.get("recorded_by"):
+        merged["recorded_by"] = actor
+    merged["recorded_at"] = now_iso
 
-    if existing_reading is not None:
-        # Update existing reading
-        shift['tank_dip_readings'][existing_reading] = reading_dict
+    # Record corrections explicitly and write an audit entry.
+    if changes:
+        merged["edited_by"] = actor
+        merged["edited_at"] = now_iso
+        history = list(merged.get("edit_history", []))
+        for field, (old, new) in changes.items():
+            history.append({"field": field, "old": old, "new": new, "by": actor, "at": now_iso})
+        merged["edit_history"] = history
+        from ...services.audit_service import log_audit_event
+        log_audit_event(
+            station_id=ctx.get("station_id", ""),
+            action="dip_reading_edit",
+            performed_by=actor,
+            entity_type="tank_dip_reading",
+            entity_id=f"{shift_id}:{reading.tank_id}",
+            details={"changes": {f: {"old": o, "new": n} for f, (o, n) in changes.items()}},
+        )
+
+    if existing_idx is not None:
+        shift['tank_dip_readings'][existing_idx] = merged
     else:
-        # Add new reading
-        shift['tank_dip_readings'].append(reading_dict)
+        shift['tank_dip_readings'].append(merged)
+
+    save_station_storage(ctx["station_id"])
 
     return {
         "status": "success",
         "message": f"Tank dip reading recorded for {reading.tank_id}",
         "shift_id": shift_id,
-        "reading": reading_dict
+        "reading": merged
     }
 
 
