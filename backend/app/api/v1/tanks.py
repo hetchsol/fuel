@@ -10,11 +10,22 @@ from .auth import get_station_context
 from .sales import load_sales
 from ...services.notification_service import create_notification
 from ...services.dip_conversion import register_tank_calibration, TANK_CALIBRATION
+from ...services.naming_convention import compute_tank_display_name
 import logging
 
 _tanks_logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _dip_volume(tank_id: str, dip_cm: float) -> float:
+    """Dip (cm) -> volume (L) via the tank's uploaded calibration chart.
+    Raises HTTPException 400 if no chart exists — upload one first."""
+    from ...services.dip_conversion import dip_to_volume
+    try:
+        return dip_to_volume(tank_id, dip_cm)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/levels", response_model=List[FuelTankLevel])
@@ -34,7 +45,8 @@ def get_tank_levels(ctx: dict = Depends(get_station_context)):
             current_level=data["current_level"],
             capacity=data["capacity"],
             last_updated=data["last_updated"],
-            percentage=percentage
+            percentage=percentage,
+            display_name=compute_tank_display_name(tank_id, tank_data),
         ))
     return tanks
 
@@ -76,6 +88,48 @@ def set_tank_level(tank_id: str, level: float, ctx: dict = Depends(get_station_c
     from ...database.storage import save_station_storage
     save_station_storage(ctx["station_id"])
     return {"tank_id": tank_id, "current_level": tank_data[tank_id]["current_level"], "status": "level_set"}
+
+@router.put("/{tank_id}/name")
+def set_tank_name(tank_id: str, name: str = "", ctx: dict = Depends(get_station_context)):
+    """
+    Set or clear a tank's custom display name (owner). An empty name reverts to
+    the auto-generated size-based name (e.g. "Diesel Tank 2 — 14,000 L").
+    tank_id is never changed — this is a display label only.
+    """
+    storage = ctx["storage"]
+    tank_data = storage.get('tanks', {})
+    if tank_id not in tank_data:
+        raise HTTPException(status_code=404, detail="Tank not found")
+
+    clean = (name or "").strip()
+    old = tank_data[tank_id].get("custom_name")
+    if clean:
+        tank_data[tank_id]["custom_name"] = clean
+    else:
+        tank_data[tank_id].pop("custom_name", None)
+
+    from ...database.storage import save_station_storage
+    save_station_storage(ctx["station_id"])
+
+    try:
+        from ...services.audit_service import log_audit_event
+        log_audit_event(
+            station_id=ctx.get("station_id", ""),
+            action="tank_rename",
+            performed_by=ctx.get("username") or ctx.get("user_id", ""),
+            entity_type="tank",
+            entity_id=tank_id,
+            details={"old": old, "new": clean or None},
+        )
+    except Exception:
+        pass
+
+    return {
+        "tank_id": tank_id,
+        "display_name": compute_tank_display_name(tank_id, tank_data),
+        "custom": bool(clean),
+        "status": "renamed",
+    }
 
 @router.post("/refill/{tank_id}")
 def refill_tank(tank_id: str, volume_added: float, ctx: dict = Depends(get_station_context)):
@@ -376,13 +430,13 @@ def record_dip_reading(tank_id: str, opening_dip: float = None, closing_dip: flo
     # Update readings
     if opening_dip is not None:
         dip_readings_data[tank_id]["opening_dip"] = opening_dip
-        dip_readings_data[tank_id]["opening_volume"] = opening_dip * TANK_CONVERSION_FACTOR
+        dip_readings_data[tank_id]["opening_volume"] = _dip_volume(tank_id, opening_dip)
 
     if closing_dip is not None:
         dip_readings_data[tank_id]["closing_dip"] = closing_dip
-        dip_readings_data[tank_id]["closing_volume"] = closing_dip * TANK_CONVERSION_FACTOR
+        dip_readings_data[tank_id]["closing_volume"] = _dip_volume(tank_id, closing_dip)
         # Update tank current level based on closing dip
-        tank_data[tank_id]["current_level"] = closing_dip * TANK_CONVERSION_FACTOR
+        tank_data[tank_id]["current_level"] = _dip_volume(tank_id, closing_dip)
 
     dip_readings_data[tank_id]["last_updated"] = datetime.now().isoformat()
     dip_readings_data[tank_id]["updated_by"] = user or "Unknown"
@@ -478,23 +532,11 @@ def create_tank(tank_id: str, fuel_type: str, capacity: float, initial_level: fl
         "percentage": percentage
     }
 
-    # Auto-clone calibration chart from a sibling tank of the same fuel type
-    if tank_id not in TANK_CALIBRATION:
-        for known_id, known_config in TANK_CALIBRATION.items():
-            known_fuel = "Diesel" if "DIESEL" in known_id.upper() else "Petrol"
-            if known_fuel == fuel_type:
-                register_tank_calibration(
-                    tank_id,
-                    chart_data=known_config["calibration_chart"],
-                    capacity=known_config.get("capacity", 50000),
-                    diameter=known_config.get("diameter", 250),
-                    length=known_config.get("length", 1000),
-                )
-                _tanks_logger.warning(
-                    f"Tank {tank_id} calibration cloned from {known_id}. "
-                    f"Provide actual calibration data for accurate dip readings."
-                )
-                break
+    # Calibration must be uploaded per tank (force-upload). We intentionally do NOT
+    # clone a sibling tank's chart here: a cloned chart silently produced wrong
+    # volumes for a tank of a different size (e.g. two diesel tanks of 30,000 L vs
+    # 14,000 L). A new tank starts with no chart until one is uploaded.
+    _tanks_logger.info(f"Tank {tank_id} created without a calibration chart - upload one before recording dips.")
 
     return {
         "status": "success",

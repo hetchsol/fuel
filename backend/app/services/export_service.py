@@ -138,7 +138,7 @@ def _tank_reading_row(r: dict) -> list:
     return [
         r.get("date", ""),
         r.get("shift_type", ""),
-        r.get("tank_id", ""),
+        r.get("tank_name") or r.get("tank_id", ""),
         r.get("fuel_type", ""),
         r.get("opening_dip_cm"),
         r.get("closing_dip_cm"),

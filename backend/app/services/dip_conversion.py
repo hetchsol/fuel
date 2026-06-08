@@ -122,47 +122,29 @@ TANK_CALIBRATION = {
 def _resolve_calibration(tank_id: str, fuel_type: str = None) -> dict:
     """
     Resolve calibration config for a tank_id.
-    Priority: hardcoded TANK_CALIBRATION → dynamic registry → same-fuel-type fallback.
-    Raises ValueError only if no calibration can be found at all.
+    Priority: hardcoded TANK_CALIBRATION → dynamic registry.
+
+    Fuel-type and string-inferred fallbacks are intentionally removed: silently
+    using another tank's chart produced wrong volumes when two tanks of the same
+    fuel type had different capacities (e.g. two diesel tanks at 30,000 L and
+    14,000 L). Every tank must have its own uploaded chart.
+
+    Raises ValueError with a clear message if no chart is found, so callers
+    can surface a readable 400 to the user.
     """
-    # 1. Hardcoded charts (existing tanks)
+    # 1. Hardcoded charts (legacy tanks that shipped with built-in charts)
     if tank_id in TANK_CALIBRATION:
         return TANK_CALIBRATION[tank_id]
 
-    # 2. Dynamic registry (registered at runtime via register_tank_calibration)
+    # 2. Dynamic registry (uploaded via /tank-calibrations/upload or registered
+    #    at startup from tank_calibrations.json)
     if tank_id in _dynamic_calibrations:
         return _dynamic_calibrations[tank_id]
 
-    # 3. Fallback: find a sibling tank of the same fuel type
-    if fuel_type:
-        for known_id, known_config in TANK_CALIBRATION.items():
-            # Infer fuel type from known tank ID
-            known_fuel = "Diesel" if "DIESEL" in known_id.upper() else "Petrol"
-            if known_fuel == fuel_type:
-                logger.warning(
-                    f"Tank {tank_id} has no calibration chart — using {known_id} chart as fallback. "
-                    f"Provide actual calibration data for accurate readings."
-                )
-                return known_config
-
-    # 4. Last attempt: infer fuel_type from tank_id string
-    inferred_fuel = None
-    if "DIESEL" in tank_id.upper():
-        inferred_fuel = "Diesel"
-    elif "PETROL" in tank_id.upper():
-        inferred_fuel = "Petrol"
-
-    if inferred_fuel:
-        for known_id, known_config in TANK_CALIBRATION.items():
-            known_fuel = "Diesel" if "DIESEL" in known_id.upper() else "Petrol"
-            if known_fuel == inferred_fuel:
-                logger.warning(
-                    f"Tank {tank_id} has no calibration chart — using {known_id} chart as fallback (inferred fuel type: {inferred_fuel}). "
-                    f"Provide actual calibration data for accurate readings."
-                )
-                return known_config
-
-    raise ValueError(f"Unknown tank: {tank_id}. Add calibration chart for this tank.")
+    raise ValueError(
+        f"No calibration chart found for tank '{tank_id}'. "
+        f"Upload a chart via Infrastructure > Calibration before recording dips."
+    )
 
 
 def dip_to_volume(tank_id: str, dip_cm: float) -> float:

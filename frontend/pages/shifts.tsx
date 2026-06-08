@@ -1255,7 +1255,7 @@ export default function Shifts() {
                   <option value="">-- Select Tank --</option>
                   {tanks.map(tank => (
                     <option key={tank.tank_id} value={tank.tank_id}>
-                      {tank.tank_id} ({tank.fuel_type})
+                      {tank.display_name || `${tank.tank_id} (${tank.fuel_type})`}
                     </option>
                   ))}
                 </select>

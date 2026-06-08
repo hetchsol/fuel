@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import useSWR from 'swr'
 import { getHeaders, authFetch } from '../lib/api'
-import { useTanks } from '../hooks/useTanks'
+import { useTanks, tankLabel } from '../hooks/useTanks'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
 
@@ -454,9 +454,7 @@ export default function FuelOperations() {
           >
             {availableTanks.map(t => (
               <option key={t.tank_id} value={t.tank_id}>
-                {t.fuel_type} Tank{availableTanks.filter(x => x.fuel_type === t.fuel_type).length > 1
-                  ? ` ${availableTanks.filter(x => x.fuel_type === t.fuel_type).indexOf(t) + 1}`
-                  : ''}
+                {tankLabel(t)}
               </option>
             ))}
           </select>
@@ -531,7 +529,7 @@ export default function FuelOperations() {
                     <div>
                       <h2 className="text-lg font-semibold text-action-primary mb-1">Current Tank Level</h2>
                       <p className="text-sm text-action-primary">
-                        {(availableTanks.find(t => t.tank_id === selectedTank)?.fuel_type || 'Fuel') + ' Tank'}
+                        {(() => { const t = availableTanks.find(t => t.tank_id === selectedTank); return t ? tankLabel(t) : 'Fuel Tank' })()}
                       </p>
                     </div>
                     {currentStock ? (

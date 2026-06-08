@@ -83,6 +83,7 @@ class FuelTankLevel(BaseModel):
     capacity: float  # Tank capacity in liters
     last_updated: str  # Timestamp of last update
     percentage: float  # Percentage full
+    display_name: Optional[str] = None  # Size-based label, e.g. "Diesel Tank 2 — 14,000 L"
 
 class FuelSettings(BaseModel):
     diesel_price_per_liter: float = Field(..., gt=0, le=1000)

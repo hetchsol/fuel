@@ -194,10 +194,7 @@ export default function Inventory() {
               const pct = tank.percentage || (tank.capacity > 0 ? (tank.current_level / tank.capacity) * 100 : 0)
               const isLow = pct <= 25
               const isCritical = pct <= 10
-              const sameFuelTanks = tanks.filter((t: any) => t.fuel_type === tank.fuel_type)
-              const tankLabel = sameFuelTanks.length > 1
-                ? `${tank.fuel_type} Tank ${sameFuelTanks.indexOf(tank) + 1}`
-                : `${tank.fuel_type} Tank`
+              const tankLabel = tank.display_name || `${tank.fuel_type} Tank`
 
               return (
                 <div key={tank.tank_id} className={`bg-gradient-to-br ${isDiesel ? 'from-fuel-diesel-light to-indigo-50' : 'from-fuel-petrol-light to-emerald-50'} rounded-lg shadow-lg p-6 border-2 ${isDiesel ? 'border-fuel-diesel-border' : 'border-fuel-petrol-border'}`}>

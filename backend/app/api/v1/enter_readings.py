@@ -622,21 +622,20 @@ async def get_shift_summary(shift_id: str, ctx: dict = Depends(get_station_conte
             "nozzle_summaries": nozzle_summaries,
         })
 
-    # Build per-tank nozzle totals using nozzle→tank resolution
-    # Also keep fuel-type totals as fallback
-    per_tank_totals = {}  # tank_id -> total
-    diesel_total = 0.0
-    petrol_total = 0.0
+    # Build per-tank nozzle totals using strict nozzle→tank resolution.
+    # Fuel-type buckets are removed: they merged two same-fuel tanks of different
+    # sizes (e.g. two diesel tanks at 30,000 L and 14,000 L) into one figure,
+    # causing wrong reconciliation. Every nozzle must be mapped to a specific tank.
+    per_tank_totals = {}  # tank_id -> total nozzle dispensed
+    unmapped_nozzles = []
     for ar in attendant_results:
         for ns in ar["nozzle_summaries"]:
             nid = ns.get("nozzle_id", "")
             resolved_tank = get_tank_id_for_nozzle(nozzle_id=nid, storage=storage)
             if resolved_tank:
                 per_tank_totals[resolved_tank] = per_tank_totals.get(resolved_tank, 0.0) + ns["average_dispensed"]
-            if ns["fuel_type"] == "Diesel":
-                diesel_total += ns["average_dispensed"]
             else:
-                petrol_total += ns["average_dispensed"]
+                unmapped_nozzles.append(nid)
 
     # Load tank_readings.json for delivery-adjusted tank movement
     tank_readings_db = _load_tank_readings_db(station_id)
@@ -656,7 +655,7 @@ async def get_shift_summary(shift_id: str, ctx: dict = Depends(get_station_conte
             tank_movement = round(matched.get("tank_volume_movement", 0), 3)
             delivery_count = matched.get("delivery_count", 0)
             total_delivery_volume = round(matched.get("total_delivery_volume", 0), 3)
-            fuel_type = matched.get("fuel_type", "Diesel" if "DIESEL" in tank_id.upper() else "Petrol")
+            fuel_type = matched.get("fuel_type") or storage.get("tanks", {}).get(tank_id, {}).get("fuel_type", "Unknown")
             data_source = "tank_reading"
         else:
             # Fallback: simple dip formula (no delivery data available)
@@ -665,14 +664,13 @@ async def get_shift_summary(shift_id: str, ctx: dict = Depends(get_station_conte
             tank_movement = round(opening_vol - closing_vol, 3) if opening_vol and closing_vol else 0
             delivery_count = 0
             total_delivery_volume = 0
-            fuel_type = "Diesel" if "DIESEL" in tank_id.upper() else "Petrol"
+            fuel_type = storage.get("tanks", {}).get(tank_id, {}).get("fuel_type", "Unknown")
             data_source = "dip_only"
 
-        # Use per-tank nozzle total if available, fall back to fuel-type total
-        if tank_id in per_tank_totals:
-            nozzle_total = per_tank_totals[tank_id]
-        else:
-            nozzle_total = diesel_total if fuel_type == "Diesel" else petrol_total
+        # Strict per-tank nozzle total only. If the tank has no mapped nozzles
+        # (nozzle→tank wiring missing in Infrastructure) the total is 0 and the
+        # variance will show FAIL, surfacing the configuration gap.
+        nozzle_total = per_tank_totals.get(tank_id, 0.0)
 
         variance = round(nozzle_total - tank_movement, 3) if tank_movement else 0
         variance_pct = round(abs(variance) / tank_movement * 100, 2) if tank_movement > 0 else 0
@@ -702,10 +700,8 @@ async def get_shift_summary(shift_id: str, ctx: dict = Depends(get_station_conte
         "date": shift.get("date"),
         "shift_type": shift.get("shift_type"),
         "attendants": attendant_results,
-        "fuel_totals": {
-            "diesel": round(diesel_total, 3),
-            "petrol": round(petrol_total, 3),
-        },
+        "per_tank_totals": {k: round(v, 3) for k, v in per_tank_totals.items()},
+        "unmapped_nozzles": unmapped_nozzles,  # non-empty = nozzle→tank wiring gap
         "reconciliation": reconciliation,
     }
 
@@ -755,12 +751,11 @@ async def get_nozzle_readings_for_tank(
     # Determine which nozzles belong to this specific tank
     tank_nozzle_ids = set(get_nozzle_ids_for_tank(tank_id=tank_id, storage=storage))
 
-    # Determine target fuel type: prefer tank record, fall back to string parsing
+    # Determine target fuel type from the tank record (strict; no string inference).
     tank_data = storage.get('tanks', {}).get(tank_id)
-    if tank_data:
-        target_fuel = tank_data.get("fuel_type", "Diesel")
-    else:
-        target_fuel = "Diesel" if "DIESEL" in tank_id.upper() else "Petrol"
+    if not tank_data:
+        raise HTTPException(status_code=404, detail=f"Tank {tank_id} not found")
+    target_fuel = tank_data.get("fuel_type", "Diesel")
 
     readings_db = _load_readings(station_id)
 

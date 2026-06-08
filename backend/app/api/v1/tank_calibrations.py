@@ -261,6 +261,22 @@ def get_calibration(tank_id: str, ctx: dict = Depends(get_station_context)):
     return {"found": False, "tank_id": tank_id, "message": "No custom calibration. Using system default."}
 
 
+@router.get("/{tank_id}/convert")
+def convert_dip(tank_id: str, dip_cm: float, ctx: dict = Depends(get_station_context)):
+    """Convert a dip reading (cm) to volume (L) using the tank's calibration chart.
+    Used by the frontend to live-populate closing volume when a closing dip is entered."""
+    storage = ctx["storage"]
+    tanks = storage.get("tanks", {})
+    if tank_id not in tanks:
+        raise HTTPException(status_code=404, detail=f"Tank {tank_id} not found")
+    from ...services.dip_conversion import dip_to_volume
+    try:
+        volume = dip_to_volume(tank_id, dip_cm)
+        return {"tank_id": tank_id, "dip_cm": dip_cm, "volume_liters": volume}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.delete("/{tank_id}")
 def clear_calibration(tank_id: str, ctx: dict = Depends(require_owner)):
     """Clear a tank's custom calibration (owner only). Reverts to system default."""

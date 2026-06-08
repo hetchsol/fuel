@@ -8,6 +8,12 @@ export interface Tank {
   capacity: number
   last_updated: string
   percentage: number
+  display_name?: string  // size-based label, e.g. "Diesel Tank 2 — 14,000 L"
+}
+
+// Display label for a tank: the server-computed size-based name, with a safe fallback.
+export function tankLabel(t: { display_name?: string; fuel_type?: string; tank_id?: string }): string {
+  return t.display_name || (t.fuel_type ? `${t.fuel_type} Tank` : (t.tank_id || 'Tank'))
 }
 
 // Fallback defaults only used when API fails and state is empty

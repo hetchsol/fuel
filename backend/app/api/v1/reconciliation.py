@@ -314,13 +314,16 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
     if critical_tanks:
         try:
             from ...services.notification_service import create_notification
+            from ...services.naming_convention import compute_tank_display_name
+            _tanks_cfg = ctx["storage"].get("tanks", {})
             for ct in critical_tanks:
+                _tname = compute_tank_display_name(ct['tank_id'], _tanks_cfg)
                 create_notification(
                     station_id=ctx["station_id"],
                     type="CRITICAL_VARIANCE",
                     severity="critical",
                     title="Critical Tank Variance Detected",
-                    message=f"Tank {ct['tank_id']} ({ct['fuel_type']}): {ct['electronic_discrepancy_percent']}% variance "
+                    message=f"{_tname}: {ct['electronic_discrepancy_percent']}% variance "
                             f"({ct['electronic_vs_tank_discrepancy']:.1f}L) during {shift.get('shift_type', '')} shift on {shift.get('date', '')}",
                     entity_type="tank_reconciliation",
                     entity_id=f"{shift_id}-{ct['tank_id']}",

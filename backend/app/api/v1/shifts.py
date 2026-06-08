@@ -507,14 +507,24 @@ def record_tank_dip_reading(shift_id: str, reading: TankDipReading, ctx: dict = 
 
     # Merge: start from the existing reading and apply only the fields supplied
     # this submission, recomputing volume for any dip provided.
+    # Dip -> volume via the tank's calibration chart (fall back to the flat factor
+    # only if the tank has no chart yet).
+    from ...services.dip_conversion import dip_to_volume
+
+    def _vol(dip_cm):
+        try:
+            return dip_to_volume(reading.tank_id, dip_cm)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
     merged = dict(existing)
     merged["tank_id"] = reading.tank_id
     if reading.opening_dip_cm is not None:
         merged["opening_dip_cm"] = reading.opening_dip_cm
-        merged["opening_volume_liters"] = reading.opening_dip_cm * TANK_CONVERSION_FACTOR
+        merged["opening_volume_liters"] = _vol(reading.opening_dip_cm)
     if reading.closing_dip_cm is not None:
         merged["closing_dip_cm"] = reading.closing_dip_cm
-        merged["closing_volume_liters"] = reading.closing_dip_cm * TANK_CONVERSION_FACTOR
+        merged["closing_volume_liters"] = _vol(reading.closing_dip_cm)
 
     now_iso = datetime.now().isoformat()
     actor = ctx.get("username") or ctx.get("user_id", "")
@@ -642,15 +652,37 @@ def get_previous_dip_readings(shift_id: str, ctx: dict = Depends(get_station_con
     if not previous_dips:
         return {"found": False, "message": "No previous dip readings found", "readings": []}
 
-    # Map closing values → opening values for auto-populate
+    # Map closing dip → opening dip strictly per tank_id.
+    # Opening volume is recomputed from the carried dip via calibration (not taken
+    # from the stored closing_volume_liters, which may have been written with a
+    # different conversion path). If calibration is unavailable for a tank, carry
+    # the stored volume as a fallback with a warning flag.
+    from ...services.dip_conversion import dip_to_volume
+    all_tank_ids = set(storage.get("tanks", {}).keys())
     auto_populate = []
+    covered_tanks = set()
+
     for dip in previous_dips:
-        if dip.get("closing_dip_cm") is not None:
-            auto_populate.append({
-                "tank_id": dip["tank_id"],
-                "opening_dip_cm": dip["closing_dip_cm"],
-                "opening_volume_liters": dip.get("closing_volume_liters"),
-            })
+        tid = dip.get("tank_id")
+        if not tid or dip.get("closing_dip_cm") is None:
+            continue
+        covered_tanks.add(tid)
+        closing_dip = dip["closing_dip_cm"]
+        try:
+            opening_vol = dip_to_volume(tid, closing_dip)
+            vol_source = "calibration"
+        except ValueError:
+            opening_vol = dip.get("closing_volume_liters")
+            vol_source = "stored"
+        auto_populate.append({
+            "tank_id": tid,
+            "opening_dip_cm": closing_dip,
+            "opening_volume_liters": opening_vol,
+            "volume_source": vol_source,
+        })
+
+    # Flag any configured tanks the previous shift did not cover.
+    missing_tanks = sorted(all_tank_ids - covered_tanks)
 
     prev_shift = shifts_data.get(found_shift_id, {})
     return {
@@ -659,4 +691,5 @@ def get_previous_dip_readings(shift_id: str, ctx: dict = Depends(get_station_con
         "source_date": prev_shift.get("date", ""),
         "source_shift_type": prev_shift.get("shift_type", ""),
         "readings": auto_populate,
+        "missing_tanks": missing_tanks,  # tanks with no closing dip in the previous shift
     }

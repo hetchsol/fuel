@@ -10,6 +10,7 @@ interface Tank {
   capacity: number
   last_updated: string
   percentage: number
+  display_name?: string
 }
 
 interface Nozzle {
@@ -67,6 +68,10 @@ export default function Infrastructure() {
   // Tank capacity edit state
   const [editingTank, setEditingTank] = useState<string | null>(null)
   const [newCapacity, setNewCapacity] = useState<number>(0)
+  const [editingTankName, setEditingTankName] = useState<string | null>(null)
+  const [tankNameDraft, setTankNameDraft] = useState<string>('')
+  const [calibStatus, setCalibStatus] = useState<Record<string, { found: boolean; point_count?: number }>>({})
+  const [calibBusy, setCalibBusy] = useState<string | null>(null)
 
   // Create tank state
   const [showCreateTank, setShowCreateTank] = useState(false)
@@ -96,9 +101,69 @@ export default function Infrastructure() {
       if (res.ok) {
         const data = await res.json()
         setTanks(data)
+        fetchCalibStatus(data)
       }
     } catch (err) {
       console.error('Failed to fetch tanks:', err)
+    }
+  }
+
+  const fetchCalibStatus = async (tankList: Tank[]) => {
+    try {
+      const entries = await Promise.all(tankList.map(async (t) => {
+        try {
+          const res = await authFetch(`${BASE}/tank-calibrations/${t.tank_id}`, { headers: getHeaders() })
+          if (res.ok) {
+            const d = await res.json()
+            return [t.tank_id, { found: !!d.found, point_count: d.point_count }] as const
+          }
+        } catch { /* ignore */ }
+        return [t.tank_id, { found: false }] as const
+      }))
+      setCalibStatus(Object.fromEntries(entries))
+    } catch { /* ignore */ }
+  }
+
+  const downloadCalibTemplate = async () => {
+    try {
+      const res = await authFetch(`${BASE}/tank-calibrations/template`, { headers: getHeaders() })
+      if (!res.ok) { setMessage({ type: 'error', text: 'Failed to download template' }); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'tank_calibration_template.xlsx'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'Network error' })
+    }
+  }
+
+  const uploadCalibration = async (tankId: string, file: File) => {
+    setCalibBusy(tankId)
+    setMessage(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      // Plain fetch (not authFetch) so the browser sets the multipart boundary.
+      const res = await fetch(`${BASE}/tank-calibrations/upload?tank_id=${encodeURIComponent(tankId)}`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: fd,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setMessage({ type: 'success', text: `Calibration uploaded for ${tankId} (${data.point_count ?? '?'} points)` })
+        fetchTanks()
+        setTimeout(() => setMessage(null), 4000)
+      } else {
+        setMessage({ type: 'error', text: data.detail || 'Upload failed' })
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'Network error' })
+    } finally {
+      setCalibBusy(null)
     }
   }
 
@@ -216,6 +281,31 @@ export default function Infrastructure() {
       } else {
         const error = await res.json()
         setMessage({ type: 'error', text: error.detail || 'Failed to rename island' })
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'Network error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const saveTankName = async (tankId: string) => {
+    setLoading(true)
+    setMessage(null)
+    try {
+      const res = await authFetch(`${BASE}/tanks/${tankId}/name?name=${encodeURIComponent(tankNameDraft.trim())}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+      })
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Tank name updated' })
+        setEditingTankName(null)
+        setTankNameDraft('')
+        fetchTanks()
+        setTimeout(() => setMessage(null), 4000)
+      } else {
+        const error = await res.json()
+        setMessage({ type: 'error', text: error.detail || 'Failed to rename tank' })
       }
     } catch (err: any) {
       setMessage({ type: 'error', text: err?.message || 'Network error' })
@@ -533,9 +623,36 @@ export default function Infrastructure() {
                 }`}
               >
                 <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-2xl font-bold text-content-primary">{tank.fuel_type} Tank</h3>
+                  <div className="flex-1 mr-3">
+                    {editingTankName === tank.tank_id ? (
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="text"
+                          value={tankNameDraft}
+                          onChange={(e) => setTankNameDraft(e.target.value)}
+                          placeholder={tank.display_name || `${tank.fuel_type} Tank`}
+                          className="flex-1 px-2 py-1 border border-surface-border rounded focus:outline-none focus:ring-2 focus:ring-action-primary text-lg font-bold"
+                        />
+                        <button onClick={() => saveTankName(tank.tank_id)} disabled={loading}
+                          className="px-3 py-1 bg-action-primary text-white rounded text-sm hover:bg-action-primary-hover disabled:opacity-50">Save</button>
+                        <button onClick={() => { setEditingTankName(null); setTankNameDraft('') }}
+                          className="px-3 py-1 bg-surface-border text-content-secondary rounded text-sm hover:opacity-80">Cancel</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-2xl font-bold text-content-primary">{tank.display_name || `${tank.fuel_type} Tank`}</h3>
+                        <button
+                          onClick={() => { setEditingTankName(tank.tank_id); setTankNameDraft('') }}
+                          className="text-xs text-action-primary hover:underline font-semibold"
+                        >
+                          Rename
+                        </button>
+                      </div>
+                    )}
                     <p className="text-sm text-content-secondary">{tank.tank_id}</p>
+                    {editingTankName === tank.tank_id && (
+                      <p className="text-xs text-content-secondary mt-1">Leave blank and save to revert to the automatic name.</p>
+                    )}
                   </div>
                   <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                     tank.fuel_type === 'Diesel'
@@ -600,6 +717,33 @@ export default function Infrastructure() {
                       {tank.capacity.toLocaleString()} L
                     </p>
                   )}
+                </div>
+
+                {/* Calibration */}
+                <div className="mb-4">
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="text-sm font-semibold text-content-secondary">Calibration (dip → volume)</p>
+                    <button onClick={downloadCalibTemplate} className="text-xs text-action-primary hover:underline font-semibold">
+                      Download template
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-sm font-medium ${calibStatus[tank.tank_id]?.found ? 'text-status-success' : 'text-status-warning'}`}>
+                      {calibStatus[tank.tank_id]?.found
+                        ? `Calibrated (${calibStatus[tank.tank_id]?.point_count ?? 0} points)`
+                        : 'No calibration chart - upload required'}
+                    </span>
+                    <label className={`px-3 py-1 rounded text-sm cursor-pointer text-white ${calibBusy === tank.tank_id ? 'bg-content-secondary cursor-wait' : 'bg-action-primary hover:bg-action-primary-hover'}`}>
+                      {calibBusy === tank.tank_id ? 'Uploading...' : 'Upload chart'}
+                      <input
+                        type="file"
+                        accept=".xlsx,.xls"
+                        className="hidden"
+                        disabled={calibBusy === tank.tank_id}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCalibration(tank.tank_id, f); e.currentTarget.value = '' }}
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 {/* Progress Bar */}

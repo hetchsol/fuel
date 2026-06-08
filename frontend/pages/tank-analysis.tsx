@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
+import { useTanks, tankLabel } from '../hooks/useTanks'
 
 const BASE = '/api/v1'
 
@@ -35,6 +36,11 @@ export default function TankAnalysis() {
   const [reconciliation, setReconciliation] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const { tanks: allTanks } = useTanks()
+  const tankNameFor = (tankId: string) => {
+    const t = allTanks.find(x => x.tank_id === tankId)
+    return t ? tankLabel(t) : tankId
+  }
 
   useEffect(() => {
     fetchRecentShifts()
@@ -250,7 +256,7 @@ export default function TankAnalysis() {
               >
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-2xl font-bold text-content-primary">{tank.tank_id}</h3>
+                    <h3 className="text-2xl font-bold text-content-primary">{tankNameFor(tank.tank_id)}</h3>
                     <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
                       tank.fuel_type === 'Diesel'
                         ? 'bg-fuel-diesel-light text-fuel-diesel'

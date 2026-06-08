@@ -4,7 +4,7 @@ import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { useTanks } from '../hooks/useTanks'
+import { useTanks, tankLabel } from '../hooks/useTanks'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
 
@@ -370,9 +370,7 @@ export default function TankReadingsReport() {
               >
                 {availableTanks.map(t => (
                   <option key={t.tank_id} value={t.tank_id}>
-                    {t.fuel_type} Tank{availableTanks.filter(x => x.fuel_type === t.fuel_type).length > 1
-                      ? ` ${availableTanks.filter(x => x.fuel_type === t.fuel_type).indexOf(t) + 1}`
-                      : ''}
+                    {tankLabel(t)}
                   </option>
                 ))}
               </select>

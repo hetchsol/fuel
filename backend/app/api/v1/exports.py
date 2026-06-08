@@ -75,6 +75,12 @@ def export_tank_readings(
     if not readings:
         raise HTTPException(status_code=404, detail="No tank readings found for the given filters")
 
+    # Show the size-based tank name in the export (falls back to tank_id).
+    from ...services.naming_convention import compute_tank_display_name
+    tanks_cfg = ctx["storage"].get("tanks", {})
+    for r in readings:
+        r["tank_name"] = compute_tank_display_name(r.get("tank_id", ""), tanks_cfg)
+
     if format == "csv":
         content = tank_readings_to_csv(readings)
         return _stream(content, "tank_readings.csv", "text/csv")

@@ -1709,7 +1709,7 @@ function TankCalibrationTab() {
             className="w-full px-3 py-2 border border-surface-border rounded-input focus:outline-none focus:ring-2 focus:ring-action-primary">
             <option value="">-- Select a tank --</option>
             {tanks.map((t: any) => (
-              <option key={t.tank_id} value={t.tank_id}>{t.tank_id} ({t.fuel_type} — {t.capacity?.toLocaleString()}L)</option>
+              <option key={t.tank_id} value={t.tank_id}>{t.display_name || `${t.tank_id} (${t.fuel_type})`}</option>
             ))}
           </select>
         </div>

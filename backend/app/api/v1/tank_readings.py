@@ -312,9 +312,12 @@ def submit_tank_reading(
 
     tank_config = tanks[reading_input.tank_id]
 
-    # Validate dip readings
-    dip_validation_opening = validate_dip_reading(reading_input.tank_id, reading_input.opening_dip_cm)
-    dip_validation_closing = validate_dip_reading(reading_input.tank_id, reading_input.closing_dip_cm)
+    # Guard: every dip conversion needs an uploaded calibration chart for this tank.
+    try:
+        dip_validation_opening = validate_dip_reading(reading_input.tank_id, reading_input.opening_dip_cm)
+        dip_validation_closing = validate_dip_reading(reading_input.tank_id, reading_input.closing_dip_cm)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     all_errors = []
     all_warnings = []
@@ -328,13 +331,16 @@ def submit_tank_reading(
     all_warnings.extend(dip_validation_closing.get('warnings', []))
 
     # Convert dip readings to volumes if not provided
-    opening_volume = reading_input.opening_volume
-    if opening_volume is None:
-        opening_volume = dip_to_volume(reading_input.tank_id, reading_input.opening_dip_cm)
+    try:
+        opening_volume = reading_input.opening_volume
+        if opening_volume is None:
+            opening_volume = dip_to_volume(reading_input.tank_id, reading_input.opening_dip_cm)
 
-    closing_volume = reading_input.closing_volume
-    if closing_volume is None:
-        closing_volume = dip_to_volume(reading_input.tank_id, reading_input.closing_dip_cm)
+        closing_volume = reading_input.closing_volume
+        if closing_volume is None:
+            closing_volume = dip_to_volume(reading_input.tank_id, reading_input.closing_dip_cm)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     # ===== HANDLE MULTIPLE DELIVERIES (NEW FEATURE) =====
     deliveries = []
@@ -653,6 +659,8 @@ def submit_tank_reading(
         save_tank_deliveries(tank_deliveries_db, station_id)  # Persist linked delivery updates
 
     # --- Notifications ---
+    from ...services.naming_convention import compute_tank_display_name
+    tank_name = compute_tank_display_name(reading_input.tank_id, tanks)
     # Tank level checks
     tank_capacity = tank_config.get('capacity', 0)
     if tank_capacity > 0 and closing_volume is not None:
@@ -663,7 +671,7 @@ def submit_tank_reading(
                 type="TANK_LEVEL_CRITICAL",
                 severity="critical",
                 title="Critical Tank Level",
-                message=f"Tank {reading_input.tank_id} is at {level_pct:.1f}% capacity ({closing_volume:.0f}L / {tank_capacity:.0f}L)",
+                message=f"{tank_name} is at {level_pct:.1f}% capacity ({closing_volume:.0f}L / {tank_capacity:.0f}L)",
                 entity_type="tank",
                 entity_id=reading_input.tank_id,
             )
@@ -673,7 +681,7 @@ def submit_tank_reading(
                 type="TANK_LEVEL_LOW",
                 severity="medium",
                 title="Low Tank Level",
-                message=f"Tank {reading_input.tank_id} is at {level_pct:.1f}% capacity ({closing_volume:.0f}L / {tank_capacity:.0f}L)",
+                message=f"{tank_name} is at {level_pct:.1f}% capacity ({closing_volume:.0f}L / {tank_capacity:.0f}L)",
                 entity_type="tank",
                 entity_id=reading_input.tank_id,
             )
@@ -685,7 +693,7 @@ def submit_tank_reading(
             type="HIGH_VARIANCE",
             severity="high",
             title="High Variance Detected",
-            message=f"Tank {reading_input.tank_id} on {reading_input.date} ({reading_input.shift_type}): Variance exceeds warning threshold",
+            message=f"{tank_name} on {reading_input.date} ({reading_input.shift_type}): Variance exceeds warning threshold",
             entity_type="tank",
             entity_id=reading_input.tank_id,
         )
@@ -707,7 +715,7 @@ def submit_tank_reading(
                         type="DELIVERY_LOSS_EXCESSIVE",
                         severity="high",
                         title="Excessive Delivery Loss",
-                        message=f"Delivery to {reading_input.tank_id}: Loss {loss:.1f}L ({loss_pct:.2f}%) exceeds allowable {allowable_pct}%",
+                        message=f"Delivery to {tank_name}: Loss {loss:.1f}L ({loss_pct:.2f}%) exceeds allowable {allowable_pct}%",
                         entity_type="delivery",
                         entity_id=reading_id,
                     )
@@ -718,7 +726,7 @@ def submit_tank_reading(
             type="DELIVERY_RECEIVED",
             severity="medium",
             title="Delivery Recorded",
-            message=f"{fuel_type} delivery of {total_delivery_volume:.0f}L recorded for {reading_input.tank_id}",
+            message=f"{fuel_type} delivery of {total_delivery_volume:.0f}L recorded for {tank_name}",
             entity_type="delivery",
             entity_id=reading_id,
         )
@@ -882,9 +890,11 @@ def get_previous_shift_closing(
         "source_shift": previous_reading.get('shift_type', 'Unknown'),
         "source_reading_id": previous_reading.get('reading_id', ''),
 
-        # Tank dip and volume - these become the new opening values
+        # Tank dip and volume - these become the new opening values.
+        # Accept both field name conventions: tank_readings.json uses 'closing_volume';
+        # shift dip records use 'closing_volume_liters'. Normalise to opening_volume.
         "opening_dip_cm": previous_reading.get('closing_dip_cm', 0),
-        "opening_volume": previous_reading.get('closing_volume', 0),
+        "opening_volume": previous_reading.get('closing_volume') or previous_reading.get('closing_volume_liters', 0),
 
         # Nozzle readings - closing values become opening values
         "nozzle_readings": []
@@ -1386,8 +1396,8 @@ def get_delivery_timeline(reading_id: str, ctx: dict = Depends(get_station_conte
 
     # Calculate timeline if not already present
     deliveries = reading.get('deliveries', [])
-    opening_volume = reading.get('opening_volume', 0)
-    closing_volume = reading.get('closing_volume', 0)
+    opening_volume = reading.get('opening_volume') or reading.get('opening_volume_liters', 0)
+    closing_volume = reading.get('closing_volume') or reading.get('closing_volume_liters', 0)
 
     timeline = calculate_inter_delivery_sales(
         deliveries=deliveries,

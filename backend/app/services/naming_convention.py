@@ -140,6 +140,37 @@ def get_full_display_label(nozzle: dict, island: Optional[dict] = None) -> str:
     return nozzle.get("nozzle_id", "")
 
 
+def compute_tank_display_name(tank_id: str, tanks_data: dict) -> str:
+    """
+    Size-based display name for a tank, e.g. "Diesel Tank 2 — 14,000 L".
+
+    The per-fuel index is stable: it is this tank's position among all tanks of
+    the same fuel_type, sorted by tank_id (1-based). A custom name set by the
+    owner (`custom_name` on the tank) always overrides the auto-generated one.
+
+    tank_id is never changed — this is a display label only.
+    """
+    tank = (tanks_data or {}).get(tank_id) or {}
+    custom = tank.get("custom_name")
+    if custom:
+        return custom
+
+    fuel = tank.get("fuel_type") or "Fuel"
+    same_fuel = sorted(
+        tid for tid, t in (tanks_data or {}).items()
+        if (t or {}).get("fuel_type") == fuel
+    )
+    index = same_fuel.index(tank_id) + 1 if tank_id in same_fuel else 1
+
+    capacity = tank.get("capacity") or 0
+    try:
+        cap_str = f"{int(round(float(capacity))):,}"
+    except (TypeError, ValueError):
+        cap_str = str(capacity)
+
+    return f"{fuel} Tank {index} — {cap_str} L"
+
+
 def resolve_nozzle_display_to_internal(
     display_label: str,
     fuel_type: str,

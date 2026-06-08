@@ -199,6 +199,24 @@ def build_matrix():
         cap(f"tank_readings_{t}", f"/tank-readings/readings/{t}", {"start_date": D0, "end_date": D1})
         cap(f"tank_movement_{t}", f"/tank-readings/movement/{t}", {"start_date": D0, "end_date": D1})
 
+    # Carry-forward: previous-shift opening for each tank (Day -> Night and Night -> next Day).
+    # This is the core of the B3/C correctness check - must match strictly per tank.
+    for t in TANKS:
+        cap(f"prev_shift_night_{t}", f"/tank-readings/readings/{t}/previous-shift",
+            {"current_date": D0, "shift_type": "Night"})
+        cap(f"prev_shift_day_{t}", f"/tank-readings/readings/{t}/previous-shift",
+            {"current_date": D1, "shift_type": "Day"})
+    # Nozzle carry-forward (attendant last readings, per nozzle)
+    cap("attendant_last_readings_diesel2", "/tank-readings/attendant-last-readings",
+        {"attendant_name": "Katongo", "tank_id": "TANK-DIESEL-2"})
+    cap("attendant_last_readings_diesel", "/tank-readings/attendant-last-readings",
+        {"attendant_name": "Katongo", "tank_id": "TANK-DIESEL"})
+    # Reconciliation tank-analysis using the first real shift that has readings
+    real_shifts = [sid for sid, s in STORAGE.get("shifts", {}).items()
+                   if s.get("date") == D0]
+    if real_shifts:
+        cap("recon_tank_analysis_real", f"/reconciliation/shift/{real_shifts[0]}/tank-analysis")
+
     # Discrepancies / anomalies (discrepancies.py) --------------------------
     cap("discrepancies_30", "/discrepancies", {"lookback_days": 30})
     cap("discrepancies_3650", "/discrepancies", {"lookback_days": 3650})

@@ -132,10 +132,7 @@ export default function Home() {
         )}
         {allTanks.map((tank: any) => {
           const fuelType = tank.fuel_type as 'Diesel' | 'Petrol'
-          const sameFuelTanks = allTanks.filter((t: any) => t.fuel_type === fuelType)
-          const tankLabel = sameFuelTanks.length > 1
-            ? `${fuelType} Tank ${sameFuelTanks.indexOf(tank) + 1}`
-            : undefined
+          const tankLabel = tank.display_name || undefined
           return (
             <TankCard
               key={tank.tank_id}

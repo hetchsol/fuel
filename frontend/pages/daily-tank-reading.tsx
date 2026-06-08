@@ -4,7 +4,7 @@ import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
 import { useWorkingDay } from '../contexts/WorkingDayContext'
-import { useTanks } from '../hooks/useTanks'
+import { useTanks, tankLabel } from '../hooks/useTanks'
 
 
 interface NozzleReading {
@@ -1072,7 +1072,7 @@ export default function DailyTankReading() {
               >
                 {availableTanks.map(t => (
                   <option key={t.tank_id} value={t.tank_id}>
-                    {t.fuel_type === 'Diesel' ? '🟣' : '🟢'} {t.fuel_type} Tank ({t.fuel_type === 'Diesel' ? 'LSD' : 'UNL'})
+                    {tankLabel(t)}
                   </option>
                 ))}
               </select>
@@ -1257,20 +1257,29 @@ export default function DailyTankReading() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="rounded-lg p-4" style={{ backgroundColor: theme.primaryLight, borderColor: theme.primary, borderWidth: '1px' }}>
                   <label className="block text-sm font-medium mb-2" style={{ color: theme.primary }}>
-                    Opening Dip (cm) <span className="text-status-error">*</span>
-                    <span className="text-xs ml-2 opacity-75">Excel Column: AF</span>
+                    Opening Dip (cm)
+                    <span className="text-xs ml-2 opacity-75">(auto - previous closing)</span>
                   </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={formData.opening_dip_cm}
-                    onChange={(e) => setFormData({ ...formData, opening_dip_cm: e.target.value })}
-                    className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
-                    style={{ borderColor: theme.primary + '80' }}
-                    placeholder="e.g., 164.5"
-                    required
-                  />
-                  <p className="text-xs mt-1 opacity-75" style={{ color: theme.primary }}>Physical measurement at start of shift</p>
+                  {user?.role === 'owner' ? (
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={formData.opening_dip_cm}
+                      onChange={(e) => setFormData({ ...formData, opening_dip_cm: e.target.value })}
+                      className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
+                      style={{ borderColor: theme.primary + '80' }}
+                      placeholder="e.g., 164.5"
+                    />
+                  ) : (
+                    <div
+                      className="w-full px-4 py-3 border rounded-md text-lg font-mono"
+                      style={{ borderColor: theme.primary + '80', backgroundColor: theme.primaryLight, color: theme.textPrimary, opacity: 0.85 }}
+                      title="Auto-fetched from previous shift closing. Only the owner can edit this."
+                    >
+                      {formData.opening_dip_cm || <span className="text-status-warning text-sm">Fetching...</span>}
+                    </div>
+                  )}
+                  <p className="text-xs mt-1 opacity-75" style={{ color: theme.primary }}>Carried from previous shift closing dip</p>
                 </div>
 
                 <div className="rounded-lg p-4" style={{ backgroundColor: theme.secondaryLight, borderColor: theme.secondary, borderWidth: '1px' }}>
@@ -1282,56 +1291,82 @@ export default function DailyTankReading() {
                     type="number"
                     step="0.1"
                     value={formData.closing_dip_cm}
-                    onChange={(e) => setFormData({ ...formData, closing_dip_cm: e.target.value })}
+                    onChange={async (e) => {
+                      const dip = e.target.value
+                      setFormData(prev => ({ ...prev, closing_dip_cm: dip }))
+                      // Auto-populate closing volume from calibration when a valid dip is entered
+                      const dipNum = parseFloat(dip)
+                      if (!isNaN(dipNum) && dipNum > 0 && selectedTank) {
+                        try {
+                          const res = await authFetch(`${BASE}/tank-calibrations/${selectedTank}/convert?dip_cm=${dipNum}`, { headers: getHeaders() })
+                          if (res.ok) {
+                            const data = await res.json()
+                            setFormData(prev => ({ ...prev, closing_dip_cm: dip, closing_volume: data.volume_liters.toFixed(2) }))
+                          }
+                        } catch { /* non-critical: user can still enter closing volume manually */ }
+                      }
+                    }}
                     className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
                     style={{ borderColor: theme.secondary + '80' }}
                     placeholder="e.g., 155.4"
                     required
                   />
-                  <p className="text-xs mt-1 opacity-75" style={{ color: theme.secondary }}>Physical measurement at end of shift</p>
+                  <p className="text-xs mt-1 opacity-75" style={{ color: theme.secondary }}>Physical measurement at end of shift - closing volume auto-fills</p>
                 </div>
 
                 {/* Tank Level Volumes (Columns AI, AL) */}
                 <div className="rounded-lg p-4" style={{ backgroundColor: theme.primaryLight, borderColor: theme.primary, borderWidth: '1px' }}>
                   <label className="block text-sm font-medium mb-2" style={{ color: theme.primary }}>
                     Tank Level Opening (Volume in Liters)
-                    <span className="text-xs ml-2 opacity-75">Excel Column: AI</span>
+                    <span className="text-xs ml-2 opacity-75">(auto - from opening dip + calibration)</span>
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.opening_volume}
-                    onChange={(e) => setFormData({ ...formData, opening_volume: e.target.value })}
-                    className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
-                    style={{
-                      borderColor: theme.primary + '80',
-                      backgroundColor: theme.cardBg,
-                      color: theme.textPrimary
-                    }}
-                    placeholder="e.g., 26887.21"
-                  />
-                  <p className="text-xs mt-1 opacity-75" style={{ color: theme.primary }}>Tank volume at start of shift (liters)</p>
+                  {user?.role === 'owner' ? (
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.opening_volume}
+                      onChange={(e) => setFormData({ ...formData, opening_volume: e.target.value })}
+                      className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
+                      style={{ borderColor: theme.primary + '80', backgroundColor: theme.cardBg, color: theme.textPrimary }}
+                      placeholder="e.g., 26887.21"
+                    />
+                  ) : (
+                    <div
+                      className="w-full px-4 py-3 border rounded-md text-lg font-mono"
+                      style={{ borderColor: theme.primary + '80', backgroundColor: theme.primaryLight, color: theme.textPrimary, opacity: 0.85 }}
+                      title="Derived from opening dip via tank calibration. Only the owner can override."
+                    >
+                      {formData.opening_volume || <span className="text-status-warning text-sm">Derived from dip...</span>}
+                    </div>
+                  )}
+                  <p className="text-xs mt-1 opacity-75" style={{ color: theme.primary }}>Derived from opening dip via calibration</p>
                 </div>
 
                 <div className="rounded-lg p-4" style={{ backgroundColor: theme.secondaryLight, borderColor: theme.secondary, borderWidth: '1px' }}>
                   <label className="block text-sm font-medium mb-2" style={{ color: theme.secondary }}>
                     Tank Level Closing (Volume in Liters)
-                    <span className="text-xs ml-2 opacity-75">Excel Column: AL</span>
+                    <span className="text-xs ml-2 opacity-75">(auto - from closing dip + calibration)</span>
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.closing_volume}
-                    onChange={(e) => setFormData({ ...formData, closing_volume: e.target.value })}
-                    className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
-                    style={{
-                      borderColor: theme.secondary + '80',
-                      backgroundColor: theme.cardBg,
-                      color: theme.textPrimary
-                    }}
-                    placeholder="e.g., 25117.64"
-                  />
-                  <p className="text-xs mt-1 opacity-75" style={{ color: theme.secondary }}>Tank volume at end of shift (liters)</p>
+                  {user?.role === 'owner' ? (
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.closing_volume}
+                      onChange={(e) => setFormData({ ...formData, closing_volume: e.target.value })}
+                      className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
+                      style={{ borderColor: theme.secondary + '80', backgroundColor: theme.cardBg, color: theme.textPrimary }}
+                      placeholder="e.g., 25117.64"
+                    />
+                  ) : (
+                    <div
+                      className="w-full px-4 py-3 border rounded-md text-lg font-mono"
+                      style={{ borderColor: theme.secondary + '80', backgroundColor: theme.secondaryLight, color: theme.textPrimary, opacity: 0.85 }}
+                      title="Auto-derived from closing dip via calibration. Only the owner can override."
+                    >
+                      {formData.closing_volume || <span className="text-status-warning text-sm">Enter closing dip above...</span>}
+                    </div>
+                  )}
+                  <p className="text-xs mt-1 opacity-75" style={{ color: theme.secondary }}>Derived from closing dip via calibration</p>
                 </div>
 
                 {/* Tank Volume Movement Display (Column AM) */}
@@ -1534,20 +1569,27 @@ export default function DailyTankReading() {
                         <div>
                           <label className="block text-sm font-bold mb-1" style={{ color: fuelColor }}>
                             Electronic Opening
+                            <span className="ml-1 text-xs font-normal text-content-secondary">(auto - previous closing)</span>
                           </label>
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={nozzle.electronic_opening}
-                            onChange={(e) => updateNozzle(index, 'electronic_opening', e.target.value)}
-                            className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
-                            style={{
-                              borderColor: fuelColor,
-                              backgroundColor: theme.cardBg,
-                              color: theme.textPrimary
-                            }}
-                            placeholder="609176.526"
-                          />
+                          {user?.role === 'owner' ? (
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={nozzle.electronic_opening}
+                              onChange={(e) => updateNozzle(index, 'electronic_opening', e.target.value)}
+                              className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
+                              style={{ borderColor: fuelColor, backgroundColor: theme.cardBg, color: theme.textPrimary }}
+                              placeholder="609176.526"
+                            />
+                          ) : (
+                            <div
+                              className="w-full px-3 py-2 border-2 rounded-md font-mono text-sm"
+                              style={{ borderColor: fuelColor, backgroundColor: fuelLightColor, color: theme.textPrimary, opacity: 0.85 }}
+                              title="Auto-fetched from previous shift closing. Only the owner can edit this."
+                            >
+                              {nozzle.electronic_opening || <span className="text-status-warning">Fetching...</span>}
+                            </div>
+                          )}
                         </div>
 
                         <div>
@@ -1586,20 +1628,27 @@ export default function DailyTankReading() {
                         <div>
                           <label className="block text-sm font-bold mb-1" style={{ color: fuelColor }}>
                             Mechanical Opening
+                            <span className="ml-1 text-xs font-normal text-content-secondary">(auto - previous closing)</span>
                           </label>
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={nozzle.mechanical_opening}
-                            onChange={(e) => updateNozzle(index, 'mechanical_opening', e.target.value)}
-                            className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
-                            style={{
-                              borderColor: fuelColor,
-                              backgroundColor: theme.cardBg,
-                              color: theme.textPrimary
-                            }}
-                            placeholder="611984"
-                          />
+                          {user?.role === 'owner' ? (
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={nozzle.mechanical_opening}
+                              onChange={(e) => updateNozzle(index, 'mechanical_opening', e.target.value)}
+                              className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
+                              style={{ borderColor: fuelColor, backgroundColor: theme.cardBg, color: theme.textPrimary }}
+                              placeholder="611984"
+                            />
+                          ) : (
+                            <div
+                              className="w-full px-3 py-2 border-2 rounded-md font-mono text-sm"
+                              style={{ borderColor: fuelColor, backgroundColor: fuelLightColor, color: theme.textPrimary, opacity: 0.85 }}
+                              title="Auto-fetched from previous shift closing. Only the owner can edit this."
+                            >
+                              {nozzle.mechanical_opening || <span className="text-status-warning">Fetching...</span>}
+                            </div>
+                          )}
                         </div>
 
                         <div>
