@@ -26,6 +26,10 @@ class ItemInput(BaseModel):
     reorder_level: float = 0
     reorder_qty: float = 0
     unit_cost: Optional[float] = None
+    # Fields synced to the pricing catalog (lubricants / accessories only)
+    selling_price: Optional[float] = None
+    sub_category: Optional[str] = None   # lubricant sub-category ("Engine Oil", etc.)
+    unit_size: Optional[str] = None      # lubricant unit size ("1L", "4L", etc.)
 
 
 class ReceiveInput(BaseModel):
@@ -98,10 +102,71 @@ def list_movements(item_key: str = None, type: str = None, limit: int = 200,
 
 @router.post("/items", dependencies=[Depends(require_manager_or_owner)])
 def upsert_item(data: ItemInput, ctx: dict = Depends(get_station_context)):
-    return svc.upsert_item(
+    item = svc.upsert_item(
         ctx["station_id"], data.category, data.product_code, data.name,
         data.unit, data.reorder_level, data.reorder_qty, data.unit_cost,
     )
+    # Sync selling_price (and catalog metadata) to the appropriate pricing catalog
+    if data.selling_price is not None:
+        station_id = ctx["station_id"]
+        if data.category == "lubricant":
+            from .lubricants_daily import load_product_catalog, save_product_catalog
+            catalog = load_product_catalog(station_id)
+            found = next((p for p in catalog if p["product_code"] == data.product_code), None)
+            if found:
+                found["selling_price"] = data.selling_price
+                if data.sub_category:
+                    found["category"] = data.sub_category
+                if data.unit_size:
+                    found["unit_size"] = data.unit_size
+                found["description"] = data.name
+            else:
+                catalog.append({
+                    "product_code": data.product_code,
+                    "description": data.name,
+                    "category": data.sub_category or "Other",
+                    "unit_size": data.unit_size or data.unit,
+                    "selling_price": data.selling_price,
+                    "reorder_level": int(data.reorder_level) if data.reorder_level else 0,
+                })
+            save_product_catalog(station_id, catalog)
+        elif data.category == "lpg_accessory":
+            from .lpg_daily import load_accessories_catalog, save_accessories_catalog
+            catalog = load_accessories_catalog(station_id)
+            found = next((a for a in catalog if a["product_code"] == data.product_code), None)
+            if found:
+                found["selling_price"] = data.selling_price
+                found["description"] = data.name
+                if data.reorder_level:
+                    found["reorder_level"] = int(data.reorder_level)
+            else:
+                catalog.append({
+                    "product_code": data.product_code,
+                    "description": data.name,
+                    "selling_price": data.selling_price,
+                    "reorder_level": int(data.reorder_level) if data.reorder_level else 0,
+                })
+            save_accessories_catalog(station_id, catalog)
+    return item
+
+
+@router.delete("/items/{item_key}", dependencies=[Depends(require_manager_or_owner)])
+def delete_item(item_key: str, ctx: dict = Depends(get_station_context)):
+    station_id = ctx["station_id"]
+    deleted = svc.delete_item(station_id, item_key, ctx["username"])
+    # Mirror removal in the pricing catalog
+    parts = item_key.split(":", 1)
+    if len(parts) == 2:
+        category, product_code = parts
+        if category == "lubricant":
+            from .lubricants_daily import load_product_catalog, save_product_catalog
+            catalog = load_product_catalog(station_id)
+            save_product_catalog(station_id, [p for p in catalog if p["product_code"] != product_code])
+        elif category == "lpg_accessory":
+            from .lpg_daily import load_accessories_catalog, save_accessories_catalog
+            catalog = load_accessories_catalog(station_id)
+            save_accessories_catalog(station_id, [a for a in catalog if a["product_code"] != product_code])
+    return {"status": "deleted", "item_key": item_key, "name": deleted.get("name")}
 
 
 @router.post("/receive", dependencies=[Depends(require_manager_or_owner)])

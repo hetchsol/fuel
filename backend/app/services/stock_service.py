@@ -213,6 +213,23 @@ def adjust(station_id: str, item_key: str, bin: str, new_qty, performed_by: str,
     return item
 
 
+def delete_item(station_id: str, item_key: str, performed_by: str = "system") -> dict:
+    """Remove an item from the catalog. Stock quantities are lost."""
+    items = load_items(station_id)
+    item = _require_item(items, item_key)
+    del items[item_key]
+    save_items(station_id, items)
+    try:
+        log_audit_event(
+            station_id=station_id, action="stock_delete", performed_by=performed_by,
+            entity_type="stock_item", entity_id=item_key,
+            details={"name": item.get("name"), "stores": item.get("stores"), "forecourt": item.get("forecourt")},
+        )
+    except Exception:
+        pass
+    return item
+
+
 def record_sale(station_id: str, item_key: str, qty, performed_by: str = "system", ref: str = "") -> Optional[dict]:
     """Decrement the forecourt bin by quantity sold (Phase 3 reconciliation feed).
 

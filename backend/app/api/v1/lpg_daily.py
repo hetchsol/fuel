@@ -175,8 +175,9 @@ def update_lpg_pricing(
     Body: { "prices": { "3": {"price_refill": 147, "price_full_cylinder": 477}, ... } }
     """
     role = ctx.get('role', '')
-    if role not in ('supervisor', 'owner'):
-        raise HTTPException(status_code=403, detail="Only supervisors and owners can update pricing")
+    role_str = role.value if hasattr(role, 'value') else str(role)
+    if role_str not in ('supervisor', 'manager', 'owner'):
+        raise HTTPException(status_code=403, detail="Only supervisors, managers and owners can update pricing")
 
     station_id = ctx["station_id"]
 
