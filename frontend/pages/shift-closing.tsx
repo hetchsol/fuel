@@ -34,8 +34,6 @@ export default function ShiftClosing() {
   // Attendant path: shift selection
   const [availableShifts, setAvailableShifts] = useState<any[]>([])
   const [selectedShiftId, setSelectedShiftId] = useState<string>('')
-  const [pendingClosings, setPendingClosings] = useState<any[]>([])
-  const [attendantDatePick, setAttendantDatePick] = useState<string>('')
 
   // Manager path: awaiting-closing list for date picker + handover dropdown
   const [managerHandovers, setManagerHandovers] = useState<any[]>([])
@@ -181,33 +179,20 @@ export default function ShiftClosing() {
         })
         .catch(() => setLoading(false))
     } else {
-      // Attendant path: fetch active shifts + unclosed past handovers in parallel
-      const params2 = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
-      const urlHandoverId = params2.get('handover_id')
-
-      Promise.all([
-        authFetch(`${BASE}/handover/my-shifts`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : { shifts: [] }),
-        authFetch(`${BASE}/handover/my-pending-closings`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : { handovers: [] }),
-      ]).then(([shiftsData, pendingData]) => {
-        const shifts = shiftsData.shifts || []
-        const pending: any[] = pendingData.handovers || []
-        setAvailableShifts(shifts)
-        setPendingClosings(pending)
-
-        // URL param: find in pending list first
-        if (urlHandoverId) {
-          const found = pending.find((h: any) => h.handover_id === urlHandoverId)
-          if (found) { loadManagerData(found); return }
-        }
-
-        // Auto-select single active shift (existing behaviour)
-        if (shifts.length === 1) {
-          setSelectedShiftId(shifts[0].shift_id)
-        } else {
-          if (shifts.length === 0 && pending.length === 0) setError('No active shift found.')
-          setLoading(false)
-        }
-      }).catch(() => setLoading(false))
+      // Attendant path: load active shift only
+      authFetch(`${BASE}/handover/my-shifts`, { headers: getAuthHeaders() })
+        .then(r => r.ok ? r.json() : { shifts: [] })
+        .then(data => {
+          const shifts = data.shifts || []
+          setAvailableShifts(shifts)
+          if (shifts.length === 1) {
+            setSelectedShiftId(shifts[0].shift_id)
+          } else {
+            if (shifts.length === 0) setError('No active shift found.')
+            setLoading(false)
+          }
+        })
+        .catch(() => setLoading(false))
     }
   }, [])
 
@@ -264,31 +249,6 @@ export default function ShiftClosing() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const handleAttendantDateChange = (date: string) => {
-    setAttendantDatePick(date)
-    setHandover(null)
-    setShiftInfo(null)
-    setError('')
-    setResult(null)
-    setSelectedShiftId('')
-    if (!date) { setLoading(false); return }
-
-    // Prefer a pending closing (Phase 1 done, Phase 2 not yet)
-    const pendingForDate = pendingClosings.filter((h: any) => h.date === date)
-    if (pendingForDate.length >= 1) {
-      loadManagerData(pendingForDate[0])
-      return
-    }
-    // Fall back to active shift for that date
-    const activeForDate = availableShifts.filter((s: any) => s.date === date)
-    if (activeForDate.length >= 1) {
-      loadData(activeForDate[0].shift_id)
-      return
-    }
-    setError('No shift found for this date.')
-    setLoading(false)
   }
 
   const isManagerRole = ['manager', 'supervisor', 'owner'].includes(userRole)
@@ -351,37 +311,7 @@ export default function ShiftClosing() {
                 <p className="text-sm pb-2" style={{ color: theme.textSecondary }}>No awaiting-closing handovers for this date.</p>
               )}
             </div>
-          ) : (
-            /* Attendant: date picker + optional shift selector */
-            <div className="flex items-end gap-3 flex-wrap">
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Date</label>
-                <input
-                  type="date"
-                  value={attendantDatePick}
-                  onChange={e => handleAttendantDateChange(e.target.value)}
-                  className="px-3 py-2 rounded-lg border text-sm"
-                  style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}
-                />
-              </div>
-              {/* Multiple active shifts on the selected date */}
-              {attendantDatePick && availableShifts.filter((s: any) => s.date === attendantDatePick).length > 1 && (
-                <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Shift</label>
-                  <select
-                    value={selectedShiftId}
-                    onChange={e => { setSelectedShiftId(e.target.value); setAttendantDatePick('') }}
-                    className="px-3 py-2 rounded-lg border text-sm font-medium"
-                    style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}>
-                    <option value="">-- Select --</option>
-                    {availableShifts.filter((s: any) => s.date === attendantDatePick).map((s: any) => (
-                      <option key={s.shift_id} value={s.shift_id}>{s.shift_type} Shift</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -402,9 +332,7 @@ export default function ShiftClosing() {
           <p className="text-sm" style={{ color: theme.textSecondary }}>
             {isManagerRole
               ? 'Select a date and attendant to load shift closing data.'
-              : pendingClosings.length > 0
-                ? `You have ${pendingClosings.length} unclosed shift(s). Select a date above to load.`
-                : 'Complete your readings at the forecourt first, or select a past date to close a previous shift.'}
+              : 'Complete your readings at the forecourt first, then return here to close your shift.'}
           </p>
         </div>
       )}
