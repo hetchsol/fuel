@@ -140,17 +140,8 @@ export default function DailyCloseOff() {
     }
   }
 
-  if (!['manager', 'owner'].includes(userRole)) return null
-
   const isClosed = summary?.already_closed
-  const record = summary?.close_off_record
   const totals = summary?.totals || {}
-  const hasUnapproved = (summary?.unapproved_handovers?.length || 0) > 0
-  const hasApproved = (summary?.approved_handovers?.length || 0) > 0
-  const depositNum = parseFloat(bankDeposit) || 0
-  const depositVariance = depositNum - (totals.total_actual_cash || 0)
-
-  const canClose = !isClosed && hasApproved && !hasUnapproved && bankDeposit && !isNaN(parseFloat(bankDeposit))
 
   const getExportConfig = useCallback((): ExportConfig | null => {
     if (!summary?.approved_handovers?.length) return null
@@ -178,6 +169,15 @@ export default function DailyCloseOff() {
       data: summary.approved_handovers,
     }
   }, [summary, selectedDate, isClosed, totals])
+
+  if (!['manager', 'owner'].includes(userRole)) return null
+
+  const record = summary?.close_off_record
+  const hasUnapproved = (summary?.unapproved_handovers?.length || 0) > 0
+  const hasApproved = (summary?.approved_handovers?.length || 0) > 0
+  const depositNum = parseFloat(bankDeposit) || 0
+  const depositVariance = depositNum - (totals.total_actual_cash || 0)
+  const canClose = !isClosed && hasApproved && !hasUnapproved && bankDeposit && !isNaN(parseFloat(bankDeposit))
 
   return (
     <div>
