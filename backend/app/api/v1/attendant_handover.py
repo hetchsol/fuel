@@ -720,6 +720,39 @@ async def get_my_active_shifts(ctx: dict = Depends(get_station_context)):
     return {"shifts": my_shifts, "count": len(my_shifts)}
 
 
+@router.get("/my-pending-closings")
+async def get_my_pending_closings(ctx: dict = Depends(get_station_context)):
+    """
+    Return all handovers for the current user that have completed Phase 1
+    (readings_verified) but have not yet been closed (Phase 2).
+    Used by the attendant shift-closing date picker.
+    """
+    station_id = ctx["station_id"]
+    user_id = ctx["user_id"]
+    user_name = ctx["full_name"]
+    handovers = _load_handovers(station_id)
+
+    my_pending = []
+    for h in handovers.values():
+        if h.get("phase") != "readings_verified":
+            continue
+        if h.get("attendant_id") == user_id or \
+           h.get("attendant_name", "").lower() == user_name.lower():
+            my_pending.append({
+                "handover_id": h.get("handover_id"),
+                "shift_id": h.get("shift_id"),
+                "date": h.get("date"),
+                "shift_type": h.get("shift_type"),
+                "attendant_name": h.get("attendant_name"),
+                "total_expected": h.get("total_expected"),
+                "phase": h.get("phase"),
+                "phase_1_completed_at": h.get("phase_1_completed_at"),
+            })
+
+    my_pending.sort(key=lambda h: h.get("date", ""), reverse=True)
+    return {"handovers": my_pending, "count": len(my_pending)}
+
+
 @router.get("/my-shift")
 async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_context)):
     """
