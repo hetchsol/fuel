@@ -1602,6 +1602,13 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
 
     handover = handovers[data.handover_id]
 
+    # Block if the attendant hasn't completed shift closing yet (Phase 2 not done)
+    if handover.get("phase", "completed") != "completed":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot review a handover that has not been fully closed by the attendant."
+        )
+
     # Block if the day has been closed off
     close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
     if handover.get("date", "") in close_offs:
@@ -1716,6 +1723,10 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
             continue
         # Block if the day has been closed off
         if h.get("date", "") in close_offs:
+            skipped_count += 1
+            continue
+        # Skip handovers where the attendant hasn't completed shift closing
+        if h.get("phase", "completed") != "completed":
             skipped_count += 1
             continue
         # Only batch-approve clean (submitted) handovers, skip flagged
