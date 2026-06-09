@@ -468,10 +468,10 @@ export default function HandoverReview() {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <button onClick={() => router.push(`/shift-closing?shift_id=${encodeURIComponent(h.shift_id)}`)}
+                      <button onClick={() => router.push(`/shift-closing?handover_id=${encodeURIComponent(h.handover_id)}`)}
                         className="px-2 py-1 text-xs font-medium rounded text-white"
                         style={{ backgroundColor: 'var(--color-action-primary)' }}>
-                        Complete closing →
+                        Complete closing
                       </button>
                     </td>
                   </tr>

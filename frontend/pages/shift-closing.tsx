@@ -28,9 +28,17 @@ export default function ShiftClosing() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  // Shift selection
+  // Role detection
+  const [userRole, setUserRole] = useState<string>('')
+
+  // Attendant path: shift selection
   const [availableShifts, setAvailableShifts] = useState<any[]>([])
   const [selectedShiftId, setSelectedShiftId] = useState<string>('')
+
+  // Manager path: awaiting-closing list for date picker + handover dropdown
+  const [managerHandovers, setManagerHandovers] = useState<any[]>([])
+  const [selectedDate, setSelectedDate] = useState<string>('')
+  const [selectedHandoverId, setSelectedHandoverId] = useState<string>('')
 
   // Phase 1 data
   const [handover, setHandover] = useState<any>(null)
@@ -58,31 +66,45 @@ export default function ShiftClosing() {
     borderColor: theme.border,
   }
 
-  // Fetch available shifts
-  useEffect(() => {
-    authFetch(`${BASE}/handover/my-shifts`, { headers: getAuthHeaders() })
-      .then(r => r.ok ? r.json() : { shifts: [] })
-      .then(data => {
-        const shifts = data.shifts || []
-        setAvailableShifts(shifts)
-        if (shifts.length === 1) {
-          // Single shift: auto-select; loadData() runs via the selectedShiftId
-          // effect and clears the spinner itself.
-          setSelectedShiftId(shifts[0].shift_id)
-        } else {
-          // 0 shifts (nothing to close) or 2+ (awaiting a dropdown pick): there's
-          // no shift to auto-load, so stop the spinner rather than hang forever.
-          if (shifts.length === 0) setError('No active shift found.')
-          setLoading(false)
-        }
-      })
-      .catch(() => { setLoading(false) })
-  }, [])
+  const loadSupportingData = async (shiftId: string) => {
+    const creditRes = await authFetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
+    if (creditRes.ok) {
+      const creditData = await creditRes.json()
+      setCreditAccounts(creditData.accounts || [])
+      setFuelPrices(creditData.fuel_prices || { Diesel: 0, Petrol: 0 })
+    }
+    try {
+      const depRes = await authFetch(`${BASE}/safe-deposits/${shiftId}`, { headers: getAuthHeaders() })
+      if (depRes.ok) {
+        const depData = await depRes.json()
+        setSafeDepositTotal(depData.total_amount || 0)
+      }
+    } catch {}
+  }
 
-  useEffect(() => {
-    if (selectedShiftId) loadData(selectedShiftId)
-  }, [selectedShiftId])
+  // Manager: load a specific awaiting-closing handover directly (no my-shift call needed)
+  const loadManagerData = async (handoverObj: any) => {
+    setLoading(true)
+    setError('')
+    setSuccess('')
+    setResult(null)
+    setHandover(handoverObj)
+    setShiftInfo({
+      shift_id: handoverObj.shift_id,
+      date: handoverObj.date,
+      shift_type: handoverObj.shift_type,
+      status: handoverObj.status || 'active',
+    })
+    try {
+      await loadSupportingData(handoverObj.shift_id)
+    } catch (err: any) {
+      setError(err.message || 'Failed to load supporting data')
+    } finally {
+      setLoading(false)
+    }
+  }
 
+  // Attendant: load shift data via my-shift endpoint
   const loadData = async (shiftId: string) => {
     setLoading(true)
     setError('')
@@ -108,31 +130,75 @@ export default function ShiftClosing() {
       }
 
       setHandover(shiftData.readings_verified_handover)
-
-      // Load credit accounts
-      const creditRes = await authFetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
-      if (creditRes.ok) {
-        const creditData = await creditRes.json()
-        setCreditAccounts(creditData.accounts || [])
-        setFuelPrices(creditData.fuel_prices || { Diesel: 0, Petrol: 0 })
-      }
-
-      // Load safe deposits total
-      if (shiftData.shift?.shift_id) {
-        try {
-          const depRes = await authFetch(`${BASE}/safe-deposits/${shiftData.shift.shift_id}`, { headers: getAuthHeaders() })
-          if (depRes.ok) {
-            const depData = await depRes.json()
-            setSafeDepositTotal(depData.total_amount || 0)
-          }
-        } catch {}
-      }
+      await loadSupportingData(shiftData.shift?.shift_id || shiftId)
     } catch (err: any) {
       setError(err.message || 'Failed to load data')
     } finally {
       setLoading(false)
     }
   }
+
+  // Init: detect role, read URL params, load appropriate data
+  useEffect(() => {
+    const role = typeof window !== 'undefined' ? (localStorage.getItem('userRole') || '') : ''
+    setUserRole(role)
+    const isManager = ['manager', 'supervisor', 'owner'].includes(role)
+
+    if (isManager) {
+      const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
+      const urlHandoverId = params.get('handover_id')
+      const urlShiftId = params.get('shift_id')
+
+      authFetch(`${BASE}/handover/review-queue`, { headers: getAuthHeaders() })
+        .then(r => r.ok ? r.json() : {} as any)
+        .then(data => {
+          const list: any[] = data.awaiting_closing_handovers || []
+          setManagerHandovers(list)
+
+          if (urlHandoverId) {
+            const found = list.find((h: any) => h.handover_id === urlHandoverId)
+            if (found) {
+              setSelectedDate(found.date)
+              setSelectedHandoverId(found.handover_id)
+              loadManagerData(found)
+              return
+            }
+            setError('This handover is not awaiting closing.')
+          } else if (urlShiftId) {
+            const forShift = list.filter((h: any) => h.shift_id === urlShiftId)
+            if (forShift.length === 1) {
+              setSelectedDate(forShift[0].date)
+              setSelectedHandoverId(forShift[0].handover_id)
+              loadManagerData(forShift[0])
+              return
+            }
+            if (forShift.length > 0) setSelectedDate(forShift[0].date)
+          }
+          setLoading(false)
+        })
+        .catch(() => setLoading(false))
+    } else {
+      // Attendant path: unchanged
+      authFetch(`${BASE}/handover/my-shifts`, { headers: getAuthHeaders() })
+        .then(r => r.ok ? r.json() : { shifts: [] })
+        .then(data => {
+          const shifts = data.shifts || []
+          setAvailableShifts(shifts)
+          if (shifts.length === 1) {
+            setSelectedShiftId(shifts[0].shift_id)
+          } else {
+            if (shifts.length === 0) setError('No active shift found.')
+            setLoading(false)
+          }
+        })
+        .catch(() => setLoading(false))
+    }
+  }, [])
+
+  // Attendant: auto-load when shift is selected
+  useEffect(() => {
+    if (selectedShiftId) loadData(selectedShiftId)
+  }, [selectedShiftId])
 
   // Computed values
   const actualCashVal = parseFloat(actualCash) || 0
@@ -184,6 +250,9 @@ export default function ShiftClosing() {
     }
   }
 
+  const isManagerRole = ['manager', 'supervisor', 'owner'].includes(userRole)
+  const handoversForDate = managerHandovers.filter((h: any) => h.date === selectedDate)
+
   if (loading) return <LoadingSpinner text="Loading shift data..." />
 
   return (
@@ -196,22 +265,70 @@ export default function ShiftClosing() {
               {result ? 'Shift closing submitted' : 'Financial reconciliation — verify cash, POS, and credit sales'}
             </p>
           </div>
-          {availableShifts.length > 1 && (
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Active Shift</label>
-              <select
-                value={selectedShiftId}
-                onChange={e => setSelectedShiftId(e.target.value)}
-                className="px-3 py-2 rounded-lg border text-sm font-medium"
-                style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}>
-                <option value="">-- Select Shift --</option>
-                {availableShifts.map((s: any) => (
-                  <option key={s.shift_id} value={s.shift_id}>
-                    {s.date} — {s.shift_type} Shift
-                  </option>
-                ))}
-              </select>
+
+          {/* Manager: date picker + attendant dropdown */}
+          {isManagerRole ? (
+            <div className="flex items-end gap-3 flex-wrap">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Date</label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={e => {
+                    setSelectedDate(e.target.value)
+                    setSelectedHandoverId('')
+                    setHandover(null)
+                    setShiftInfo(null)
+                    setError('')
+                  }}
+                  className="px-3 py-2 rounded-lg border text-sm"
+                  style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}
+                />
+              </div>
+              {selectedDate && handoversForDate.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Attendant</label>
+                  <select
+                    value={selectedHandoverId}
+                    onChange={e => {
+                      setSelectedHandoverId(e.target.value)
+                      const found = managerHandovers.find((h: any) => h.handover_id === e.target.value)
+                      if (found) loadManagerData(found)
+                    }}
+                    className="px-3 py-2 rounded-lg border text-sm font-medium"
+                    style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}>
+                    <option value="">-- Select --</option>
+                    {handoversForDate.map((h: any) => (
+                      <option key={h.handover_id} value={h.handover_id}>
+                        {h.shift_type} Shift — {h.attendant_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {selectedDate && handoversForDate.length === 0 && (
+                <p className="text-sm pb-2" style={{ color: theme.textSecondary }}>No awaiting-closing handovers for this date.</p>
+              )}
             </div>
+          ) : (
+            /* Attendant: shift dropdown when multiple active shifts */
+            availableShifts.length > 1 && (
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Active Shift</label>
+                <select
+                  value={selectedShiftId}
+                  onChange={e => setSelectedShiftId(e.target.value)}
+                  className="px-3 py-2 rounded-lg border text-sm font-medium"
+                  style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}>
+                  <option value="">-- Select Shift --</option>
+                  {availableShifts.map((s: any) => (
+                    <option key={s.shift_id} value={s.shift_id}>
+                      {s.date} — {s.shift_type} Shift
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )
           )}
         </div>
       </div>
@@ -227,10 +344,14 @@ export default function ShiftClosing() {
         </div>
       )}
 
-      {/* No handover — redirect message */}
+      {/* Empty state */}
       {!handover && !loading && (
         <div className="rounded-lg shadow p-6 text-center" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-          <p className="text-sm" style={{ color: theme.textSecondary }}>Complete your readings at the forecourt first.</p>
+          <p className="text-sm" style={{ color: theme.textSecondary }}>
+            {isManagerRole
+              ? 'Select a date and attendant to load shift closing data.'
+              : 'Complete your readings at the forecourt first.'}
+          </p>
         </div>
       )}
 
@@ -277,13 +398,12 @@ export default function ShiftClosing() {
               <span className="font-semibold">Flags:</span> {result.auto_flag_reasons.join(', ')}
             </div>
           )}
-          {/* Next step in the day's chain (item 6) */}
           <div className="mt-5 pt-4 flex items-center justify-between" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
             <span className="text-sm" style={{ color: theme.textSecondary }}>Shift closed. A manager now reviews the handover.</span>
             <Link href="/handover-review"
               className="px-4 py-2 text-sm font-medium rounded-lg text-white"
               style={{ backgroundColor: 'var(--color-action-primary)' }}>
-              Next: Handover Review →
+              Next: Handover Review
             </Link>
           </div>
         </div>
@@ -317,6 +437,12 @@ export default function ShiftClosing() {
                 <div className="font-mono" style={{ color: theme.textPrimary }}>{fmtZMW((handover.lubricant_sales || 0) + (handover.accessory_sales || 0))}</div>
               </div>
             </div>
+            {isManagerRole && handover.attendant_name && (
+              <div className="mt-3 pt-3 text-sm" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                <span className="text-xs" style={{ color: theme.textSecondary }}>Attendant</span>
+                <div style={{ color: theme.textPrimary }}>{handover.attendant_name}</div>
+              </div>
+            )}
             <div className="mt-3 pt-3 flex justify-between items-center text-sm" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
               <span className="font-bold" style={{ color: theme.textPrimary }}>Total Expected</span>
               <span className="font-mono font-bold text-lg" style={{ color: theme.primary }}>{fmtZMW(totalExpected)}</span>
