@@ -441,7 +441,7 @@ export default function HandoverReview() {
               No shifts awaiting closing
             </div>
           ) : (
-            <table className="min-w-full text-sm">
+            <table className="w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
                   {['Date', 'Shift', 'Attendant', 'Waiting', '', 'Action'].map((h, i) => (
@@ -486,7 +486,7 @@ export default function HandoverReview() {
       {statusTab !== 'awaiting' && (
       <div className="rounded-lg shadow overflow-x-auto"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <table className="min-w-full text-sm">
+        <table className="w-full text-sm">
           <thead>
             <tr style={{ backgroundColor: theme.background }}>
               {statusTab !== 'approved' && (
@@ -497,29 +497,33 @@ export default function HandoverReview() {
                     className="rounded" />
                 </th>
               )}
-              {['Date', 'Shift', 'Attendant', 'Expected Cash', 'Actual Cash', 'Difference', 'Flags', 'Review Status', 'Actions'].map(h => (
-                <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
-                  style={{ color: theme.textSecondary }}>{h}</th>
-              ))}
+              {['Date', 'Shift', 'Attendant', 'Expected Cash', 'Actual Cash', 'Difference', 'Flags', 'Review Status', 'Actions'].map(h => {
+                const rightAlign = ['Expected Cash', 'Actual Cash', 'Difference'].includes(h)
+                return (
+                  <th key={h} className={`px-3 py-2 ${rightAlign ? 'text-right' : 'text-left'} text-xs font-medium uppercase whitespace-nowrap`}
+                    style={{ color: theme.textSecondary }}>{h}</th>
+                )
+              })}
             </tr>
           </thead>
-          <tbody>
-            {displayedHandovers.length === 0 && (
+          {displayedHandovers.length === 0 && (
+            <tbody>
               <tr>
                 <td colSpan={10} className="px-4 py-8 text-center text-sm" style={{ color: theme.textSecondary }}>
                   No handovers found
                 </td>
               </tr>
-            )}
-            {displayedHandovers.map(h => {
-              const rs = h.review_status || 'submitted'
-              const style = REVIEW_STATUS_STYLES[rs] || REVIEW_STATUS_STYLES.submitted
-              const isExpanded = expandedId === h.handover_id
-              const canSelect = rs === 'submitted'
-              const canAct = rs === 'submitted' || rs === 'flagged'
+            </tbody>
+          )}
+          {displayedHandovers.map(h => {
+            const rs = h.review_status || 'submitted'
+            const style = REVIEW_STATUS_STYLES[rs] || REVIEW_STATUS_STYLES.submitted
+            const isExpanded = expandedId === h.handover_id
+            const canSelect = rs === 'submitted'
+            const canAct = rs === 'submitted' || rs === 'flagged'
 
-              return (
-                <tbody key={h.handover_id}>
+            return (
+              <tbody key={h.handover_id}>
                   <tr className="hover:bg-surface-bg cursor-pointer"
                     style={{ borderTopColor: theme.border, borderTopWidth: 1 }}
                     onClick={() => setExpandedId(isExpanded ? null : h.handover_id)}>
@@ -605,9 +609,8 @@ export default function HandoverReview() {
                     </tr>
                   )}
                 </tbody>
-              )
-            })}
-          </tbody>
+            )
+          })}
         </table>
       </div>
       )}
