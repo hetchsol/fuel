@@ -37,6 +37,48 @@ const LPG_SIZES = [3, 6, 9, 19, 45, 48]
 const LUB_CATS = ['Engine Oil', 'Gear Oil', 'Transmission Fluid', 'Hydraulic Fluid',
                   'Brake Fluid', 'Coolant', 'Grease', 'Filters', 'Other']
 
+const UOM_OPTIONS: { group: string; units: { code: string; label: string }[] }[] = [
+  { group: 'Volume', units: [
+    { code: 'mL', label: 'mL — Millilitre' },
+    { code: 'L',  label: 'L — Litre' },
+    { code: 'fl oz', label: 'fl oz — Fluid ounce' },
+    { code: 'pt', label: 'pt — Pint' },
+    { code: 'qt', label: 'qt — Quart' },
+    { code: 'gal', label: 'gal — Gallon' },
+  ]},
+  { group: 'Mass / Weight', units: [
+    { code: 'mg', label: 'mg — Milligram' },
+    { code: 'g',  label: 'g — Gram' },
+    { code: 'kg', label: 'kg — Kilogram' },
+    { code: 't',  label: 't — Tonne' },
+    { code: 'oz', label: 'oz — Ounce' },
+    { code: 'lb', label: 'lb — Pound' },
+    { code: 'st', label: 'st — Stone' },
+  ]},
+  { group: 'Gas', units: [
+    { code: 'm³',  label: 'm³ — Cubic metre' },
+    { code: 'ft³', label: 'ft³ — Cubic foot' },
+  ]},
+  { group: 'Length', units: [
+    { code: 'mm', label: 'mm — Millimetre' },
+    { code: 'cm', label: 'cm — Centimetre' },
+    { code: 'm',  label: 'm — Metre' },
+    { code: 'in', label: 'in — Inch' },
+    { code: 'ft', label: 'ft — Foot' },
+    { code: 'yd', label: 'yd — Yard' },
+  ]},
+  { group: 'Count / Packaging', units: [
+    { code: 'ea',   label: 'ea — Each' },
+    { code: 'pr',   label: 'pr — Pair' },
+    { code: 'dz',   label: 'dz — Dozen' },
+    { code: 'set',  label: 'set — Set' },
+    { code: 'pk',   label: 'pk — Pack' },
+    { code: 'bx',   label: 'bx — Box' },
+    { code: 'ctn',  label: 'ctn — Carton' },
+    { code: 'roll', label: 'roll — Roll' },
+  ]},
+]
+
 export default function StoresDashboard() {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('lubricants')
@@ -599,10 +641,11 @@ function ItemModal({ type, item, onClose, onDone }: {
   const [name, setName] = useState(item ? (item as any).description : '')
   const [code, setCode] = useState(item?.product_code || '')
   const [subCat, setSubCat] = useState(isLub ? (item as LubRow | null)?.sub_category || 'Engine Oil' : '')
-  const [unitSize, setUnitSize] = useState(isLub ? (item as LubRow | null)?.unit_size || '' : '')
+  const [uom, setUom] = useState(
+    isLub ? ((item as LubRow | null)?.unit_size || 'L') : 'ea'
+  )
   const [sellingPrice, setSellingPrice] = useState(String(item?.selling_price || ''))
   const [reorderLevel, setReorderLevel] = useState(String(item?.reorder_level || ''))
-  const [unit, setUnit] = useState('ea')
   const [busy, setBusy] = useState(false)
 
   const submit = async () => {
@@ -616,13 +659,13 @@ function ItemModal({ type, item, onClose, onDone }: {
         category: isLub ? 'lubricant' : 'lpg_accessory',
         product_code: code.trim(),
         name: name.trim(),
-        unit: isLub ? (unitSize || 'ea') : 'ea',
+        unit: uom,
         reorder_level: parseFloat(reorderLevel) || 0,
         selling_price: sp,
       }
       if (isLub) {
         body.sub_category = subCat
-        body.unit_size = unitSize
+        body.unit_size = uom
       }
 
       const res = await authFetch(`${BASE}/stores/items`, {
@@ -659,9 +702,19 @@ function ItemModal({ type, item, onClose, onDone }: {
               </select>
             </div>
           )}
-          {isLub && (
-            <Field label="Unit size (e.g. 1L, 4L, 20L)" value={unitSize} onChange={setUnitSize} placeholder="1L" />
-          )}
+          <div>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Unit of measure</label>
+            <select value={uom} onChange={e => setUom(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded border border-surface-border bg-surface-bg text-content-primary">
+              {UOM_OPTIONS.map(group => (
+                <optgroup key={group.group} label={group.group}>
+                  {group.units.map(u => (
+                    <option key={u.code} value={u.code}>{u.label}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
           <Field label="Selling price (ZMW)" value={sellingPrice} onChange={setSellingPrice} type="number" placeholder="0.00" />
           <Field label="Re-order level" value={reorderLevel} onChange={setReorderLevel} type="number" placeholder="0" />
         </div>
