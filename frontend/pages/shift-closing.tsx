@@ -140,7 +140,8 @@ export default function ShiftClosing() {
 
   // Init: detect role, read URL params, load appropriate data
   useEffect(() => {
-    const role = typeof window !== 'undefined' ? (localStorage.getItem('userRole') || '') : ''
+    const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null
+    const role = userData ? (JSON.parse(userData).role || '') : ''
     setUserRole(role)
     const isManager = ['manager', 'supervisor', 'owner'].includes(role)
 
