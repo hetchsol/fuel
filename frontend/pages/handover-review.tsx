@@ -33,6 +33,14 @@ interface HandoverEntry {
     meter_deviation_liters?: number | null
     meter_deviation_percent?: number | null
     meter_deviation_flagged?: boolean | null
+    changeover_reading?: number | null
+    changeover_estimated?: boolean | null
+    pre_change_volume?: number | null
+    post_change_volume?: number | null
+    pre_change_price?: number | null
+    post_change_price?: number | null
+    pre_change_revenue?: number | null
+    post_change_revenue?: number | null
   }[]
   fuel_revenue: number
   lpg_sales: number
@@ -722,33 +730,68 @@ function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
           </thead>
           <tbody>
             {h.nozzle_summaries.map(ns => (
-              <tr key={ns.nozzle_id} style={{ borderTopWidth: 1, borderTopColor: theme.border }}>
-                <td className="px-2 py-1 font-medium" style={{ color: theme.textPrimary }}>{ns.nozzle_id}</td>
-                <td className="px-2 py-1" style={{ color: theme.textSecondary }}>{ns.fuel_type}</td>
-                <td className="px-2 py-1 text-right font-mono" style={{ color: theme.textSecondary }}>
-                  {ns.opening_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })}
-                </td>
-                <td className="px-2 py-1 text-right font-mono" style={{ color: theme.textPrimary }}>
-                  {ns.closing_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })}
-                </td>
-                <td className="px-2 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
-                  {ns.volume_sold.toLocaleString(undefined, { minimumFractionDigits: 3 })}
-                </td>
-                <td className="px-2 py-1 text-right font-mono" style={{ color: theme.textPrimary }}>
-                  {ns.mechanical_volume != null ? ns.mechanical_volume.toLocaleString(undefined, { minimumFractionDigits: 3 }) : '-'}
-                </td>
-                <td className="px-2 py-1 text-right font-mono" style={{
-                  color: ns.meter_deviation_flagged ? 'var(--color-status-error)' : theme.textSecondary,
-                  fontWeight: ns.meter_deviation_flagged ? 600 : 400,
-                }}>
-                  {ns.meter_deviation_percent != null
-                    ? <>{ns.meter_deviation_flagged && '! '}{ns.meter_deviation_percent.toFixed(2)}%</>
-                    : '-'}
-                </td>
-                <td className="px-2 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
-                  K{ns.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
+              <>
+                <tr key={ns.nozzle_id} style={{ borderTopWidth: 1, borderTopColor: theme.border }}>
+                  <td className="px-2 py-1 font-medium" style={{ color: theme.textPrimary }}>{ns.nozzle_id}</td>
+                  <td className="px-2 py-1" style={{ color: theme.textSecondary }}>{ns.fuel_type}</td>
+                  <td className="px-2 py-1 text-right font-mono" style={{ color: theme.textSecondary }}>
+                    {ns.opening_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono" style={{ color: theme.textPrimary }}>
+                    {ns.closing_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
+                    {ns.volume_sold.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono" style={{ color: theme.textPrimary }}>
+                    {ns.mechanical_volume != null ? ns.mechanical_volume.toLocaleString(undefined, { minimumFractionDigits: 3 }) : '-'}
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono" style={{
+                    color: ns.meter_deviation_flagged ? 'var(--color-status-error)' : theme.textSecondary,
+                    fontWeight: ns.meter_deviation_flagged ? 600 : 400,
+                  }}>
+                    {ns.meter_deviation_percent != null
+                      ? <>{ns.meter_deviation_flagged && '! '}{ns.meter_deviation_percent.toFixed(2)}%</>
+                      : '-'}
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
+                    K{ns.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
+                {ns.pre_change_revenue != null && ns.post_change_revenue != null && (
+                  <tr key={`${ns.nozzle_id}-split`} style={{ backgroundColor: theme.cardBg }}>
+                    <td colSpan={8} className="px-4 py-1.5">
+                      <div className="flex flex-wrap gap-4 text-xs" style={{ color: theme.textSecondary }}>
+                        <span>
+                          Price split{ns.changeover_estimated ? ' (estimated)' : ''}:
+                        </span>
+                        <span>
+                          {ns.pre_change_volume?.toLocaleString(undefined, { minimumFractionDigits: 3 })} L
+                          at K{ns.pre_change_price?.toFixed(2)}
+                          {' = '}
+                          <span className="font-mono font-medium" style={{ color: theme.textPrimary }}>
+                            K{ns.pre_change_revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </span>
+                        <span>+</span>
+                        <span>
+                          {ns.post_change_volume?.toLocaleString(undefined, { minimumFractionDigits: 3 })} L
+                          at K{ns.post_change_price?.toFixed(2)}
+                          {' = '}
+                          <span className="font-mono font-medium" style={{ color: theme.textPrimary }}>
+                            K{ns.post_change_revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </span>
+                        {ns.changeover_estimated && (
+                          <span style={{ color: 'var(--color-status-warning)' }}>
+                            No meter snapshot - split estimated by time
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </>
             ))}
           </tbody>
         </table>

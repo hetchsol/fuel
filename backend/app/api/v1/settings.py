@@ -16,6 +16,8 @@ from .auth import get_station_context, require_manager_or_owner, require_owner
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
 from ...database.station_files import load_station_json, save_station_json
+from ...config import apply_due_price_changes
+from ...database.storage import save_station_storage
 
 router = APIRouter()
 
@@ -26,6 +28,10 @@ def get_fuel_settings(ctx: dict = Depends(get_station_context)):
     Get current fuel pricing and allowable loss settings
     """
     storage = ctx["storage"]
+    station_id = ctx["station_id"]
+    applied = apply_due_price_changes(storage, station_id)
+    if applied:
+        save_station_storage(station_id)
     return FuelSettings(**storage.setdefault('fuel_settings', {}))
 
 @router.put("/fuel")
@@ -77,10 +83,13 @@ def update_fuel_settings(settings: FuelSettings, ctx: dict = Depends(get_station
 def get_scheduled_prices(ctx: dict = Depends(get_station_context)):
     """Get all scheduled price changes for this station."""
     station_id = ctx["station_id"]
+    storage = ctx["storage"]
     scheduled = load_station_json(station_id, 'scheduled_price_changes.json', default=[])
-    # Also sync with storage
-    ctx["storage"]["scheduled_price_changes"] = scheduled
-    return {"scheduled_prices": scheduled}
+    storage["scheduled_price_changes"] = scheduled
+    applied = apply_due_price_changes(storage, station_id)
+    if applied:
+        save_station_storage(station_id)
+    return {"scheduled_prices": storage.get("scheduled_price_changes", scheduled)}
 
 
 @router.post("/fuel/schedule-price", dependencies=[Depends(require_manager_or_owner)])

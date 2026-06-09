@@ -210,6 +210,22 @@ def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, use
             old_price = price_info["old_price"] or price_info["price"]
             new_price = price_info["new_price"] or price_info["price"]
 
+            # Resolve changeover reading: attendant-submitted field > blind snapshot > time estimate
+            price_change_ref = None
+            if price_info.get("effective_date") and price_info.get("effective_time"):
+                price_change_ref = f"{price_info['effective_date']}T{price_info['effective_time']}"
+
+            snapshot_reading = None
+            if price_change_ref and shift_id:
+                shift_obj = storage.get("shifts", {}).get(shift_id, {})
+                snapshot_reading = (
+                    shift_obj.get("price_change_readings", {})
+                    .get(reading.nozzle_id, {})
+                    .get(price_change_ref)
+                )
+                if snapshot_reading:
+                    snapshot_reading = snapshot_reading.get("reading_value")
+
             if reading.changeover_reading is not None:
                 co = reading.changeover_reading
                 if co < opening_val or co > closing_val:
@@ -217,9 +233,22 @@ def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, use
                         detail=f"Changeover reading for {reading.nozzle_id} must be between opening ({opening_val}) and closing ({closing_val})")
                 changeover_reading_val = co
                 changeover_estimated = False
+            elif snapshot_reading is not None and opening_val <= snapshot_reading <= closing_val:
+                # Blind entry captured at the price-change moment — use actual reading
+                changeover_reading_val = snapshot_reading
+                changeover_estimated = False
             else:
-                # Estimate: midnight is 6 hours into a 12-hour night shift (50%)
-                co = opening_val + volume * 0.5
+                # Estimate split by actual proportion of shift elapsed before the price change
+                shift_start = price_info.get("shift_start")
+                shift_end   = price_info.get("shift_end")
+                change_dt   = price_info.get("change_dt")
+                if shift_start and shift_end and change_dt:
+                    total_secs = (shift_end - shift_start).total_seconds()
+                    pre_secs   = (change_dt - shift_start).total_seconds()
+                    proportion = pre_secs / total_secs if total_secs > 0 else 0.5
+                else:
+                    proportion = 0.5
+                co = opening_val + volume * proportion
                 changeover_reading_val = round(co, 3)
                 changeover_estimated = True
 
@@ -718,6 +747,105 @@ async def get_my_active_shifts(ctx: dict = Depends(get_station_context)):
                 break
 
     return {"shifts": my_shifts, "count": len(my_shifts)}
+
+
+@router.get("/pending-price-prompts")
+async def get_pending_price_prompts(ctx: dict = Depends(get_station_context)):
+    """
+    Return any pending price-change snapshot prompts for the current user's active shift.
+    The frontend uses this to show a blind meter-reading entry card.
+    """
+    storage = ctx["storage"]
+    user_id = ctx["user_id"]
+    shifts  = storage.get("shifts", {})
+
+    for shift in shifts.values():
+        assigned = shift.get("assigned_attendants") or []
+        if user_id not in assigned:
+            continue
+        if shift.get("status") not in ("active", "started"):
+            continue
+        pending = [
+            p for p in shift.get("price_change_prompts", [])
+            if p.get("status") == "pending"
+        ]
+        if pending:
+            # Include only nozzle_id and price_change_ref — nothing that reveals previous readings
+            return {
+                "shift_id": shift.get("shift_id"),
+                "prompts": [
+                    {"nozzle_id": p["nozzle_id"], "price_change_ref": p["price_change_ref"]}
+                    for p in pending
+                ],
+            }
+    return {"shift_id": None, "prompts": []}
+
+
+@router.post("/price-change-reading")
+async def submit_price_change_reading(data: dict, ctx: dict = Depends(get_station_context)):
+    """
+    Blind meter reading submitted by an attendant at a price-change boundary.
+    Accepts: shift_id, nozzle_id, price_change_ref, reading_value.
+    Returns only {status: recorded} — no volume, no revenue, no previous reading.
+    """
+    from ...database.storage import save_station_storage
+    storage    = ctx["storage"]
+    station_id = ctx["station_id"]
+    user_id    = ctx["user_id"]
+    username   = ctx["username"]
+
+    shift_id         = data.get("shift_id")
+    nozzle_id        = data.get("nozzle_id")
+    price_change_ref = data.get("price_change_ref")
+    reading_value    = data.get("reading_value")
+
+    if not all([shift_id, nozzle_id, price_change_ref, reading_value is not None]):
+        raise HTTPException(status_code=422, detail="shift_id, nozzle_id, price_change_ref, and reading_value are required")
+
+    try:
+        reading_value = float(reading_value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="reading_value must be a number")
+    if reading_value < 0:
+        raise HTTPException(status_code=422, detail="reading_value must be non-negative")
+
+    shifts = storage.get("shifts", {})
+    shift  = shifts.get(shift_id)
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    assigned = shift.get("assigned_attendants") or []
+    if user_id not in assigned:
+        raise HTTPException(status_code=403, detail="Not assigned to this shift")
+
+    prompts = shift.get("price_change_prompts", [])
+    matched = None
+    for p in prompts:
+        if p.get("nozzle_id") == nozzle_id and p.get("price_change_ref") == price_change_ref:
+            matched = p
+            break
+    if not matched:
+        raise HTTPException(status_code=404, detail="No matching price-change prompt found")
+    if matched.get("status") != "pending":
+        raise HTTPException(status_code=409, detail="Reading already submitted for this prompt")
+
+    from datetime import datetime
+    now_iso = datetime.now().isoformat()
+    matched["status"]       = "completed"
+    matched["reading_value"] = reading_value
+    matched["submitted_at"]  = now_iso
+    matched["submitted_by"]  = username
+
+    # Also store in shift's price_change_readings for use by the revenue calculation
+    readings = shift.setdefault("price_change_readings", {})
+    readings.setdefault(nozzle_id, {})[price_change_ref] = {
+        "reading_value": reading_value,
+        "submitted_at":  now_iso,
+        "submitted_by":  username,
+    }
+
+    save_station_storage(station_id)
+    return {"status": "recorded"}
 
 
 @router.get("/my-shift")

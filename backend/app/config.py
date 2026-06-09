@@ -281,46 +281,124 @@ def apply_due_price_changes(storage: dict, station_id: str = None) -> list:
     if applied and station_id:
         from .database.station_files import save_station_json
         save_station_json(station_id, 'scheduled_price_changes.json', scheduled)
+        # Write a pending snapshot prompt into every active shift so attendants
+        # can submit a blind meter reading at the price-change boundary.
+        _create_price_change_prompts(storage, applied)
 
     return applied
 
 
+def _create_price_change_prompts(storage: dict, applied_changes: list) -> None:
+    """
+    For each active shift, record a pending price-change snapshot prompt per nozzle
+    so the attendant is asked for a blind meter reading at the changeover boundary.
+    """
+    from datetime import datetime
+    shifts = storage.get('shifts', {})
+    islands = storage.get('islands', {})
+
+    # Build nozzle→fuel_type map from islands
+    nozzle_fuel: dict = {}
+    for isl in islands.values():
+        ps = isl.get('pump_station') or {}
+        for nozzle in ps.get('nozzles', []):
+            nid = nozzle.get('nozzle_id') or nozzle.get('id')
+            ft  = (ps.get('fuel_type') or nozzle.get('fuel_type') or '').upper()
+            if nid:
+                nozzle_fuel[nid] = ft
+
+    now_iso = datetime.now().isoformat()
+
+    for shift in shifts.values():
+        if shift.get('status') not in ('active', 'started'):
+            continue
+        prompts = shift.setdefault('price_change_prompts', [])
+        # Collect nozzle ids for this shift
+        shift_nozzles: list = []
+        for ps_data in shift.get('pump_stations', {}).values():
+            for n in ps_data.get('nozzles', []):
+                nid = n.get('nozzle_id') or n.get('id')
+                if nid:
+                    shift_nozzles.append(nid)
+
+        for change in applied_changes:
+            change_fuel = (change.get('fuel_type') or '').upper()
+            price_change_ref = f"{change.get('effective_date')}T{change.get('effective_time', '00:00')}"
+            for nozzle_id in shift_nozzles:
+                nozzle_ft = nozzle_fuel.get(nozzle_id, '')
+                fuel_match = ('DIESEL' in change_fuel and 'DIESEL' in nozzle_ft) or \
+                             (('PETROL' in change_fuel or 'GASOLINE' in change_fuel) and
+                              ('PETROL' in nozzle_ft or 'GASOLINE' in nozzle_ft))
+                if not fuel_match:
+                    continue
+                # Avoid duplicate prompts for the same nozzle+price_change
+                already = any(
+                    p.get('nozzle_id') == nozzle_id and p.get('price_change_ref') == price_change_ref
+                    for p in prompts
+                )
+                if not already:
+                    prompts.append({
+                        'nozzle_id': nozzle_id,
+                        'price_change_ref': price_change_ref,
+                        'triggered_at': now_iso,
+                        'status': 'pending',
+                        'reading_value': None,
+                        'submitted_at': None,
+                        'submitted_by': None,
+                    })
+
+
 def resolve_fuel_price_for_shift(fuel_type: str, shift_date: str, shift_type: str, storage: dict = None) -> dict:
     """
-    For a given shift, determine whether a price change occurred during it.
-    A Night shift on date D runs 6PM on D to 6AM on D+1.
-    A price change with effective_date == D+1 means it changed at midnight during this shift.
+    Determine whether a price change occurred during a shift window and return
+    both prices so the caller can split expected cash by segment.
+
+    Shift windows:
+      Day   shift on date D: 06:00 D  to 18:00 D
+      Night shift on date D: 18:00 D  to 06:00 D+1
 
     Returns:
         {
-            "price": float,               # current price (for single-price backward compat)
+            "price": float,               # current price (backward compat — new price if change, else single price)
             "has_price_change": bool,
-            "old_price": float | None,     # price before the changeover
-            "new_price": float | None,     # price after the changeover
+            "old_price": float | None,
+            "new_price": float | None,
             "effective_date": str | None,
+            "effective_time": str | None,
+            "shift_start": datetime | None,   # shift window start (for split arithmetic)
+            "shift_end":   datetime | None,   # shift window end
+            "change_dt":   datetime | None,   # exact moment price changed
         }
     """
     from datetime import datetime, timedelta
     current_price = resolve_fuel_price(fuel_type, storage)
-    result = {"price": current_price, "has_price_change": False,
-              "old_price": None, "new_price": None, "effective_date": None}
+    result = {
+        "price": current_price, "has_price_change": False,
+        "old_price": None, "new_price": None,
+        "effective_date": None, "effective_time": None,
+        "shift_start": None, "shift_end": None, "change_dt": None,
+    }
 
-    # Only Night shifts can span a price change (they cross midnight)
-    if not shift_type or shift_type.upper() != "NIGHT":
-        return result
-
-    if not storage:
+    if not storage or not shift_type or not shift_date:
         return result
 
     scheduled = storage.get('scheduled_price_changes', [])
     if not scheduled:
         return result
 
-    # Night shift on date D crosses into D+1
     try:
         shift_d = datetime.strptime(shift_date, "%Y-%m-%d")
-        next_day = (shift_d + timedelta(days=1)).strftime("%Y-%m-%d")
     except (ValueError, TypeError):
+        return result
+
+    shift_upper = shift_type.upper()
+    if shift_upper == "NIGHT":
+        shift_start = shift_d.replace(hour=18, minute=0, second=0, microsecond=0)
+        shift_end   = (shift_d + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
+    elif shift_upper == "DAY":
+        shift_start = shift_d.replace(hour=6, minute=0, second=0, microsecond=0)
+        shift_end   = shift_d.replace(hour=18, minute=0, second=0, microsecond=0)
+    else:
         return result
 
     fuel_upper = fuel_type.upper()
@@ -334,35 +412,26 @@ def resolve_fuel_price_for_shift(fuel_type: str, shift_date: str, shift_type: st
                         ('PETROL' in entry_fuel or 'GASOLINE' in entry_fuel))
         if not matches_fuel:
             continue
-        # Check if the price change effective datetime falls within this night shift (6PM D to 6AM D+1)
+
         effective_time = entry.get('effective_time', '00:00') or '00:00'
         entry_date = entry.get('effective_date', '')
-        if entry_date == next_day:
-            # A change on D+1 at midnight (or early morning) falls within the night shift
-            try:
-                eh, em = map(int, effective_time.split(":"))
-            except (ValueError, TypeError):
-                eh, em = 0, 0
-            if eh < 6:  # before 6 AM on D+1 means it's within the night shift
-                result["has_price_change"] = True
-                result["old_price"] = entry.get('old_price_per_liter')
-                result["new_price"] = entry.get('new_price_per_liter')
-                result["effective_date"] = entry_date
-                result["effective_time"] = effective_time
-                break
-        elif entry_date == shift_date:
-            # A change on the shift date itself at/after 6PM falls within the night shift
-            try:
-                eh, em = map(int, effective_time.split(":"))
-            except (ValueError, TypeError):
-                eh, em = 0, 0
-            if eh >= 18:  # at or after 6 PM on D means it's within the night shift
-                result["has_price_change"] = True
-                result["old_price"] = entry.get('old_price_per_liter')
-                result["new_price"] = entry.get('new_price_per_liter')
-                result["effective_date"] = entry_date
-                result["effective_time"] = effective_time
-                break
+        try:
+            change_dt = datetime.strptime(f"{entry_date} {effective_time}", "%Y-%m-%d %H:%M")
+        except (ValueError, TypeError):
+            continue
+
+        # Change must fall strictly inside the shift window (not at the boundary)
+        if shift_start < change_dt < shift_end:
+            result["has_price_change"] = True
+            result["old_price"]       = entry.get('old_price_per_liter')
+            result["new_price"]       = entry.get('new_price_per_liter')
+            result["price"]           = entry.get('new_price_per_liter', current_price)
+            result["effective_date"]  = entry_date
+            result["effective_time"]  = effective_time
+            result["shift_start"]     = shift_start
+            result["shift_end"]       = shift_end
+            result["change_dt"]       = change_dt
+            break
 
     return result
 

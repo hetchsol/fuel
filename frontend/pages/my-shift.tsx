@@ -197,6 +197,14 @@ export default function MyShift() {
   const [currentStep, setCurrentStep] = useState<1 | 2>(1)
   const [readingsVerifiedHandover, setReadingsVerifiedHandover] = useState<any>(null)
   const [priceChangeDetected, setPriceChangeDetected] = useState(false)
+
+  // Blind price-change snapshot prompts
+  const [pricePrompts, setPricePrompts] = useState<{nozzle_id: string, price_change_ref: string}[]>([])
+  const [pricePromptShiftId, setPricePromptShiftId] = useState<string | null>(null)
+  const [promptValues, setPromptValues] = useState<Record<string, string>>({}) // keyed by nozzle_id
+  const [promptSubmitting, setPromptSubmitting] = useState(false)
+  const [promptError, setPromptError] = useState('')
+
   // Start-of-shift opening verification (two-mode). Default true so the closing
   // flow never flashes before the shift loads; set from the backend on load.
   const [openingVerified, setOpeningVerified] = useState(true)
@@ -205,8 +213,18 @@ export default function MyShift() {
   // Review confirmation modal
   const [showReviewModal, setShowReviewModal] = useState(false)
 
-  // Fetch available active shifts for dropdown
+  // Fetch available active shifts and any pending price-change prompts
   useEffect(() => {
+    authFetch(`${BASE}/handover/pending-price-prompts`, { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : { prompts: [] })
+      .then(data => {
+        if (data.prompts && data.prompts.length > 0) {
+          setPricePrompts(data.prompts)
+          setPricePromptShiftId(data.shift_id)
+        }
+      })
+      .catch(() => {})
+
     authFetch(`${BASE}/handover/my-shifts`, { headers: getAuthHeaders() })
       .then(r => r.ok ? r.json() : { shifts: [] })
       .then(data => {
@@ -803,8 +821,89 @@ export default function MyShift() {
     }
   }
 
+  const handlePromptSubmit = async (nozzle_id: string, price_change_ref: string) => {
+    const value = promptValues[nozzle_id]
+    if (!value || isNaN(parseFloat(value))) {
+      setPromptError('Enter a valid meter reading.')
+      return
+    }
+    setPromptSubmitting(true)
+    setPromptError('')
+    try {
+      const res = await authFetch(`${BASE}/handover/price-change-reading`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          shift_id: pricePromptShiftId,
+          nozzle_id,
+          price_change_ref,
+          reading_value: parseFloat(value),
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        setPromptError(d.detail || 'Failed to record reading.')
+        return
+      }
+      setPricePrompts(prev => prev.filter(p => !(p.nozzle_id === nozzle_id && p.price_change_ref === price_change_ref)))
+      setPromptValues(prev => { const n = { ...prev }; delete n[nozzle_id]; return n })
+    } catch {
+      setPromptError('Failed to record reading.')
+    } finally {
+      setPromptSubmitting(false)
+    }
+  }
+
   return (
     <div>
+      {/* Blind price-change snapshot prompts — shown one at a time, blocks the page */}
+      {pricePrompts.length > 0 && (() => {
+        const prompt = pricePrompts[0]
+        const nozzleLabel = nozzleRows.find(r => r.nozzle_id === prompt.nozzle_id)?.display_label
+          || prompt.nozzle_id
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center"
+            style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+            <div className="rounded-lg shadow-xl p-8 w-full max-w-sm mx-4"
+              style={{ backgroundColor: theme.cardBg }}>
+              <h2 className="text-lg font-bold mb-1" style={{ color: theme.textPrimary }}>
+                Meter Reading Required
+              </h2>
+              <p className="text-sm mb-6" style={{ color: theme.textSecondary }}>
+                A fuel price change is in effect. Enter the current meter reading for:
+              </p>
+              <div className="text-base font-semibold mb-4" style={{ color: theme.textPrimary }}>
+                {nozzleLabel}
+              </div>
+              <input
+                type="number"
+                step="0.001"
+                min="0"
+                value={promptValues[prompt.nozzle_id] || ''}
+                onChange={e => setPromptValues(prev => ({ ...prev, [prompt.nozzle_id]: e.target.value }))}
+                placeholder="Meter reading"
+                className="w-full px-4 py-3 rounded border text-right font-mono text-lg mb-4 focus:outline-none"
+                style={{ borderColor: theme.border, backgroundColor: theme.cardBg, color: theme.textPrimary }}
+                autoFocus
+              />
+              {promptError && (
+                <p className="text-sm mb-3" style={{ color: 'var(--color-status-error)' }}>{promptError}</p>
+              )}
+              <button
+                onClick={() => handlePromptSubmit(prompt.nozzle_id, prompt.price_change_ref)}
+                disabled={promptSubmitting || !promptValues[prompt.nozzle_id]}
+                className="w-full py-3 rounded font-medium text-white disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-action-primary)' }}>
+                {promptSubmitting ? 'Recording...' : 'Submit Reading'}
+              </button>
+              <p className="text-xs text-center mt-4" style={{ color: theme.textSecondary }}>
+                {pricePrompts.length > 1 ? `${pricePrompts.length - 1} more nozzle(s) to follow.` : ''}
+              </p>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Blind double-entry prompt for a closing reading */}
       {activeEntry && (() => {
         const row = nozzleRows.find(r => r.nozzle_id === activeEntry.nozzleId)
