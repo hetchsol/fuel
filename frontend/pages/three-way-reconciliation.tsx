@@ -53,7 +53,16 @@ interface ReconciliationData {
 
 export default function ThreeWayReconciliation() {
   const router = useRouter()
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const today = new Date().toISOString().split('T')[0]
+
+  const [mode, setMode] = useState<'shift' | 'range'>('range')
+  const [shifts, setShifts] = useState<any[]>([])
+  const [selectedShift, setSelectedShift] = useState('')
+  const [selectedDate, setSelectedDate] = useState(today)
+  const [startDate, setStartDate] = useState(today)
+  const [endDate, setEndDate] = useState(today)
+  const [rangeData, setRangeData] = useState<any[]>([])
+
   const [dailySummary, setDailySummary] = useState<any>(null)
   const [selectedReading, setSelectedReading] = useState<ReconciliationData | null>(null)
   const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null)
@@ -63,35 +72,38 @@ export default function ThreeWayReconciliation() {
   // Accept date query parameter
   useEffect(() => {
     if (router.query.date && typeof router.query.date === 'string') {
-      setSelectedDate(router.query.date)
+      const d = router.query.date
+      setSelectedDate(d); setStartDate(d); setEndDate(d)
     }
   }, [router.query.date])
 
   useEffect(() => {
-    fetchDailySummary()
+    authFetch(`${BASE}/shifts/`, { headers: getHeaders() })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setShifts(data.slice(0, 30)))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (mode === 'range') fetchDailySummary(selectedDate)
   }, [selectedDate])
 
-  const fetchDailySummary = async () => {
+  const fetchDailySummary = async (date: string) => {
     setLoading(true)
     try {
-      const response = await authFetch(`${BASE}/reconciliation/three-way/daily-summary/${selectedDate}`, {
+      const response = await authFetch(`${BASE}/reconciliation/three-way/daily-summary/${date}`, {
         headers: getHeaders()
       })
       if (response.ok) {
         const data = await response.json()
         setDailySummary(data)
-        // Fetch variance trends for each unique tank
         if (data.all_shifts) {
           const tankIds = Array.from(new Set(data.all_shifts.map((s: any) => s.tank_id))) as string[]
           const trends: Record<string, any> = {}
           await Promise.all(tankIds.map(async (tankId) => {
             try {
-              const tRes = await authFetch(`${BASE}/reconciliation/three-way/patterns/${tankId}?days=30`, {
-                headers: getHeaders()
-              })
-              if (tRes.ok) {
-                trends[tankId] = await tRes.json()
-              }
+              const tRes = await authFetch(`${BASE}/reconciliation/three-way/patterns/${tankId}?days=30`, { headers: getHeaders() })
+              if (tRes.ok) trends[tankId] = await tRes.json()
             } catch {}
           }))
           setVarianceTrends(trends)
@@ -106,6 +118,42 @@ export default function ThreeWayReconciliation() {
       setLoading(false)
     }
   }
+
+  const handleShiftSelect = (shiftId: string) => {
+    setSelectedShift(shiftId)
+    const shift = shifts.find(s => s.shift_id === shiftId)
+    if (shift?.date) {
+      setSelectedDate(shift.date)
+      fetchDailySummary(shift.date)
+    }
+  }
+
+  const genDates = (start: string, end: string) => {
+    const out: string[] = []
+    const cur = new Date(start)
+    const last = new Date(end)
+    while (cur <= last && out.length < 31) {
+      out.push(cur.toISOString().split('T')[0])
+      cur.setDate(cur.getDate() + 1)
+    }
+    return out
+  }
+
+  const fetchRange = async () => {
+    setLoading(true)
+    try {
+      const dates = genDates(startDate, endDate)
+      const results = await Promise.all(
+        dates.map(d => authFetch(`${BASE}/reconciliation/three-way/daily-summary/${d}`, { headers: getHeaders() })
+          .then(r => r.ok ? r.json() : null).catch(() => null))
+      )
+      setRangeData(results.filter(Boolean))
+      setDailySummary(null)
+    } catch {}
+    finally { setLoading(false) }
+  }
+
+  const isMultiDay = startDate !== endDate
 
   const viewDetails = (reading: any) => {
     setSelectedReading(reading.reconciliation)
@@ -201,25 +249,120 @@ export default function ThreeWayReconciliation() {
           </div>
         </div>
 
-        {/* Date Selector */}
-        <div className="bg-surface-card rounded-lg shadow p-4 mb-6">
-          <label className="block text-sm font-medium text-content-secondary mb-2">
-            Select Date
-          </label>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="border border-surface-border rounded px-3 py-2"
-          />
+        {/* Selection controls */}
+        <div className="bg-surface-card rounded-lg shadow p-4 mb-6 space-y-4">
+          <div className="flex flex-wrap items-end gap-4">
+            {/* Mode toggle */}
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1 uppercase tracking-wide">Mode</label>
+              <div className="flex rounded-md border border-surface-border overflow-hidden">
+                {(['shift', 'range'] as const).map(m => (
+                  <button key={m} onClick={() => { setMode(m); setDailySummary(null); setRangeData([]) }}
+                    className="px-4 py-2 text-sm font-medium transition-colors"
+                    style={{ backgroundColor: mode === m ? 'var(--color-action-primary)' : 'transparent', color: mode === m ? '#fff' : 'var(--color-content-secondary)' }}>
+                    {m === 'shift' ? 'By Shift' : 'By Date Range'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {mode === 'shift' ? (
+              <div className="flex-1 min-w-[260px]">
+                <label className="block text-xs font-medium text-content-secondary mb-1 uppercase tracking-wide">Shift</label>
+                <select value={selectedShift} onChange={e => handleShiftSelect(e.target.value)}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-action-primary">
+                  <option value="">-- Select a shift --</option>
+                  {shifts.map(s => (
+                    <option key={s.shift_id} value={s.shift_id}>{s.date} - {s.shift_type} ({s.shift_id})</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-content-secondary mb-1 uppercase tracking-wide">From</label>
+                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                    className="px-3 py-2 border border-surface-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-action-primary" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-content-secondary mb-1 uppercase tracking-wide">To</label>
+                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                    className="px-3 py-2 border border-surface-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-action-primary" />
+                </div>
+                {isMultiDay ? (
+                  <button onClick={fetchRange} disabled={loading}
+                    className="px-5 py-2 rounded-md text-sm font-medium text-white disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--color-action-primary)' }}>
+                    {loading ? 'Loading...' : 'Load'}
+                  </button>
+                ) : (
+                  <button onClick={() => { setSelectedDate(startDate); fetchDailySummary(startDate) }} disabled={loading}
+                    className="px-5 py-2 rounded-md text-sm font-medium text-white disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--color-action-primary)' }}>
+                    {loading ? 'Loading...' : 'Load'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
+
+        {/* Multi-day range summary table */}
+        {!loading && isMultiDay && rangeData.length > 0 && (
+          <div className="bg-surface-card rounded-lg shadow overflow-hidden mb-6">
+            <div className="px-6 py-4 border-b border-surface-border">
+              <h2 className="text-lg font-bold text-content-primary">{startDate} to {endDate}</h2>
+              <p className="text-xs text-content-secondary mt-1">{rangeData.length} day(s) with data</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-surface-border bg-surface-bg">
+                    {['Date', 'Shifts', 'Balanced', 'Variances', 'Critical', 'Overall Status'].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rangeData.map((day: any, i: number) => {
+                    const statusColor = day.overall_status === 'EXCELLENT' ? 'text-status-success bg-status-success-light' :
+                      day.overall_status === 'GOOD' ? 'text-action-primary bg-action-primary-light' :
+                      day.overall_status === 'NEEDS_ATTENTION' ? 'text-status-warning bg-status-pending-light' :
+                      'text-status-error bg-status-error-light'
+                    return (
+                      <tr key={i} className="border-b border-surface-border hover:bg-surface-bg transition-colors">
+                        <td className="px-4 py-3 font-medium">
+                          <button onClick={() => { setSelectedDate(day.date); fetchDailySummary(day.date); setRangeData([]) }}
+                            className="text-action-primary hover:underline">{day.date}</button>
+                        </td>
+                        <td className="px-4 py-3">{day.total_shifts}</td>
+                        <td className="px-4 py-3 text-status-success font-semibold">{day.balanced_shifts}</td>
+                        <td className="px-4 py-3 text-status-warning font-semibold">{day.variance_shifts}</td>
+                        <td className="px-4 py-3 text-status-error font-semibold">{day.critical_shifts}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${statusColor}`}>{day.overall_status}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {!loading && isMultiDay && rangeData.length === 0 && mode === 'range' && startDate && endDate && (
+          <div className="bg-surface-card rounded-lg shadow p-12 text-center">
+            <p className="text-content-secondary text-sm">No data found for {startDate} to {endDate}. Click Load to fetch.</p>
+          </div>
+        )}
 
         {loading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-content-primary"></div>
             <p className="mt-2 text-content-secondary">Loading...</p>
           </div>
-        ) : dailySummary ? (
+        ) : (!isMultiDay || mode === 'shift') && dailySummary ? (
           <>
             {/* Daily Summary Card */}
             <div className="bg-surface-card rounded-lg shadow mb-6">
@@ -396,11 +539,13 @@ export default function ThreeWayReconciliation() {
               </div>
             </div>
           </>
-        ) : (
+        ) : (!isMultiDay || mode === 'shift') ? (
           <div className="bg-surface-card rounded-lg shadow p-12 text-center">
-            <p className="text-content-secondary text-lg">No data for {selectedDate}</p>
+            <p className="text-content-secondary text-lg">
+              {mode === 'shift' ? 'Select a shift above to load data.' : `No data for ${selectedDate}.`}
+            </p>
           </div>
-        )}
+        ) : null}
 
         {/* Details Modal */}
         {selectedReading && (
@@ -615,7 +760,7 @@ export default function ThreeWayReconciliation() {
                       View Full Tank Analysis &rarr;
                     </Link>
                     <Link
-                      href={`/reconciliation?date=${selectedDate}`}
+                      href={`/shift-reconciliation?date=${selectedDate}`}
                       className="inline-flex items-center px-4 py-2 border border-action-primary text-action-primary rounded-lg hover:bg-action-primary-light font-medium text-sm"
                     >
                       View Shift Reconciliation &rarr;
