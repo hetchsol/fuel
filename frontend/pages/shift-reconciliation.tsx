@@ -133,7 +133,7 @@ function ShiftReconciliationView() {
         cash_difference: r.cash_difference || r.difference || 0,
       })),
     }
-  }, [reconciliations, selectedDate])
+  }, [reconciliations, startDate, endDate, mode, selectedShift])
 
   return (
     <div>
