@@ -547,8 +547,17 @@ def submit_tank_reading(
         if running_total_tank_movement != 0 else 0.0
     )
 
-    # Generate reading ID
-    reading_id = f"TR-{reading_input.tank_id}-{reading_input.date}-{uuid.uuid4().hex[:8]}"
+    # Upsert: reuse the existing reading_id if one already exists for this
+    # tank + date + shift so that re-submitting edits the record in place
+    # rather than creating a duplicate entry.
+    existing_id = next(
+        (rid for rid, r in tank_readings_db.items()
+         if r.get('tank_id') == reading_input.tank_id
+         and r.get('date') == reading_input.date
+         and r.get('shift_type', '').lower() == reading_input.shift_type.lower()),
+        None
+    )
+    reading_id = existing_id or f"TR-{reading_input.tank_id}-{reading_input.date}-{uuid.uuid4().hex[:8]}"
 
     # Create comprehensive output
     output = TankVolumeReadingOutput(
@@ -819,6 +828,27 @@ def get_latest_reading(
     # Sort by date and return latest
     readings.sort(key=lambda x: x.date, reverse=True)
     return readings[0]
+
+
+@router.get("/readings/{tank_id}/by-shift")
+def get_reading_by_shift(
+    tank_id: str,
+    date: str,
+    shift_type: str,
+    ctx: dict = Depends(get_station_context)
+):
+    """
+    Return the saved tank reading for a specific tank + date + shift, or 404.
+    Used by the frontend to detect and load an existing record when the user
+    selects a date/shift combination that has already been entered.
+    """
+    tank_readings_db = load_tank_readings(ctx["station_id"])
+    for reading in tank_readings_db.values():
+        if (reading.get('tank_id') == tank_id
+                and reading.get('date') == date
+                and reading.get('shift_type', '').lower() == shift_type.lower()):
+            return JSONResponse(content=jsonable_encoder(reading))
+    raise HTTPException(status_code=404, detail="No reading found for this tank/date/shift")
 
 
 @router.get("/readings/{tank_id}/previous-shift")

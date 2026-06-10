@@ -136,6 +136,10 @@ export default function DailyTankReading() {
   } | null>(null)
   const [fetchingPrevious, setFetchingPrevious] = useState(false)
 
+  // Existing record state — set when the selected tank/date/shift already has a saved entry
+  const [existingReadingId, setExistingReadingId] = useState<string | null>(null)
+  const [loadingExisting, setLoadingExisting] = useState(false)
+
   // Pull from Shift Dip Readings state
   const [shiftDipPulled, setShiftDipPulled] = useState(false)
   const [fetchingShiftDip, setFetchingShiftDip] = useState(false)
@@ -333,6 +337,76 @@ export default function DailyTankReading() {
     }
   }
 
+  // Fetch and populate an existing saved reading for this tank + date + shift.
+  // Returns true if a record was found (so callers can skip the carry-forward).
+  const fetchExistingRecord = async (): Promise<boolean> => {
+    if (!selectedTank || !formData.date || !formData.shift_type) return false
+    setLoadingExisting(true)
+    try {
+      const res = await authFetch(
+        `${BASE}/tank-readings/readings/${selectedTank}/by-shift?date=${formData.date}&shift_type=${formData.shift_type}`,
+        { headers: getHeaders() }
+      )
+      if (!res.ok) return false
+      const data = await res.json()
+
+      setFormData(prev => {
+        // Map saved nozzle readings onto the current (island-sourced) nozzle list so
+        // internal_nozzle_id is preserved and matching is by identity not position.
+        const updatedNozzles = prev.nozzles.map(formNozzle => {
+          const saved = (data.nozzle_readings || []).find((n: any) =>
+            n.nozzle_id === formNozzle.nozzle_id
+          )
+          if (!saved) return formNozzle
+          return {
+            ...formNozzle,
+            attendant: saved.attendant || '',
+            electronic_opening: saved.electronic_opening?.toString() || '',
+            electronic_closing: saved.electronic_closing?.toString() || '',
+            mechanical_opening: saved.mechanical_opening?.toString() || '',
+            mechanical_closing: saved.mechanical_closing?.toString() || '',
+          }
+        })
+
+        return {
+          ...prev,
+          opening_dip_cm: data.opening_dip_cm?.toString() || '',
+          closing_dip_cm: data.closing_dip_cm?.toString() || '',
+          after_delivery_dip_cm: data.after_delivery_dip_cm?.toString() || '',
+          opening_volume: data.opening_volume?.toString() || '',
+          closing_volume: data.closing_volume?.toString() || '',
+          before_offload_volume: data.before_offload_volume?.toString() || '',
+          after_offload_volume: data.after_offload_volume?.toString() || '',
+          delivery_occurred: data.delivery_occurred || false,
+          price_per_liter: data.price_per_liter?.toString() || prev.price_per_liter,
+          actual_cash_banked: data.actual_cash_banked?.toString() || '',
+          notes: data.notes || '',
+          nozzles: updatedNozzles,
+        }
+      })
+
+      // Restore deliveries from the saved record
+      const savedDeliveries = (data.deliveries || []).map((d: any) => ({
+        id: d.delivery_id || `saved-${d.delivery_time || Date.now()}`,
+        time: d.delivery_time || '',
+        supplier: d.supplier || '',
+        invoice_number: d.invoice_number || '',
+        fuel_type: d.fuel_type || (isDiesel ? 'Diesel' : 'Petrol'),
+        before_volume: d.before_volume?.toString() || '',
+        after_volume: d.after_volume?.toString() || '',
+        volume_delivered: d.volume_delivered || 0,
+        flowmeter_volume: d.flowmeter_volume?.toString() || '',
+      }))
+      setDeliveries(savedDeliveries)
+      setExistingReadingId(data.reading_id)
+      return true
+    } catch {
+      return false
+    } finally {
+      setLoadingExisting(false)
+    }
+  }
+
   // Fetch previous shift closing readings to auto-populate opening values
   const fetchPreviousShiftData = async () => {
     try {
@@ -462,18 +536,20 @@ export default function DailyTankReading() {
     setErPulledAt('')
   }
 
-  // Auto-fetch previous shift data when tank, date, or shift changes.
-  // Wait for islandsLoaded so nozzle list is populated before matching previous readings.
-  // Gate only on nozzle openings — dip/volume may already be set by fetchShiftDipReadings
-  // (which pulls the current shift's recorded opening dip) and that must not block the
-  // nozzle carry-forward from the previous shift's closing readings.
+  // When tank/date/shift are set and the island list is ready, check whether a
+  // reading already exists for this combination. If it does, populate the whole
+  // form from the saved record and stop. If not, fall through to the previous-
+  // shift carry-forward so opening values are still auto-suggested.
   useEffect(() => {
-    if (selectedTank && formData.date && formData.shift_type && islandsLoaded) {
-      const hasNozzleOpenings = formData.nozzles.some(n => n.electronic_opening || n.mechanical_opening)
-      if (!hasNozzleOpenings) {
-        fetchPreviousShiftData()
+    if (!selectedTank || !formData.date || !formData.shift_type || !islandsLoaded) return
+    // Reset existing-record marker whenever the selection changes
+    setExistingReadingId(null)
+    fetchExistingRecord().then(found => {
+      if (!found) {
+        const hasNozzleOpenings = formData.nozzles.some(n => n.electronic_opening || n.mechanical_opening)
+        if (!hasNozzleOpenings) fetchPreviousShiftData()
       }
-    }
+    })
   }, [selectedTank, formData.date, formData.shift_type, islandsLoaded])
 
   // Auto-pull attendant readings on load (item 3 — Manager_Flow_Simplification_Plan.md).
@@ -489,7 +565,8 @@ export default function DailyTankReading() {
 
     const hasClosing = formData.nozzles.some(n => n.electronic_closing || n.mechanical_closing)
     setAutoErAttemptedKey(key)
-    if (hasClosing || erPulled) return
+    // Skip if an existing saved record was already loaded — it has authoritative nozzle data
+    if (hasClosing || erPulled || existingReadingId) return
     fetchFromEnterReadings(true)
   }, [selectedTank, formData.date, formData.shift_type, islandsLoaded, formData.nozzles.length])
 
@@ -1236,6 +1313,23 @@ export default function DailyTankReading() {
                   >
                     Clear & enter manually
                   </button>
+                </div>
+              )}
+
+              {/* Existing record indicator */}
+              {loadingExisting && (
+                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: 'var(--color-action-primary-light)', borderColor: 'var(--color-action-primary)', borderWidth: '1px' }}>
+                  <svg className="animate-spin h-5 w-5 text-action-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="text-action-primary text-sm font-medium">Checking for existing record...</span>
+                </div>
+              )}
+              {existingReadingId && !loadingExisting && (
+                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: 'var(--color-status-warning-light)', borderColor: 'var(--color-status-warning)', borderWidth: '1px' }}>
+                  <span className="text-status-warning font-bold text-sm">Existing record loaded.</span>
+                  <span className="text-status-warning text-sm">All fields populated from the saved entry. Make any corrections and click Update Record to save.</span>
                 </div>
               )}
 
@@ -2801,7 +2895,7 @@ export default function DailyTankReading() {
                       className="px-8 py-3 text-white font-semibold rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition"
                       style={{ backgroundColor: theme.secondary }}
                     >
-                      {loading ? 'Processing...' : '✓ Submit Daily Reading'}
+                      {loading ? 'Processing...' : existingReadingId ? 'Update Record' : 'Save Record'}
                     </button>
                   </div>
                 </>
