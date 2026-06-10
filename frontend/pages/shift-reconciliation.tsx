@@ -465,7 +465,7 @@ export default function ReconciliationHub() {
 
   const setTab = (key: string) => {
     router.replace(
-      { pathname: '/reconciliation', query: { ...router.query, tab: key } },
+      { pathname: '/shift-reconciliation', query: { ...router.query, tab: key } },
       undefined,
       { shallow: true },
     )

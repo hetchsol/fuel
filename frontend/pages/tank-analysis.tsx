@@ -31,58 +31,74 @@ interface TankReconciliation {
 
 export default function TankAnalysis() {
   const router = useRouter()
-  const [shifts, setShifts] = useState<any[]>([])
-  const [selectedShift, setSelectedShift] = useState('')
-  const [reconciliation, setReconciliation] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const { tanks: allTanks } = useTanks()
   const tankNameFor = (tankId: string) => {
     const t = allTanks.find(x => x.tank_id === tankId)
     return t ? tankLabel(t) : tankId
   }
 
+  // ── Selection state ──
+  const [selectedTank, setSelectedTank] = useState('')
+  const [mode, setMode] = useState<'shift' | 'range'>('shift')
+
+  // ── Shift mode ──
+  const [shifts, setShifts] = useState<any[]>([])
+  const [selectedShift, setSelectedShift] = useState('')
+  const [reconciliation, setReconciliation] = useState<any>(null)
+
+  // ── Date range mode ──
+  const today = new Date().toISOString().split('T')[0]
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
+  const [startDate, setStartDate] = useState(sevenDaysAgo)
+  const [endDate, setEndDate] = useState(today)
+  const [rangeReadings, setRangeReadings] = useState<any[]>([])
+
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  // Pre-select first tank once list loads
+  useEffect(() => {
+    if (allTanks.length > 0 && !selectedTank) {
+      setSelectedTank(allTanks[0].tank_id)
+    }
+  }, [allTanks, selectedTank])
+
   useEffect(() => {
     fetchRecentShifts()
   }, [])
 
-  // Accept shiftId query parameter to pre-select a shift
+  // Accept shiftId query param to pre-select a shift
   useEffect(() => {
     if (router.query.shiftId && typeof router.query.shiftId === 'string' && shifts.length > 0) {
       const shiftId = router.query.shiftId
       if (shifts.some(s => s.shift_id === shiftId)) {
-        handleShiftSelect(shiftId)
+        setSelectedShift(shiftId)
+        fetchShiftAnalysis(shiftId)
       }
     }
   }, [router.query.shiftId, shifts])
 
   const fetchRecentShifts = async () => {
     try {
-      const res = await authFetch(`${BASE}/shifts/`, {
-        headers: getHeaders()
-      })
+      const res = await authFetch(`${BASE}/shifts/`, { headers: getHeaders() })
       if (res.ok) {
         const data = await res.json()
         setShifts(data.slice(0, 30))
       }
-    } catch (err) {
-      console.error('Failed to fetch shifts:', err)
-    }
+    } catch {}
   }
 
-  const fetchReconciliation = async (shiftId: string) => {
+  const fetchShiftAnalysis = async (shiftId: string) => {
+    if (!shiftId) { setReconciliation(null); return }
     setLoading(true)
     setError('')
     try {
-      const res = await authFetch(`${BASE}/reconciliation/shift/${shiftId}/tank-analysis`, {
-        headers: getHeaders()
-      })
+      const res = await authFetch(`${BASE}/reconciliation/shift/${shiftId}/tank-analysis`, { headers: getHeaders() })
       if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to fetch reconciliation')
+        const err = await res.json()
+        throw new Error(err.detail || 'Failed to fetch reconciliation')
       }
-      const data = await res.json()
-      setReconciliation(data)
+      setReconciliation(await res.json())
     } catch (err: any) {
       setError(err.message || 'Failed to load reconciliation data')
       setReconciliation(null)
@@ -91,62 +107,103 @@ export default function TankAnalysis() {
     }
   }
 
-  const handleShiftSelect = (shiftId: string) => {
-    setSelectedShift(shiftId)
-    if (shiftId) {
-      fetchReconciliation(shiftId)
-    } else {
-      setReconciliation(null)
+  const fetchRangeReadings = async () => {
+    if (!selectedTank || !startDate || !endDate) return
+    setLoading(true)
+    setError('')
+    try {
+      const res = await authFetch(
+        `${BASE}/tank-readings/readings/${selectedTank}?start_date=${startDate}&end_date=${endDate}`,
+        { headers: getHeaders() }
+      )
+      if (!res.ok) throw new Error('Failed to load readings')
+      setRangeReadings(await res.json())
+    } catch (err: any) {
+      setError(err.message || 'Failed to load readings')
+      setRangeReadings([])
+    } finally {
+      setLoading(false)
     }
   }
+
+  // Auto-load when mode/tank/shift changes
+  useEffect(() => {
+    if (mode === 'shift' && selectedShift) fetchShiftAnalysis(selectedShift)
+    if (mode === 'range' && selectedTank && startDate && endDate) fetchRangeReadings()
+  }, [mode, selectedTank])
+
+  const handleShiftSelect = (shiftId: string) => {
+    setSelectedShift(shiftId)
+    fetchShiftAnalysis(shiftId)
+  }
+
+  // For shift mode, filter results to selected tank (or show all if no tank selected)
+  const visibleTankRecons: TankReconciliation[] = reconciliation?.tank_reconciliations
+    ? (selectedTank
+        ? reconciliation.tank_reconciliations.filter((t: TankReconciliation) => t.tank_id === selectedTank)
+        : reconciliation.tank_reconciliations)
+    : []
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'acceptable':
-        return 'bg-status-success-light text-status-success border-status-success'
-      case 'warning':
-        return 'bg-status-pending-light text-status-warning border-status-warning'
-      case 'critical':
-        return 'bg-status-error-light text-status-error border-status-error'
-      default:
-        return 'bg-surface-bg text-content-primary border-surface-border'
+      case 'acceptable': return 'bg-status-success-light text-status-success border-status-success'
+      case 'warning':    return 'bg-status-pending-light text-status-warning border-status-warning'
+      case 'critical':   return 'bg-status-error-light text-status-error border-status-error'
+      default:           return 'bg-surface-bg text-content-primary border-surface-border'
     }
   }
 
+  const fmt = (n: number | null | undefined, dp = 2) =>
+    n == null ? '-' : Number(n).toLocaleString('en-ZM', { minimumFractionDigits: dp, maximumFractionDigits: dp })
+
   const getExportConfig = useCallback((): ExportConfig | null => {
-    if (!reconciliation?.tanks) return null
+    if (mode === 'shift') {
+      if (!visibleTankRecons.length) return null
+      return {
+        title: 'Tank Volume Movement Analysis',
+        subtitle: `Shift: ${selectedShift}`,
+        filename: `tank_analysis_${selectedShift.replace(/\s/g, '_')}`,
+        columns: [
+          { header: 'Tank', key: 'tank_id' },
+          { header: 'Fuel Type', key: 'fuel_type' },
+          { header: 'Opening Vol (L)', key: 'opening_volume_liters', format: 'number' },
+          { header: 'Closing Vol (L)', key: 'closing_volume_liters', format: 'number' },
+          { header: 'Tank Movement (L)', key: 'tank_movement', format: 'number' },
+          { header: 'Electronic Sales (L)', key: 'total_electronic_sales', format: 'number' },
+          { header: 'Mechanical Sales (L)', key: 'total_mechanical_sales', format: 'number' },
+          { header: 'Elec Variance (L)', key: 'electronic_vs_tank_discrepancy', format: 'number' },
+          { header: 'Elec Variance %', key: 'electronic_discrepancy_percent', format: 'percent' },
+          { header: 'Status', key: 'status' },
+        ],
+        data: visibleTankRecons,
+      }
+    }
+    if (!rangeReadings.length) return null
     return {
-      title: 'Tank Volume Movement Analysis',
-      subtitle: `Shift: ${selectedShift}`,
-      filename: `tank_analysis_${selectedShift.replace(/\s/g,'_')}`,
+      title: `Tank Analysis - ${tankNameFor(selectedTank)}`,
+      subtitle: `${startDate} to ${endDate}`,
+      filename: `tank_analysis_${selectedTank}_${startDate}_${endDate}`,
       columns: [
-        { header: 'Tank', key: 'tank_id' },
-        { header: 'Fuel Type', key: 'fuel_type' },
+        { header: 'Date', key: 'date' },
+        { header: 'Shift', key: 'shift_type' },
         { header: 'Opening Vol (L)', key: 'opening_volume', format: 'number' },
         { header: 'Closing Vol (L)', key: 'closing_volume', format: 'number' },
-        { header: 'Tank Movement (L)', key: 'tank_movement', format: 'number' },
-        { header: 'Electronic Sales (L)', key: 'electronic_sales', format: 'number' },
-        { header: 'Mechanical Sales (L)', key: 'mechanical_sales', format: 'number' },
-        { header: 'Variance (L)', key: 'variance', format: 'number' },
-        { header: 'Status', key: 'status' },
+        { header: 'Movement (L)', key: 'tank_volume_movement', format: 'number' },
+        { header: 'Elec Dispensed (L)', key: 'total_electronic_dispensed', format: 'number' },
+        { header: 'Mech Dispensed (L)', key: 'total_mechanical_dispensed', format: 'number' },
+        { header: 'Elec vs Tank (L)', key: 'electronic_vs_tank_variance', format: 'number' },
+        { header: 'Elec vs Tank %', key: 'electronic_vs_tank_percent', format: 'percent' },
+        { header: 'Status', key: 'validation_status' },
       ],
-      data: reconciliation.tanks.map((t: any) => ({
-        tank_id: t.tank_id,
-        fuel_type: t.fuel_type,
-        opening_volume: t.opening_volume || t.opening_dip_volume || 0,
-        closing_volume: t.closing_volume || t.closing_dip_volume || 0,
-        tank_movement: t.tank_movement || t.dip_movement || 0,
-        electronic_sales: t.electronic_sales || t.electronic_volume || 0,
-        mechanical_sales: t.mechanical_sales || t.mechanical_volume || 0,
-        variance: t.variance || t.discrepancy || 0,
-        status: t.status || t.severity || '',
-      })),
+      data: rangeReadings,
     }
-  }, [reconciliation, selectedShift])
+  }, [mode, visibleTankRecons, rangeReadings, selectedShift, selectedTank, startDate, endDate, allTanks])
 
+  // ── Render ───────────────────────────────────────────────
   return (
     <div>
-      <div className="mb-8">
+      {/* Header */}
+      <div className="mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold text-content-primary">Tank Volume Movement Analysis</h1>
@@ -154,73 +211,132 @@ export default function TankAnalysis() {
               Compare actual tank volume movement with electronic/mechanical sales to identify discrepancies
             </p>
           </div>
-          {reconciliation && <ExportButtons getConfig={getExportConfig} />}
+          {(visibleTankRecons.length > 0 || rangeReadings.length > 0) && (
+            <ExportButtons getConfig={getExportConfig} />
+          )}
         </div>
       </div>
 
-      {/* Shift Selector */}
-      <div className="bg-surface-card rounded-lg shadow p-6 mb-6">
-        <label className="block text-sm font-medium text-content-secondary mb-2">
-          Select Shift to Analyze
-        </label>
-        <select
-          value={selectedShift}
-          onChange={(e) => handleShiftSelect(e.target.value)}
-          className="w-full md:w-1/2 px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
-        >
-          <option value="">-- Select a shift --</option>
-          {shifts.map(shift => (
-            <option key={shift.shift_id} value={shift.shift_id}>
-              {shift.date} - {shift.shift_type} ({shift.shift_id})
-            </option>
-          ))}
-        </select>
+      {/* Selection controls */}
+      <div className="bg-surface-card rounded-lg shadow p-6 mb-6 space-y-4">
+        {/* Row 1: Tank + Mode */}
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex-1 min-w-[180px]">
+            <label className="block text-xs font-medium text-content-secondary mb-1 uppercase tracking-wide">Tank</label>
+            <select
+              value={selectedTank}
+              onChange={e => { setSelectedTank(e.target.value); setReconciliation(null); setRangeReadings([]) }}
+              className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary text-sm"
+            >
+              <option value="">-- Select tank --</option>
+              {allTanks.map(t => (
+                <option key={t.tank_id} value={t.tank_id}>{tankLabel(t)}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-content-secondary mb-1 uppercase tracking-wide">Mode</label>
+            <div className="flex rounded-md border border-surface-border overflow-hidden">
+              {(['shift', 'range'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => { setMode(m); setReconciliation(null); setRangeReadings([]) }}
+                  className="px-4 py-2 text-sm font-medium transition-colors"
+                  style={{
+                    backgroundColor: mode === m ? 'var(--color-action-primary)' : 'transparent',
+                    color: mode === m ? '#fff' : 'var(--color-content-secondary)',
+                  }}
+                >
+                  {m === 'shift' ? 'By Shift' : 'By Date Range'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2: Shift or Date Range controls */}
+        {mode === 'shift' ? (
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex-1 min-w-[240px]">
+              <label className="block text-xs font-medium text-content-secondary mb-1 uppercase tracking-wide">Shift</label>
+              <select
+                value={selectedShift}
+                onChange={e => handleShiftSelect(e.target.value)}
+                disabled={!selectedTank}
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary text-sm disabled:opacity-50"
+              >
+                <option value="">-- Select a shift --</option>
+                {shifts.map(s => (
+                  <option key={s.shift_id} value={s.shift_id}>
+                    {s.date} - {s.shift_type} ({s.shift_id})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1 uppercase tracking-wide">From</label>
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                className="px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1 uppercase tracking-wide">To</label>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                className="px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary text-sm" />
+            </div>
+            <button
+              onClick={fetchRangeReadings}
+              disabled={!selectedTank || loading}
+              className="px-5 py-2 rounded-md text-sm font-medium text-white disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-action-primary)' }}
+            >
+              {loading ? 'Loading...' : 'Load'}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Cross-links to other reconciliation pages */}
-      {reconciliation && reconciliation.shift_date && (
+      {/* Cross-links */}
+      {reconciliation?.shift_date && (
         <div className="mb-6 flex gap-4 flex-wrap">
-          <Link
-            href={`/three-way-reconciliation?date=${reconciliation.shift_date}`}
-            className="inline-flex items-center text-sm text-action-primary hover:text-action-primary-hover font-medium"
-          >
-            &larr; Three-Way Reconciliation ({reconciliation.shift_date})
+          <Link href={`/three-way-reconciliation?date=${reconciliation.shift_date}`}
+            className="text-sm text-action-primary hover:underline font-medium">
+            Three-Way Reconciliation ({reconciliation.shift_date})
           </Link>
-          <Link
-            href={`/shift-reconciliation?date=${reconciliation.shift_date}`}
-            className="inline-flex items-center text-sm text-action-primary hover:text-action-primary-hover font-medium"
-          >
-            Shift Reconciliation &rarr;
+          <Link href={`/shift-reconciliation?date=${reconciliation.shift_date}`}
+            className="text-sm text-action-primary hover:underline font-medium">
+            Shift Reconciliation
           </Link>
         </div>
       )}
 
-      {/* Loading State */}
       {loading && (
         <div className="bg-action-primary-light border border-action-primary rounded-lg p-6 text-center">
-          <p className="text-action-primary">Loading reconciliation data...</p>
+          <p className="text-action-primary">Loading...</p>
         </div>
       )}
 
-      {/* Error State */}
       {error && (
         <div className="bg-status-error-light border border-status-error rounded-lg p-6">
-          <p className="text-status-error font-semibold">Error: {error}</p>
-          <p className="text-sm text-status-error mt-2">
-            Make sure tank dip readings (opening and closing) have been recorded for this shift.
+          <p className="text-status-error font-semibold">{error}</p>
+          <p className="text-sm text-status-error mt-1">
+            Make sure tank dip readings have been recorded for this shift.
           </p>
         </div>
       )}
 
-      {/* Reconciliation Results */}
-      {reconciliation && !loading && (
+      {/* ── SHIFT MODE RESULTS ── */}
+      {mode === 'shift' && reconciliation && !loading && (
         <div>
-          {/* Summary */}
+          {/* Shift summary cards */}
           <div className="bg-surface-card rounded-lg shadow p-6 mb-6">
-            <h2 className="text-xl font-bold text-content-primary mb-4">Shift Summary</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <h2 className="text-lg font-bold text-content-primary mb-4">Shift Summary</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="p-4 bg-action-primary-light rounded-lg border border-action-primary">
-                <p className="text-xs text-action-primary font-medium">Shift</p>
+                <p className="text-xs text-action-primary font-medium uppercase">Shift</p>
                 <p className="text-lg font-bold text-action-primary">{reconciliation.shift_type}</p>
                 <p className="text-sm text-action-primary">{reconciliation.shift_date}</p>
               </div>
@@ -228,111 +344,95 @@ export default function TankAnalysis() {
                 reconciliation.summary.critical_variances > 0 ? 'critical' :
                 reconciliation.summary.warnings > 0 ? 'warning' : 'acceptable'
               )}`}>
-                <p className="text-xs font-medium">Status</p>
+                <p className="text-xs font-medium uppercase">Status</p>
                 <p className="text-lg font-bold">
-                  {reconciliation.summary.critical_variances > 0 ? 'CRITICAL' :
-                   reconciliation.summary.warnings > 0 ? 'WARNING' : 'ACCEPTABLE'}
+                  {reconciliation.summary.critical_variances > 0 ? 'Critical' :
+                   reconciliation.summary.warnings > 0 ? 'Warning' : 'Acceptable'}
                 </p>
               </div>
               <div className="p-4 bg-surface-bg rounded-lg border border-surface-border">
-                <p className="text-xs text-content-secondary font-medium">Tanks Reconciled</p>
+                <p className="text-xs text-content-secondary font-medium uppercase">Tanks Reconciled</p>
                 <p className="text-2xl font-bold text-content-primary">{reconciliation.summary.total_tanks_reconciled}</p>
               </div>
               <div className="p-4 bg-surface-bg rounded-lg border border-surface-border">
-                <p className="text-xs text-content-secondary font-medium">Critical Variances</p>
+                <p className="text-xs text-content-secondary font-medium uppercase">Critical Variances</p>
                 <p className="text-2xl font-bold text-status-error">{reconciliation.summary.critical_variances}</p>
               </div>
             </div>
           </div>
 
-          {/* Tank Reconciliations */}
+          {visibleTankRecons.length === 0 && selectedTank && (
+            <div className="bg-status-pending-light border border-status-warning rounded-lg p-6 text-center">
+              <p className="text-status-warning text-sm">No data recorded for {tankNameFor(selectedTank)} in this shift.</p>
+            </div>
+          )}
+
+          {/* Per-tank detail cards */}
           <div className="space-y-6">
-            {reconciliation.tank_reconciliations.map((tank: TankReconciliation) => (
-              <div
-                key={tank.tank_id}
+            {visibleTankRecons.map((tank: TankReconciliation) => (
+              <div key={tank.tank_id}
                 className={`bg-surface-card rounded-lg shadow-lg p-6 border-2 ${
                   tank.fuel_type === 'Diesel' ? 'border-fuel-diesel-border' : 'border-fuel-petrol-border'
-                }`}
-              >
+                }`}>
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h3 className="text-2xl font-bold text-content-primary">{tankNameFor(tank.tank_id)}</h3>
-                    <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                    <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-semibold ${
                       tank.fuel_type === 'Diesel'
                         ? 'bg-fuel-diesel-light text-fuel-diesel'
                         : 'bg-fuel-petrol-light text-fuel-petrol'
-                    }`}>
-                      {tank.fuel_type}
-                    </span>
+                    }`}>{tank.fuel_type}</span>
                   </div>
                   <span className={`px-4 py-2 rounded-lg border-2 font-bold ${getStatusColor(tank.status)}`}>
                     {tank.status.toUpperCase()}
                   </span>
                 </div>
 
-                {/* Delivery Data */}
+                {/* Delivery data */}
                 {(tank.deliveries?.length > 0 || tank.delivery_timeline?.has_deliveries) && (
                   <div className="mb-4 bg-action-primary-light border-2 border-action-primary rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm font-bold text-action-primary">
-                        Fuel Deliveries During Shift
-                      </p>
+                      <p className="text-sm font-bold text-action-primary">Fuel Deliveries During Shift</p>
                       <span className="px-3 py-1 rounded-full bg-action-primary-light text-action-primary text-xs font-semibold border border-action-primary">
-                        {tank.delivery_timeline?.number_of_deliveries || tank.deliveries?.length || 0} Delivery(s)
+                        {tank.delivery_timeline?.number_of_deliveries || tank.deliveries?.length || 0} delivery(s)
                       </span>
                     </div>
-
-                    {/* Delivery summary */}
-                    <div className="flex items-center gap-4 mb-3 p-2 rounded bg-action-primary-light border border-action-primary text-sm">
-                      <span className="text-action-primary">
-                        Total Delivered: <strong>
-                          {(tank.delivery_timeline?.total_delivered ||
-                            tank.deliveries?.reduce((s: number, d: any) => s + (d.volume_delivered || 0), 0) || 0
-                          ).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} L
-                        </strong>
-                      </span>
-                    </div>
-
-                    {/* Delivery list */}
+                    <p className="text-sm text-action-primary mb-3">
+                      Total delivered: <strong>
+                        {(tank.delivery_timeline?.total_delivered ||
+                          tank.deliveries?.reduce((s: number, d: any) => s + (d.volume_delivered || 0), 0) || 0
+                        ).toLocaleString(undefined, { maximumFractionDigits: 0 })} L
+                      </strong>
+                    </p>
                     {tank.delivery_timeline?.timeline?.filter((e: any) => e.event_type === 'DELIVERY').map((event: any, idx: number) => (
                       <div key={idx} className="flex items-center gap-3 mb-1 p-2 bg-surface-card rounded border border-action-primary text-sm">
-                        <span className="w-6 h-6 rounded-full bg-action-primary text-white flex items-center justify-center text-xs font-bold">
-                          {event.delivery_number || idx + 1}
-                        </span>
+                        <span className="w-6 h-6 rounded-full bg-action-primary text-white flex items-center justify-center text-xs font-bold">{idx + 1}</span>
                         <span className="text-action-primary">
-                          +{event.change?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}L
+                          +{event.change?.toLocaleString(undefined, { maximumFractionDigits: 0 })}L
                           {event.supplier && <> from <strong>{event.supplier}</strong></>}
                           {event.time && <> at <strong>{event.time}</strong></>}
                         </span>
                       </div>
                     ))}
-
-                    {/* Fallback: show raw deliveries if no timeline */}
                     {!tank.delivery_timeline?.timeline && tank.deliveries?.map((d: any, idx: number) => (
                       <div key={idx} className="flex items-center gap-3 mb-1 p-2 bg-surface-card rounded border border-action-primary text-sm">
-                        <span className="w-6 h-6 rounded-full bg-action-primary text-white flex items-center justify-center text-xs font-bold">
-                          {idx + 1}
-                        </span>
+                        <span className="w-6 h-6 rounded-full bg-action-primary text-white flex items-center justify-center text-xs font-bold">{idx + 1}</span>
                         <span className="text-action-primary">
-                          +{(d.volume_delivered || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}L
+                          +{(d.volume_delivered || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}L
                           {d.supplier && <> from <strong>{d.supplier}</strong></>}
                           {d.delivery_time && <> at <strong>{d.delivery_time}</strong></>}
                         </span>
                       </div>
                     ))}
-
-                    {/* Segment breakdown from delivery_timeline */}
                     {tank.delivery_timeline?.inter_delivery_sales?.length > 0 && (
                       <div className="mt-3 overflow-x-auto">
-                        <h5 className="text-xs font-semibold text-action-primary mb-2">Segment Sales Breakdown</h5>
+                        <p className="text-xs font-semibold text-action-primary mb-2">Segment Sales Breakdown</p>
                         <table className="min-w-full text-xs border border-action-primary">
                           <thead>
                             <tr className="bg-action-primary-light">
-                              <th className="px-2 py-1 text-left font-medium text-action-primary">Segment</th>
-                              <th className="px-2 py-1 text-left font-medium text-action-primary">Period</th>
-                              <th className="px-2 py-1 text-right font-medium text-action-primary">Start Level</th>
-                              <th className="px-2 py-1 text-right font-medium text-action-primary">End Level</th>
-                              <th className="px-2 py-1 text-right font-medium text-action-primary">Sales (L)</th>
+                              {['Segment', 'Period', 'Start (L)', 'End (L)', 'Sales (L)'].map(h => (
+                                <th key={h} className="px-2 py-1 text-left font-medium text-action-primary">{h}</th>
+                              ))}
                             </tr>
                           </thead>
                           <tbody>
@@ -345,12 +445,6 @@ export default function TankAnalysis() {
                                 <td className="px-2 py-1 text-right font-mono font-semibold text-action-primary">{seg.sales_volume?.toFixed(2)}</td>
                               </tr>
                             ))}
-                            <tr className="border-t-2 border-action-primary bg-action-primary-light">
-                              <td colSpan={4} className="px-2 py-1 text-right font-bold text-action-primary">Total</td>
-                              <td className="px-2 py-1 text-right font-mono font-bold text-action-primary">
-                                {tank.delivery_timeline.total_sales?.toFixed(2)}
-                              </td>
-                            </tr>
                           </tbody>
                         </table>
                       </div>
@@ -358,158 +452,84 @@ export default function TankAnalysis() {
                   </div>
                 )}
 
-                {/* Tank Dip Readings */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  <div className="p-4 bg-action-primary-light rounded-lg border border-action-primary">
-                    <p className="text-xs text-action-primary font-medium mb-1">Opening Dip</p>
-                    <p className="text-2xl font-bold text-action-primary">{tank.opening_dip_cm.toFixed(1)} cm</p>
-                    <p className="text-sm text-action-primary">{tank.opening_volume_liters.toLocaleString()} L</p>
-                  </div>
-                  <div className="p-4 bg-action-primary-light rounded-lg border border-action-primary">
-                    <p className="text-xs text-action-primary font-medium mb-1">Closing Dip</p>
-                    <p className="text-2xl font-bold text-action-primary">{tank.closing_dip_cm.toFixed(1)} cm</p>
-                    <p className="text-sm text-action-primary">{tank.closing_volume_liters.toLocaleString()} L</p>
-                  </div>
+                {/* Volume movement grid */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                  {[
+                    { label: 'Opening Volume', value: `${fmt(tank.opening_volume_liters)} L` },
+                    { label: 'Closing Volume', value: `${fmt(tank.closing_volume_liters)} L` },
+                    { label: 'Tank Movement', value: `${fmt(tank.tank_movement)} L` },
+                    { label: 'Electronic Sales', value: `${fmt(tank.total_electronic_sales)} L` },
+                    { label: 'Mechanical Sales', value: `${fmt(tank.total_mechanical_sales)} L` },
+                    { label: 'Elec Variance', value: `${fmt(tank.electronic_vs_tank_discrepancy)} L (${fmt(tank.electronic_discrepancy_percent, 2)}%)` },
+                  ].map(item => (
+                    <div key={item.label} className="p-3 bg-surface-bg rounded-lg border border-surface-border">
+                      <p className="text-xs text-content-secondary font-medium">{item.label}</p>
+                      <p className="text-sm font-bold text-content-primary mt-1 font-mono">{item.value}</p>
+                    </div>
+                  ))}
                 </div>
 
-                {/* Pump-Level Performance Analysis */}
-                <div className="bg-action-primary-light rounded-lg p-4 mb-4 border-2 border-action-primary">
-                  <h4 className="font-bold text-content-primary mb-3">📊 Pump Performance Analysis</h4>
-                  <p className="text-xs text-content-secondary mb-3">Average of Electronic + Mechanical readings per pump (Excel columns AY, AZ, BA, BB)</p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Pump 1 Average */}
-                    <div className="bg-surface-card rounded-lg p-4 border border-action-primary">
-                      <div className="flex items-center justify-between mb-2">
-                        <h5 className="font-semibold text-content-primary">Pump 1 (Nozzles 1A + 1B)</h5>
-                        <span className="text-xs bg-action-primary-light text-action-primary px-2 py-1 rounded">Island 1</span>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-content-secondary">Average Volume:</span>
-                          <span className="font-bold text-content-primary">
-                            {((tank.total_electronic_sales + tank.total_mechanical_sales) / 4).toFixed(2)} L
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-content-secondary">Est. Revenue:</span>
-                          <span className="font-bold text-status-success">
-                            K{(((tank.total_electronic_sales + tank.total_mechanical_sales) / 4) * (reconciliation?.fuel_prices?.[tank.fuel_type] || 0)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                          </span>
-                        </div>
-                        <div className="text-xs text-content-secondary pt-2 border-t">
-                          Formula: (Nozzle1A + Nozzle1B) avg / 2
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Pump 2 Average */}
-                    <div className="bg-surface-card rounded-lg p-4 border border-action-primary">
-                      <div className="flex items-center justify-between mb-2">
-                        <h5 className="font-semibold text-content-primary">Pump 2 (Nozzles 2A + 2B)</h5>
-                        <span className="text-xs bg-action-primary-light text-action-primary px-2 py-1 rounded">Island 2</span>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-content-secondary">Average Volume:</span>
-                          <span className="font-bold text-content-primary">
-                            {((tank.total_electronic_sales + tank.total_mechanical_sales) / 4).toFixed(2)} L
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-content-secondary">Est. Revenue:</span>
-                          <span className="font-bold text-status-success">
-                            K{(((tank.total_electronic_sales + tank.total_mechanical_sales) / 4) * (reconciliation?.fuel_prices?.[tank.fuel_type] || 0)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                          </span>
-                        </div>
-                        <div className="text-xs text-content-secondary pt-2 border-t">
-                          Formula: (Nozzle2A + Nozzle2B) avg / 2
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Pump Comparison */}
-                  <div className="mt-4 bg-action-primary-light rounded-lg p-3 border border-action-primary">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-action-primary">Pump Balance Check:</span>
-                      <span className="text-sm text-action-primary">
-                        Both pumps dispensing evenly ✓
-                      </span>
-                    </div>
-                    <p className="text-xs text-action-primary mt-1">
-                      Significant imbalance between pumps may indicate meter issues or operational problems
-                    </p>
-                  </div>
-                </div>
-
-                {/* Volume Movement Comparison */}
-                <div className="bg-surface-bg rounded-lg p-4 mb-4">
-                  <h4 className="font-bold text-content-primary mb-3">Volume Movement Comparison</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-3 bg-surface-card rounded border-2 border-action-primary">
-                      <p className="text-xs text-content-secondary font-medium">Tank Movement (Actual)</p>
-                      <p className="text-xl font-bold text-action-primary">{tank.tank_movement.toFixed(2)} L</p>
-                      <p className="text-xs text-content-secondary">Opening - Closing</p>
-                    </div>
-                    <div className="p-3 bg-surface-card rounded border border-surface-border">
-                      <p className="text-xs text-content-secondary font-medium">Electronic Sales</p>
-                      <p className="text-xl font-bold text-content-primary">{tank.total_electronic_sales.toFixed(2)} L</p>
-                      <p className={`text-sm font-semibold ${
-                        Math.abs(tank.electronic_discrepancy_percent) < 2 ? 'text-status-success' :
-                        Math.abs(tank.electronic_discrepancy_percent) < 5 ? 'text-status-warning' : 'text-status-error'
-                      }`}>
-                        Variance: {tank.electronic_vs_tank_discrepancy.toFixed(2)} L ({tank.electronic_discrepancy_percent.toFixed(2)}%)
-                      </p>
-                    </div>
-                    <div className="p-3 bg-surface-card rounded border border-surface-border">
-                      <p className="text-xs text-content-secondary font-medium">Mechanical Sales</p>
-                      <p className="text-xl font-bold text-content-primary">{tank.total_mechanical_sales.toFixed(2)} L</p>
-                      <p className={`text-sm font-semibold ${
-                        Math.abs(tank.mechanical_discrepancy_percent) < 2 ? 'text-status-success' :
-                        Math.abs(tank.mechanical_discrepancy_percent) < 5 ? 'text-status-warning' : 'text-status-error'
-                      }`}>
-                        Variance: {tank.mechanical_vs_tank_discrepancy.toFixed(2)} L ({tank.mechanical_discrepancy_percent.toFixed(2)}%)
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Analysis Message */}
-                <div className={`p-4 rounded-lg border ${getStatusColor(tank.status)}`}>
-                  <p className="font-semibold">{tank.message}</p>
-                </div>
+                <p className="text-sm text-content-secondary">{tank.message}</p>
               </div>
             ))}
-          </div>
-
-          {/* Interpretation Guide */}
-          <div className="mt-6 bg-action-primary-light border border-action-primary rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-action-primary mb-2">Understanding Discrepancies</h3>
-            <ul className="text-sm text-action-primary space-y-1">
-              <li>• <strong>Positive variance</strong>: Tank lost more fuel than meters recorded (possible leakage, theft, or evaporation)</li>
-              <li>• <strong>Negative variance</strong>: Meters recorded more than tank lost (possible meter over-reading or dip measurement error)</li>
-              <li>• <strong>Acceptable</strong>: {'<'} 2% variance (normal operational variation)</li>
-              <li>• <strong>Warning</strong>: 2-5% variance (requires attention)</li>
-              <li>• <strong>Critical</strong>: {'>'} 5% variance (immediate investigation required)</li>
-              <li>• <strong>Delivery Days</strong>: Delivery data is shown directly from recorded deliveries when available</li>
-            </ul>
-          </div>
-
-          {/* Three-Way Reconciliation Note */}
-          <div className="mt-4 bg-category-a-light border border-category-a-border rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-category-a mb-2">Three-Way Reconciliation System</h3>
-            <p className="text-sm text-category-a">
-              This analysis compares <strong>Tank Movement</strong> (physical dips) vs <strong>Electronic Meters</strong> vs <strong>Mechanical Meters</strong> to identify discrepancies and ensure accurate fuel accounting.
-            </p>
           </div>
         </div>
       )}
 
-      {/* No Selection State */}
-      {!selectedShift && !loading && (
-        <div className="bg-surface-bg border border-surface-border rounded-lg p-12 text-center">
-          <p className="text-content-secondary text-lg">Select a shift above to view tank volume movement analysis</p>
+      {/* ── DATE RANGE MODE RESULTS ── */}
+      {mode === 'range' && !loading && rangeReadings.length > 0 && (
+        <div className="bg-surface-card rounded-lg shadow overflow-hidden">
+          <div className="px-6 py-4 border-b border-surface-border">
+            <h2 className="text-lg font-bold text-content-primary">
+              {tankNameFor(selectedTank)} — {startDate} to {endDate}
+            </h2>
+            <p className="text-xs text-content-secondary mt-1">{rangeReadings.length} reading(s)</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-surface-border" style={{ backgroundColor: 'var(--color-surface-bg)' }}>
+                  {['Date', 'Shift', 'Opening (L)', 'Closing (L)', 'Movement (L)', 'Elec Dispensed (L)', 'Elec vs Tank (L)', 'Elec vs Tank %', 'Status'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rangeReadings.map((r: any, i: number) => {
+                  const varPct = r.electronic_vs_tank_percent ?? r.electronic_vs_tank_variance
+                  const status = r.validation_status || '-'
+                  const statusStyle = status === 'PASS'
+                    ? 'text-status-success bg-status-success-light'
+                    : status === 'WARNING'
+                    ? 'text-status-warning bg-status-pending-light'
+                    : status === 'FAIL'
+                    ? 'text-status-error bg-status-error-light'
+                    : 'text-content-secondary'
+                  return (
+                    <tr key={r.reading_id || i} className="border-b border-surface-border hover:bg-surface-bg transition-colors">
+                      <td className="px-4 py-3 font-medium">{r.date}</td>
+                      <td className="px-4 py-3">{r.shift_type}</td>
+                      <td className="px-4 py-3 font-mono text-right">{fmt(r.opening_volume)}</td>
+                      <td className="px-4 py-3 font-mono text-right">{fmt(r.closing_volume)}</td>
+                      <td className="px-4 py-3 font-mono text-right">{fmt(r.tank_volume_movement)}</td>
+                      <td className="px-4 py-3 font-mono text-right">{fmt(r.total_electronic_dispensed)}</td>
+                      <td className="px-4 py-3 font-mono text-right">{fmt(r.electronic_vs_tank_variance)}</td>
+                      <td className="px-4 py-3 font-mono text-right">{varPct != null ? `${fmt(varPct, 2)}%` : '-'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusStyle}`}>{status}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {mode === 'range' && !loading && rangeReadings.length === 0 && selectedTank && startDate && endDate && (
+        <div className="bg-surface-card rounded-lg p-8 text-center border border-surface-border">
+          <p className="text-content-secondary text-sm">No readings found for {tankNameFor(selectedTank)} between {startDate} and {endDate}.</p>
         </div>
       )}
     </div>
