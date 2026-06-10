@@ -38,13 +38,13 @@ export default function AdvancedReports() {
 
   const productTypes = ['Petrol', 'Diesel', 'LPG', 'Lubricants', 'Accessories']
   const reportTypes = [
-    { value: 'staff', label: 'Staff Performance', icon: '👤' },
-    { value: 'nozzle', label: 'Nozzle Report', icon: '⛽' },
-    { value: 'island', label: 'Island Report', icon: '🏝️' },
-    { value: 'product', label: 'Product Sales', icon: '📦' },
-    { value: 'custom', label: 'Custom Multi-Filter', icon: '🔍' },
-    { value: 'daily', label: 'Daily Summary', icon: '📅' },
-    { value: 'monthly', label: 'Monthly Summary', icon: '📊' }
+    { value: 'staff', label: 'Staff Performance' },
+    { value: 'nozzle', label: 'Nozzle Report' },
+    { value: 'island', label: 'Island Report' },
+    { value: 'product', label: 'Product Sales' },
+    { value: 'custom', label: 'Custom Multi-Filter' },
+    { value: 'daily', label: 'Daily Summary' },
+    { value: 'monthly', label: 'Monthly Summary' }
   ]
 
   // Fetch dropdown lists when report type changes
@@ -405,7 +405,6 @@ export default function AdvancedReports() {
                   : 'border-surface-border hover:border-surface-border text-content-secondary'
               }`}
             >
-              <div className="text-2xl mb-1">{type.icon}</div>
               <div className="text-xs font-medium">{type.label}</div>
             </button>
           ))}
@@ -515,7 +514,7 @@ export default function AdvancedReports() {
                       onClick={() => { setSpecificId(''); setProductSearch('') }}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-content-secondary hover:text-content-primary text-sm"
                     >
-                      ✕
+                      &times;
                     </button>
                   )}
                 </div>

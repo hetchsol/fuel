@@ -875,7 +875,7 @@ export default function Shifts() {
                       )
                   ).map((assignment: any) => (
                     <div key={assignment.attendant_id} className="p-4 bg-surface-card rounded-lg border border-surface-border">
-                      <p className="font-medium mb-2 text-content-primary">👤 {assignment.attendant_name}</p>
+                      <p className="font-medium mb-2 text-content-primary">{assignment.attendant_name}</p>
 
                       {/* Product assignments */}
                       {(assignment.assigned_lpg || assignment.assigned_lubricants || assignment.assigned_accessories) && (
@@ -1544,7 +1544,7 @@ export default function Shifts() {
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold">{editingShiftId ? 'Edit Shift' : 'Create Shift'}</h2>
               <button onClick={() => { setShowManagementModal(false); setEditingShiftId(null) }} className="text-content-secondary hover:text-content-primary text-2xl">
-                ✕
+                &times;
               </button>
             </div>
 
@@ -1620,7 +1620,7 @@ export default function Shifts() {
               {selectedAttendants.map(attendant => (
                 <div key={attendant.user_id} className="mb-6 p-4 border rounded-lg bg-surface-bg">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold">👤 {attendant.full_name}</h3>
+                    <h3 className="font-semibold">{attendant.full_name}</h3>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"

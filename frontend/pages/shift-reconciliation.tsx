@@ -298,7 +298,7 @@ function ShiftReconciliationView() {
 
             {/* Revenue Breakdown */}
             <div className="p-6">
-              <h3 className="text-lg font-bold text-content-primary mb-4">💰 Revenue Breakdown</h3>
+              <h3 className="text-lg font-bold text-content-primary mb-4">Revenue Breakdown</h3>
 
               {/* VAT Calculation Section */}
               <div className="mb-6 bg-category-d-light rounded-lg p-4 border-2 border-category-d-border">
@@ -433,10 +433,10 @@ function ShiftReconciliationView() {
                       <div>
                         <p className="text-sm font-semibold text-content-secondary">
                           {recon.difference === 0
-                            ? '✅ Perfect Match'
+                            ? 'Perfect Match'
                             : recon.difference > 0
-                            ? '📈 Overage (Excess Cash)'
-                            : '📉 Shortage (Cash Short)'}
+                            ? 'Overage (Excess Cash)'
+                            : 'Shortage (Cash Short)'}
                         </p>
                         <p className="text-xs text-content-secondary mt-1">Actual - Expected</p>
                       </div>
@@ -467,7 +467,7 @@ function ShiftReconciliationView() {
                     <div className="flex justify-between items-center">
                       <div>
                         <p className="text-sm font-semibold text-category-c">
-                          {recon.difference < 0 ? '📉 Loss Percentage' : recon.difference > 0 ? '📈 Gain Percentage' : '⚖️ Perfect Balance'}
+                          {recon.difference < 0 ? 'Loss Percentage' : recon.difference > 0 ? 'Gain Percentage' : 'Perfect Balance'}
                         </p>
                         <p className="text-xs text-category-c mt-1">
                           (Actual - Expected) / Expected × 100

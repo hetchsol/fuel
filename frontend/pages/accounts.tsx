@@ -383,7 +383,7 @@ export default function Accounts() {
       {/* Account Holders List */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-content-primary">💳 Account Holders</h2>
+          <h2 className="text-xl font-bold text-content-primary">Account Holders</h2>
           {canManage && (
             <button
               onClick={() => setShowCreate(true)}

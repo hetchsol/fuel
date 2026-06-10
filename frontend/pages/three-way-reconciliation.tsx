@@ -175,7 +175,7 @@ export default function ThreeWayReconciliation() {
       case 'BALANCED': return '✓'
       case 'VARIANCE_MINOR': return '⚠'
       case 'VARIANCE_INVESTIGATION': return '⚠⚠'
-      case 'DISCREPANCY_CRITICAL': return '🚨'
+      case 'DISCREPANCY_CRITICAL': return '!!'
       default: return '?'
     }
   }
@@ -388,7 +388,7 @@ export default function ThreeWayReconciliation() {
                   </div>
 
                   <div className="bg-status-error-light rounded-lg p-4">
-                    <div className="text-sm text-status-error mb-1">🚨 Critical</div>
+                    <div className="text-sm text-status-error mb-1">Critical</div>
                     <div className="text-2xl font-bold text-status-error">{dailySummary.critical_shifts}</div>
                   </div>
                 </div>

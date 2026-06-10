@@ -160,7 +160,7 @@ export default function Inventory() {
                 : 'border-transparent text-content-secondary hover:text-content-secondary hover:border-surface-border'
             }`}
           >
-            🔥 LPG & Accessories
+            LPG & Accessories
           </button>
           <button
             onClick={() => setActiveTab('lubricants')}
@@ -170,7 +170,7 @@ export default function Inventory() {
                 : 'border-transparent text-content-secondary hover:text-content-secondary hover:border-surface-border'
             }`}
           >
-            🛢️ Lubricants
+            Lubricants
           </button>
         </nav>
       </div>

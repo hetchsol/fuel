@@ -231,7 +231,7 @@ export default function Readings() {
 
             <div className="border-2 border-dashed border-surface-border rounded-lg p-4 bg-surface-bg">
               <label className="block text-sm font-medium text-content-secondary mb-2">
-                📷 Upload Nozzle Image (Auto-extracts number)
+                Upload Nozzle Image (Auto-extracts number)
               </label>
               <div className="space-y-3">
                 <input
@@ -284,7 +284,7 @@ export default function Readings() {
             {/* Electronic Reading (Primary) */}
             <div className="bg-fuel-petrol-light border-2 border-fuel-petrol-border rounded-lg p-3">
               <label className="block text-sm font-bold text-fuel-petrol mb-1">
-                ⚡ Electronic Reading (Primary - Precise to 3 decimals)
+                Electronic Reading (Primary - Precise to 3 decimals)
               </label>
               <input
                 type="number"
@@ -409,7 +409,7 @@ export default function Readings() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 bg-fuel-petrol-light border border-fuel-petrol-border rounded-md">
-                  <p className="text-xs font-medium text-fuel-petrol">⚡ Electronic Reading</p>
+                  <p className="text-xs font-medium text-fuel-petrol">Electronic Reading</p>
                   <p className="text-lg font-bold text-fuel-petrol mt-1">{parseFloat(formData.manualValue).toFixed(3)}</p>
                 </div>
                 <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-md">
@@ -426,9 +426,9 @@ export default function Readings() {
               <div className="p-3 bg-cyan-50 border border-cyan-200 rounded-md">
                 <p className="text-xs font-medium text-cyan-900">OCR Method</p>
                 <p className="text-sm text-cyan-700 mt-1">
-                  {result.ocr_method === 'real_ocr' && '🎯 Real OCR - Tesseract'}
-                  {result.ocr_method === 'simulated' && '🔄 Simulated OCR'}
-                  {result.ocr_method === 'no_image' && '📝 No Image - Simulated'}
+                  {result.ocr_method === 'real_ocr' && 'Real OCR - Tesseract'}
+                  {result.ocr_method === 'simulated' && 'Simulated OCR'}
+                  {result.ocr_method === 'no_image' && 'No Image - Simulated'}
                 </p>
                 <p className="text-xs text-cyan-600 mt-1">
                   Confidence: {((result.ocr_confidence || 0) * 100).toFixed(0)}%

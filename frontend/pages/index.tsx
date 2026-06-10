@@ -172,10 +172,10 @@ export default function Home() {
           {daily && (
             <div className="grid grid-cols-2 gap-4">
               {[
-                { label: 'Date', value: daily.date || 'N/A', icon: '📅' },
-                { label: 'Volume Records', value: daily.volumes?.length || 0, icon: '📊' },
-                { label: 'Cash Variance', value: daily.cash_variance?.length || 0, icon: '💰' },
-                { label: 'Flags', value: daily.flags?.length || 0, icon: '🚩' },
+                { label: 'Date', value: daily.date || 'N/A' },
+                { label: 'Volume Records', value: daily.volumes?.length || 0 },
+                { label: 'Cash Variance', value: daily.cash_variance?.length || 0 },
+                { label: 'Flags', value: daily.flags?.length || 0 },
               ].map((item) => (
                 <div key={item.label} className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
                   <p className="text-xs text-content-secondary mb-1">{item.label}</p>

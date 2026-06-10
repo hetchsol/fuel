@@ -698,7 +698,7 @@ export default function TankReadingsReport() {
                   <div className="rounded-lg p-4 mb-4" style={{ backgroundColor: 'var(--color-fuel-diesel-light)', borderColor: 'var(--color-fuel-diesel)', borderWidth: '2px' }}>
                     <div className="flex justify-between items-center mb-3">
                       <h3 className="text-lg font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>
-                        Customer Allocation (Columns AR-BB)
+                        Customer Allocation
                       </h3>
                       {selectedReading.allocation_balance_check !== null && selectedReading.allocation_balance_check !== undefined && (
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -753,7 +753,7 @@ export default function TankReadingsReport() {
                     {/* Column AW Check */}
                     <div className="mt-3 p-2 rounded text-xs" style={{ backgroundColor: 'var(--color-fuel-diesel-light)' }}>
                       <span style={{ color: 'var(--color-fuel-diesel)' }}>
-                        <strong>Column AW Check:</strong> Total Electronic ({selectedReading.total_electronic_dispensed.toFixed(3)} L) -
+                        <strong>Balance Check:</strong> Total Electronic ({selectedReading.total_electronic_dispensed.toFixed(3)} L) -
                         Sum of Allocations ({selectedReading.customer_allocations.reduce((sum, a) => sum + a.volume, 0).toFixed(3)} L) =
                         {selectedReading.allocation_balance_check?.toFixed(3) || '0.000'} L
                       </span>

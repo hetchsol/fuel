@@ -1153,7 +1153,7 @@ export default function DailyTankReading() {
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold transition-colors duration-300" style={{ color: theme.textPrimary }}>Daily Tank Reading</h1>
-          <p className="mt-1 transition-colors duration-300" style={{ color: theme.textSecondary }}>Complete Excel-format daily reading (Columns D-BF)</p>
+          <p className="mt-1 transition-colors duration-300" style={{ color: theme.textSecondary }}>Complete daily reading for the selected tank and shift</p>
         </div>
 
         {/* Tank Selector */}
@@ -1267,7 +1267,7 @@ export default function DailyTankReading() {
           {activeSection === 1 && (
             <div className="rounded-lg shadow p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>📏 Tank Dip Readings & Volume Levels</h2>
+                <h2 className="text-xl font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>Tank Dip Readings & Volume Levels</h2>
                 {!autoPopulated?.active && !fetchingPrevious && !shiftDipPulled && (
                   <button
                     type="button"
@@ -1279,7 +1279,7 @@ export default function DailyTankReading() {
                   </button>
                 )}
               </div>
-              <p className="text-sm mb-6 transition-colors duration-300" style={{ color: theme.textSecondary }}>Physical measurements in centimeters and volume levels in liters (Columns AF-AH, AI, AL)</p>
+              <p className="text-sm mb-6 transition-colors duration-300" style={{ color: theme.textSecondary }}>Physical measurements in centimeters and volume levels in liters</p>
 
               {/* Shift dip readings indicator */}
               {fetchingShiftDip && (
@@ -1425,7 +1425,6 @@ export default function DailyTankReading() {
                 <div className="rounded-lg p-4" style={{ backgroundColor: theme.secondaryLight, borderColor: theme.secondary, borderWidth: '1px' }}>
                   <label className="block text-sm font-medium mb-2" style={{ color: theme.secondary }}>
                     Closing Dip (cm) <span className="text-status-error">*</span>
-                    <span className="text-xs ml-2 opacity-75">Excel Column: AH</span>
                   </label>
                   <input
                     type="number"
@@ -1513,8 +1512,7 @@ export default function DailyTankReading() {
                       <div className="flex items-center justify-between">
                         <div>
                           <label className="block text-sm font-medium mb-1" style={{ color: theme.accent }}>
-                            📊 Tank Volume Movement (Calculated)
-                            <span className="text-xs ml-2 opacity-75">Excel Column: AM</span>
+                            Tank Volume Movement (Calculated)
                           </label>
                           <p className="text-xs opacity-75" style={{ color: theme.accent }}>
                             Automatic calculation based on opening, closing, and delivery volumes
@@ -1547,7 +1545,6 @@ export default function DailyTankReading() {
                     <div className="rounded-lg p-4" style={{ backgroundColor: theme.accentLight, borderColor: theme.accent, borderWidth: '1px' }}>
                       <label className="block text-sm font-medium mb-2" style={{ color: theme.accent }}>
                         After Delivery Dip (cm)
-                        <span className="text-xs ml-2 opacity-75">Excel Column: AG</span>
                       </label>
                       <input
                         type="number"
@@ -1588,7 +1585,7 @@ export default function DailyTankReading() {
             <div className="rounded-lg shadow p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-xl font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>⛽ Nozzle Readings (Columns D-AE)</h2>
+                  <h2 className="text-xl font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>Nozzle Readings</h2>
                   <p className="text-sm mt-1 transition-colors duration-300" style={{ color: theme.textSecondary }}>Individual pump nozzle readings with attendant assignments</p>
                 </div>
                 {!erPulled && !isReadOnly && (
@@ -1667,9 +1664,6 @@ export default function DailyTankReading() {
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-bold" style={{ color: fuelColor }}>
                           {fuelPrefix} {nozzle.nozzle_id}
-                          <span className="text-xs ml-2 opacity-75">
-                            (Excel Columns {index === 0 ? 'D-J' : index === 1 ? 'K-Q' : index === 2 ? 'R-X' : 'Y-AE'})
-                          </span>
                         </h3>
                         {elecMovement > 0 && (
                           <div className="text-sm font-bold px-3 py-1 rounded-full" style={{
@@ -1836,7 +1830,7 @@ export default function DailyTankReading() {
                 borderColor: getFuelColor()
               }}>
                 <h4 className="font-bold mb-3 text-lg" style={{ color: getFuelColor() }}>
-                  Calculated Totals (Columns AN, AO):
+                  Calculated Totals:
                 </h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="rounded-lg p-4 border-2 transition-colors duration-300" style={{
@@ -1879,13 +1873,12 @@ export default function DailyTankReading() {
           {/* Section 3: Financial & Delivery (Columns AR, AT + Delivery) */}
           {activeSection === 3 && (
             <div className="rounded-lg shadow p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
-              <h2 className="text-xl font-semibold mb-4 transition-colors duration-300" style={{ color: theme.textPrimary }}>💰 Financial & Delivery Information</h2>
+              <h2 className="text-xl font-semibold mb-4 transition-colors duration-300" style={{ color: theme.textPrimary }}>Financial & Delivery Information</h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
                 <div className="rounded-lg p-4" style={{ backgroundColor: theme.primaryLight, borderColor: theme.primary, borderWidth: '1px' }}>
                   <label className="block text-sm font-medium mb-2" style={{ color: theme.primary }}>
                     Price per Liter (ZMW)
-                    <span className="text-xs ml-2 opacity-75">Excel Column: AR</span>
                   </label>
                   <input
                     type="number"
@@ -1924,7 +1917,6 @@ export default function DailyTankReading() {
                 <div className="md:col-span-2 rounded-lg p-4" style={{ backgroundColor: theme.secondaryLight, borderColor: theme.secondary, borderWidth: '2px' }}>
                   <label className="block text-sm font-medium mb-2" style={{ color: theme.secondary }}>
                     Actual Cash Banked (ZMW)
-                    <span className="text-xs ml-2 opacity-75">Excel Column: AT</span>
                   </label>
                   <input
                     type="number"
@@ -1949,7 +1941,7 @@ export default function DailyTankReading() {
               {/* Real-time Financial Metrics Display (Columns AP, AQ, AS, AU, AV, AW) */}
               {formData.opening_volume && formData.closing_volume && totalElectronic > 0 && (
                 <div className="mb-6 rounded-lg p-6 transition-colors duration-300" style={{ backgroundColor: theme.primaryLight, borderColor: theme.primary, borderWidth: '2px' }}>
-                  <h3 className="text-lg font-semibold mb-4" style={{ color: theme.primary }}>📊 Real-time Analysis & Variance</h3>
+                  <h3 className="text-lg font-semibold mb-4" style={{ color: theme.primary }}>Real-time Analysis & Variance</h3>
 
                   {(() => {
                     const metrics = calculateFinancialMetrics()
@@ -1963,7 +1955,7 @@ export default function DailyTankReading() {
                             Math.abs(metrics.electronicVariancePercent) > 0.5 ? 'bg-status-pending-light border-status-warning' :
                             'bg-status-success-light border-status-success'
                           }`}>
-                            <p className="text-xs font-medium mb-1 opacity-75">Column AP: Electronic vs Tank Variance</p>
+                            <p className="text-xs font-medium mb-1 opacity-75">Electronic vs Tank Variance</p>
                             <p className="text-2xl font-bold">
                               {metrics.electronicVsTankVariance.toFixed(3)} L
                             </p>
@@ -1977,7 +1969,7 @@ export default function DailyTankReading() {
                             Math.abs(metrics.mechanicalVariancePercent) > 0.5 ? 'bg-status-pending-light border-status-warning' :
                             'bg-status-success-light border-status-success'
                           }`}>
-                            <p className="text-xs font-medium mb-1 opacity-75">Column AQ: Mechanical vs Tank Variance</p>
+                            <p className="text-xs font-medium mb-1 opacity-75">Mechanical vs Tank Variance</p>
                             <p className="text-2xl font-bold">
                               {metrics.mechanicalVsTankVariance.toFixed(3)} L
                             </p>
@@ -1990,7 +1982,7 @@ export default function DailyTankReading() {
                         {/* Financial Summary */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div className="rounded-lg p-4" style={{ backgroundColor: theme.secondaryLight, borderColor: theme.secondary, borderWidth: '2px', borderStyle: 'solid' }}>
-                            <p className="text-xs font-medium mb-1 opacity-75" style={{ color: theme.secondary }}>Column AS: Expected Amount (Electronic)</p>
+                            <p className="text-xs font-medium mb-1 opacity-75" style={{ color: theme.secondary }}>Expected Amount (Electronic)</p>
                             <p className="text-xl font-bold" style={{ color: theme.secondary }}>
                               ZMW {metrics.expectedAmountElectronic.toFixed(2)}
                             </p>
@@ -2004,7 +1996,7 @@ export default function DailyTankReading() {
                             Math.abs(metrics.lossPercent) > 1 ? 'bg-status-pending-light border-status-warning' :
                             'bg-status-success-light border-status-success'
                           }`}>
-                            <p className="text-xs font-medium mb-1 opacity-75">Column AU: Cash Difference</p>
+                            <p className="text-xs font-medium mb-1 opacity-75">Cash Difference</p>
                             <p className="text-xl font-bold">
                               ZMW {metrics.cashDifference.toFixed(2)}
                             </p>
@@ -2018,7 +2010,7 @@ export default function DailyTankReading() {
                             Math.abs(metrics.lossPercent) > 1 ? 'bg-status-pending-light border-status-warning' :
                             'bg-status-success-light border-status-success'
                           }`}>
-                            <p className="text-xs font-medium mb-1 opacity-75">Column AV: Loss/Gain %</p>
+                            <p className="text-xs font-medium mb-1 opacity-75">Loss/Gain %</p>
                             <p className="text-xl font-bold">
                               {metrics.lossPercent.toFixed(2)}%
                             </p>
@@ -2035,7 +2027,7 @@ export default function DailyTankReading() {
                             metrics.validationStatus === 'WARNING' ? 'bg-status-pending-light border-2 border-status-warning text-status-warning' :
                             'bg-status-error-light border-2 border-status-error text-status-error'
                           }`}>
-                            Column AW: {metrics.validationStatus}
+                            {metrics.validationStatus}
                           </div>
                         </div>
 
@@ -2059,7 +2051,7 @@ export default function DailyTankReading() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="text-lg font-semibold" style={{ color: theme.accent }}>
-                      🚚 Fuel Deliveries (Multiple Supported)
+                      Fuel Deliveries (Multiple Supported)
                     </h3>
                     <p className="text-sm opacity-75 mt-1" style={{ color: theme.accent }}>
                       Add multiple deliveries or link existing standalone deliveries
@@ -2082,7 +2074,7 @@ export default function DailyTankReading() {
                 {availableDeliveries.length > 0 && (
                   <div className="bg-status-warning-light border-2 border-status-warning rounded-lg p-4 mb-4">
                     <div className="flex items-start gap-3">
-                      <div className="text-2xl">💡</div>
+                      <div className="text-2xl">i</div>
                       <div className="flex-1">
                         <h4 className="font-semibold text-status-warning-dark mb-2">
                           {availableDeliveries.length} Standalone Delivery(s) Available
@@ -2127,7 +2119,7 @@ export default function DailyTankReading() {
                     {deliveries.length > 1 && (
                       <div className="bg-action-primary-light border border-action-primary/30 rounded-lg p-3">
                         <p className="text-sm text-action-primary">
-                          📋 <strong>Deliveries are displayed in chronological order</strong> based on delivery time.
+                          <strong>Deliveries are displayed in chronological order</strong> based on delivery time.
                           This helps track the tank state throughout the shift.
                         </p>
                       </div>
@@ -2157,7 +2149,7 @@ export default function DailyTankReading() {
                                 {delivery.id.startsWith('temp-') ? ' (New)' : ' (Linked)'}
                               </h4>
                               <p className="text-xs opacity-75" style={{ color: theme.accent }}>
-                                {delivery.time ? `⏰ ${delivery.time}` : 'Time not set'}
+                                {delivery.time ? delivery.time : 'Time not set'}
                               </p>
                             </div>
                           </div>
@@ -2178,7 +2170,7 @@ export default function DailyTankReading() {
                             <div className="flex items-center justify-between">
                               <div>
                                 <p className="text-xs font-medium text-status-success mb-1">
-                                  📊 Current Tank Reading (Before This Delivery)
+                                  Current Tank Reading (Before This Delivery)
                                 </p>
                                 <p className="text-xs text-status-success">
                                   {index === 0
@@ -2326,7 +2318,7 @@ export default function DailyTankReading() {
                           <div className="md:col-span-2">
                             <div className="bg-action-primary-light border border-action-primary/30 rounded-lg p-3 mb-3">
                               <p className="text-xs text-action-primary">
-                                <strong>💡 Optional Verification:</strong> Enter tank dip readings before/after this delivery to verify the volume.
+                                <strong>Optional Verification:</strong> Enter tank dip readings before/after this delivery to verify the volume.
                                 These fields auto-calculate each other based on the delivery volume above.
                               </p>
                             </div>
@@ -2410,7 +2402,7 @@ export default function DailyTankReading() {
                         borderColor: theme.primary
                       }}>
                         <h4 className="font-semibold mb-4 flex items-center gap-2" style={{ color: theme.primary }}>
-                          <span className="text-2xl">📈</span>
+                          <span className="text-2xl"></span>
                           Shift Timeline (Chronological Order)
                         </h4>
                         <div className="space-y-3">
@@ -2437,7 +2429,7 @@ export default function DailyTankReading() {
                                 <div className="flex-1 pb-4">
                                   <div className="flex items-center justify-between mb-1">
                                     <span className="text-sm font-semibold" style={{ color: theme.textPrimary }}>
-                                      {event.time === 'Start' || event.time === 'End' ? event.time : `⏰ ${event.time}`}
+                                      {event.time === 'Start' || event.time === 'End' ? event.time : event.time}
                                     </span>
                                     {event.volume !== null && (
                                       <span className={`text-xl font-bold ${
@@ -2556,8 +2548,7 @@ export default function DailyTankReading() {
                         <div className="flex items-center justify-between mb-3">
                           <div>
                             <label className="block text-sm font-medium mb-1" style={{ color: theme.primary }}>
-                              📊 Tank Volume Movement (With Multiple Deliveries)
-                              <span className="text-xs ml-2 opacity-75">Excel Column: AM</span>
+                              Tank Volume Movement (With Multiple Deliveries)
                             </label>
                             <p className="text-xs opacity-75" style={{ color: theme.primary }}>
                               NEW Formula: (Opening - Closing) + Total Delivered
@@ -2618,7 +2609,7 @@ export default function DailyTankReading() {
                   borderWidth: '2px'
                 }}>
                   <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-fuel-diesel)' }}>
-                    👥 Customer Allocation (Excel Columns AR-BB)
+                    Customer Allocation
                   </h3>
                   <p className="text-sm mb-4 opacity-75" style={{ color: 'var(--color-fuel-diesel)' }}>
                     Allocate diesel volume to different customer types. Total must match Total Electronic Dispensed.
@@ -2637,7 +2628,7 @@ export default function DailyTankReading() {
                             {allocationBalance.valid ? '✅ Allocations Balance!' : '⚠️ Allocation Mismatch'}
                           </p>
                           <p className="text-xs opacity-75 mt-1">
-                            Column AW Check: Total Electronic - Sum(Allocations) = {allocationBalance.difference.toFixed(3)}L
+                            Balance check: Total Electronic - Sum(Allocations) = {allocationBalance.difference.toFixed(3)}L
                           </p>
                         </div>
                         <div className="text-right">
@@ -2751,7 +2742,7 @@ export default function DailyTankReading() {
 
               {formData.delivery_occurred && (
                 <div className="rounded-lg p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.accentLight, borderColor: theme.accent, borderWidth: '1px' }}>
-                  <h3 className="text-lg font-semibold mb-4" style={{ color: theme.accent }}>🚚 Delivery Details</h3>
+                  <h3 className="text-lg font-semibold mb-4" style={{ color: theme.accent }}>Delivery Details</h3>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -2792,7 +2783,6 @@ export default function DailyTankReading() {
                     <div>
                       <label className="block text-sm font-medium mb-1" style={{ color: theme.accent }}>
                         Before Offload Volume (L)
-                        <span className="text-xs ml-2 opacity-75">Column: AJ</span>
                       </label>
                       <input
                         type="number"
@@ -2808,7 +2798,6 @@ export default function DailyTankReading() {
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium mb-1" style={{ color: theme.accent }}>
                         After Offload Volume (L)
-                        <span className="text-xs ml-2 opacity-75">Column: AK</span>
                       </label>
                       <input
                         type="number"
@@ -2833,8 +2822,7 @@ export default function DailyTankReading() {
                           <div className="flex items-center justify-between">
                             <div>
                               <label className="block text-sm font-medium mb-1" style={{ color: theme.accent }}>
-                                📊 Tank Volume Movement (With Delivery)
-                                <span className="text-xs ml-2 opacity-75">Excel Column: AM</span>
+                                Tank Volume Movement (With Delivery)
                               </label>
                               <p className="text-xs opacity-75" style={{ color: theme.accent }}>
                                 Updated calculation including delivery volumes
@@ -2889,7 +2877,7 @@ export default function DailyTankReading() {
           {/* Section 4: Review & Submit */}
           {activeSection === 4 && (
             <div className="bg-surface-card rounded-lg shadow p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4">📋 Review & Submit</h2>
+              <h2 className="text-xl font-semibold mb-4">Review & Submit</h2>
 
               {!calculatedValues ? (
                 <>
@@ -2944,7 +2932,7 @@ export default function DailyTankReading() {
 
                   {/* Tank Movement Results */}
                   <div className="bg-surface-card border border-surface-border rounded-lg p-4">
-                    <h4 className="font-semibold text-content-primary mb-3">Tank Movement (Column AM)</h4>
+                    <h4 className="font-semibold text-content-primary mb-3">Tank Volume Movement</h4>
                     <div className="text-3xl font-bold text-action-primary">
                       {calculatedValues.tank_volume_movement.toFixed(2)} L
                     </div>
@@ -2958,7 +2946,7 @@ export default function DailyTankReading() {
                       Math.abs(calculatedValues.electronic_vs_tank_percent) > 0.5 ? 'bg-status-warning-light border-status-warning/30' :
                       'bg-status-success-light border-status-success/30'
                     }`}>
-                      <h4 className="font-semibold mb-2">Electronic vs Tank (Column AP)</h4>
+                      <h4 className="font-semibold mb-2">Electronic vs Tank</h4>
                       <p className="text-2xl font-bold">{calculatedValues.electronic_vs_tank_variance.toFixed(2)} L</p>
                       <p className="text-sm">({calculatedValues.electronic_vs_tank_percent.toFixed(2)}%)</p>
                     </div>
@@ -2968,7 +2956,7 @@ export default function DailyTankReading() {
                       Math.abs(calculatedValues.mechanical_vs_tank_percent) > 0.5 ? 'bg-status-warning-light border-status-warning/30' :
                       'bg-status-success-light border-status-success/30'
                     }`}>
-                      <h4 className="font-semibold mb-2">Mechanical vs Tank (Column AQ)</h4>
+                      <h4 className="font-semibold mb-2">Mechanical vs Tank</h4>
                       <p className="text-2xl font-bold">{calculatedValues.mechanical_vs_tank_variance.toFixed(2)} L</p>
                       <p className="text-sm">({calculatedValues.mechanical_vs_tank_percent.toFixed(2)}%)</p>
                     </div>
@@ -2977,7 +2965,7 @@ export default function DailyTankReading() {
                   {/* Financial Summary */}
                   {calculatedValues.expected_amount_electronic && (
                     <div className="bg-action-primary-light border border-action-primary/30 rounded-lg p-4">
-                      <h4 className="font-semibold text-action-primary mb-3">Financial Summary (Columns AR-AU)</h4>
+                      <h4 className="font-semibold text-action-primary mb-3">Financial Summary</h4>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         <div>
                           <p className="text-sm text-action-primary">Expected (Electronic)</p>
