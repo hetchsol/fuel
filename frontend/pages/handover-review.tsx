@@ -5,6 +5,8 @@ import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ReasonChips, { REASON_PRESETS } from '../components/ReasonChips'
 import { getHeaders, authFetch } from '../lib/api'
+import ExportButtons from '../components/ExportButtons'
+import { ExportConfig } from '../lib/exportUtils'
 
 const BASE = '/api/v1'
 
@@ -323,11 +325,53 @@ export default function HandoverReview() {
     }
   }
 
+  const getExportConfig = (): ExportConfig | null => {
+    if (displayedHandovers.length === 0) return null
+    const tabLabel: Record<string, string> = {
+      all: 'All Handovers', pending: 'Pending Review', flagged: 'Flagged',
+      approved: 'Approved', awaiting: 'Awaiting Closing',
+    }
+    const subtitle = [
+      filterDate ? `Date: ${filterDate}` : '',
+      filterShift ? `Shift: ${filterShift}` : '',
+    ].filter(Boolean).join('  |  ') || undefined
+    return {
+      title: `Handover Review - ${tabLabel[statusTab] || 'All'}`,
+      subtitle,
+      filename: `handover_review_${filterDate || new Date().toISOString().slice(0, 10)}`,
+      summaryCards: [
+        { label: 'Awaiting Closing', value: awaitingCount },
+        { label: 'Pending Review', value: summaryPending },
+        { label: 'Flagged', value: summaryFlagged },
+        { label: 'Approved Today', value: summaryApprovedToday },
+      ],
+      columns: [
+        { header: 'Date', key: 'date' },
+        { header: 'Shift', key: 'shift_id' },
+        { header: 'Attendant', key: 'attendant_name' },
+        { header: 'Expected Cash', key: 'expected_cash', format: 'currency' },
+        { header: 'Actual Cash', key: 'actual_cash', format: 'currency' },
+        { header: 'Difference', key: 'difference', format: 'currency' },
+        { header: 'Flags', key: '_flags' },
+        { header: 'Status', key: 'review_status' },
+      ],
+      data: displayedHandovers.map(h => ({
+        ...h,
+        _flags: (h.auto_flag_reasons || []).map(f =>
+          f === 'cash_shortage' ? 'Cash Shortage' : f === 'meter_deviation' ? 'Meter Deviation' : f
+        ).join(', ') || '-',
+      })),
+    }
+  }
+
   if (loading) return <LoadingSpinner />
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Handover Review</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Handover Review</h1>
+        <ExportButtons getConfig={getExportConfig} />
+      </div>
 
       {/* Attendant focus banner — set when opened from a person card on My Shift */}
       {filterAttendant && (
