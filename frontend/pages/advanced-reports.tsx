@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { getStaffList, getNozzleList, getIslandList, getProductList, getHeaders } from '../lib/api'
+import { getStaffList, getNozzleList, getIslandList, getProductList, getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
 
@@ -185,7 +185,7 @@ export default function AdvancedReports() {
           break
       }
 
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         headers: getHeaders()
       })
       if (!response.ok) {
