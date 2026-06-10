@@ -85,7 +85,7 @@ function SalesReportsView() {
 
         try {
             const user = JSON.parse(userStr);
-            if (!['owner', 'supervisor'].includes(user.role)) {
+            if (!['owner', 'supervisor', 'manager'].includes(user.role)) {
                 router.push('/');
                 return;
             }

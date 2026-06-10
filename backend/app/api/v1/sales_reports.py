@@ -21,6 +21,7 @@ def _load_fuel_sales_from_handovers(station_id: str, storage: dict) -> List[dict
     from ...services.handover_sales import iter_completed_handover_nozzles
     sales = []
     for ho, ns in iter_completed_handover_nozzles(station_id):
+        volume = ns.get('volume_sold', 0)
         sales.append({
             'date': ho.get('date', ''),
             'shift_id': ho.get('shift_id', ''),
@@ -28,9 +29,12 @@ def _load_fuel_sales_from_handovers(station_id: str, storage: dict) -> List[dict
             'attendant': ho.get('attendant_name', ''),
             'nozzle_id': ns.get('nozzle_id', ''),
             'fuel_type': ns.get('fuel_type', ''),
-            'volume': ns.get('volume_sold', 0),
+            'volume': volume,
+            'average_volume': volume,
             'total_amount': ns.get('revenue', 0),
             'price_per_liter': ns.get('price_per_liter', 0),
+            'unit_price': ns.get('price_per_liter', 0),
+            'discrepancy_percent': ns.get('meter_deviation_percent'),
         })
     return sales
 
@@ -44,7 +48,7 @@ def get_daily_sales_report(date: str, ctx: dict = Depends(get_station_context)):
         sales = _load_fuel_sales_from_handovers(ctx["station_id"], ctx["storage"])
         daily_sales = [s for s in sales if s.get("date") == date]
 
-        empty_fuel = {"total_volume": 0, "total_amount": 0, "sales_count": 0, "shifts": []}
+        empty_fuel = {"total_volume": 0, "total_amount": 0, "sales_count": 0, "shifts": [], "sales": []}
         if not daily_sales:
             return {
                 "date": date, "total_sales": 0,
@@ -67,12 +71,14 @@ def get_daily_sales_report(date: str, ctx: dict = Depends(get_station_context)):
                 "total_amount": round(diesel_amount, 2),
                 "sales_count": len(diesel_sales),
                 "shifts": list(set(s.get("shift_id") for s in diesel_sales)),
+                "sales": diesel_sales,
             },
             "petrol": {
                 "total_volume": round(petrol_volume, 2),
                 "total_amount": round(petrol_amount, 2),
                 "sales_count": len(petrol_sales),
                 "shifts": list(set(s.get("shift_id") for s in petrol_sales)),
+                "sales": petrol_sales,
             },
             "summary": {
                 "total_volume": round(diesel_volume + petrol_volume, 2),
