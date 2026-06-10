@@ -120,7 +120,7 @@ function ShiftReconciliationView() {
       ],
       data: reconciliations.map((r: any) => ({
         shift_type: r.shift_type || r.shift_id,
-        date: r.date || selectedDate,
+        date: r.date || startDate,
         petrol_revenue: r.petrol_revenue || 0,
         diesel_revenue: r.diesel_revenue || 0,
         lpg_revenue: r.lpg_revenue || 0,
