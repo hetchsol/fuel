@@ -302,8 +302,24 @@ def submit_tank_reading(
 
     station_id = ctx["station_id"]
     storage = ctx["storage"]
+    role = ctx.get("role", "")
     tank_readings_db = load_tank_readings(station_id)
     tank_deliveries_db = load_tank_deliveries(station_id)
+
+    # Only owners may overwrite an existing record (historical correction).
+    # Supervisors and other roles can still create new records for the current shift.
+    existing_for_upsert = next(
+        (rid for rid, r in tank_readings_db.items()
+         if r.get('tank_id') == reading_input.tank_id
+         and r.get('date') == reading_input.date
+         and r.get('shift_type', '').lower() == reading_input.shift_type.lower()),
+        None
+    )
+    if existing_for_upsert and role != "owner":
+        raise HTTPException(
+            status_code=403,
+            detail="Only the owner can update an existing tank reading record."
+        )
 
     # Get tank configuration from runtime storage
     tanks = storage.get('tanks', {})

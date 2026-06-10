@@ -140,6 +140,9 @@ export default function DailyTankReading() {
   const [existingReadingId, setExistingReadingId] = useState<string | null>(null)
   const [loadingExisting, setLoadingExisting] = useState(false)
 
+  // Non-owners can view existing records but cannot edit or resubmit them.
+  const isReadOnly = !!existingReadingId && user?.role !== 'owner'
+
   // Pull from Shift Dip Readings state
   const [shiftDipPulled, setShiftDipPulled] = useState(false)
   const [fetchingShiftDip, setFetchingShiftDip] = useState(false)
@@ -1327,9 +1330,22 @@ export default function DailyTankReading() {
                 </div>
               )}
               {existingReadingId && !loadingExisting && (
-                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ backgroundColor: 'var(--color-status-warning-light)', borderColor: 'var(--color-status-warning)', borderWidth: '1px' }}>
-                  <span className="text-status-warning font-bold text-sm">Existing record loaded.</span>
-                  <span className="text-status-warning text-sm">All fields populated from the saved entry. Make any corrections and click Update Record to save.</span>
+                <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{
+                  backgroundColor: isReadOnly ? 'var(--color-status-error-light)' : 'var(--color-status-warning-light)',
+                  borderColor: isReadOnly ? 'var(--color-status-error)' : 'var(--color-status-warning)',
+                  borderWidth: '1px'
+                }}>
+                  {isReadOnly ? (
+                    <>
+                      <span className="text-status-error font-bold text-sm">Read only.</span>
+                      <span className="text-status-error text-sm">This record has already been submitted. Only the owner can make corrections.</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-status-warning font-bold text-sm">Existing record loaded.</span>
+                      <span className="text-status-warning text-sm">All fields populated from the saved entry. Make any corrections and click Update Record to save.</span>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -1417,10 +1433,12 @@ export default function DailyTankReading() {
                     value={formData.closing_dip_cm}
                     onChange={(e) => setFormData(prev => ({ ...prev, closing_dip_cm: e.target.value }))}
                     onBlur={async (e) => {
+                      if (isReadOnly) return
                       const vol = await dipToVolume(e.target.value)
                       if (vol) setFormData(prev => ({ ...prev, closing_volume: vol }))
                     }}
-                    className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
+                    disabled={isReadOnly}
+                    className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     style={{ borderColor: theme.secondary + '80' }}
                     placeholder="e.g., 155.4"
                     required
@@ -1519,7 +1537,8 @@ export default function DailyTankReading() {
                       type="checkbox"
                       checked={formData.delivery_occurred}
                       onChange={(e) => setFormData({ ...formData, delivery_occurred: e.target.checked })}
-                      className="mr-2 w-5 h-5"
+                      disabled={isReadOnly}
+                      className="mr-2 w-5 h-5 disabled:opacity-60 disabled:cursor-not-allowed"
                     />
                     <span className="text-sm font-medium transition-colors duration-300" style={{ color: theme.textPrimary }}>Delivery Occurred During Shift</span>
                   </label>
@@ -1536,10 +1555,12 @@ export default function DailyTankReading() {
                         value={formData.after_delivery_dip_cm}
                         onChange={(e) => setFormData(prev => ({ ...prev, after_delivery_dip_cm: e.target.value }))}
                         onBlur={async (e) => {
+                          if (isReadOnly) return
                           const vol = await dipToVolume(e.target.value)
                           if (vol) setFormData(prev => ({ ...prev, after_offload_volume: vol }))
                         }}
-                        className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
+                        disabled={isReadOnly}
+                        className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2 disabled:opacity-60 disabled:cursor-not-allowed"
                         style={{ borderColor: theme.accent + '80' }}
                         placeholder="e.g., 180.0"
                       />
@@ -1570,7 +1591,7 @@ export default function DailyTankReading() {
                   <h2 className="text-xl font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>⛽ Nozzle Readings (Columns D-AE)</h2>
                   <p className="text-sm mt-1 transition-colors duration-300" style={{ color: theme.textSecondary }}>Individual pump nozzle readings with attendant assignments</p>
                 </div>
-                {!erPulled && (
+                {!erPulled && !isReadOnly && (
                   <button
                     type="button"
                     onClick={() => fetchFromEnterReadings(false)}
@@ -1669,7 +1690,8 @@ export default function DailyTankReading() {
                           <select
                             value={nozzle.attendant}
                             onChange={(e) => updateNozzle(index, 'attendant', e.target.value)}
-                            className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
+                            disabled={isReadOnly}
+                            className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
                             style={{
                               borderColor: fuelColor,
                               backgroundColor: theme.cardBg,
@@ -1719,7 +1741,8 @@ export default function DailyTankReading() {
                             step="0.001"
                             value={nozzle.electronic_closing}
                             onChange={(e) => updateNozzle(index, 'electronic_closing', e.target.value)}
-                            className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
+                            disabled={isReadOnly}
+                            className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
                             style={{
                               borderColor: fuelColor,
                               backgroundColor: theme.cardBg,
@@ -1778,7 +1801,8 @@ export default function DailyTankReading() {
                             step="0.001"
                             value={nozzle.mechanical_closing}
                             onChange={(e) => updateNozzle(index, 'mechanical_closing', e.target.value)}
-                            className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
+                            disabled={isReadOnly}
+                            className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
                             style={{
                               borderColor: fuelColor,
                               backgroundColor: theme.cardBg,
@@ -1868,7 +1892,8 @@ export default function DailyTankReading() {
                     step="0.01"
                     value={formData.price_per_liter}
                     onChange={(e) => setFormData({ ...formData, price_per_liter: e.target.value })}
-                    className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2 transition-colors duration-300"
+                    disabled={isReadOnly}
+                    className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2 transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
                     style={{ borderColor: theme.primary + '80', backgroundColor: theme.cardBg, color: theme.textPrimary }}
                     placeholder="29.92"
                   />
@@ -1906,7 +1931,8 @@ export default function DailyTankReading() {
                     step="0.01"
                     value={formData.actual_cash_banked}
                     onChange={(e) => setFormData({ ...formData, actual_cash_banked: e.target.value })}
-                    className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2 transition-colors duration-300"
+                    disabled={isReadOnly}
+                    className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2 transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
                     style={{
                       borderColor: theme.secondary + '80',
                       backgroundColor: theme.cardBg,
@@ -2039,6 +2065,7 @@ export default function DailyTankReading() {
                       Add multiple deliveries or link existing standalone deliveries
                     </p>
                   </div>
+                  {!isReadOnly && (
                   <button
                     type="button"
                     onClick={addDelivery}
@@ -2048,6 +2075,7 @@ export default function DailyTankReading() {
                     <span className="text-xl">+</span>
                     Add Delivery
                   </button>
+                  )}
                 </div>
 
                 {/* Auto-Link Suggestion Box */}
@@ -2133,6 +2161,7 @@ export default function DailyTankReading() {
                               </p>
                             </div>
                           </div>
+                          {!isReadOnly && (
                           <button
                             type="button"
                             onClick={() => removeDelivery(delivery.id)}
@@ -2140,6 +2169,7 @@ export default function DailyTankReading() {
                           >
                             Remove
                           </button>
+                          )}
                         </div>
 
                         {/* Current Tank Reading Display */}
@@ -2166,7 +2196,10 @@ export default function DailyTankReading() {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div
+                          className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                          style={{ pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.65 : 1 }}
+                        >
                           {/* Row 1: Time and Fuel Type */}
                           <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
@@ -2826,7 +2859,8 @@ export default function DailyTankReading() {
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:ring-2 focus:ring-action-primary"
+                  disabled={isReadOnly}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:ring-2 focus:ring-action-primary disabled:opacity-60 disabled:cursor-not-allowed"
                   rows={3}
                   placeholder="Any additional notes or observations..."
                 />
@@ -2889,6 +2923,7 @@ export default function DailyTankReading() {
                     >
                       ← Back to Edit
                     </button>
+                    {!isReadOnly && (
                     <button
                       type="submit"
                       disabled={loading}
@@ -2897,6 +2932,7 @@ export default function DailyTankReading() {
                     >
                       {loading ? 'Processing...' : existingReadingId ? 'Update Record' : 'Save Record'}
                     </button>
+                    )}
                   </div>
                 </>
               ) : (
