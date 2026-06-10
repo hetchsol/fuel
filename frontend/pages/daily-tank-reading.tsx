@@ -600,6 +600,24 @@ export default function DailyTankReading() {
     }
   }
 
+  // Convert a dip reading (cm) to volume (L) via the tank's calibration chart.
+  // Returns the formatted volume string, or '' if conversion fails.
+  const dipToVolume = async (dipValue: string): Promise<string> => {
+    const dipNum = parseFloat(dipValue)
+    if (isNaN(dipNum) || dipNum <= 0 || !selectedTank) return ''
+    try {
+      const res = await authFetch(
+        `${BASE}/tank-calibrations/${selectedTank}/convert?dip_cm=${dipNum}`,
+        { headers: getHeaders() }
+      )
+      if (res.ok) {
+        const data = await res.json()
+        return data.volume_liters.toFixed(2)
+      }
+    } catch {}
+    return ''
+  }
+
   // NEW: Calculate total delivered volume
   const getTotalDelivered = () => {
     return deliveries.reduce((sum, d) => {
@@ -1273,7 +1291,11 @@ export default function DailyTankReading() {
                       type="number"
                       step="0.1"
                       value={formData.opening_dip_cm}
-                      onChange={(e) => setFormData({ ...formData, opening_dip_cm: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, opening_dip_cm: e.target.value }))}
+                      onBlur={async (e) => {
+                        const vol = await dipToVolume(e.target.value)
+                        if (vol) setFormData(prev => ({ ...prev, opening_volume: vol }))
+                      }}
                       className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
                       style={{ borderColor: theme.primary + '80' }}
                       placeholder="e.g., 164.5"
@@ -1299,20 +1321,10 @@ export default function DailyTankReading() {
                     type="number"
                     step="0.1"
                     value={formData.closing_dip_cm}
-                    onChange={async (e) => {
-                      const dip = e.target.value
-                      setFormData(prev => ({ ...prev, closing_dip_cm: dip }))
-                      // Auto-populate closing volume from calibration when a valid dip is entered
-                      const dipNum = parseFloat(dip)
-                      if (!isNaN(dipNum) && dipNum > 0 && selectedTank) {
-                        try {
-                          const res = await authFetch(`${BASE}/tank-calibrations/${selectedTank}/convert?dip_cm=${dipNum}`, { headers: getHeaders() })
-                          if (res.ok) {
-                            const data = await res.json()
-                            setFormData(prev => ({ ...prev, closing_dip_cm: dip, closing_volume: data.volume_liters.toFixed(2) }))
-                          }
-                        } catch { /* non-critical: user can still enter closing volume manually */ }
-                      }
+                    onChange={(e) => setFormData(prev => ({ ...prev, closing_dip_cm: e.target.value }))}
+                    onBlur={async (e) => {
+                      const vol = await dipToVolume(e.target.value)
+                      if (vol) setFormData(prev => ({ ...prev, closing_volume: vol }))
                     }}
                     className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
                     style={{ borderColor: theme.secondary + '80' }}
@@ -1428,7 +1440,11 @@ export default function DailyTankReading() {
                         type="number"
                         step="0.1"
                         value={formData.after_delivery_dip_cm}
-                        onChange={(e) => setFormData({ ...formData, after_delivery_dip_cm: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, after_delivery_dip_cm: e.target.value }))}
+                        onBlur={async (e) => {
+                          const vol = await dipToVolume(e.target.value)
+                          if (vol) setFormData(prev => ({ ...prev, after_offload_volume: vol }))
+                        }}
                         className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
                         style={{ borderColor: theme.accent + '80' }}
                         placeholder="e.g., 180.0"
