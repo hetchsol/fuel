@@ -517,7 +517,7 @@ export default function Settings() {
           <form onSubmit={handleSystemUpdate} className="space-y-6">
             <div className="border-b pb-6">
               <h2 className="text-xl font-semibold text-content-primary mb-4">System Information</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Business Name</label>
                   <input
@@ -615,7 +615,7 @@ export default function Settings() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="border-b pb-6">
               <h2 className="text-xl font-semibold text-content-primary mb-4">Fuel Pricing</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Diesel Price per Liter</label>
                   <div className="relative">
@@ -725,7 +725,7 @@ export default function Settings() {
 
             <div>
               <h2 className="text-xl font-semibold text-content-primary mb-4">Allowable Losses During Offloading</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Diesel Allowable Loss (%)</label>
                   <input
@@ -759,7 +759,7 @@ export default function Settings() {
 
             <div>
               <h2 className="text-xl font-semibold text-content-primary mb-4">Nozzle Loss Threshold</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Allowable Loss Per Nozzle (Liters)</label>
                   <input
@@ -779,7 +779,7 @@ export default function Settings() {
 
             <div>
               <h2 className="text-xl font-semibold text-content-primary mb-4">Cash Shortage Threshold</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Cash Shortage Threshold (ZMW)</label>
                   <input
@@ -839,7 +839,7 @@ export default function Settings() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-content-secondary mb-1">VAT Rate (%)</label>
                 <input
@@ -916,7 +916,7 @@ export default function Settings() {
             </div>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">PASS Threshold (%)</label>
                   <input
@@ -1039,7 +1039,7 @@ export default function Settings() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-content-secondary mb-1">Low Stock Threshold (%)</label>
                 <input
@@ -1180,7 +1180,7 @@ export default function Settings() {
             {reconTolerances.volume_tolerance_mode === 'percentage' && (
               <div>
                 <h3 className="text-sm font-semibold text-content-primary mb-3">Percentage Tolerances</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-content-secondary mb-1">Acceptable (%)</label>
                     <input type="number" step="0.1" min="0" max="100"
@@ -1227,7 +1227,7 @@ export default function Settings() {
             {reconTolerances.volume_tolerance_mode === 'fixed' && (
               <div>
                 <h3 className="text-sm font-semibold text-content-primary mb-3">Fixed Volume Tolerances (Litres)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-content-secondary mb-1">Acceptable (L)</label>
                     <input type="number" step="0.5" min="0" max="10000"
@@ -1253,7 +1253,7 @@ export default function Settings() {
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-semibold text-content-primary mb-3">Percentage</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-content-secondary mb-1">Acceptable (%)</label>
                       <input type="number" step="0.1" min="0" max="100"
@@ -1276,7 +1276,7 @@ export default function Settings() {
                     The cap is the hard ceiling. Even if the percentage allows more, loss beyond the cap triggers escalation.
                     Set to 0 to disable (percentage alone governs).
                   </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-content-secondary mb-1">Cap — Acceptable (L)</label>
                       <input type="number" step="0.5" min="0" max="10000"
@@ -1403,7 +1403,7 @@ export default function Settings() {
             <div className="border-t pt-4">
               <h3 className="text-sm font-semibold text-content-primary mb-3">Cash Tolerances (ZMW)</h3>
               <p className="text-xs text-content-secondary mb-3">Cash tolerances are always flat ZMW amounts, independent of volume mode.</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Acceptable (ZMW)</label>
                   <input type="number" step="10" min="0" max="1000000"
@@ -1702,7 +1702,7 @@ function TankCalibrationTab() {
       </div>
 
       {/* Tank selector */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-content-secondary mb-1">Select Tank</label>
           <select value={selectedTank} onChange={e => setSelectedTank(e.target.value)}

@@ -545,7 +545,7 @@ export default function Infrastructure() {
             <div className="mb-6 p-4 bg-action-primary-light border border-action-primary rounded-md">
               <h3 className="font-semibold text-content-primary mb-4">Create New Tank</h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">Tank ID</label>
                   <input
@@ -614,7 +614,7 @@ export default function Infrastructure() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {tanks.map(tank => (
               <div
                 key={tank.tank_id}
@@ -838,7 +838,7 @@ export default function Infrastructure() {
           </div>
 
           {/* 3-column Grid of Island Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {islands.map(island => (
               <div
                 key={island.island_id}

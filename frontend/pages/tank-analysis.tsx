@@ -334,7 +334,7 @@ export default function TankAnalysis() {
           {/* Shift summary cards */}
           <div className="bg-surface-card rounded-lg shadow p-6 mb-6">
             <h2 className="text-lg font-bold text-content-primary mb-4">Shift Summary</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="p-4 bg-action-primary-light rounded-lg border border-action-primary">
                 <p className="text-xs text-action-primary font-medium uppercase">Shift</p>
                 <p className="text-lg font-bold text-action-primary">{reconciliation.shift_type}</p>
@@ -453,7 +453,7 @@ export default function TankAnalysis() {
                 )}
 
                 {/* Volume movement grid */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
                   {[
                     { label: 'Opening Volume', value: `${fmt(tank.opening_volume_liters)} L` },
                     { label: 'Closing Volume', value: `${fmt(tank.closing_volume_liters)} L` },

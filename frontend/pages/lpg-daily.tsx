@@ -552,7 +552,7 @@ export default function LPGDaily() {
       )}
 
       {/* Date / Shift / Salesperson selectors */}
-      <div className="rounded-lg shadow p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4"
+      <div className="rounded-lg shadow p-4 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
         <div>
           <label className="block text-sm font-medium mb-1" style={{ color: theme.textSecondary }}>Date</label>
@@ -876,7 +876,7 @@ export default function LPGDaily() {
       )}
 
       {/* Cylinder Population */}
-      <div className="rounded-lg shadow p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4"
+      <div className="rounded-lg shadow p-4 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
         <div className="col-span-full text-sm font-semibold mb-1" style={{ color: theme.textPrimary }}>
           Cylinder Population Count

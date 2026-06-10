@@ -416,7 +416,7 @@ export default function AdvancedReports() {
       <div className="bg-surface-card rounded-lg shadow p-6 mb-6">
         <h2 className="text-lg font-semibold text-content-primary mb-4">Filters</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Specific ID input for staff/nozzle/island/product */}
           {['staff', 'nozzle', 'island', 'product'].includes(reportType) && (
             <div className="md:col-span-2 lg:col-span-3">

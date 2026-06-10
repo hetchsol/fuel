@@ -371,7 +371,7 @@ export default function ThreeWayReconciliation() {
               </div>
 
               <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                   <div className="bg-surface-bg rounded-lg p-4">
                     <div className="text-sm text-content-secondary mb-1">Total Shifts</div>
                     <div className="text-2xl font-bold text-content-primary">{dailySummary.total_shifts}</div>
@@ -443,7 +443,7 @@ export default function ThreeWayReconciliation() {
                 <div className="bg-surface-bg px-6 py-4 border-b">
                   <h2 className="text-lg font-semibold text-content-primary">Variance Trends (30 days)</h2>
                 </div>
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {Object.entries(varianceTrends).map(([tankId, trend]: [string, any]) => {
                     const direction = trend.trend_direction || 'stable'
                     const avgVariance = trend.average_variance_percent ?? 0
@@ -503,7 +503,7 @@ export default function ThreeWayReconciliation() {
                     </div>
 
                     {/* Three Sources Mini View */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="bg-action-primary-light rounded p-3">
                         <div className="text-xs text-action-primary font-medium mb-1">PHYSICAL (Tank)</div>
                         <div className="text-lg font-bold text-action-primary">
@@ -570,7 +570,7 @@ export default function ThreeWayReconciliation() {
                 {/* Three Sources */}
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold mb-4">Three Sources</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {/* Physical */}
                     <div className="bg-action-primary-light rounded-lg p-4 border border-action-primary">
                       <div className="text-sm font-semibold text-action-primary mb-3">PHYSICAL</div>

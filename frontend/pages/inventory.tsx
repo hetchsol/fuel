@@ -183,7 +183,7 @@ export default function Inventory() {
             <p className="text-sm text-content-secondary">Current fuel levels and tank status</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {tanks.length === 0 && (
               <div className="col-span-full text-center py-8 text-content-secondary">
                 No tanks configured. Add tanks in the setup wizard or Infrastructure page.
@@ -270,7 +270,7 @@ export default function Inventory() {
             <p className="text-sm text-content-secondary">Gas stoves, cookers, hoses, and regulators</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {lpgAccessories.map(accessory => {
               const stockPercentage = (accessory.current_stock / accessory.opening_stock) * 100
               return (
@@ -363,7 +363,7 @@ export default function Inventory() {
               Active Sales Location
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {lubricants.filter(lube => lube.location === 'Island 3').map(lube => {
                 const stockPercentage = (lube.current_stock / lube.opening_stock) * 100
                 const stockValue = lube.current_stock * lube.unit_price
@@ -444,7 +444,7 @@ export default function Inventory() {
               Reserve Stock
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {lubricants.filter(lube => lube.location === 'Buffer').map(lube => {
                 const stockValue = lube.current_stock * lube.unit_price
                 return (
@@ -462,7 +462,7 @@ export default function Inventory() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <p className="text-xs text-content-secondary">Current Stock</p>
                         <p className="text-lg font-bold text-content-primary">{lube.current_stock}</p>

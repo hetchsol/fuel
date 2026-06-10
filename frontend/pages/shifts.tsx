@@ -945,7 +945,7 @@ export default function Shifts() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                 <div className="bg-surface-card rounded-lg p-4 border border-surface-border">
                   <p className="text-xs text-content-secondary font-medium">Attendants on Duty</p>
                   <p className="text-lg font-semibold text-content-primary mt-1">
@@ -1082,7 +1082,7 @@ export default function Shifts() {
           </div>
 
           {/* Existing Tank Dip Readings */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {tankDipReadings.length === 0 ? (
               <div className="col-span-2 p-6 bg-surface-bg rounded-lg border border-surface-border text-center">
                 <p className="text-content-secondary">No tank dip readings recorded for this shift yet.</p>
@@ -1598,7 +1598,7 @@ export default function Shifts() {
               {/* Attendant Selection */}
               <div className="mb-6">
                 <label className="block text-sm font-medium mb-2">Select Staff for This Shift</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {availableStaff.map(staff => (
                     <label key={staff.user_id} className="flex items-center space-x-2 p-2 border rounded hover:bg-surface-bg cursor-pointer">
                       <input
@@ -1792,7 +1792,7 @@ export default function Shifts() {
                                 })}
                               </div>
                             ) : (
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 ml-6">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 ml-6">
                                 {group.nozzles.map((nozzle: any) => {
                                   const takenByOther = otherAttendantNozzles.has(nozzle.nozzle_id)
                                   const takenByName = takenByOther
@@ -1977,7 +1977,7 @@ function ShiftDepositOverview({ shiftId }: { shiftId: string }) {
       </button>
       {expanded && (
       <div className="px-6 pb-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {data.attendants.map((att: any) => (
           <div key={att.attendant_id} className={`p-3 rounded-lg border ${att.overdue ? 'border-status-warning bg-status-warning/5' : 'border-surface-border'}`}>
             <div className="flex justify-between items-center mb-1">

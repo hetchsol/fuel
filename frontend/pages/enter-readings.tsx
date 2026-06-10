@@ -450,7 +450,7 @@ export default function EnterReadings() {
         <h2 className="text-sm font-semibold mb-3 uppercase tracking-wide" style={{ color: theme.textSecondary }}>
           Shift Information
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div>
             <div className="text-xs" style={{ color: theme.textSecondary }}>Shift ID</div>
             <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>{shiftInfo?.shift_id}</div>
@@ -739,7 +739,7 @@ export default function EnterReadings() {
 
           {/* Totals card */}
           <div className="rounded-lg p-4" style={{ backgroundColor: theme.background }}>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
               <div>
                 <div className="text-xs" style={{ color: theme.textSecondary }}>Total Electronic</div>
                 <div className="font-mono font-bold" style={{ color: theme.textPrimary }}>
@@ -957,8 +957,8 @@ function SupervisorSection({
 
       <div className="rounded-lg shadow p-4 mb-6"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <div className="flex items-end gap-4">
-          <div className="flex-1">
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Select Shift</label>
             <select value={supervisorShiftId}
               onChange={e => setSupervisorShiftId(e.target.value)}
@@ -1089,7 +1089,7 @@ function SupervisorSection({
                       className="w-full px-3 py-2 rounded border text-sm"
                       style={inputStyle} />
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => handleReview(att.attendant_id, 'approve')}
                       disabled={reviewLoading === att.attendant_id}

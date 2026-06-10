@@ -976,7 +976,7 @@ export default function MyShift() {
           <span className="text-xs" style={{ color: theme.textSecondary }}>{showShiftInfo ? '−' : '+'}</span>
         </button>
         {showShiftInfo && (
-        <div className="px-4 pb-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="px-4 pb-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div>
             <div className="text-xs" style={{ color: theme.textSecondary }}>Shift ID</div>
             <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>{shiftInfo?.shift_id}</div>
@@ -1827,7 +1827,7 @@ export default function MyShift() {
                           Opening: {row.opening_stock}
                         </span>
                       </div>
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                           <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Qty Sold</label>
                           <input type="number" min={0} max={row.opening_stock} step={1}
@@ -1934,7 +1934,7 @@ export default function MyShift() {
                           Opening: {row.opening_stock}
                         </span>
                       </div>
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                           <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Qty Sold</label>
                           <input type="number" min={0} max={row.opening_stock} step={1}
@@ -2328,7 +2328,7 @@ export default function MyShift() {
           <h2 className="text-lg font-bold mb-4" style={{ color: theme.textPrimary }}>
             {isAttendant ? 'Readings Verified' : 'Readings Summary'}
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-sm">
             <div>
               <span className="text-xs" style={{ color: theme.textSecondary }}>Handover ID</span>
               <div className="font-mono font-medium" style={{ color: theme.textPrimary }}>{handoverResult.handover_id}</div>
@@ -2464,7 +2464,7 @@ export default function MyShift() {
                 </tbody>
               </table>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                 <SummaryCell label="Fuel Revenue" value={handoverResult.fuel_revenue} theme={theme} />
                 <SummaryCell label="LPG Sales" value={handoverResult.lpg_sales} theme={theme} />
                 <SummaryCell label="Lubricant Sales" value={handoverResult.lubricant_sales} theme={theme} />
@@ -2637,7 +2637,7 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
               {(!shift.assignments || shift.assignments.length === 0) ? (
                 <p className="text-sm italic" style={{ color: theme.textSecondary }}>No attendants assigned yet</p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {shift.assignments.map((assignment: any, idx: number) => (
                     <div key={idx}
                       onClick={() => router.push(`/handover-review?attendant_id=${encodeURIComponent(assignment.attendant_id || '')}`)}
@@ -2776,7 +2776,7 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
           <h2 className="text-lg font-bold" style={{ color: theme.textPrimary }}>Staff</h2>
         </div>
         <div className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* On Shift */}
             <div>
               <h3 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--color-status-success)' }}>
@@ -2862,7 +2862,7 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
             <h2 className="text-lg font-bold" style={{ color: theme.textPrimary }}>Islands & Nozzles</h2>
           </div>
           <div className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {islands.map(island => (
                 <div key={island.island_id}
                   onClick={() => router.push('/shifts')}

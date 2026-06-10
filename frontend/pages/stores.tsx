@@ -795,7 +795,7 @@ function StockActionModal({ item_key, name, stores, forecourt, onClose, onDone }
         </p>
 
         {/* Action selector */}
-        <div className="grid grid-cols-4 gap-1 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 mb-4">
           {ACTIONS.map(([a, label]) => (
             <button key={a} type="button" onClick={() => { setAction(a); setQty(''); setNote('') }}
               className="py-1.5 text-xs font-medium rounded border text-center"

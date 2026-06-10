@@ -195,7 +195,7 @@ export default function Sales() {
           <h2 className="text-xl font-semibold mb-4">Reading Details</h2>
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Shift Type, Shift ID and Fuel Type */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-content-secondary mb-1">
                   Shift Type
@@ -267,7 +267,7 @@ export default function Sales() {
             {/* Mechanical Readings */}
             <div className="border-t pt-4">
               <h3 className="text-md font-semibold text-content-secondary mb-3">Mechanical Readings</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">
                     Opening Reading (Liters)
@@ -303,7 +303,7 @@ export default function Sales() {
             {/* Electronic Readings */}
             <div className="border-t pt-4">
               <h3 className="text-md font-semibold text-content-secondary mb-3">Electronic Readings</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-content-secondary mb-1">
                     Opening Reading (Liters)
@@ -340,7 +340,7 @@ export default function Sales() {
             {volumes && (
               <div className="p-4 bg-action-primary-light border border-action-primary rounded-md">
                 <h4 className="text-sm font-semibold text-action-primary mb-2">Calculated Volumes</h4>
-                <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                   <div>
                     <p className="text-action-primary">Mechanical</p>
                     <p className="font-bold text-action-primary">{volumes.mechanical} L</p>

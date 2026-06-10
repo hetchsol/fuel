@@ -1055,7 +1055,7 @@ export default function DailyTankReading() {
           backgroundColor: getFuelLightColor(),
           borderColor: getFuelColor()
         }}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2" style={{ color: getFuelColor() }}>Tank</label>
               <select
@@ -1254,7 +1254,7 @@ export default function DailyTankReading() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="rounded-lg p-4" style={{ backgroundColor: theme.primaryLight, borderColor: theme.primary, borderWidth: '1px' }}>
                   <label className="block text-sm font-medium mb-2" style={{ color: theme.primary }}>
                     Opening Dip (cm)
@@ -1542,7 +1542,7 @@ export default function DailyTankReading() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         {/* Attendant */}
                         <div className="md:col-span-3">
                           <label className="block text-sm font-bold mb-1" style={{ color: fuelColor }}>
@@ -1739,7 +1739,7 @@ export default function DailyTankReading() {
             <div className="rounded-lg shadow p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
               <h2 className="text-xl font-semibold mb-4 transition-colors duration-300" style={{ color: theme.textPrimary }}>💰 Financial & Delivery Information</h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
                 <div className="rounded-lg p-4" style={{ backgroundColor: theme.primaryLight, borderColor: theme.primary, borderWidth: '1px' }}>
                   <label className="block text-sm font-medium mb-2" style={{ color: theme.primary }}>
                     Price per Liter (ZMW)
@@ -1813,7 +1813,7 @@ export default function DailyTankReading() {
                     return (
                       <div className="space-y-4">
                         {/* Variance Analysis */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className={`rounded-lg p-4 border-2 ${
                             Math.abs(metrics.electronicVariancePercent) > 1 ? 'bg-status-error-light border-status-error' :
                             Math.abs(metrics.electronicVariancePercent) > 0.5 ? 'bg-status-pending-light border-status-warning' :
@@ -1844,7 +1844,7 @@ export default function DailyTankReading() {
                         </div>
 
                         {/* Financial Summary */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div className="rounded-lg p-4" style={{ backgroundColor: theme.secondaryLight, borderColor: theme.secondary, borderWidth: '2px', borderStyle: 'solid' }}>
                             <p className="text-xs font-medium mb-1 opacity-75" style={{ color: theme.secondary }}>Column AS: Expected Amount (Electronic)</p>
                             <p className="text-xl font-bold" style={{ color: theme.secondary }}>
@@ -2048,7 +2048,7 @@ export default function DailyTankReading() {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {/* Row 1: Time and Fuel Type */}
                           <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: theme.accent }}>
@@ -2316,7 +2316,7 @@ export default function DailyTankReading() {
 
                         {/* Summary calculation */}
                         <div className="mt-6 pt-4 border-t-2" style={{ borderColor: theme.primary + '40' }}>
-                          <div className="grid grid-cols-3 gap-4 text-center">
+                          <div className="grid grid-cols-3 sm:grid-cols-3 gap-4 text-center">
                             <div>
                               <p className="text-xs opacity-75 mb-1" style={{ color: theme.textSecondary }}>Opening</p>
                               <p className="text-lg font-bold text-status-success">{parseFloat(formData.opening_volume).toFixed(0)}L</p>
@@ -2515,7 +2515,7 @@ export default function DailyTankReading() {
                           backgroundColor: theme.cardBg,
                           borderColor: volume > 0 ? 'var(--color-fuel-diesel)' : theme.border
                         }}>
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             <div>
                               <label className="block text-sm font-bold mb-1" style={{ color: 'var(--color-fuel-diesel)' }}>
                                 {allocation.customer_name}
@@ -2602,7 +2602,7 @@ export default function DailyTankReading() {
                 <div className="rounded-lg p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.accentLight, borderColor: theme.accent, borderWidth: '1px' }}>
                   <h3 className="text-lg font-semibold mb-4" style={{ color: theme.accent }}>🚚 Delivery Details</h3>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-1" style={{ color: theme.accent }}>Delivery Time</label>
                       <input
@@ -2743,7 +2743,7 @@ export default function DailyTankReading() {
                 <>
                   <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: theme.primaryLight, borderColor: theme.primary, borderWidth: '1px' }}>
                     <h3 className="font-semibold mb-3" style={{ color: theme.primary }}>Summary</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                       <div>
                         <p className="text-sm opacity-75" style={{ color: theme.primary }}>Date</p>
                         <p className="font-semibold">{formData.date}</p>
@@ -2798,7 +2798,7 @@ export default function DailyTankReading() {
                   </div>
 
                   {/* Variance Analysis */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className={`border rounded-lg p-4 ${
                       Math.abs(calculatedValues.electronic_vs_tank_percent) > 1 ? 'bg-status-error-light border-status-error/30' :
                       Math.abs(calculatedValues.electronic_vs_tank_percent) > 0.5 ? 'bg-status-warning-light border-status-warning/30' :
@@ -2824,7 +2824,7 @@ export default function DailyTankReading() {
                   {calculatedValues.expected_amount_electronic && (
                     <div className="bg-action-primary-light border border-action-primary/30 rounded-lg p-4">
                       <h4 className="font-semibold text-action-primary mb-3">Financial Summary (Columns AR-AU)</h4>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         <div>
                           <p className="text-sm text-action-primary">Expected (Electronic)</p>
                           <p className="text-lg font-bold">ZMW {calculatedValues.expected_amount_electronic.toFixed(2)}</p>

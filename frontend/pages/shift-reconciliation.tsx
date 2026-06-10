@@ -321,7 +321,7 @@ function ShiftReconciliationView() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 <div className="bg-surface-card rounded-lg p-4 border border-action-primary">
                   <p className="text-xs text-content-secondary font-medium">Petrol Revenue</p>
                   <p className="text-xl font-bold text-action-primary mt-1">

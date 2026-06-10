@@ -252,21 +252,21 @@ function SalesReportsView() {
                         </span>
                     )}
                     {reportData && startDate && endDate && (
-                        <>
+                        <div className="flex flex-wrap gap-2 mt-3">
                             <button
                                 onClick={() => downloadExport(`/exports/sales?format=csv&start_date=${startDate}&end_date=${endDate}`, 'sales.csv')}
-                                className="ml-4 px-4 py-2 border border-action-primary text-action-primary font-medium rounded-lg hover:opacity-80 transition"
+                                className="px-4 py-2 border border-action-primary text-action-primary font-medium rounded-lg hover:opacity-80 transition text-sm"
                             >
                                 CSV
                             </button>
                             <button
                                 onClick={() => downloadExport(`/exports/sales?format=excel&start_date=${startDate}&end_date=${endDate}`, 'sales.xlsx')}
-                                className="ml-2 px-4 py-2 border border-action-primary text-action-primary font-medium rounded-lg hover:opacity-80 transition"
+                                className="px-4 py-2 border border-action-primary text-action-primary font-medium rounded-lg hover:opacity-80 transition text-sm"
                             >
                                 Excel
                             </button>
-                            <ExportButtons getConfig={getExportConfig} className="ml-2" />
-                        </>
+                            <ExportButtons getConfig={getExportConfig} />
+                        </div>
                     )}
                 </div>
 
@@ -286,7 +286,7 @@ function SalesReportsView() {
                 {reportData && (
                     <div className="space-y-6">
                         {/* Summary Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
                             <div className="bg-gradient-to-br from-surface-card to-surface-bg p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 border border-surface-border">
                                 <p className="text-sm text-content-secondary mb-2 font-medium uppercase tracking-wide">Date Range</p>
                                 <p className="text-base font-bold text-content-primary leading-tight">
@@ -322,7 +322,7 @@ function SalesReportsView() {
 
                         {/* Product Breakdown Table */}
                         <div className="bg-surface-card rounded-2xl shadow-2xl overflow-hidden transform hover:scale-[1.01] transition-transform duration-300">
-                            <div className="px-8 py-6 bg-gradient-to-r from-action-primary to-indigo-600 border-b border-action-primary-hover">
+                            <div className="px-4 sm:px-8 py-4 sm:py-6 bg-gradient-to-r from-action-primary to-indigo-600 border-b border-action-primary-hover">
                                 <h2 className="text-2xl font-bold text-white flex items-center">
                                     <svg className="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -399,7 +399,7 @@ function SalesReportsView() {
                         {/* Daily Breakdown */}
                         {reportData.daily_breakdown && reportData.daily_breakdown.length > 0 && (
                             <div className="bg-surface-card rounded-2xl shadow-2xl overflow-hidden transform hover:scale-[1.01] transition-transform duration-300">
-                                <div className="px-8 py-6 bg-gradient-to-r from-indigo-600 to-purple-600 border-b border-indigo-700">
+                                <div className="px-4 sm:px-8 py-4 sm:py-6 bg-gradient-to-r from-indigo-600 to-purple-600 border-b border-indigo-700">
                                     <h2 className="text-2xl font-bold text-white flex items-center">
                                         <svg className="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -452,7 +452,7 @@ function SalesReportsView() {
                             <div className="space-y-6">
                                 {/* Diesel Sales */}
                                 <div className="bg-surface-card rounded-2xl shadow-xl overflow-hidden">
-                                    <div className="px-8 py-6 bg-gradient-to-r from-fuel-diesel to-orange-600 border-b">
+                                    <div className="px-4 sm:px-8 py-4 sm:py-6 bg-gradient-to-r from-fuel-diesel to-orange-600 border-b">
                                         <h2 className="text-2xl font-bold text-white flex items-center">
                                             Diesel Sales Detail
                                             <span className="ml-3 text-base font-normal text-orange-100">{dailySalesData.diesel.sales_count} transactions</span>
@@ -509,7 +509,7 @@ function SalesReportsView() {
 
                                 {/* Petrol Sales */}
                                 <div className="bg-surface-card rounded-2xl shadow-xl overflow-hidden">
-                                    <div className="px-8 py-6 bg-gradient-to-r from-fuel-petrol to-emerald-600 border-b">
+                                    <div className="px-4 sm:px-8 py-4 sm:py-6 bg-gradient-to-r from-fuel-petrol to-emerald-600 border-b">
                                         <h2 className="text-2xl font-bold text-white flex items-center">
                                             Petrol Sales Detail
                                             <span className="ml-3 text-base font-normal text-green-100">{dailySalesData.petrol.sales_count} transactions</span>
@@ -594,7 +594,7 @@ function SalesReportsView() {
 
                 {/* Empty State */}
                 {!reportData && !loading && !error && (
-                    <div className="bg-gradient-to-br from-surface-card to-action-primary-light rounded-2xl shadow-2xl p-16 text-center transform hover:scale-[1.02] transition-transform duration-300">
+                    <div className="bg-gradient-to-br from-surface-card to-action-primary-light rounded-2xl shadow-2xl p-8 sm:p-16 text-center transform hover:scale-[1.02] transition-transform duration-300">
                         <div className="relative">
                             <div className="absolute inset-0 flex items-center justify-center">
                                 <div className="w-32 h-32 bg-action-primary-light rounded-full animate-pulse"></div>
@@ -647,12 +647,12 @@ export default function ReportsHub() {
   return (
     <div>
       <div className="bg-surface-card border-b border-surface-border px-4">
-        <div className="max-w-7xl mx-auto flex gap-1">
+        <div className="max-w-7xl mx-auto flex gap-1 overflow-x-auto">
           {REPORT_TABS.map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              className="px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0"
               style={{
                 borderColor: active === t.key ? 'var(--color-action-primary)' : 'transparent',
                 color: active === t.key ? 'var(--color-action-primary)' : 'var(--color-content-secondary)',

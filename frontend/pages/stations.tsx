@@ -183,7 +183,7 @@ export default function StationsPage() {
       {loading ? (
         <LoadingSpinner text="Loading stations..." />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {stations.map((station: any) => {
             const isCurrent = localStorage.getItem('stationId') === station.station_id
             const isDisabled = station.status === 'disabled'

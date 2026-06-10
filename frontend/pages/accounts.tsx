@@ -241,7 +241,7 @@ export default function Accounts() {
         <h2 className="text-xl font-bold text-content-primary mb-4">📝 Record Credit Sale</h2>
 
         <form onSubmit={handleSubmitSale} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-content-secondary mb-1">
                 Account Holder
@@ -397,7 +397,7 @@ export default function Accounts() {
         {loading && accounts.length === 0 ? (
           <LoadingSpinner text="Loading accounts..." />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {accounts.map(account => {
               const utilization = getCreditUtilization(account)
               return (

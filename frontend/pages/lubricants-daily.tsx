@@ -355,7 +355,7 @@ export default function LubricantsDaily() {
       {/* Controls */}
       <div className="rounded-lg shadow p-4 mb-6 space-y-4"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1" style={{ color: theme.textSecondary }}>Date</label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)}

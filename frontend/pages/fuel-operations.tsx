@@ -475,10 +475,10 @@ export default function FuelOperations() {
         {/* Tabs */}
         <div className="bg-surface-card rounded-lg shadow mb-6">
           <div className="border-b border-surface-border">
-            <nav className="flex -mb-px">
+            <nav className="flex -mb-px overflow-x-auto">
               <button
                 onClick={() => setActiveTab('levels')}
-                className={`px-6 py-3 font-medium text-sm border-b-2 ${
+                className={`px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap flex-shrink-0 ${
                   activeTab === 'levels'
                     ? 'border-action-primary text-action-primary'
                     : 'border-transparent text-content-secondary hover:text-content-secondary'
@@ -488,7 +488,7 @@ export default function FuelOperations() {
               </button>
               <button
                 onClick={() => setActiveTab('deliveries')}
-                className={`px-6 py-3 font-medium text-sm border-b-2 ${
+                className={`px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap flex-shrink-0 ${
                   activeTab === 'deliveries'
                     ? 'border-action-primary text-action-primary'
                     : 'border-transparent text-content-secondary hover:text-content-secondary'
@@ -498,7 +498,7 @@ export default function FuelOperations() {
               </button>
               <button
                 onClick={() => setActiveTab('readings')}
-                className={`px-6 py-3 font-medium text-sm border-b-2 ${
+                className={`px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap flex-shrink-0 ${
                   activeTab === 'readings'
                     ? 'border-action-primary text-action-primary'
                     : 'border-transparent text-content-secondary hover:text-content-secondary'
@@ -508,7 +508,7 @@ export default function FuelOperations() {
               </button>
               <button
                 onClick={() => setActiveTab('summary')}
-                className={`px-6 py-3 font-medium text-sm border-b-2 ${
+                className={`px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap flex-shrink-0 ${
                   activeTab === 'summary'
                     ? 'border-action-primary text-action-primary'
                     : 'border-transparent text-content-secondary hover:text-content-secondary'
@@ -611,7 +611,7 @@ export default function FuelOperations() {
                   return (
                     <div className="mb-6">
                       <h2 className="text-xl font-semibold mb-4">Today's Activity — {fuelType} {ppl > 0 && <span className="text-sm font-normal text-content-secondary">@ K{ppl}/L</span>}</h2>
-                      <div className="grid grid-cols-3 gap-4 mb-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                         <div className="bg-status-success-light rounded-lg p-4 border border-status-success">
                           <p className="text-xs text-status-success font-medium">Deliveries In</p>
                           <p className="text-2xl font-bold text-status-success">{todayDelivered.toLocaleString(undefined, { maximumFractionDigits: 0 })} L</p>
@@ -721,7 +721,7 @@ export default function FuelOperations() {
             {/* ===== Tank Readings Tab ===== */}
             {activeTab === 'readings' && (
               <div>
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                   <h2 className="text-xl font-semibold">Daily Tank Readings</h2>
                   <button
                     onClick={() => setShowForm(!showForm)}
@@ -735,7 +735,7 @@ export default function FuelOperations() {
                   <form onSubmit={submitReading} className="bg-surface-bg rounded-lg p-6 mb-6 border border-surface-border">
                     <h3 className="text-lg font-semibold mb-4">Submit Tank Reading</h3>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                       <div>
                         <label className="block text-sm font-medium text-content-secondary mb-1">Date</label>
                         <input
@@ -860,7 +860,7 @@ export default function FuelOperations() {
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-3">
                           <div>
                             <p className="text-xs text-content-secondary">Opening</p>
                             <p className="font-semibold">{reading.opening_volume.toLocaleString()} L</p>
@@ -907,7 +907,7 @@ export default function FuelOperations() {
             {/* ===== Deliveries Tab ===== */}
             {activeTab === 'deliveries' && (
               <div>
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                   <h2 className="text-xl font-semibold">Fuel Deliveries</h2>
                   <button
                     onClick={() => setShowDeliveryForm(!showDeliveryForm)}
@@ -921,7 +921,7 @@ export default function FuelOperations() {
                   <form onSubmit={addDeliveryToQueue} className="bg-surface-bg rounded-lg p-6 mb-6 border border-surface-border">
                     <h3 className="text-lg font-semibold mb-4">Record Fuel Delivery</h3>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                       <div>
                         <label className="block text-sm font-medium text-content-secondary mb-1">Date</label>
                         <input
@@ -1070,7 +1070,7 @@ export default function FuelOperations() {
                 {/* Delivery Queue */}
                 {deliveryQueue.length > 0 && (
                   <div className="bg-surface-bg rounded-lg p-6 mb-6 border border-surface-border">
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                       <h3 className="text-lg font-semibold">
                         Delivery Queue ({deliveryQueue.filter(d => d.status === 'pending').length} pending)
                       </h3>
@@ -1229,7 +1229,7 @@ export default function FuelOperations() {
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4 mb-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
                           <div>
                             <p className="text-xs text-content-secondary">Before</p>
                             <p className="font-semibold">{delivery.volume_before.toLocaleString()} L</p>
@@ -1267,7 +1267,7 @@ export default function FuelOperations() {
                             }}>
                               Delivery Reconciliation: {delivery.recon_status.replace(/_/g, ' ')}
                             </p>
-                            <div className="grid grid-cols-3 gap-2 text-xs mb-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs mb-2">
                               <div>
                                 <p className="text-content-secondary">OMC Invoice</p>
                                 <p className="font-semibold">{delivery.expected_volume?.toLocaleString()} L</p>
@@ -1311,7 +1311,7 @@ export default function FuelOperations() {
             {/* ===== Summary Tab ===== */}
             {activeTab === 'summary' && (
               <div>
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
                   <h2 className="text-xl font-semibold">Tank Movement Summary</h2>
                   <div className="flex items-center gap-2">
                     <label className="text-sm text-content-secondary">Date:</label>
@@ -1332,7 +1332,7 @@ export default function FuelOperations() {
                   <>
                     {/* Daily Totals */}
                     {summaryMovements && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                         <div className="bg-status-success-light rounded-lg p-4 border border-status-success">
                           <p className="text-xs text-status-success font-medium">Total Delivered</p>
                           <p className="text-2xl font-bold text-status-success">

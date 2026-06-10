@@ -341,7 +341,7 @@ export default function ShiftClosing() {
       {result && (
         <div className="rounded-lg shadow p-6 mb-6" style={{ backgroundColor: theme.cardBg, borderColor: 'var(--color-status-success)', borderWidth: 2 }}>
           <h2 className="text-lg font-bold mb-4" style={{ color: theme.textPrimary }}>Shift Closing Summary</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-sm">
             <div>
               <span className="text-xs" style={{ color: theme.textSecondary }}>Handover ID</span>
               <div className="font-mono font-medium" style={{ color: theme.textPrimary }}>{result.handover_id}</div>
@@ -361,7 +361,7 @@ export default function ShiftClosing() {
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
             <div>
               <span className="text-xs" style={{ color: theme.textSecondary }}>Cash</span>
               <div className="font-mono" style={{ color: theme.textPrimary }}>{fmtZMW(result.actual_cash)}</div>
@@ -380,7 +380,7 @@ export default function ShiftClosing() {
               <span className="font-semibold">Flags:</span> {result.auto_flag_reasons.join(', ')}
             </div>
           )}
-          <div className="mt-5 pt-4 flex items-center justify-between" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+          <div className="mt-5 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
             <span className="text-sm" style={{ color: theme.textSecondary }}>Shift closed. A manager now reviews the handover.</span>
             <Link href="/handover-review"
               className="px-4 py-2 text-sm font-medium rounded-lg text-white"
@@ -399,7 +399,7 @@ export default function ShiftClosing() {
             <h2 className="text-sm font-semibold mb-3 uppercase tracking-wide" style={{ color: theme.textSecondary }}>
               Verified Readings Summary
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <div>
                 <span className="text-xs" style={{ color: theme.textSecondary }}>Shift</span>
                 <div className="font-medium" style={{ color: theme.textPrimary }}>

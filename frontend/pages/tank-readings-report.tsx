@@ -355,7 +355,7 @@ export default function TankReadingsReport() {
         {activeTab === 'readings' && (<>
         {/* Filters */}
         <div className="rounded-lg shadow p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2 transition-colors duration-300" style={{ color: theme.textPrimary }}>
                 Tank
@@ -456,7 +456,7 @@ export default function TankReadingsReport() {
 
         {/* Summary Statistics */}
         {readings.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             <div className="rounded-lg p-4 shadow transition-colors duration-300" style={{ backgroundColor: theme.primaryLight, borderColor: theme.primary, borderWidth: '2px' }}>
               <p className="text-sm font-medium mb-1" style={{ color: theme.primary }}>Total Readings</p>
               <p className="text-3xl font-bold" style={{ color: theme.primary }}>{readings.length}</p>
@@ -633,7 +633,7 @@ export default function TankReadingsReport() {
                   <h3 className="text-lg font-semibold mb-3 transition-colors duration-300" style={{ color: theme.textPrimary }}>
                     Nozzle Readings
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {selectedReading.nozzle_readings.map((nozzle) => {
                       const fuelPrefix = getFuelTypePrefix(selectedReading.tank_id)
                       const fuelColors = getFuelColorSet(selectedReading.tank_id === 'TANK-DIESEL' ? 'diesel' : 'petrol')
@@ -877,7 +877,7 @@ export default function TankReadingsReport() {
                 {user?.role === 'owner' && selectedReading.delivery_vat_amount != null && selectedReading.delivery_vat_amount > 0 && (
                   <div className="rounded-lg p-4 mb-4 border-2 border-status-warning bg-status-pending-light">
                     <h3 className="text-lg font-semibold mb-3 text-status-warning">Delivery VAT</h3>
-                    <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                       <div>
                         <span className="text-content-secondary">Net Price / Liter</span>
                         <p className="font-semibold text-lg text-status-warning">
@@ -928,7 +928,7 @@ export default function TankReadingsReport() {
         {activeTab === 'validated' && user?.role === 'owner' && (
           <div>
             {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
               <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-action-primary">
                 <div className="text-sm text-content-secondary">Total Readings</div>
                 <div className="text-2xl font-bold">{validatedStats.total}</div>
@@ -1094,7 +1094,7 @@ export default function TankReadingsReport() {
                   {/* Three Readings Comparison */}
                   <div className="border-t pt-4">
                     <h3 className="font-semibold mb-3">Reading Comparison</h3>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="bg-action-primary-light p-4 rounded-lg border border-action-primary">
                         <div className="text-sm font-medium text-action-primary mb-1">Mechanical</div>
                         <div className="text-2xl font-bold text-action-primary">{selectedValidatedReading.mechanical_reading.toFixed(2)}</div>
