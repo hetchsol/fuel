@@ -348,26 +348,34 @@ export default function DailyTankReading() {
         const data = await response.json()
 
         if (data.found) {
-          // Auto-populate opening values from previous shift's closing values
+          // Carry previous shift's closing readings into opening slots.
           setFormData(prev => {
             const updatedNozzles = [...prev.nozzles]
 
-            // Update nozzle opening readings from previous closing
             data.nozzle_readings?.forEach((prevNozzle: any) => {
-              const nozzleIndex = updatedNozzles.findIndex(n => n.nozzle_id === prevNozzle.nozzle_id)
+              // Fix 4: try internal_nozzle_id first (more stable), fall back to display label.
+              const nozzleIndex = updatedNozzles.findIndex(n =>
+                (prevNozzle.internal_nozzle_id && n.internal_nozzle_id === prevNozzle.internal_nozzle_id) ||
+                n.nozzle_id === prevNozzle.nozzle_id
+              )
               if (nozzleIndex !== -1) {
+                const cur = updatedNozzles[nozzleIndex]
                 updatedNozzles[nozzleIndex] = {
-                  ...updatedNozzles[nozzleIndex],
-                  electronic_opening: prevNozzle.electronic_opening?.toString() || '',
-                  mechanical_opening: prevNozzle.mechanical_opening?.toString() || ''
+                  ...cur,
+                  // Fix 3: only fill slots that are still empty — attendant-submitted
+                  // openings (from fetchFromEnterReadings) are more authoritative.
+                  electronic_opening: cur.electronic_opening || prevNozzle.electronic_opening?.toString() || '',
+                  mechanical_opening: cur.mechanical_opening || prevNozzle.mechanical_opening?.toString() || ''
                 }
               }
             })
 
             return {
               ...prev,
-              opening_dip_cm: data.opening_dip_cm?.toString() || '',
-              opening_volume: data.opening_volume?.toString() || '',
+              // Only fill dip/volume if fetchShiftDipReadings hasn't already populated them
+              // from the current shift's recorded opening dip.
+              opening_dip_cm: prev.opening_dip_cm || data.opening_dip_cm?.toString() || '',
+              opening_volume: prev.opening_volume || data.opening_volume?.toString() || '',
               nozzles: updatedNozzles
             }
           })
@@ -454,15 +462,15 @@ export default function DailyTankReading() {
     setErPulledAt('')
   }
 
-  // NEW: Auto-fetch previous shift data when tank, date, or shift changes
-  // Wait for islandsLoaded so nozzle list is populated before matching previous readings
+  // Auto-fetch previous shift data when tank, date, or shift changes.
+  // Wait for islandsLoaded so nozzle list is populated before matching previous readings.
+  // Gate only on nozzle openings — dip/volume may already be set by fetchShiftDipReadings
+  // (which pulls the current shift's recorded opening dip) and that must not block the
+  // nozzle carry-forward from the previous shift's closing readings.
   useEffect(() => {
     if (selectedTank && formData.date && formData.shift_type && islandsLoaded) {
-      // Only auto-fetch if opening values are empty
-      const hasOpeningValues = formData.opening_dip_cm || formData.opening_volume ||
-        formData.nozzles.some(n => n.electronic_opening || n.mechanical_opening)
-
-      if (!hasOpeningValues) {
+      const hasNozzleOpenings = formData.nozzles.some(n => n.electronic_opening || n.mechanical_opening)
+      if (!hasNozzleOpenings) {
         fetchPreviousShiftData()
       }
     }

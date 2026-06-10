@@ -900,10 +900,46 @@ def get_previous_shift_closing(
         "nozzle_readings": []
     }
 
+    # Build a lookup table: display_label → internal_nozzle_id and vice-versa,
+    # scoped to the tank's fuel type so mixed-fuel islands don't cross-contaminate.
+    from ...services.naming_convention import resolve_nozzle_display_to_internal
+    islands_data = ctx["storage"].get("islands", {})
+    tanks_data = ctx["storage"].get("tanks", {})
+    tank_fuel = (tanks_data.get(tank_id) or {}).get("fuel_type", "")
+
+    # Two maps for bidirectional resolution:
+    #   display_label → internal_id  (for entries that stored display labels)
+    #   internal_id   → display_label (for entries that stored internal IDs)
+    display_to_internal: dict = {}
+    internal_to_display: dict = {}
+    for isl in islands_data.values():
+        ps = isl.get("pump_station") or {}
+        for nz in ps.get("nozzles", []):
+            if tank_fuel and nz.get("fuel_type") != tank_fuel:
+                continue
+            nid = nz.get("nozzle_id", "")
+            lbl = nz.get("display_label") or ""
+            if nid and lbl:
+                display_to_internal[lbl] = nid
+                internal_to_display[nid] = lbl
+
     # Extract nozzle closing readings
     for nozzle in previous_reading.get('nozzle_readings', []):
+        stored_id = nozzle.get('nozzle_id', '')
+        # Resolve the counterpart ID regardless of which format was stored
+        if stored_id in display_to_internal:
+            # Stored as display label (e.g. "1A") — resolve to internal
+            internal_id = display_to_internal[stored_id]
+        elif stored_id in internal_to_display:
+            # Stored as internal ID (e.g. "ISL001-N1-A") — normalise display label
+            internal_id = stored_id
+            stored_id = internal_to_display[stored_id]  # return display label as nozzle_id
+        else:
+            internal_id = None
+
         previous_closing["nozzle_readings"].append({
-            "nozzle_id": nozzle.get('nozzle_id', ''),
+            "nozzle_id": stored_id,
+            "internal_nozzle_id": internal_id,
             "attendant": nozzle.get('attendant', ''),
             "electronic_opening": nozzle.get('electronic_closing', 0),
             "mechanical_opening": nozzle.get('mechanical_closing', 0)
