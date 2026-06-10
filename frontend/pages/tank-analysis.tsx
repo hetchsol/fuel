@@ -187,7 +187,7 @@ export default function TankAnalysis() {
             &larr; Three-Way Reconciliation ({reconciliation.shift_date})
           </Link>
           <Link
-            href={`/reconciliation?date=${reconciliation.shift_date}`}
+            href={`/shift-reconciliation?date=${reconciliation.shift_date}`}
             className="inline-flex items-center text-sm text-action-primary hover:text-action-primary-hover font-medium"
           >
             Shift Reconciliation &rarr;
