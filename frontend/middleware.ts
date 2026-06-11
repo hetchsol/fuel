@@ -13,14 +13,12 @@ import { NextRequest, NextResponse } from 'next/server'
 const OWNER_ROUTES = ['/stations', '/infrastructure']
 
 // Routes that require manager or owner role
-const MANAGER_ROUTES = ['/settings', '/users', '/audit', '/daily-close-off']
+const MANAGER_ROUTES = ['/settings', '/users', '/audit', '/daily-close-off', '/tank-dips']
 
 // Routes that require supervisor, manager, or owner role
 const SUPERVISOR_ROUTES = [
   '/daily-tank-reading',
   '/fuel-operations',
-  '/tank-movement',
-  '/stock-movement',
   '/lpg-daily',
   '/lubricants-daily',
   '/inventory',
@@ -28,7 +26,7 @@ const SUPERVISOR_ROUTES = [
   '/accounts',
   '/three-way-reconciliation',
   '/tank-analysis',
-  '/reconciliation',
+  '/shift-reconciliation',
   '/reports',
   '/tank-readings-report',
   '/advanced-reports',

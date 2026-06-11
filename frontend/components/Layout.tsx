@@ -343,7 +343,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'My Shift',
       roles: ['supervisor', 'manager', 'owner'],
       children: [
-        { path: '/my-shift', label: 'Readings Verification', roles: ['supervisor'] },
+        { path: '/my-shift', label: 'End My Shift', roles: ['supervisor'] },
         { path: '/shift-closing', label: 'Close Shift', roles: ['supervisor', 'manager', 'owner'] },
       ]
     },
@@ -374,7 +374,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       ]
     },
     // Consolidated analytical clusters (each is a single tabbed page).
-    { path: '/reconciliation', label: 'Reconciliation', roles: ['supervisor', 'manager', 'owner'] },
+    { path: '/shift-reconciliation', label: 'Reconciliation', roles: ['supervisor', 'manager', 'owner'] },
     { path: '/reports', label: 'Reports', roles: ['supervisor', 'manager', 'owner'] },
     { path: '/alerts', label: 'Alerts', roles: ['supervisor', 'manager', 'owner'] },
     {
@@ -399,6 +399,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Day',
       roles: ['manager'],
       children: [
+        { path: '/shifts', label: 'Shifts', roles: ['manager'] },
         { path: '/handover-review', label: 'Handover Review', roles: ['manager'] },
         { path: '/daily-close-off', label: 'Daily Close-Off', roles: ['manager'] },
       ],
@@ -408,6 +409,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       roles: ['manager'],
       children: [
         { path: '/tank-dips', label: 'Tank Dips', roles: ['manager'] },
+        { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['manager'] },
         { path: '/stores', label: 'Stores / Stock', roles: ['manager'] },
         { path: '/stock-takes', label: 'Stock Takes', roles: ['manager'] },
         { path: '/inventory', label: 'Tank Levels', roles: ['manager'] },
@@ -416,7 +418,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       ],
     },
     // Same consolidated clusters as every other role.
-    { path: '/reconciliation', label: 'Reconciliation', roles: ['manager'] },
+    { path: '/shift-reconciliation', label: 'Reconciliation', roles: ['manager'] },
     { path: '/reports', label: 'Reports', roles: ['manager'] },
     { path: '/alerts', label: 'Alerts', roles: ['manager'] },
     {
