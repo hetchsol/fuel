@@ -444,6 +444,9 @@ def record_dip_reading(tank_id: str, opening_dip: float = None, closing_dip: flo
     # Update tank last_updated timestamp
     tank_data[tank_id]["last_updated"] = datetime.now().isoformat()
 
+    from ...database.storage import save_station_storage
+    save_station_storage(ctx["station_id"])
+
     percentage = (tank_data[tank_id]["current_level"] / tank_data[tank_id]["capacity"]) * 100
 
     return {
