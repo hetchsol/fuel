@@ -136,8 +136,10 @@ def record_tank_dips(
             "deliveries": [],
         }
 
-    # Keep tank.current_level in sync when a closing dip is provided
-    if closing_volume is not None:
+    # Keep tank.current_level in sync only when the dip is for today — retrospective
+    # entries must not overwrite the live level with historical data.
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    if closing_volume is not None and date == today:
         tank_data = storage.get("tanks", {})
         if tank_id in tank_data:
             tank_data[tank_id]["current_level"] = closing_volume
