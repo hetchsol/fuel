@@ -590,25 +590,40 @@ export default function HandoverReview() {
                     <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.date}</td>
                     <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{h.shift_type}</td>
                     <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{h.attendant_name}</td>
-                    <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
-                      K{h.expected_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
-                      K{h.actual_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono font-bold"
-                      style={{ color: h.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
-                      {h.difference >= 0 ? '+' : ''}K{h.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
+                    {h.phase === 'readings_only' ? (
+                      <td className="px-3 py-2 text-right font-mono text-xs italic" colSpan={3}
+                        style={{ color: theme.textSecondary }}>
+                        Readings only
+                      </td>
+                    ) : (
+                      <>
+                        <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
+                          K{h.expected_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
+                          K{h.actual_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono font-bold"
+                          style={{ color: h.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
+                          {h.difference >= 0 ? '+' : ''}K{h.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                      </>
+                    )}
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
+                        {h.phase === 'readings_only' && (
+                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                            style={{ backgroundColor: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
+                            Enter Readings
+                          </span>
+                        )}
                         {(h.auto_flag_reasons || []).map(flag => (
                           <span key={flag} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
                             style={{ backgroundColor: 'var(--color-status-error-light, #fde8e8)', color: 'var(--color-status-error)' }}>
                             {FLAG_LABELS[flag] || flag}
                           </span>
                         ))}
-                        {(!h.auto_flag_reasons || h.auto_flag_reasons.length === 0) && (
+                        {h.phase !== 'readings_only' && (!h.auto_flag_reasons || h.auto_flag_reasons.length === 0) && (
                           <span className="text-xs" style={{ color: theme.textSecondary }}>-</span>
                         )}
                       </div>
@@ -841,8 +856,8 @@ function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
         </table>
       </div>
 
-      {/* Financial summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Financial summary — hidden for readings_only (enter-readings path) */}
+      {h.phase !== 'readings_only' && <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'Fuel Revenue', value: h.fuel_revenue, drillKey: '' },
           { label: 'LPG Sales', value: h.lpg_sales, drillKey: 'lpg' },
@@ -877,7 +892,7 @@ function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
             {h.difference >= 0 ? '+' : ''}K{h.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Stock drill-down panels */}
       {expandedStock === 'lpg' && h.stock_snapshot?.lpg_cylinders && (

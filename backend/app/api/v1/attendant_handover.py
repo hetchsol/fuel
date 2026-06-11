@@ -23,7 +23,7 @@ from ...services.notification_service import create_notification
 from ...services.shift_status import assert_shift_editable, advance_shift_on_approval
 from ...services.stock_service import apply_handover_sales
 from ...database.station_files import load_station_json, save_station_json
-from .enter_readings import _load_readings as _load_enter_readings
+from .enter_readings import _load_readings as _load_enter_readings, _save_readings as _save_enter_readings
 from .lpg_daily import (
     load_lpg_pricing, LPG_SIZES, DEFAULT_LPG_ACCESSORIES,
     load_lpg_accessories, save_lpg_accessories,
@@ -1709,10 +1709,10 @@ async def get_review_queue(
     if date:
         results = [h for h in results if h.get("date") == date]
 
-    # Separate by review_status (only fully completed handovers)
+    # Separate by review_status — completed handovers and readings_only (enter-readings path)
     pending = [h for h in results
                if h.get("review_status", "submitted") in ["submitted", "flagged"]
-               and h.get("phase", "completed") == "completed"]
+               and h.get("phase", "completed") in ("completed", "readings_only")]
     approved_today = [
         h for h in results
         if h.get("review_status") == "approved"
@@ -1779,8 +1779,9 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
 
     handover = handovers[data.handover_id]
 
-    # Block if the attendant hasn't completed shift closing yet (Phase 2 not done)
-    if handover.get("phase", "completed") != "completed":
+    # Block if the attendant hasn't completed shift closing yet (Phase 2 not done).
+    # readings_only phase (from enter-readings path) is also reviewable.
+    if handover.get("phase", "completed") not in ("completed", "readings_only"):
         raise HTTPException(
             status_code=400,
             detail="Cannot review a handover that has not been fully closed by the attendant."
@@ -1866,6 +1867,24 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
             created_by=ctx["username"],
         )
 
+    # For readings_only handovers (enter-readings path): sync review decision back to
+    # attendant_readings.json so the attendant's Enter Readings page reflects the outcome.
+    if handover.get("phase") == "readings_only":
+        try:
+            att_id = handover.get("attendant_id", "")
+            shift_id = handover.get("shift_id", "")
+            er_db = _load_enter_readings(station_id)
+            closing_key = f"AR-{shift_id}-{att_id}-C"
+            er_record = er_db.get(closing_key)
+            if er_record:
+                er_record["review_status"] = handover["review_status"]
+                if data.action == "return":
+                    er_record.setdefault("supervisor_review", {})["overall_note"] = data.supervisor_note
+                _save_enter_readings(er_db, station_id)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("readings_only review sync failed: %s", exc)
+
     return {"status": "success", "review_status": handover["review_status"], "handover_id": data.handover_id}
 
 
@@ -1903,7 +1922,7 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
             skipped_count += 1
             continue
         # Skip handovers where the attendant hasn't completed shift closing
-        if h.get("phase", "completed") != "completed":
+        if h.get("phase", "completed") not in ("completed", "readings_only"):
             skipped_count += 1
             continue
         # Only batch-approve clean (submitted) handovers, skip flagged
@@ -1934,6 +1953,24 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
         )
 
     _save_handovers(handovers, station_id)
+
+    # Sync approval back to attendant_readings.json for any readings_only records.
+    try:
+        er_db = None
+        for hid in handover_ids:
+            h = handovers.get(hid)
+            if h and h.get("phase") == "readings_only" and h.get("review_status") == "approved":
+                if er_db is None:
+                    er_db = _load_enter_readings(station_id)
+                closing_key = f"AR-{h['shift_id']}-{h['attendant_id']}-C"
+                er_record = er_db.get(closing_key)
+                if er_record:
+                    er_record["review_status"] = "approved"
+        if er_db is not None:
+            _save_enter_readings(er_db, station_id)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("batch readings_only review sync failed: %s", exc)
 
     # Auto-advance any shift whose attendants are now all approved.
     for sid in affected_shift_ids:

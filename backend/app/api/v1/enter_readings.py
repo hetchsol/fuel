@@ -27,6 +27,96 @@ def _save_readings(data: dict, station_id: str):
     save_station_json(station_id, 'attendant_readings.json', data)
 
 
+def _load_handovers(station_id: str) -> dict:
+    return load_station_json(station_id, 'attendant_handovers.json', default={})
+
+
+def _save_handovers(data: dict, station_id: str):
+    save_station_json(station_id, 'attendant_handovers.json', data)
+
+
+def _create_synthetic_handover(
+    station_id: str,
+    shift_id: str,
+    user_id: str,
+    user_name: str,
+    shift: dict,
+    opening_map: dict,
+    closing_nozzle_readings: list,
+    storage: dict,
+) -> None:
+    """
+    Write a minimal readings_only handover record so supervisors can review
+    enter-readings submissions from the Handover Review page alongside regular handovers.
+    Idempotent: overwrites any previous synthetic record for the same attendant+shift
+    (handles re-submissions when readings are returned).
+    """
+    threshold = _get_meter_discrepancy_threshold(storage)
+    nozzle_summaries = []
+
+    for nr in closing_nozzle_readings:
+        nid = nr.nozzle_id
+        onr = opening_map.get(nid, {})
+
+        elec_open = onr.get("electronic_reading", 0)
+        elec_close = nr.electronic_reading
+        mech_open = onr.get("mechanical_reading", 0)
+        mech_close = nr.mechanical_reading
+
+        elec_dispensed = round(elec_close - elec_open, 3)
+        mech_dispensed = round(mech_close - mech_open, 3)
+        avg_dispensed = (elec_dispensed + mech_dispensed) / 2
+        dev_liters = round(abs(elec_dispensed - mech_dispensed), 3)
+        dev_pct = round(dev_liters / avg_dispensed * 100, 4) if avg_dispensed > 0 else 0.0
+
+        nozzle_obj = get_nozzle(nid, storage=storage)
+        fuel_type = nozzle_obj.get("fuel_type", "Diesel") if nozzle_obj else "Diesel"
+
+        nozzle_summaries.append({
+            "nozzle_id": nid,
+            "fuel_type": fuel_type,
+            "opening_reading": elec_open,
+            "closing_reading": elec_close,
+            "volume_sold": elec_dispensed,
+            "price_per_liter": 0.0,
+            "revenue": 0.0,
+            "mechanical_opening": mech_open,
+            "mechanical_closing": mech_close,
+            "mechanical_volume": mech_dispensed,
+            "meter_deviation_liters": dev_liters,
+            "meter_deviation_percent": dev_pct,
+            "meter_deviation_flagged": dev_pct > threshold,
+        })
+
+    handover_id = f"HO-ER-{shift_id}-{user_id}"
+    handovers = _load_handovers(station_id)
+
+    handovers[handover_id] = {
+        "handover_id": handover_id,
+        "shift_id": shift_id,
+        "attendant_id": user_id,
+        "attendant_name": user_name,
+        "date": shift.get("date", ""),
+        "shift_type": shift.get("shift_type", ""),
+        "nozzle_summaries": nozzle_summaries,
+        "fuel_revenue": 0.0,
+        "lpg_sales": 0.0,
+        "lubricant_sales": 0.0,
+        "accessory_sales": 0.0,
+        "total_expected": 0.0,
+        "credit_sales": 0.0,
+        "expected_cash": 0.0,
+        "actual_cash": 0.0,
+        "difference": 0.0,
+        "status": "submitted",
+        "phase": "readings_only",
+        "review_status": "submitted",
+        "created_at": datetime.now().isoformat(),
+    }
+
+    _save_handovers(handovers, station_id)
+
+
 def _get_assigned_nozzle_ids(assignment: dict, islands_data: dict) -> list:
     """Derive nozzle IDs from an assignment (nozzle_ids or island_ids)."""
     nozzle_ids = list(assignment.get("nozzle_ids", []))
@@ -441,6 +531,22 @@ async def submit_readings(data: AttendantReadingsInput, ctx: dict = Depends(get_
                 "mechanical_movement": round(nr.mechanical_reading - opening_nr.get("mechanical_reading", 0), 3),
                 "timestamp": datetime.now().isoformat(),
             })
+
+        # Sync to handover review queue so supervisors review from one place
+        try:
+            _create_synthetic_handover(
+                station_id=station_id,
+                shift_id=data.shift_id,
+                user_id=user_id,
+                user_name=user_name,
+                shift=shift,
+                opening_map=opening_map,
+                closing_nozzle_readings=data.nozzle_readings,
+                storage=storage,
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("synthetic handover create failed: %s", exc)
 
         return {"status": "success", "message": "Closing readings submitted", "key": closing_key}
 
