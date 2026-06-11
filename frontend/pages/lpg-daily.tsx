@@ -90,25 +90,12 @@ export default function LPGDaily() {
   // Accessories
   const [accessoryRows, setAccessoryRows] = useState<AccessoryRow[]>([])
 
-  // Pricing editor state
-  const [showPricingEditor, setShowPricingEditor] = useState(false)
-  const [editPrices, setEditPrices] = useState<Record<number, { price_refill: string, price_full_cylinder: string }>>({})
-  const [pricingSaving, setPricingSaving] = useState(false)
-  const [pricingMsg, setPricingMsg] = useState('')
-
-  // Accessories pricing editor state
-  const [showAccPricingEditor, setShowAccPricingEditor] = useState(false)
-  const [accEditPrices, setAccEditPrices] = useState<Record<string, string>>({})
-  const [accEditReorderLevels, setAccEditReorderLevels] = useState<Record<string, string>>({})
-  const [accPricingSaving, setAccPricingSaving] = useState(false)
-
   const [showEmptyTracking, setShowEmptyTracking] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [entries, setEntries] = useState<any[]>([])
 
-  const canEditPricing = user?.role === 'supervisor' || user?.role === 'manager' || user?.role === 'owner'
   const canManageStock = user?.role === 'supervisor' || user?.role === 'manager' || user?.role === 'owner'
   const canManage = user?.role === 'manager' || user?.role === 'owner'
   const lpgPricesConfigured = pricing.length > 0 && pricing.some((p: any) => p.price_refill > 0 || p.price_with_cylinder > 0)
@@ -122,26 +109,7 @@ export default function LPGDaily() {
   const fetchPricing = useCallback(() => {
     authFetch(`${BASE}/lpg-daily/pricing`, { headers: getAuthHeaders() })
       .then(r => r.json())
-      .then(data => {
-        setPricing(data.sizes || [])
-        // Populate pricing editor
-        const ep: Record<number, { price_refill: string, price_full_cylinder: string }> = {}
-        const prices = data.prices || {}
-        for (const size of LPG_SIZES) {
-          const sp = prices[String(size)]
-          if (sp) {
-            ep[size] = { price_refill: String(sp.price_refill || 0), price_full_cylinder: String(sp.price_full_cylinder || 0) }
-          } else {
-            // Fallback: use computed sizes data
-            const sizeData = (data.sizes || []).find((s: any) => s.size_kg === size)
-            ep[size] = {
-              price_refill: String(sizeData?.price_refill || 0),
-              price_full_cylinder: String(sizeData?.price_with_cylinder || 0),
-            }
-          }
-        }
-        setEditPrices(ep)
-      })
+      .then(data => { setPricing(data.sizes || []) })
       .catch(() => {})
   }, [])
 
@@ -188,15 +156,6 @@ export default function LPGDaily() {
         balance: balances[p.product_code]?.balance ?? 0,
         sales_value: 0,
       })))
-      // Populate editor
-      const ep: Record<string, string> = {}
-      const er: Record<string, string> = {}
-      for (const p of products) {
-        ep[p.product_code] = String(p.selling_price || 0)
-        er[p.product_code] = String(p.reorder_level || 0)
-      }
-      setAccEditPrices(ep)
-      setAccEditReorderLevels(er)
     }).catch(() => {})
   }, [date])
 
@@ -391,56 +350,6 @@ export default function LPGDaily() {
     }
   }
 
-  const savePricing = async () => {
-    setPricingSaving(true)
-    setPricingMsg('')
-    try {
-      const prices: Record<string, { price_refill: number, price_full_cylinder: number }> = {}
-      for (const size of LPG_SIZES) {
-        const ep = editPrices[size]
-        prices[String(size)] = {
-          price_refill: parseFloat(ep?.price_refill) || 0,
-          price_full_cylinder: parseFloat(ep?.price_full_cylinder) || 0,
-        }
-      }
-      const res = await authFetch(`${BASE}/lpg-daily/pricing`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ prices }),
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Failed to update pricing')
-      }
-      setPricingMsg('Pricing updated successfully')
-      fetchPricing()
-    } catch (err: any) {
-      setPricingMsg(err.message || 'Failed to save pricing')
-    } finally {
-      setPricingSaving(false)
-    }
-  }
-
-  const saveAccPricing = async () => {
-    setAccPricingSaving(true)
-    try {
-      const items = Object.entries(accEditPrices).map(([code, price]) => ({
-        product_code: code,
-        selling_price: parseFloat(price) || 0,
-        reorder_level: parseInt(accEditReorderLevels[code] || '0') || 0,
-      }))
-      const res = await authFetch(`${BASE}/lpg-daily/accessories/pricing`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(items),
-      })
-      if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Failed') }
-      fetchAccessories()
-      setShowAccPricingEditor(false)
-    } catch (err: any) { setError(err.message) }
-    finally { setAccPricingSaving(false) }
-  }
-
   const accPricesConfigured = accessoryRows.length > 0 && accessoryRows.some(r => r.selling_price > 0)
   const isFirstCylinderEntry = cylinderRows.length > 0 && cylinderRows.every(r => r.opening_balance === 0)
   const isFirstAccessoryEntry = accessoryRows.length > 0 && accessoryRows.every(r => r.opening_stock === 0)
@@ -484,72 +393,6 @@ export default function LPGDaily() {
           <ExportButtons getConfig={getExportConfig} />
         </div>
       </div>
-
-      {/* Pricing Settings (editable by supervisor/owner) */}
-      {canEditPricing && (
-        <div className="rounded-lg shadow mb-6 overflow-hidden"
-          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-          <button
-            onClick={() => setShowPricingEditor(!showPricingEditor)}
-            className="w-full p-3 flex justify-between items-center text-sm font-medium"
-            style={{ color: theme.textPrimary }}>
-            <span>LPG Pricing Settings</span>
-            <span className="text-xs" style={{ color: theme.textSecondary }}>
-              {showPricingEditor ? 'Hide' : 'Edit Pricing'} {showPricingEditor ? '-' : '+'}
-            </span>
-          </button>
-          {showPricingEditor && (
-            <div className="p-4 space-y-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr style={{ backgroundColor: theme.background }}>
-                      <th className="px-3 py-2 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Size (kg)</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Price Refill (ZMW)</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Price Full Cylinder (ZMW)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {LPG_SIZES.map(size => (
-                      <tr key={size} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                        <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{size} kg</td>
-                        <td className="px-3 py-2">
-                          <input type="number" min={0} step="1"
-                            value={editPrices[size]?.price_refill || ''}
-                            onChange={e => setEditPrices(prev => ({
-                              ...prev,
-                              [size]: { ...prev[size], price_refill: e.target.value }
-                            }))}
-                            className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right" style={inputStyle} />
-                        </td>
-                        <td className="px-3 py-2">
-                          <input type="number" min={0} step="1"
-                            value={editPrices[size]?.price_full_cylinder || ''}
-                            onChange={e => setEditPrices(prev => ({
-                              ...prev,
-                              [size]: { ...prev[size], price_full_cylinder: e.target.value }
-                            }))}
-                            className="w-20 sm:w-32 px-1 sm:px-2 py-1 rounded border text-xs sm:text-sm text-right" style={inputStyle} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {pricingMsg && (
-                <div className="text-sm" style={{
-                  color: pricingMsg.includes('success') ? 'var(--color-status-success)' : 'var(--color-status-error)'
-                }}>{pricingMsg}</div>
-              )}
-              <button onClick={savePricing} disabled={pricingSaving}
-                className="px-4 py-2 rounded text-sm font-medium text-white disabled:opacity-50"
-                style={{ backgroundColor: theme.primary }}>
-                {pricingSaving ? 'Saving...' : 'Save Pricing'}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Date / Shift / Salesperson selectors */}
       <div className="rounded-lg shadow p-4 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4"
@@ -909,47 +752,6 @@ export default function LPGDaily() {
         </div>
       </div>
 
-      {/* Accessories Pricing Editor */}
-      {canEditPricing && (
-        <div className="mb-4">
-          <button onClick={() => setShowAccPricingEditor(!showAccPricingEditor)}
-            className="text-sm font-medium px-3 py-1.5 rounded-btn border"
-            style={{ color: theme.primary, borderColor: theme.border, backgroundColor: theme.cardBg }}>
-            {showAccPricingEditor ? 'Hide' : 'Edit'} Accessory Prices
-          </button>
-          {showAccPricingEditor && (
-            <div className="mt-2 rounded-lg shadow p-4" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-              <div className="space-y-2">
-                {accessoryRows.map(row => (
-                  <div key={row.product_code} className="flex items-center gap-3">
-                    <span className="text-sm flex-1" style={{ color: theme.textPrimary }}>{row.description}</span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs" style={{ color: theme.textSecondary }}>K</span>
-                      <input type="number" min={0} step={1}
-                        value={accEditPrices[row.product_code] || '0'}
-                        onChange={e => setAccEditPrices({ ...accEditPrices, [row.product_code]: e.target.value })}
-                        className="w-24 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
-                    </div>
-                    <div className="flex items-center gap-1" title="Re-order level (alert when balance ≤ this; 0 disables)">
-                      <span className="text-xs" style={{ color: theme.textSecondary }}>R/L</span>
-                      <input type="number" min={0} step={1}
-                        value={accEditReorderLevels[row.product_code] || '0'}
-                        onChange={e => setAccEditReorderLevels({ ...accEditReorderLevels, [row.product_code]: e.target.value })}
-                        className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button onClick={saveAccPricing} disabled={accPricingSaving}
-                className="mt-3 w-full py-2 rounded-lg font-semibold text-white text-sm disabled:opacity-50"
-                style={{ backgroundColor: theme.primary }}>
-                {accPricingSaving ? 'Saving...' : 'Save Accessory Prices'}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* First-time accessory stock banner */}
       {isFirstAccessoryEntry && (
         <div className="mb-4 p-3 rounded-lg text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: 'var(--color-action-primary)', border: '1px solid var(--color-action-primary)' }}>
@@ -1055,7 +857,7 @@ export default function LPGDaily() {
       )}
       {!lpgPricesConfigured && (
         <div className="mb-4 p-4 rounded-lg text-sm font-medium" style={{ backgroundColor: 'rgba(239,83,80,0.1)', color: 'var(--color-status-error)', border: '1px solid var(--color-status-error)' }}>
-          LPG pricing not configured. {canEditPricing ? 'Set prices in the pricing editor above before recording sales.' : 'Contact the owner or supervisor to set prices before recording sales.'}
+          LPG pricing not configured. Ask a manager to set prices in Stores / Stock before recording sales.
         </div>
       )}
       <button
