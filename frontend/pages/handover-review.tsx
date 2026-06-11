@@ -82,6 +82,8 @@ interface HandoverEntry {
   // Present on "awaiting closing" (Phase-1) rows from the review-queue payload.
   hours_waiting?: number
   is_stale?: boolean
+  // "readings" = enter-readings source; absent or "handover" = financial handover
+  source?: 'handover' | 'readings'
 }
 
 const REVIEW_STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
@@ -123,10 +125,10 @@ export default function HandoverReview() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Return modal
-  const [returnModalId, setReturnModalId] = useState<string | null>(null)
+  const [returnModalId, setReturnModalId] = useState<HandoverEntry | null>(null)
   const [returnNote, setReturnNote] = useState('')
   // Approve-with-note modal (required for flagged handovers)
-  const [approveModalId, setApproveModalId] = useState<string | null>(null)
+  const [approveModalId, setApproveModalId] = useState<HandoverEntry | null>(null)
   const [approveNote, setApproveNote] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
 
@@ -231,18 +233,32 @@ export default function HandoverReview() {
     router.replace('/handover-review', undefined, { shallow: true })
   }
 
-  const handleApprove = async (handoverId: string, note?: string) => {
+  const handleApprove = async (h: HandoverEntry, note?: string) => {
     setActionLoading(true)
     try {
-      const res = await authFetch(`${BASE}/handover/review`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          handover_id: handoverId,
-          action: 'approve',
-          ...(note ? { supervisor_note: note } : {}),
-        }),
-      })
+      let res: Response
+      if (h.source === 'readings') {
+        res = await authFetch(`${BASE}/enter-readings/review`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            shift_id: h.shift_id,
+            attendant_id: h.attendant_id,
+            action: 'approve',
+            ...(note ? { overall_note: note } : {}),
+          }),
+        })
+      } else {
+        res = await authFetch(`${BASE}/handover/review`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            handover_id: h.handover_id,
+            action: 'approve',
+            ...(note ? { supervisor_note: note } : {}),
+          }),
+        })
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Approve failed' }))
         throw new Error(err.detail)
@@ -262,11 +278,29 @@ export default function HandoverReview() {
     if (!returnModalId || !returnNote.trim()) return
     setActionLoading(true)
     try {
-      const res = await authFetch(`${BASE}/handover/review`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ handover_id: returnModalId, action: 'return', supervisor_note: returnNote.trim() }),
-      })
+      let res: Response
+      if (returnModalId.source === 'readings') {
+        res = await authFetch(`${BASE}/enter-readings/review`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            shift_id: returnModalId.shift_id,
+            attendant_id: returnModalId.attendant_id,
+            action: 'return',
+            overall_note: returnNote.trim(),
+          }),
+        })
+      } else {
+        res = await authFetch(`${BASE}/handover/review`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            handover_id: returnModalId.handover_id,
+            action: 'return',
+            supervisor_note: returnNote.trim(),
+          }),
+        })
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Return failed' }))
         throw new Error(err.detail)
@@ -314,7 +348,7 @@ export default function HandoverReview() {
   }
 
   const selectableIds = handovers
-    .filter(h => (h.review_status || 'submitted') === 'submitted')
+    .filter(h => (h.review_status || 'submitted') === 'submitted' && h.source !== 'readings')
     .map(h => h.handover_id)
 
   const toggleSelectAll = () => {
@@ -590,28 +624,19 @@ export default function HandoverReview() {
                     <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.date}</td>
                     <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{h.shift_type}</td>
                     <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{h.attendant_name}</td>
-                    {h.phase === 'readings_only' ? (
-                      <td className="px-3 py-2 text-right font-mono text-xs italic" colSpan={3}
-                        style={{ color: theme.textSecondary }}>
-                        Readings only
-                      </td>
-                    ) : (
-                      <>
-                        <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
-                          K{h.expected_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
-                          K{h.actual_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono font-bold"
-                          style={{ color: h.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
-                          {h.difference >= 0 ? '+' : ''}K{h.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                      </>
-                    )}
+                    <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
+                      {h.source === 'readings' ? '—' : `K${h.expected_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
+                      {h.source === 'readings' ? '—' : `K${h.actual_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono font-bold"
+                      style={{ color: h.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
+                      {h.source === 'readings' ? '—' : `${h.difference >= 0 ? '+' : ''}K${h.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
-                        {h.phase === 'readings_only' && (
+                        {h.source === 'readings' && (
                           <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
                             style={{ backgroundColor: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
                             Enter Readings
@@ -623,7 +648,7 @@ export default function HandoverReview() {
                             {FLAG_LABELS[flag] || flag}
                           </span>
                         ))}
-                        {h.phase !== 'readings_only' && (!h.auto_flag_reasons || h.auto_flag_reasons.length === 0) && (
+                        {!h.source && (!h.auto_flag_reasons || h.auto_flag_reasons.length === 0) && (
                           <span className="text-xs" style={{ color: theme.textSecondary }}>-</span>
                         )}
                       </div>
@@ -640,9 +665,9 @@ export default function HandoverReview() {
                           <button
                             onClick={() => {
                               if (rs === 'flagged') {
-                                setApproveModalId(h.handover_id); setApproveNote('')
+                                setApproveModalId(h); setApproveNote('')
                               } else {
-                                handleApprove(h.handover_id)
+                                handleApprove(h)
                               }
                             }}
                             disabled={actionLoading}
@@ -650,7 +675,7 @@ export default function HandoverReview() {
                             style={{ backgroundColor: 'var(--color-status-success)' }}>
                             Approve
                           </button>
-                          <button onClick={() => { setReturnModalId(h.handover_id); setReturnNote('') }}
+                          <button onClick={() => { setReturnModalId(h); setReturnNote('') }}
                             className="px-2 py-1 text-xs font-medium rounded"
                             style={{ backgroundColor: 'var(--color-status-warning-light, #fff8e1)', color: 'var(--color-status-warning)' }}>
                             Return
@@ -741,8 +766,8 @@ export default function HandoverReview() {
                 style={{ color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
                 Cancel
               </button>
-              <button onClick={() => handleApprove(approveModalId, approveNote.trim())}
-                disabled={!approveNote.trim() || actionLoading}
+              <button onClick={() => approveModalId && handleApprove(approveModalId, approveNote.trim())}
+                disabled={!approveNote.trim() || actionLoading || !approveModalId}
                 className="px-4 py-2 text-sm font-medium rounded text-white disabled:opacity-50"
                 style={{ backgroundColor: 'var(--color-status-success)' }}>
                 {actionLoading ? 'Approving...' : 'Confirm Approve'}
@@ -856,8 +881,8 @@ function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
         </table>
       </div>
 
-      {/* Financial summary — hidden for readings_only (enter-readings path) */}
-      {h.phase !== 'readings_only' && <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Financial summary — hidden for enter-readings source rows */}
+      {h.source !== 'readings' && <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'Fuel Revenue', value: h.fuel_revenue, drillKey: '' },
           { label: 'LPG Sales', value: h.lpg_sales, drillKey: 'lpg' },

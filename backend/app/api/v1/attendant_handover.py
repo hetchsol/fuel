@@ -23,7 +23,7 @@ from ...services.notification_service import create_notification
 from ...services.shift_status import assert_shift_editable, advance_shift_on_approval
 from ...services.stock_service import apply_handover_sales
 from ...database.station_files import load_station_json, save_station_json
-from .enter_readings import _load_readings as _load_enter_readings, _save_readings as _save_enter_readings
+from .enter_readings import _load_readings as _load_enter_readings
 from .lpg_daily import (
     load_lpg_pricing, LPG_SIZES, DEFAULT_LPG_ACCESSORIES,
     load_lpg_accessories, save_lpg_accessories,
@@ -99,6 +99,98 @@ def notify_stale_readings(station_id: str) -> int:
     if notified:
         _save_handovers(handovers, station_id)
     return notified
+
+
+def _build_er_review_item(
+    shift_id: str,
+    att_id: str,
+    readings_db: dict,
+    storage: dict,
+) -> dict | None:
+    """
+    Build a unified review-queue item from an attendant_readings.json O/C pair.
+    attendant_readings.json is the canonical store for raw nozzle readings; this
+    helper surfaces those records in the handover review queue alongside financial
+    handovers so supervisors review everything from one page.
+    Returns None if the opening record is missing (unpaired closing).
+    """
+    opening_key = f"AR-{shift_id}-{att_id}-O"
+    closing_key = f"AR-{shift_id}-{att_id}-C"
+    opening_rec = readings_db.get(opening_key)
+    closing_rec = readings_db.get(closing_key)
+    if not closing_rec or not opening_rec:
+        return None
+
+    opening_map: dict = {}
+    for nr in opening_rec.get("nozzle_readings", []):
+        opening_map[nr["nozzle_id"]] = nr
+
+    threshold = storage.get("validation_thresholds", {}).get("meter_discrepancy_threshold", 0.5)
+    nozzle_summaries = []
+    has_deviation = False
+
+    for nr in closing_rec.get("nozzle_readings", []):
+        nid = nr["nozzle_id"]
+        onr = opening_map.get(nid, {})
+        elec_open = onr.get("electronic_reading", 0)
+        elec_close = nr["electronic_reading"]
+        mech_open = onr.get("mechanical_reading", 0)
+        mech_close = nr["mechanical_reading"]
+        elec_disp = round(elec_close - elec_open, 3)
+        mech_disp = round(mech_close - mech_open, 3)
+        avg = (elec_disp + mech_disp) / 2
+        dev_pct = round(abs(elec_disp - mech_disp) / avg * 100, 4) if avg > 0 else 0.0
+        flagged = dev_pct > threshold
+        if flagged:
+            has_deviation = True
+
+        nozzle_obj = get_nozzle(nid, storage=storage)
+        fuel_type = nozzle_obj.get("fuel_type", "Diesel") if nozzle_obj else "Diesel"
+
+        nozzle_summaries.append({
+            "nozzle_id": nid,
+            "fuel_type": fuel_type,
+            "opening_reading": elec_open,
+            "closing_reading": elec_close,
+            "volume_sold": elec_disp,
+            "price_per_liter": 0.0,
+            "revenue": 0.0,
+            "mechanical_opening": mech_open,
+            "mechanical_closing": mech_close,
+            "mechanical_volume": mech_disp,
+            "meter_deviation_liters": round(abs(elec_disp - mech_disp), 3),
+            "meter_deviation_percent": dev_pct,
+            "meter_deviation_flagged": flagged,
+        })
+
+    return {
+        "handover_id": f"ER-{shift_id}-{att_id}",
+        "shift_id": shift_id,
+        "attendant_id": att_id,
+        "attendant_name": closing_rec.get("user_name", att_id),
+        "date": "",           # filled by caller
+        "shift_type": "",     # filled by caller
+        "nozzle_summaries": nozzle_summaries,
+        "fuel_revenue": 0.0,
+        "lpg_sales": 0.0,
+        "lubricant_sales": 0.0,
+        "accessory_sales": 0.0,
+        "total_expected": 0.0,
+        "credit_sales": 0.0,
+        "expected_cash": 0.0,
+        "actual_cash": 0.0,
+        "pos_receipts": 0.0,
+        "total_accounted": 0.0,
+        "difference": 0.0,
+        "status": "submitted",
+        "phase": "completed",
+        "review_status": closing_rec.get("review_status", "submitted"),
+        "auto_flag_reasons": ["meter_deviation"] if has_deviation else None,
+        "supervisor_review": closing_rec.get("supervisor_review"),
+        "notes": closing_rec.get("notes"),
+        "created_at": closing_rec.get("submitted_at", ""),
+        "source": "readings",
+    }
 
 
 def _get_fuel_type(nozzle_id: str, storage: dict = None) -> str:
@@ -1709,10 +1801,10 @@ async def get_review_queue(
     if date:
         results = [h for h in results if h.get("date") == date]
 
-    # Separate by review_status — completed handovers and readings_only (enter-readings path)
+    # Separate by review_status (only fully completed handovers)
     pending = [h for h in results
                if h.get("review_status", "submitted") in ["submitted", "flagged"]
-               and h.get("phase", "completed") in ("completed", "readings_only")]
+               and h.get("phase", "completed") == "completed"]
     approved_today = [
         h for h in results
         if h.get("review_status") == "approved"
@@ -1723,6 +1815,51 @@ async def get_review_queue(
     def sort_key(h):
         is_flagged = 0 if h.get("review_status") == "flagged" else 1
         return (is_flagged, -(datetime.fromisoformat(h.get("created_at", "2000-01-01")).timestamp()))
+    # Inject enter-readings closing records that have no corresponding financial handover.
+    # attendant_readings.json is the canonical store for raw nozzle readings; these items
+    # appear here so supervisors review everything from one page.
+    er_readings_db = _load_enter_readings(station_id)
+    shifts_data = ctx["storage"].get("shifts", {})
+
+    # Index (shift_id, attendant_id) pairs that already have a financial handover so
+    # we don't show duplicate rows.
+    financial_pairs: set = {
+        (h.get("shift_id", ""), h.get("attendant_id", ""))
+        for h in handovers.values()
+        if h.get("phase") in ("completed", "readings_verified")
+    }
+
+    for key, rec in er_readings_db.items():
+        if not key.endswith("-C"):
+            continue
+        rec_status = rec.get("review_status", "submitted")
+        if rec_status not in ("submitted", "flagged"):
+            continue
+
+        rec_shift_id = rec.get("shift_id", "")
+        rec_att_id = rec.get("user_id", "")
+
+        if shift_id and rec_shift_id != shift_id:
+            continue
+
+        # Skip if a financial handover exists for this attendant+shift
+        if (rec_shift_id, rec_att_id) in financial_pairs:
+            continue
+
+        shift_obj = shifts_data.get(rec_shift_id, {})
+        shift_date = shift_obj.get("date", rec.get("submitted_at", "")[:10])
+
+        if date and shift_date != date:
+            continue
+
+        er_item = _build_er_review_item(rec_shift_id, rec_att_id, er_readings_db, ctx["storage"])
+        if er_item is None:
+            continue
+
+        er_item["date"] = shift_date
+        er_item["shift_type"] = shift_obj.get("shift_type", "")
+        pending.append(er_item)
+
     pending.sort(key=sort_key)
 
     flagged_count = sum(1 for h in pending if h.get("review_status") == "flagged")
@@ -1779,9 +1916,8 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
 
     handover = handovers[data.handover_id]
 
-    # Block if the attendant hasn't completed shift closing yet (Phase 2 not done).
-    # readings_only phase (from enter-readings path) is also reviewable.
-    if handover.get("phase", "completed") not in ("completed", "readings_only"):
+    # Block if the attendant hasn't completed shift closing yet (Phase 2 not done)
+    if handover.get("phase", "completed") != "completed":
         raise HTTPException(
             status_code=400,
             detail="Cannot review a handover that has not been fully closed by the attendant."
@@ -1867,24 +2003,6 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
             created_by=ctx["username"],
         )
 
-    # For readings_only handovers (enter-readings path): sync review decision back to
-    # attendant_readings.json so the attendant's Enter Readings page reflects the outcome.
-    if handover.get("phase") == "readings_only":
-        try:
-            att_id = handover.get("attendant_id", "")
-            shift_id = handover.get("shift_id", "")
-            er_db = _load_enter_readings(station_id)
-            closing_key = f"AR-{shift_id}-{att_id}-C"
-            er_record = er_db.get(closing_key)
-            if er_record:
-                er_record["review_status"] = handover["review_status"]
-                if data.action == "return":
-                    er_record.setdefault("supervisor_review", {})["overall_note"] = data.supervisor_note
-                _save_enter_readings(er_db, station_id)
-        except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning("readings_only review sync failed: %s", exc)
-
     return {"status": "success", "review_status": handover["review_status"], "handover_id": data.handover_id}
 
 
@@ -1922,7 +2040,7 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
             skipped_count += 1
             continue
         # Skip handovers where the attendant hasn't completed shift closing
-        if h.get("phase", "completed") not in ("completed", "readings_only"):
+        if h.get("phase", "completed") != "completed":
             skipped_count += 1
             continue
         # Only batch-approve clean (submitted) handovers, skip flagged
@@ -1953,24 +2071,6 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
         )
 
     _save_handovers(handovers, station_id)
-
-    # Sync approval back to attendant_readings.json for any readings_only records.
-    try:
-        er_db = None
-        for hid in handover_ids:
-            h = handovers.get(hid)
-            if h and h.get("phase") == "readings_only" and h.get("review_status") == "approved":
-                if er_db is None:
-                    er_db = _load_enter_readings(station_id)
-                closing_key = f"AR-{h['shift_id']}-{h['attendant_id']}-C"
-                er_record = er_db.get(closing_key)
-                if er_record:
-                    er_record["review_status"] = "approved"
-        if er_db is not None:
-            _save_enter_readings(er_db, station_id)
-    except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("batch readings_only review sync failed: %s", exc)
 
     # Auto-advance any shift whose attendants are now all approved.
     for sid in affected_shift_ids:
