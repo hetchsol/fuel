@@ -1246,6 +1246,55 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
     handovers[handover_id] = handover_output.dict()
     _save_handovers(handovers, station_id)
 
+    # Mirror nozzle readings into attendant_readings.json so nozzle-readings-for-tank
+    # can find them regardless of which path the attendant used.
+    try:
+        ar_db = load_station_json(station_id, 'attendant_readings.json', default={})
+        opening_key = f"AR-{data.shift_id}-{user_id}-O"
+        closing_key = f"AR-{data.shift_id}-{user_id}-C"
+        if opening_key not in ar_db:
+            ar_db[opening_key] = {
+                "shift_id": data.shift_id,
+                "user_id": user_id,
+                "user_name": user_name,
+                "reading_type": "Opening",
+                "nozzle_readings": [
+                    {
+                        "nozzle_id": ns.nozzle_id,
+                        "electronic_reading": ns.opening_reading,
+                        "mechanical_reading": ns.mechanical_opening or 0,
+                    }
+                    for ns in nozzle_summaries
+                ],
+                "submitted_at": now_iso,
+                "review_status": "submitted",
+                "source": "handover",
+            }
+        if closing_key not in ar_db:
+            ar_db[closing_key] = {
+                "shift_id": data.shift_id,
+                "user_id": user_id,
+                "user_name": user_name,
+                "reading_type": "Closing",
+                "nozzle_readings": [
+                    {
+                        "nozzle_id": ns.nozzle_id,
+                        "electronic_reading": ns.closing_reading,
+                        "mechanical_reading": ns.mechanical_closing or 0,
+                    }
+                    for ns in nozzle_summaries
+                ],
+                "submitted_at": now_iso,
+                "review_status": "submitted",
+                "source": "handover",
+            }
+        save_station_json(station_id, 'attendant_readings.json', ar_db)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Handover write-through to attendant_readings.json failed: %s", exc
+        )
+
     # Update nozzle state immediately
     if not had_er_closing:
         _update_nozzle_state(data.nozzle_readings, storage)

@@ -434,11 +434,51 @@ def submit_tank_reading(
          and r.get('shift_type', '').lower() == reading_input.shift_type.lower()),
         None
     )
-    if existing_for_upsert and role != "owner":
+    existing_record = tank_readings_db.get(existing_for_upsert, {}) if existing_for_upsert else {}
+    existing_is_complete = bool(existing_record.get('nozzle_readings'))
+    if existing_for_upsert and existing_is_complete and role != "owner":
         raise HTTPException(
             status_code=403,
             detail="Only the owner can update an existing tank reading record."
         )
+
+    # Dip consistency: if a dip-only record from the Tank Dips page exists,
+    # submitted values must match (within float tolerance) or be absent.
+    DIP_FLOAT_TOLERANCE_CM = 0.01
+    if existing_for_upsert:
+        stored_opening = existing_record.get('opening_dip_cm')
+        stored_closing = existing_record.get('closing_dip_cm')
+
+        opening_mismatch = (
+            stored_opening is not None
+            and reading_input.opening_dip_cm is not None
+            and abs(stored_opening - reading_input.opening_dip_cm) > DIP_FLOAT_TOLERANCE_CM
+        )
+        closing_mismatch = (
+            stored_closing is not None
+            and reading_input.closing_dip_cm is not None
+            and abs(stored_closing - reading_input.closing_dip_cm) > DIP_FLOAT_TOLERANCE_CM
+        )
+
+        if opening_mismatch or closing_mismatch:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Dip values conflict with the record on the Tank Dips page.",
+                    "stored": {
+                        "opening_dip_cm": stored_opening,
+                        "closing_dip_cm": stored_closing,
+                    },
+                    "submitted": {
+                        "opening_dip_cm": reading_input.opening_dip_cm,
+                        "closing_dip_cm": reading_input.closing_dip_cm,
+                    },
+                    "instruction": (
+                        "Correct the dip on the Tank Dips page first, or submit "
+                        "with the values shown there."
+                    ),
+                }
+            )
 
     # Get tank configuration from runtime storage
     tanks = storage.get('tanks', {})
