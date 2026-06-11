@@ -355,6 +355,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/enter-readings', label: 'Enter Readings', roles: ['supervisor'] },
         { path: '/handover-review', label: 'Handover Review', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/readings', label: 'OCR Reading Entry', roles: ['supervisor'], disabled: true },
+        { path: '/tank-dips', label: 'Tank Dips', roles: ['manager', 'owner'] },
         { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/fuel-operations', label: 'Fuel Operations', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/lpg-daily', label: 'LPG Daily Operations', roles: ['supervisor', 'manager', 'owner'] },
@@ -406,6 +407,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Stock & Sales',
       roles: ['manager'],
       children: [
+        { path: '/tank-dips', label: 'Tank Dips', roles: ['manager'] },
         { path: '/stores', label: 'Stores / Stock', roles: ['manager'] },
         { path: '/stock-takes', label: 'Stock Takes', roles: ['manager'] },
         { path: '/inventory', label: 'Tank Levels', roles: ['manager'] },

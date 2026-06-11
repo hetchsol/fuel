@@ -5,13 +5,9 @@ import LoadingSpinner from './LoadingSpinner'
 interface TankCardProps {
   fuelType: 'Diesel' | 'Petrol'
   tank: any
-  tankId?: string       // Explicit tank_id (for multi-tank support)
-  tankLabel?: string    // Display label e.g. "Diesel Tank 2"
+  tankId?: string
+  tankLabel?: string
   tanksError: any
-  canEditDipReadings: boolean
-  userRole: string
-  onSaveDipReadings: (tankId: string, fuelType: string, dipReadings: any) => Promise<void>
-  savingDips: boolean
   mutateTanks: () => void
 }
 
@@ -85,18 +81,8 @@ const TankCard = ({
   tankId: tankIdProp,
   tankLabel,
   tanksError,
-  canEditDipReadings,
-  userRole,
-  onSaveDipReadings,
-  savingDips,
   mutateTanks
 }: TankCardProps) => {
-  const [dipReadings, setDipReadings] = useState({
-    openingDip: '',
-    closingDip: ''
-  })
-  const [savedDips, setSavedDips] = useState<any>(null)
-
   const isDiesel = fuelType === 'Diesel'
   const accentColor = isDiesel ? 'var(--color-fuel-diesel)' : 'var(--color-fuel-petrol)'
   const accentBorder = isDiesel ? 'var(--color-fuel-diesel-border)' : 'var(--color-fuel-petrol-border)'
@@ -143,31 +129,6 @@ const TankCard = ({
 
   const tankId = tankIdProp || (tank?.tank_id) || `TANK-${fuelType.toUpperCase()}`
   const displayName = tankLabel || `${fuelType} Tank`
-
-  useEffect(() => {
-    if (tank && canEditDipReadings) {
-      fetchDipReadings()
-    }
-  }, [tank, canEditDipReadings])
-
-  const fetchDipReadings = async () => {
-    try {
-      const BASE = '/api/v1'
-      const res = await authFetch(`${BASE}/tanks/dip-reading/${tankId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setSavedDips(data)
-      }
-    } catch (err) {
-      console.error('Failed to fetch dip readings:', err)
-    }
-  }
-
-  const handleSave = async () => {
-    await onSaveDipReadings(tankId, fuelType, dipReadings)
-    await fetchDipReadings()
-    setDipReadings({ openingDip: '', closingDip: '' })
-  }
 
   return (
     <div
@@ -241,88 +202,6 @@ const TankCard = ({
             </p>
           </div>
 
-          {/* Dip Readings */}
-          {canEditDipReadings && (
-            <div className={`mt-4 pt-4 border-t ${colors.sectionDivider}`}>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className={`text-sm font-semibold ${colors.boldText}`}>Shift Dip Readings (cm)</h3>
-                <span className={`text-xs ${colors.badgeBg} px-2 py-1 rounded-badge font-semibold`}>
-                  {userRole === 'owner' ? 'Owner' : 'Supervisor'}
-                </span>
-              </div>
-
-              {savedDips && (savedDips.opening_dip || savedDips.closing_dip) && (
-                <div className={`mb-3 p-3 ${colors.sectionBg} rounded-xl border ${colors.sectionBorder}`}>
-                  <p className={`text-xs font-semibold ${colors.boldText} mb-2`}>Current Readings</p>
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <p className={colors.lightText}>Opening</p>
-                      <p className={`font-bold ${colors.boldText}`}>
-                        {savedDips.opening_dip ? `${savedDips.opening_dip.toFixed(1)} cm` : 'Not set'}
-                      </p>
-                      {savedDips.opening_volume && (
-                        <p className={`${colors.lightestText} text-xs`}>
-                          {savedDips.opening_volume.toLocaleString()} L
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <p className={colors.lightText}>Closing</p>
-                      <p className={`font-bold ${colors.boldText}`}>
-                        {savedDips.closing_dip ? `${savedDips.closing_dip.toFixed(1)} cm` : 'Not set'}
-                      </p>
-                      {savedDips.closing_volume && (
-                        <p className={`${colors.lightestText} text-xs`}>
-                          {savedDips.closing_volume.toLocaleString()} L
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {savedDips.last_updated && (
-                    <p className={`text-xs ${colors.lightestText} mt-2`}>
-                      Last updated: {new Date(savedDips.last_updated).toLocaleTimeString()} by {savedDips.updated_by}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={`block text-xs font-medium ${colors.text} mb-1`}>
-                    Opening Dip
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={dipReadings.openingDip}
-                    onChange={(e) => setDipReadings({ ...dipReadings, openingDip: e.target.value })}
-                    className={`w-full px-3 py-2 text-sm border ${colors.inputBorder} rounded-input focus:outline-none focus:ring-2 ${colors.focusRing}`}
-                    placeholder="cm"
-                  />
-                </div>
-                <div>
-                  <label className={`block text-xs font-medium ${colors.text} mb-1`}>
-                    Closing Dip
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={dipReadings.closingDip}
-                    onChange={(e) => setDipReadings({ ...dipReadings, closingDip: e.target.value })}
-                    className={`w-full px-3 py-2 text-sm border ${colors.inputBorder} rounded-input focus:outline-none focus:ring-2 ${colors.focusRing}`}
-                    placeholder="cm"
-                  />
-                </div>
-              </div>
-              <button
-                onClick={handleSave}
-                disabled={savingDips || (!dipReadings.openingDip && !dipReadings.closingDip)}
-                className={`mt-3 w-full px-3 py-2 ${colors.button} text-white text-sm font-medium rounded-btn focus:outline-none focus:ring-2 ${colors.focusRing} disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                {savingDips ? 'Saving...' : 'Save Dip Readings'}
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>

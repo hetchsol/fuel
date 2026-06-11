@@ -37,15 +37,6 @@ export default function Shifts() {
   // Tank dip reading state
   const [tanks, setTanks] = useState<any[]>([])
   const [tankDipReadings, setTankDipReadings] = useState<any[]>([])
-  const [showTankDipModal, setShowTankDipModal] = useState(false)
-  const [tankDipForm, setTankDipForm] = useState({
-    tank_id: '',
-    opening_dip_cm: '',
-    closing_dip_cm: ''
-  })
-  const [previousDipData, setPreviousDipData] = useState<any>(null)
-  // Edit mode: managers/owners correcting an already-recorded dip in this shift.
-  const [editingDip, setEditingDip] = useState(false)
 
   // Fetch active shift on mount
   useEffect(() => {
@@ -254,61 +245,16 @@ export default function Shifts() {
   const fetchTankDipReadings = async () => {
     if (!activeShift) return
     try {
-      const res = await authFetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-readings`, {
-        headers: getHeaders()
-      })
+      const res = await authFetch(
+        `${BASE}/tank-readings/dips?date=${activeShift.date}&shift_type=${activeShift.shift_type}`,
+        { headers: getHeaders() }
+      )
       if (res.ok) {
         const data = await res.json()
         setTankDipReadings(data)
       }
     } catch (err: any) {
       console.error('Failed to fetch tank dip readings:', err)
-    }
-
-    // Also fetch previous shift's closing dips for auto-populate
-    try {
-      const prevRes = await authFetch(`${BASE}/shifts/${activeShift.shift_id}/previous-dip-readings`)
-      if (prevRes.ok) {
-        const prevData = await prevRes.json()
-        if (prevData.found) {
-          setPreviousDipData(prevData)
-        }
-      }
-    } catch {}
-  }
-
-  const handleSubmitTankDipReading = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!activeShift) return
-
-    setLoading(true)
-    try {
-      const payload = {
-        tank_id: tankDipForm.tank_id,
-        opening_dip_cm: tankDipForm.opening_dip_cm ? parseFloat(tankDipForm.opening_dip_cm) : null,
-        closing_dip_cm: tankDipForm.closing_dip_cm ? parseFloat(tankDipForm.closing_dip_cm) : null
-      }
-
-      const res = await authFetch(`${BASE}/shifts/${activeShift.shift_id}/tank-dip-reading`, {
-        method: 'POST',
-        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.detail || 'Failed to submit tank dip reading')
-      }
-
-      toast.success(editingDip ? 'Dip reading corrected.' : 'Tank dip reading recorded successfully!')
-      fetchTankDipReadings()
-      setShowTankDipModal(false)
-      setEditingDip(false)
-      setTankDipForm({ tank_id: '', opening_dip_cm: '', closing_dip_cm: '' })
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to submit tank dip reading')
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -1056,28 +1002,13 @@ export default function Shifts() {
         <div className="mb-6 bg-surface-card rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-content-primary">Tank Dip Readings</h2>
-            {(currentUser?.role === 'supervisor' || currentUser?.role === 'manager' || currentUser?.role === 'owner') && (
-              <button
-                onClick={() => {
-                  setEditingDip(false)
-                  // Carry-over: the opening dip auto-fills from the previous shift's
-                  // closing dip (closing of one shift = opening of the next).
-                  if (previousDipData?.found && previousDipData.readings?.length > 0) {
-                    const firstTank = previousDipData.readings[0]
-                    setTankDipForm({
-                      tank_id: firstTank.tank_id || '',
-                      opening_dip_cm: firstTank.opening_dip_cm != null ? firstTank.opening_dip_cm.toFixed(1) : '',
-                      closing_dip_cm: '',
-                    })
-                  } else {
-                    setTankDipForm({ tank_id: '', opening_dip_cm: '', closing_dip_cm: '' })
-                  }
-                  setShowTankDipModal(true)
-                }}
-                className="px-4 py-2 bg-status-success text-white rounded-md hover:bg-status-success/90 font-medium"
+            {(currentUser?.role === 'manager' || currentUser?.role === 'owner') && (
+              <a
+                href="/tank-dips"
+                className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary/90 font-medium text-sm"
               >
-                + Record Dip Reading
-              </button>
+                Enter Dips
+              </a>
             )}
           </div>
 
@@ -1085,8 +1016,8 @@ export default function Shifts() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {tankDipReadings.length === 0 ? (
               <div className="col-span-2 p-6 bg-surface-bg rounded-lg border border-surface-border text-center">
-                <p className="text-content-secondary">No tank dip readings recorded for this shift yet.</p>
-                <p className="text-sm text-content-secondary mt-1">Record opening and closing dip readings for reconciliation.</p>
+                <p className="text-content-secondary">No tank dip readings for this shift yet.</p>
+                <p className="text-sm text-content-secondary mt-1">Dip readings are entered by the manager on the Tank Dips page.</p>
               </div>
             ) : (
               tankDipReadings.map((reading: any) => {
@@ -1097,7 +1028,7 @@ export default function Shifts() {
                 const isComplete = hasOpening && hasClosing
                 const closingHigher = hasOpening && hasClosing && reading.closing_dip_cm > reading.opening_dip_cm
                 const movement = hasOpening && hasClosing
-                  ? reading.opening_volume_liters - reading.closing_volume_liters
+                  ? (reading.opening_volume ?? reading.opening_volume ?? reading.opening_volume_liters) - (reading.closing_volume ?? reading.closing_volume ?? reading.closing_volume_liters)
                   : null
                 return (
                   <div
@@ -1132,11 +1063,11 @@ export default function Shifts() {
                           {hasOpening ? `${reading.opening_dip_cm.toFixed(1)} cm` : <span className="text-status-warning">Not recorded</span>}
                         </span>
                       </div>
-                      {reading.opening_volume_liters != null && (
+                      {(reading.opening_volume ?? reading.opening_volume_liters) != null && (
                         <div className="flex justify-between text-xs text-content-secondary">
                           <span>Opening Volume:</span>
-                          <span>{Math.round(reading.opening_volume_liters).toLocaleString()} L
-                            {(() => { const p = fuelPrices[tank?.fuel_type || ''] || 0; return p > 0 ? <span className="ml-1 font-mono text-content-secondary/60">(ZMW {(reading.opening_volume_liters * p).toLocaleString(undefined, { maximumFractionDigits: 0 })})</span> : null })()}
+                          <span>{Math.round(reading.opening_volume ?? reading.opening_volume_liters).toLocaleString()} L
+                            {(() => { const p = fuelPrices[tank?.fuel_type || ''] || 0; const v = reading.opening_volume ?? reading.opening_volume_liters; return p > 0 ? <span className="ml-1 font-mono text-content-secondary/60">(ZMW {(v * p).toLocaleString(undefined, { maximumFractionDigits: 0 })})</span> : null })()}
                           </span>
                         </div>
                       )}
@@ -1147,11 +1078,11 @@ export default function Shifts() {
                           {hasClosing ? `${reading.closing_dip_cm.toFixed(1)} cm` : <span className="text-status-warning">Not recorded</span>}
                         </span>
                       </div>
-                      {reading.closing_volume_liters != null && (
+                      {(reading.closing_volume ?? reading.closing_volume_liters) != null && (
                         <div className="flex justify-between text-xs text-content-secondary">
                           <span>Closing Volume:</span>
-                          <span>{Math.round(reading.closing_volume_liters).toLocaleString()} L
-                            {(() => { const p = fuelPrices[tank?.fuel_type || ''] || 0; return p > 0 ? <span className="ml-1 font-mono text-content-secondary/60">(ZMW {(reading.closing_volume_liters * p).toLocaleString(undefined, { maximumFractionDigits: 0 })})</span> : null })()}
+                          <span>{Math.round(reading.closing_volume ?? reading.closing_volume_liters).toLocaleString()} L
+                            {(() => { const p = fuelPrices[tank?.fuel_type || ''] || 0; const v = reading.closing_volume ?? reading.closing_volume_liters; return p > 0 ? <span className="ml-1 font-mono text-content-secondary/60">(ZMW {(v * p).toLocaleString(undefined, { maximumFractionDigits: 0 })})</span> : null })()}
                           </span>
                         </div>
                       )}
@@ -1189,23 +1120,13 @@ export default function Shifts() {
                         </div>
                       )}
 
-                      {/* Edit/correct — managers and owners only, while the shift is open */}
                       {(currentUser?.role === 'manager' || currentUser?.role === 'owner') && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingDip(true)
-                            setTankDipForm({
-                              tank_id: reading.tank_id,
-                              opening_dip_cm: reading.opening_dip_cm != null ? reading.opening_dip_cm.toString() : '',
-                              closing_dip_cm: reading.closing_dip_cm != null ? reading.closing_dip_cm.toString() : '',
-                            })
-                            setShowTankDipModal(true)
-                          }}
-                          className="mt-2 w-full px-3 py-1.5 text-xs font-medium rounded border border-action-primary text-action-primary hover:bg-action-primary-light"
+                        <a
+                          href="/tank-dips"
+                          className="mt-2 block text-center w-full px-3 py-1.5 text-xs font-medium rounded border border-action-primary text-action-primary hover:bg-action-primary-light"
                         >
-                          Edit reading (correct a mistake)
-                        </button>
+                          Edit on Tank Dips page
+                        </a>
                       )}
                     </div>
                   </div>
@@ -1214,135 +1135,11 @@ export default function Shifts() {
             )}
           </div>
 
-          {/* Show tanks without dip readings yet */}
           {tanks.length > 0 && tankDipReadings.length > 0 && tanks.length > tankDipReadings.length && (
             <div className="mt-3 p-2 bg-status-warning-light border border-status-warning rounded text-xs text-status-warning">
-              {tanks.filter(t => !tankDipReadings.some((r: any) => r.tank_id === t.tank_id)).map(t => t.tank_id).join(', ')} — no dip readings yet. Record before shift end for reconciliation.
+              {tanks.filter(t => !tankDipReadings.some((r: any) => r.tank_id === t.tank_id)).map(t => t.tank_id).join(', ')} — no dip readings yet.
             </div>
           )}
-        </div>
-      )}
-
-      {/* Tank Dip Reading Modal */}
-      {showTankDipModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-card rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-content-primary mb-4">{editingDip ? 'Edit Tank Dip Reading' : 'Record Tank Dip Reading'}</h3>
-
-            <form onSubmit={handleSubmitTankDipReading} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Select Tank
-                </label>
-                <select
-                  value={tankDipForm.tank_id}
-                  disabled={editingDip}
-                  onChange={(e) => {
-                    const tankId = e.target.value
-                    // Existing recorded value wins; otherwise carry over the previous
-                    // shift's closing dip as this shift's opening.
-                    const prevReading = previousDipData?.readings?.find((r: any) => r.tank_id === tankId)
-                    const existingReading = tankDipReadings.find((r: any) => r.tank_id === tankId)
-                    setTankDipForm({
-                      tank_id: tankId,
-                      opening_dip_cm: existingReading?.opening_dip_cm?.toFixed(1) || prevReading?.opening_dip_cm?.toFixed(1) || '',
-                      closing_dip_cm: existingReading?.closing_dip_cm?.toFixed(1) || '',
-                    })
-                  }}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary disabled:opacity-60"
-                  required
-                >
-                  <option value="">-- Select Tank --</option>
-                  {tanks.map(tank => (
-                    <option key={tank.tank_id} value={tank.tank_id}>
-                      {tank.display_name || `${tank.tank_id} (${tank.fuel_type})`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Auto-populated indicator */}
-              {previousDipData?.found && tankDipForm.opening_dip_cm && !tankDipReadings.some((r: any) => r.tank_id === tankDipForm.tank_id && r.opening_dip_cm) && (
-                <div className="p-2 bg-status-success-light border border-status-success rounded text-xs text-status-success">
-                  Opening dip auto-filled from previous shift ({previousDipData.source_shift_type} {previousDipData.source_date})
-                </div>
-              )}
-
-              {/* Editing an already-recorded reading (correction is logged) */}
-              {editingDip && (
-                <div className="p-2 bg-status-warning-light border border-status-warning rounded text-xs text-status-warning">
-                  Correcting a recorded reading. This change is logged against your name.
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Opening Dip (cm)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={tankDipForm.opening_dip_cm}
-                  onChange={(e) => setTankDipForm({ ...tankDipForm, opening_dip_cm: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
-                  placeholder="e.g., 165.5"
-                />
-                <p className="text-xs text-content-secondary mt-1">Dip reading at shift start</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Closing Dip (cm)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={tankDipForm.closing_dip_cm}
-                  onChange={(e) => setTankDipForm({ ...tankDipForm, closing_dip_cm: e.target.value })}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
-                  placeholder="e.g., 155.4"
-                />
-                <p className="text-xs text-content-secondary mt-1">Dip reading at shift end</p>
-              </div>
-
-              {/* Closing > Opening warning */}
-              {tankDipForm.opening_dip_cm && tankDipForm.closing_dip_cm &&
-                parseFloat(tankDipForm.closing_dip_cm) > parseFloat(tankDipForm.opening_dip_cm) && (
-                <div className="p-2 bg-status-warning-light border border-status-warning rounded text-xs text-status-warning">
-                  Closing dip ({tankDipForm.closing_dip_cm} cm) is higher than opening ({tankDipForm.opening_dip_cm} cm). This usually means a delivery occurred during the shift — make sure it's recorded.
-                </div>
-              )}
-
-              <div className="p-3 bg-action-primary-light border border-action-primary rounded-md">
-                <p className="text-xs text-action-primary">
-                  <strong>Tip:</strong> Record opening dip at shift start and closing dip at shift end.
-                  Both are needed for reconciliation. You can save opening now and update with closing later.
-                </p>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="submit"
-                  disabled={loading || !tankDipForm.tank_id}
-                  className="flex-1 px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover disabled:bg-content-secondary disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Saving...' : editingDip ? 'Save Correction' : 'Save Reading'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowTankDipModal(false)
-                    setEditingDip(false)
-                    setTankDipForm({ tank_id: '', opening_dip_cm: '', closing_dip_cm: '' })
-                    setPreviousDipData(null)
-                  }}
-                  className="px-4 py-2 bg-surface-border text-content-secondary rounded-md hover:bg-surface-border"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
 

@@ -66,6 +66,123 @@ def save_tank_deliveries(tank_deliveries_db: dict, station_id: str):
     save_station_json(station_id, 'tank_deliveries.json', tank_deliveries_db)
 
 
+# ===== TANK DIPS — LIGHTWEIGHT UPSERT =====
+
+@router.post("/dips")
+def record_tank_dips(
+    tank_id: str,
+    date: str,
+    shift_type: str,
+    recorded_by: str,
+    opening_dip_cm: Optional[float] = None,
+    closing_dip_cm: Optional[float] = None,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Manager+ only. Create or update dip readings for a single tank/date/shift.
+    This is the authoritative write path for tank dips.
+    """
+    from ...services.dip_conversion import dip_to_volume
+    from ...database.storage import save_station_storage
+
+    role = ctx.get("role", "")
+    if role not in ("manager", "owner"):
+        raise HTTPException(status_code=403, detail="Only managers and owners can record tank dip readings.")
+
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+    tank_readings_db = load_tank_readings(station_id)
+
+    # Find existing record for this tank/date/shift
+    existing_id = next(
+        (rid for rid, r in tank_readings_db.items()
+         if r.get("tank_id") == tank_id
+         and r.get("date") == date
+         and r.get("shift_type", "").lower() == shift_type.lower()),
+        None
+    )
+
+    opening_volume = dip_to_volume(tank_id, opening_dip_cm) if opening_dip_cm is not None else None
+    closing_volume = dip_to_volume(tank_id, closing_dip_cm) if closing_dip_cm is not None else None
+
+    now = datetime.utcnow().isoformat()
+
+    if existing_id:
+        rec = tank_readings_db[existing_id]
+        if opening_dip_cm is not None:
+            rec["opening_dip_cm"] = opening_dip_cm
+            rec["opening_volume"] = opening_volume
+        if closing_dip_cm is not None:
+            rec["closing_dip_cm"] = closing_dip_cm
+            rec["closing_volume"] = closing_volume
+        rec["recorded_by"] = recorded_by
+        rec["updated_at"] = now
+        reading_id = existing_id
+    else:
+        reading_id = str(uuid.uuid4())
+        tank_readings_db[reading_id] = {
+            "reading_id": reading_id,
+            "tank_id": tank_id,
+            "date": date,
+            "shift_type": shift_type,
+            "opening_dip_cm": opening_dip_cm,
+            "opening_volume": opening_volume,
+            "closing_dip_cm": closing_dip_cm,
+            "closing_volume": closing_volume,
+            "recorded_by": recorded_by,
+            "created_at": now,
+            "updated_at": now,
+            "nozzle_readings": [],
+            "deliveries": [],
+        }
+
+    # Keep tank.current_level in sync when a closing dip is provided
+    if closing_volume is not None:
+        tank_data = storage.get("tanks", {})
+        if tank_id in tank_data:
+            tank_data[tank_id]["current_level"] = closing_volume
+            tank_data[tank_id]["last_updated"] = now
+
+    save_tank_readings(tank_readings_db, station_id)
+    save_station_storage(station_id)
+
+    rec = tank_readings_db[reading_id]
+    return {
+        "reading_id": reading_id,
+        "tank_id": tank_id,
+        "date": date,
+        "shift_type": shift_type,
+        "opening_dip_cm": rec.get("opening_dip_cm"),
+        "opening_volume": rec.get("opening_volume"),
+        "closing_dip_cm": rec.get("closing_dip_cm"),
+        "closing_volume": rec.get("closing_volume"),
+    }
+
+
+@router.get("/dips")
+def get_tank_dips(
+    date: str,
+    shift_type: str,
+    ctx: dict = Depends(get_station_context),
+):
+    """Return dip records for all tanks for a given date/shift."""
+    tank_readings_db = load_tank_readings(ctx["station_id"])
+    results = [
+        {
+            "tank_id": r.get("tank_id"),
+            "opening_dip_cm": r.get("opening_dip_cm"),
+            "opening_volume": r.get("opening_volume"),
+            "closing_dip_cm": r.get("closing_dip_cm"),
+            "closing_volume": r.get("closing_volume"),
+            "recorded_by": r.get("recorded_by"),
+            "updated_at": r.get("updated_at") or r.get("created_at"),
+        }
+        for r in tank_readings_db.values()
+        if r.get("date") == date and r.get("shift_type", "").lower() == shift_type.lower()
+        and (r.get("opening_dip_cm") is not None or r.get("closing_dip_cm") is not None)
+    ]
+    return results
+
 
 # ===== DELIVERY THREE-WAY RECONCILIATION =====
 

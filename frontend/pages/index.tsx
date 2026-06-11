@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import useSWR from 'swr'
-import toast from 'react-hot-toast'
-import { getDaily, getFlags, getTankLevels, getHeaders, authFetch, isManagerOrAbove } from '../lib/api'
+import { getDaily, getFlags, getTankLevels, isManagerOrAbove } from '../lib/api'
 import TankCard from '../components/TankCard'
 import DayChecklist from '../components/DayChecklist'
 import AttendantShiftCard from '../components/AttendantShiftCard'
@@ -27,17 +26,12 @@ function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
 }
 
 export default function Home() {
-  const { date, setDate } = useWorkingDay()  // shared working day (item 2)
+  const { date, setDate } = useWorkingDay()
   const [userRole, setUserRole] = useState<string>('')
-  const [savingDips, setSavingDips] = useState(false)
 
-  // Get user role from localStorage
   useEffect(() => {
     const userData = localStorage.getItem('user')
-    if (userData) {
-      const user = JSON.parse(userData)
-      setUserRole(user.role || '')
-    }
+    if (userData) setUserRole(JSON.parse(userData).role || '')
   }, [])
 
   const { data: daily, error: dailyError } = useSWR(['daily', date], () => getDaily(date))
@@ -46,41 +40,7 @@ export default function Home() {
     refreshInterval: 30000,
   })
 
-  const canEditDipReadings = userRole === 'supervisor' || userRole === 'manager' || userRole === 'owner'
-
   const allTanks = tanks || []
-
-  const handleSaveDipReadings = async (tankId: string, fuelType: string, dipReadings: any) => {
-    setSavingDips(true)
-    try {
-      const userData = localStorage.getItem('user')
-      const user = userData ? JSON.parse(userData).full_name : 'Unknown'
-
-      const BASE = '/api/v1'
-      const res = await authFetch(`${BASE}/tanks/dip-reading/${tankId}`, {
-        method: 'POST',
-        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          opening_dip: dipReadings.openingDip ? parseFloat(dipReadings.openingDip) : null,
-          closing_dip: dipReadings.closingDip ? parseFloat(dipReadings.closingDip) : null,
-          user: user
-        })
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        mutateTanks()
-        toast.success(`${fuelType} dip readings saved — level updated to ${data.current_level.toLocaleString()} L`)
-      } else {
-        toast.error('Failed to save dip readings')
-      }
-    } catch (err) {
-      console.error('Error saving dip readings:', err)
-      toast.error('Error saving dip readings')
-    } finally {
-      setSavingDips(false)
-    }
-  }
 
   return (
     <div>
@@ -141,10 +101,6 @@ export default function Home() {
               tankId={tank.tank_id}
               tankLabel={tankLabel}
               tanksError={tanksError}
-              canEditDipReadings={canEditDipReadings}
-              userRole={userRole}
-              onSaveDipReadings={handleSaveDipReadings}
-              savingDips={savingDips}
               mutateTanks={mutateTanks}
             />
           )

@@ -188,18 +188,18 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
     shift = shifts[shift_id]
     shift_date = shift.get('date', '')
     shift_type_str = shift.get('shift_type', '')
-    tank_dip_readings = shift.get('tank_dip_readings', [])
 
-    # Fallback: if shift has no inline dip readings, look in tank_readings.json
-    # (data entered via Operations > Daily Tank Readings page)
+    # Primary: tank_readings.json (entered via Operations > Tank Dips page)
+    # Fallback: inline shift dip readings (legacy, entered via Shifts page)
     station_tank_readings = _load_station_tank_readings(ctx["station_id"])
     tank_reading_entries = {}  # tank_id -> tank_readings.json entry (for nozzle fallback)
+    tank_dip_readings = []
 
-    if not tank_dip_readings:
-        for tr in station_tank_readings.values():
-            if tr.get('date') == shift_date and tr.get('shift_type') == shift_type_str:
-                tank_id = tr.get('tank_id', '')
-                tank_reading_entries[tank_id] = tr
+    for tr in station_tank_readings.values():
+        if tr.get('date') == shift_date and tr.get('shift_type') == shift_type_str:
+            tank_id = tr.get('tank_id', '')
+            tank_reading_entries[tank_id] = tr
+            if tr.get('opening_dip_cm') is not None or tr.get('closing_dip_cm') is not None:
                 tank_dip_readings.append({
                     'tank_id': tank_id,
                     'opening_dip_cm': tr.get('opening_dip_cm'),
@@ -207,16 +207,19 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
                     'opening_volume_liters': tr.get('opening_volume'),
                     'closing_volume_liters': tr.get('closing_volume'),
                 })
-    else:
-        # Even with shift dips, index tank_readings for nozzle/delivery fallback
-        for tr in station_tank_readings.values():
-            if tr.get('date') == shift_date and tr.get('shift_type') == shift_type_str:
-                tank_reading_entries[tr.get('tank_id', '')] = tr
+
+    if not tank_dip_readings:
+        # Fallback: inline dip readings stored on the shift record (legacy path)
+        for dip in shift.get('tank_dip_readings', []):
+            tank_id = dip.get('tank_id', '')
+            tank_dip_readings.append(dip)
+            if tank_id not in tank_reading_entries:
+                tank_reading_entries[tank_id] = {}
 
     if not tank_dip_readings:
         raise HTTPException(
             status_code=400,
-            detail="No tank dip readings found for this shift. Record readings via Operations > Daily Tank Readings or Shifts > Tank Dip Readings."
+            detail="No tank dip readings found for this shift. Record readings via Operations > Tank Dips."
         )
 
     # Calculate tank reconciliation for each tank

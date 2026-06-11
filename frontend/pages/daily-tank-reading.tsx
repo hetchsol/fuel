@@ -306,7 +306,7 @@ export default function DailyTankReading() {
     }
   }
 
-  // Auto-pull dip readings from the Shift's tank_dip_readings (recorded on Shifts page)
+  // Auto-pull dip readings from the Tank Dips page record (authoritative source)
   useEffect(() => {
     if (selectedTank && formData.date && formData.shift_type) {
       fetchShiftDipReadings()
@@ -314,11 +314,13 @@ export default function DailyTankReading() {
   }, [selectedTank, formData.date, formData.shift_type])
 
   const fetchShiftDipReadings = async () => {
-    const shiftId = `${formData.date}-${formData.shift_type}`
     setFetchingShiftDip(true)
     setShiftDipPulled(false)
     try {
-      const res = await authFetch(`${BASE}/shifts/${shiftId}/tank-dip-readings`, { headers: getHeaders() })
+      const res = await authFetch(
+        `${BASE}/tank-readings/dips?date=${formData.date}&shift_type=${formData.shift_type}`,
+        { headers: getHeaders() }
+      )
       if (res.ok) {
         const data = await res.json()
         const tankDip = data.find((d: any) => d.tank_id === selectedTank)
@@ -327,14 +329,14 @@ export default function DailyTankReading() {
             ...prev,
             opening_dip_cm: tankDip.opening_dip_cm != null ? tankDip.opening_dip_cm.toString() : prev.opening_dip_cm,
             closing_dip_cm: tankDip.closing_dip_cm != null ? tankDip.closing_dip_cm.toString() : prev.closing_dip_cm,
-            opening_volume: tankDip.opening_volume_liters != null ? tankDip.opening_volume_liters.toString() : prev.opening_volume,
-            closing_volume: tankDip.closing_volume_liters != null ? tankDip.closing_volume_liters.toString() : prev.closing_volume,
+            opening_volume: tankDip.opening_volume != null ? tankDip.opening_volume.toString() : prev.opening_volume,
+            closing_volume: tankDip.closing_volume != null ? tankDip.closing_volume.toString() : prev.closing_volume,
           }))
           setShiftDipPulled(true)
         }
       }
     } catch (err) {
-      console.error('Error fetching shift dip readings:', err)
+      console.error('Error fetching dip readings:', err)
     } finally {
       setFetchingShiftDip(false)
     }
