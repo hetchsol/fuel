@@ -35,9 +35,12 @@ interface Delivery {
   fuel_type: string
   date: string
   time: string
+  before_delivery_dip_cm?: number
+  after_delivery_dip_cm?: number
   volume_before: number
   volume_after: number
   actual_volume_delivered: number
+  invoice_volume_liters?: number
   expected_volume?: number
   flowmeter_volume?: number
   delivery_variance?: number
@@ -59,11 +62,13 @@ interface QueuedTankDelivery {
   id: string
   date: string
   time: string
-  volume_before: string
-  volume_after: string
+  before_delivery_dip_cm: string
+  after_delivery_dip_cm: string
+  computed_before_vol?: number  // cached from calibration preview at add time
+  computed_after_vol?: number
   supplier: string
   invoice_number: string
-  expected_volume: string
+  invoice_volume_liters: string
   flowmeter_volume: string
   temperature: string
   notes: string
@@ -110,15 +115,17 @@ export default function FuelOperations() {
   const [deliveryForm, setDeliveryForm] = useState({
     date: new Date().toISOString().split('T')[0],
     time: '',
-    volume_before: '',
-    volume_after: '',
+    before_delivery_dip_cm: '',
+    after_delivery_dip_cm: '',
     supplier: '',
     invoice_number: '',
-    expected_volume: '',
+    invoice_volume_liters: '',
     flowmeter_volume: '',
     temperature: '',
     notes: ''
   })
+  const [beforeVolPreview, setBeforeVolPreview] = useState<number | null>(null)
+  const [afterVolPreview, setAfterVolPreview] = useState<number | null>(null)
 
   const [readings, setReadings] = useState<TankReading[]>([])
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
@@ -167,10 +174,8 @@ export default function FuelOperations() {
   }
 
   const calculateDeliveryPreview = () => {
-    const before = parseFloat(deliveryForm.volume_before)
-    const after = parseFloat(deliveryForm.volume_after)
-    if (!before || !after) return 0
-    return after - before
+    if (afterVolPreview === null || beforeVolPreview === null) return 0
+    return afterVolPreview - beforeVolPreview
   }
 
   const fetchSummary = async () => {
@@ -289,17 +294,40 @@ export default function FuelOperations() {
     }
   }
 
+  const fetchDipVolume = async (dipCm: string, setter: (v: number | null) => void) => {
+    if (!selectedTank || !dipCm || isNaN(parseFloat(dipCm))) {
+      setter(null)
+      return
+    }
+    try {
+      const res = await authFetch(
+        `${BASE}/tank-calibrations/${selectedTank}/convert?dip_cm=${parseFloat(dipCm)}`,
+        { headers: getHeaders() }
+      )
+      if (res.ok) {
+        const data = await res.json()
+        setter(data.volume_liters ?? null)
+      } else {
+        setter(null)
+      }
+    } catch {
+      setter(null)
+    }
+  }
+
   const addDeliveryToQueue = (e: React.FormEvent) => {
     e.preventDefault()
     const newDelivery: QueuedTankDelivery = {
       id: crypto.randomUUID(),
       date: deliveryForm.date,
       time: deliveryForm.time,
-      volume_before: deliveryForm.volume_before,
-      volume_after: deliveryForm.volume_after,
+      before_delivery_dip_cm: deliveryForm.before_delivery_dip_cm,
+      after_delivery_dip_cm: deliveryForm.after_delivery_dip_cm,
+      computed_before_vol: beforeVolPreview ?? undefined,
+      computed_after_vol: afterVolPreview ?? undefined,
       supplier: deliveryForm.supplier,
       invoice_number: deliveryForm.invoice_number,
-      expected_volume: deliveryForm.expected_volume,
+      invoice_volume_liters: deliveryForm.invoice_volume_liters,
       flowmeter_volume: deliveryForm.flowmeter_volume,
       temperature: deliveryForm.temperature,
       notes: deliveryForm.notes,
@@ -308,14 +336,16 @@ export default function FuelOperations() {
     setDeliveryQueue(prev => [...prev, newDelivery].sort((a, b) => a.time.localeCompare(b.time)))
     setError('')
     setSuccess('')
+    setBeforeVolPreview(null)
+    setAfterVolPreview(null)
     setDeliveryForm({
       ...deliveryForm,
       time: '',
-      volume_before: '',
-      volume_after: '',
+      before_delivery_dip_cm: '',
+      after_delivery_dip_cm: '',
       supplier: '',
       invoice_number: '',
-      expected_volume: '',
+      invoice_volume_liters: '',
       flowmeter_volume: '',
       temperature: '',
       notes: ''
@@ -344,11 +374,11 @@ export default function FuelOperations() {
           tank_id: selectedTank,
           date: delivery.date,
           time: delivery.time,
-          volume_before: parseFloat(delivery.volume_before),
-          volume_after: parseFloat(delivery.volume_after),
+          before_delivery_dip_cm: parseFloat(delivery.before_delivery_dip_cm),
+          after_delivery_dip_cm: parseFloat(delivery.after_delivery_dip_cm),
           supplier: delivery.supplier,
           invoice_number: delivery.invoice_number || null,
-          expected_volume: delivery.expected_volume ? parseFloat(delivery.expected_volume) : null,
+          invoice_volume_liters: delivery.invoice_volume_liters ? parseFloat(delivery.invoice_volume_liters) : null,
           flowmeter_volume: delivery.flowmeter_volume ? parseFloat(delivery.flowmeter_volume) : null,
           temperature: delivery.temperature ? parseFloat(delivery.temperature) : null,
           recorded_by: user.user_id,
@@ -948,27 +978,40 @@ export default function FuelOperations() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-content-secondary mb-1">Volume Before Delivery (L)</label>
+                        <label className="block text-sm font-medium text-content-secondary mb-1">Dip Before Delivery (cm)</label>
                         <input
                           type="number"
-                          step="0.01"
-                          value={deliveryForm.volume_before}
-                          onChange={(e) => setDeliveryForm({ ...deliveryForm, volume_before: e.target.value })}
+                          step="0.1"
+                          min="0"
+                          value={deliveryForm.before_delivery_dip_cm}
+                          onChange={(e) => setDeliveryForm({ ...deliveryForm, before_delivery_dip_cm: e.target.value })}
+                          onBlur={(e) => fetchDipVolume(e.target.value, setBeforeVolPreview)}
                           className="w-full px-3 py-2 border border-surface-border rounded-md"
                           required
                         />
+                        {beforeVolPreview !== null && (
+                          <p className="text-xs text-content-secondary mt-1">= {beforeVolPreview.toFixed(0)} L</p>
+                        )}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-content-secondary mb-1">Volume After Delivery (L)</label>
+                        <label className="block text-sm font-medium text-content-secondary mb-1">Dip After Delivery (cm)</label>
                         <input
                           type="number"
-                          step="0.01"
-                          value={deliveryForm.volume_after}
-                          onChange={(e) => setDeliveryForm({ ...deliveryForm, volume_after: e.target.value })}
+                          step="0.1"
+                          min="0"
+                          value={deliveryForm.after_delivery_dip_cm}
+                          onChange={(e) => setDeliveryForm({ ...deliveryForm, after_delivery_dip_cm: e.target.value })}
+                          onBlur={(e) => fetchDipVolume(e.target.value, setAfterVolPreview)}
                           className="w-full px-3 py-2 border border-surface-border rounded-md"
                           required
                         />
+                        {afterVolPreview !== null && (
+                          <p className="text-xs text-content-secondary mt-1">
+                            = {afterVolPreview.toFixed(0)} L
+                            {beforeVolPreview !== null && ` (delivery: ${(afterVolPreview - beforeVolPreview).toFixed(0)} L)`}
+                          </p>
+                        )}
                       </div>
 
                       <div>
@@ -993,14 +1036,15 @@ export default function FuelOperations() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-content-secondary mb-1">Expected Volume (L) - Optional</label>
+                        <label className="block text-sm font-medium text-content-secondary mb-1">Invoice Volume (L) - Optional</label>
                         <input
                           type="number"
                           step="0.01"
-                          value={deliveryForm.expected_volume}
-                          onChange={(e) => setDeliveryForm({ ...deliveryForm, expected_volume: e.target.value })}
+                          min="0"
+                          value={deliveryForm.invoice_volume_liters}
+                          onChange={(e) => setDeliveryForm({ ...deliveryForm, invoice_volume_liters: e.target.value })}
                           className="w-full px-3 py-2 border border-surface-border rounded-md"
-                          placeholder="What supplier claimed"
+                          placeholder="Volume on supplier invoice"
                         />
                       </div>
 
@@ -1039,14 +1083,14 @@ export default function FuelOperations() {
                       </div>
                     </div>
 
-                    {deliveryForm.volume_before && deliveryForm.volume_after && (
+                    {beforeVolPreview !== null && afterVolPreview !== null && (
                       <div className="bg-action-primary-light border border-action-primary rounded-md p-4 mb-4">
                         <p className="text-sm font-medium text-action-primary">
-                          Calculated Delivery: <span className="text-2xl">{calculateDeliveryPreview().toFixed(2)} L</span>
+                          Calculated Delivery: <span className="text-2xl">{calculateDeliveryPreview().toFixed(0)} L</span>
                         </p>
-                        {deliveryForm.expected_volume && (
+                        {deliveryForm.invoice_volume_liters && (
                           <p className="text-sm text-action-primary mt-1">
-                            Variance: {(calculateDeliveryPreview() - parseFloat(deliveryForm.expected_volume)).toFixed(2)} L
+                            Variance vs invoice: {(calculateDeliveryPreview() - parseFloat(deliveryForm.invoice_volume_liters)).toFixed(0)} L
                           </p>
                         )}
                       </div>
@@ -1096,7 +1140,9 @@ export default function FuelOperations() {
                             .filter(d => d.status === 'pending')
                             .sort((a, b) => a.time.localeCompare(b.time))
                             .map((delivery, idx, arr) => {
-                              const vol = parseFloat(delivery.volume_after) - parseFloat(delivery.volume_before)
+                              const bVol = delivery.computed_before_vol
+                              const aVol = delivery.computed_after_vol
+                              const vol = bVol != null && aVol != null ? aVol - bVol : null
                               return (
                                 <div key={delivery.id} className="relative pb-4">
                                   {idx < arr.length - 1 && (
@@ -1106,11 +1152,16 @@ export default function FuelOperations() {
                                   <div className="flex items-baseline gap-3">
                                     <span className="text-sm font-mono font-semibold text-action-primary">{delivery.time}</span>
                                     <span className="text-sm">
-                                      {parseFloat(delivery.volume_before).toLocaleString()} L
+                                      {delivery.before_delivery_dip_cm} cm
                                       <span className="mx-1 text-content-secondary">&rarr;</span>
-                                      {parseFloat(delivery.volume_after).toLocaleString()} L
+                                      {delivery.after_delivery_dip_cm} cm
+                                      {bVol != null && aVol != null && (
+                                        <span className="ml-1 text-content-secondary text-xs">
+                                          ({bVol.toFixed(0)} L &rarr; {aVol.toFixed(0)} L)
+                                        </span>
+                                      )}
                                     </span>
-                                    <span className="text-xs font-medium text-status-success">+{vol.toLocaleString()} L</span>
+                                    {vol != null && <span className="text-xs font-medium text-status-success">+{vol.toFixed(0)} L</span>}
                                   </div>
                                   {delivery.supplier && (
                                     <p className="text-xs text-content-secondary mt-0.5">{delivery.supplier}</p>
@@ -1122,23 +1173,23 @@ export default function FuelOperations() {
                       </div>
                     )}
 
-                    {/* Volume sequence warning */}
+                    {/* Dip sequence warning */}
                     {(() => {
                       const sorted = deliveryQueue
                         .filter(d => d.status === 'pending')
                         .sort((a, b) => a.time.localeCompare(b.time))
                       const warnings: string[] = []
                       for (let i = 1; i < sorted.length; i++) {
-                        const prevAfter = parseFloat(sorted[i - 1].volume_after)
-                        const currBefore = parseFloat(sorted[i].volume_before)
-                        if (currBefore > prevAfter) {
-                          warnings.push(`Delivery at ${sorted[i].time}: before volume (${currBefore.toLocaleString()} L) > previous after volume (${prevAfter.toLocaleString()} L)`)
+                        const prevAfterDip = parseFloat(sorted[i - 1].after_delivery_dip_cm)
+                        const currBeforeDip = parseFloat(sorted[i].before_delivery_dip_cm)
+                        if (!isNaN(prevAfterDip) && !isNaN(currBeforeDip) && currBeforeDip > prevAfterDip) {
+                          warnings.push(`Delivery at ${sorted[i].time}: before dip (${currBeforeDip} cm) > previous after dip (${prevAfterDip} cm)`)
                         }
                       }
                       if (warnings.length === 0) return null
                       return (
                         <div className="mb-4 p-3 bg-status-pending-light border border-status-warning rounded-md">
-                          <p className="text-xs font-medium text-status-warning mb-1">Volume sequence warnings:</p>
+                          <p className="text-xs font-medium text-status-warning mb-1">Dip sequence warnings:</p>
                           {warnings.map((w, i) => (
                             <p key={i} className="text-xs text-status-warning">{w}</p>
                           ))}
@@ -1149,7 +1200,9 @@ export default function FuelOperations() {
                     {/* Queue cards */}
                     <div className="space-y-2">
                       {deliveryQueue.map((delivery) => {
-                        const vol = parseFloat(delivery.volume_after) - parseFloat(delivery.volume_before)
+                        const vol = delivery.computed_before_vol != null && delivery.computed_after_vol != null
+                          ? delivery.computed_after_vol - delivery.computed_before_vol
+                          : null
                         return (
                           <div
                             key={delivery.id}
@@ -1169,8 +1222,8 @@ export default function FuelOperations() {
                                   {delivery.status === 'error' && <span className="text-status-error text-sm">&#10007;</span>}
                                 </div>
                                 <div className="flex gap-3 text-xs text-content-secondary">
-                                  <span>{parseFloat(delivery.volume_before).toLocaleString()} L &rarr; {parseFloat(delivery.volume_after).toLocaleString()} L</span>
-                                  <span className="font-medium text-status-success">+{vol.toLocaleString()} L</span>
+                                  <span>{delivery.before_delivery_dip_cm} cm &rarr; {delivery.after_delivery_dip_cm} cm</span>
+                                  {vol != null && <span className="font-medium text-status-success">+{vol.toFixed(0)} L</span>}
                                   {delivery.supplier && <span>| {delivery.supplier}</span>}
                                 </div>
                                 {delivery.status === 'submitted' && delivery.result && (
@@ -1236,10 +1289,16 @@ export default function FuelOperations() {
                           <div>
                             <p className="text-xs text-content-secondary">Before</p>
                             <p className="font-semibold">{delivery.volume_before.toLocaleString()} L</p>
+                            {delivery.before_delivery_dip_cm != null && (
+                              <p className="text-xs text-content-secondary">{delivery.before_delivery_dip_cm} cm</p>
+                            )}
                           </div>
                           <div>
                             <p className="text-xs text-content-secondary">After</p>
                             <p className="font-semibold">{delivery.volume_after.toLocaleString()} L</p>
+                            {delivery.after_delivery_dip_cm != null && (
+                              <p className="text-xs text-content-secondary">{delivery.after_delivery_dip_cm} cm</p>
+                            )}
                           </div>
                           <div>
                             <p className="text-xs text-content-secondary">Delivered</p>
@@ -1247,10 +1306,10 @@ export default function FuelOperations() {
                           </div>
                         </div>
 
-                        {delivery.expected_volume && (
+                        {(delivery.invoice_volume_liters ?? delivery.expected_volume) && (
                           <div className="bg-action-primary-light rounded p-2 mb-2">
                             <p className="text-xs text-action-primary">
-                              Expected: {delivery.expected_volume.toLocaleString()}L |
+                              Invoice: {(delivery.invoice_volume_liters ?? delivery.expected_volume)?.toLocaleString()}L |
                               Variance: {delivery.delivery_variance?.toFixed(2)}L ({delivery.variance_percent?.toFixed(2)}%)
                             </p>
                           </div>
@@ -1273,7 +1332,7 @@ export default function FuelOperations() {
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs mb-2">
                               <div>
                                 <p className="text-content-secondary">OMC Invoice</p>
-                                <p className="font-semibold">{delivery.expected_volume?.toLocaleString()} L</p>
+                                <p className="font-semibold">{(delivery.invoice_volume_liters ?? delivery.expected_volume)?.toLocaleString() ?? '—'} L</p>
                               </div>
                               <div>
                                 <p className="text-content-secondary">Flowmeter</p>

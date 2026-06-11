@@ -120,11 +120,13 @@ export default function DailyTankReading() {
     time: string;
     supplier: string;
     invoice_number: string;
-    fuel_type: string;  // NEW: diesel or petrol
+    fuel_type: string;
     before_volume: string;
     after_volume: string;
     volume_delivered: number;
     flowmeter_volume: string;
+    before_delivery_dip_cm: number | null;
+    after_delivery_dip_cm: number | null;
   }>>([])
   const [availableDeliveries, setAvailableDeliveries] = useState<any[]>([])
 
@@ -402,6 +404,8 @@ export default function DailyTankReading() {
         after_volume: d.after_volume?.toString() || '',
         volume_delivered: d.volume_delivered || 0,
         flowmeter_volume: d.flowmeter_volume?.toString() || '',
+        before_delivery_dip_cm: d.before_delivery_dip_cm ?? null,
+        after_delivery_dip_cm: d.after_delivery_dip_cm ?? null,
       }))
       setDeliveries(savedDeliveries)
       setExistingReadingId(data.reading_id)
@@ -609,14 +613,16 @@ export default function DailyTankReading() {
 
     const newDelivery = {
       id: `temp-${Date.now()}`,
-      time: fullTimestamp,  // AUTO-POPULATED with full timestamp DD-MM-YYYY HH:MM
+      time: fullTimestamp,
       supplier: '',
       invoice_number: '',
-      fuel_type: fuelType,  // AUTO-POPULATED from selected tank
-      before_volume: estimatedTankLevel > 0 ? estimatedTankLevel.toString() : '',  // AUTO-POPULATED
+      fuel_type: fuelType,
+      before_volume: estimatedTankLevel > 0 ? estimatedTankLevel.toString() : '',
       after_volume: '',
       volume_delivered: 0,
       flowmeter_volume: '',
+      before_delivery_dip_cm: null,
+      after_delivery_dip_cm: null,
     }
     setDeliveries([...deliveries, newDelivery])
   }
@@ -677,6 +683,8 @@ export default function DailyTankReading() {
         after_volume: standalone.volume_after.toString(),
         volume_delivered: standalone.actual_volume_delivered,
         flowmeter_volume: standalone.flowmeter_volume?.toString() || '',
+        before_delivery_dip_cm: standalone.before_delivery_dip_cm ?? null,
+        after_delivery_dip_cm: standalone.after_delivery_dip_cm ?? null,
       }
       setDeliveries([...deliveries, linked])
       setAvailableDeliveries(availableDeliveries.filter(d => d.delivery_id !== deliveryId))
@@ -2367,10 +2375,26 @@ export default function DailyTankReading() {
                             />
                             {delivery.before_volume && delivery.after_volume && (
                               <p className="text-xs mt-1" style={{ color: theme.accent }}>
-                                ✓ Calculated: {(parseFloat(delivery.after_volume) - parseFloat(delivery.before_volume)).toFixed(2)}L
+                                Calculated: {(parseFloat(delivery.after_volume) - parseFloat(delivery.before_volume)).toFixed(2)}L
                               </p>
                             )}
                           </div>
+
+                          {(delivery.before_delivery_dip_cm != null || delivery.after_delivery_dip_cm != null) && (
+                            <div className="sm:col-span-2">
+                              <p className="text-xs font-medium mb-1 opacity-75" style={{ color: theme.accent }}>
+                                Dip Readings (from Fuel Operations)
+                              </p>
+                              <div className="flex gap-6 text-xs" style={{ color: theme.textSecondary }}>
+                                {delivery.before_delivery_dip_cm != null && (
+                                  <span>Before: {delivery.before_delivery_dip_cm} cm</span>
+                                )}
+                                {delivery.after_delivery_dip_cm != null && (
+                                  <span>After: {delivery.after_delivery_dip_cm} cm</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )})}

@@ -368,9 +368,11 @@ class DeliveryReference(BaseModel):
     delivery_time: str  # HH:MM format
     supplier: str
     invoice_number: Optional[str] = None
-    before_volume: float  # Tank level before this specific delivery
-    after_volume: float   # Tank level after this specific delivery
+    before_volume: float  # Tank level before this specific delivery (derived from dip)
+    after_volume: float   # Tank level after this specific delivery (derived from dip)
     flowmeter_volume: Optional[float] = None  # Gauge reading from delivery pipe
+    before_delivery_dip_cm: Optional[float] = None  # Physical dip before delivery
+    after_delivery_dip_cm: Optional[float] = None   # Physical dip after delivery
 
 # LPG Products
 class LPGSale(BaseModel):
@@ -593,14 +595,14 @@ class TankDeliveryInput(BaseModel):
     date: str  # YYYY-MM-DD
     time: str  # HH:MM
 
-    # Volume readings
-    volume_before: float  # Tank level before delivery
-    volume_after: float   # Tank level after delivery
+    # Dip stick readings — system derives volumes via calibration chart
+    before_delivery_dip_cm: float  # Physical dip before delivery
+    after_delivery_dip_cm: float   # Physical dip after delivery
 
     # Delivery details
     supplier: str
     invoice_number: Optional[str] = None
-    expected_volume: Optional[float] = None  # What supplier said they delivered
+    invoice_volume_liters: Optional[float] = None  # Volume stated on supplier invoice
     flowmeter_volume: Optional[float] = None  # Gauge reading from delivery pipe
     temperature: Optional[float] = None  # Temperature at delivery
 
@@ -616,12 +618,17 @@ class TankDeliveryOutput(BaseModel):
     date: str
     time: str
 
-    # Volumes
+    # Dip inputs (raw physical measurements)
+    before_delivery_dip_cm: Optional[float] = None
+    after_delivery_dip_cm: Optional[float] = None
+
+    # Volumes (derived from dip via calibration chart)
     volume_before: float
     volume_after: float
     actual_volume_delivered: float  # Calculated: after - before
-    expected_volume: Optional[float] = None
-    delivery_variance: Optional[float] = None  # actual - expected
+    invoice_volume_liters: Optional[float] = None  # Volume stated on supplier invoice
+    expected_volume: Optional[float] = None  # Alias for invoice_volume_liters (backward compat)
+    delivery_variance: Optional[float] = None  # actual - invoice
     variance_percent: Optional[float] = None
 
     # Details

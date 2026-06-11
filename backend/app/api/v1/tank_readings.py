@@ -534,12 +534,15 @@ def submit_tank_reading(
                     "fuel_type": tank_config.get("fuel_type", ""),
                     "date": reading_input.date,
                     "time": d.delivery_time,
+                    "before_delivery_dip_cm": d.before_delivery_dip_cm,
+                    "after_delivery_dip_cm": d.after_delivery_dip_cm,
                     "volume_before": d.before_volume,
                     "volume_after": d.after_volume,
                     "actual_volume_delivered": d.volume_delivered,
                     "supplier": d.supplier,
                     "invoice_number": d.invoice_number,
                     "flowmeter_volume": d.flowmeter_volume,
+                    "invoice_volume_liters": None,
                     "expected_volume": None,
                     "delivery_variance": None,
                     "variance_percent": None,
@@ -560,6 +563,8 @@ def submit_tank_reading(
                     before_volume=d.before_volume,
                     after_volume=d.after_volume,
                     flowmeter_volume=d.flowmeter_volume,
+                    before_delivery_dip_cm=d.before_delivery_dip_cm,
+                    after_delivery_dip_cm=d.after_delivery_dip_cm,
                 ))
             else:
                 resolved.append(d)
@@ -1307,45 +1312,68 @@ def record_delivery(
 
     tank_config = tanks[delivery_input.tank_id]
 
-    # Validate delivery volumes
-    if delivery_input.volume_after <= delivery_input.volume_before:
+    # Derive volumes from dip readings via calibration chart
+    try:
+        volume_before = dip_to_volume(delivery_input.tank_id, delivery_input.before_delivery_dip_cm)
+        volume_after  = dip_to_volume(delivery_input.tank_id, delivery_input.after_delivery_dip_cm)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    # Hard rejects
+    if delivery_input.after_delivery_dip_cm <= delivery_input.before_delivery_dip_cm:
         raise HTTPException(
             status_code=400,
-            detail="After delivery volume must be greater than before delivery volume"
+            detail="After-delivery dip must be greater than before-delivery dip"
+        )
+    if volume_after > tank_config['capacity']:
+        raise HTTPException(
+            status_code=400,
+            detail=f"After-delivery volume ({volume_after:.0f}L) exceeds tank capacity ({tank_config['capacity']:.0f}L)"
         )
 
-    if delivery_input.volume_after > tank_config['capacity']:
-        raise HTTPException(
-            status_code=400,
-            detail=f"After delivery volume ({delivery_input.volume_after}L) exceeds tank capacity ({tank_config['capacity']}L)"
-        )
+    # Sequence guard: before-dip volume must not be lower than last delivery's after-volume
+    existing = [v for v in tank_deliveries_db.values()
+                if v.get('tank_id') == delivery_input.tank_id and v.get('date') == delivery_input.date]
+    if existing:
+        last = max(existing, key=lambda x: x.get('time', ''))
+        last_after_vol = last.get('volume_after', 0) or 0
+        tolerance = max(last_after_vol * 0.005, 10)  # 0.5% or 10L floor
+        if volume_before < last_after_vol - tolerance:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Before-delivery dip converts to {volume_before:.0f}L, which is lower than the "
+                    f"last delivery's after-dip ({last_after_vol:.0f}L). "
+                    f"Check dip reading or delivery order."
+                )
+            )
 
     # Calculate actual delivery
-    actual_volume = delivery_input.volume_after - delivery_input.volume_before
+    actual_volume = volume_after - volume_before
 
-    # Calculate variance if expected volume provided
+    # Calculate variance if invoice volume provided
     delivery_variance = None
     variance_percent = None
     validation_status = "PASS"
     validation_message = "Delivery recorded successfully"
 
-    if delivery_input.expected_volume:
-        delivery_variance = actual_volume - delivery_input.expected_volume
-        variance_percent = (abs(delivery_variance) / delivery_input.expected_volume) * 100
+    if delivery_input.invoice_volume_liters:
+        delivery_variance = actual_volume - delivery_input.invoice_volume_liters
+        variance_percent = (abs(delivery_variance) / delivery_input.invoice_volume_liters) * 100
 
-        if abs(variance_percent) > 2.0:  # More than 2% variance
-            validation_status = "WARNING"
-            if delivery_variance > 0:
-                validation_message = f"Received {delivery_variance:.2f}L MORE than expected ({variance_percent:.2f}% variance)"
-            else:
-                validation_message = f"Received {abs(delivery_variance):.2f}L LESS than expected ({variance_percent:.2f}% variance)"
-        elif abs(variance_percent) > 5.0:  # More than 5% variance
+        if abs(variance_percent) > 5.0:
             validation_status = "FAIL"
             validation_message = f"CRITICAL: Delivery variance of {variance_percent:.2f}% - Investigation required"
+        elif abs(variance_percent) > 2.0:
+            validation_status = "WARNING"
+            if delivery_variance > 0:
+                validation_message = f"Received {delivery_variance:.2f}L MORE than invoice ({variance_percent:.2f}% variance)"
+            else:
+                validation_message = f"Received {abs(delivery_variance):.2f}L LESS than invoice ({variance_percent:.2f}% variance)"
 
     # Compute delivery three-way reconciliation (Invoice vs Flowmeter vs Tank Dip)
     recon = compute_delivery_recon(
-        expected_volume=delivery_input.expected_volume,
+        expected_volume=delivery_input.invoice_volume_liters,
         flowmeter_volume=delivery_input.flowmeter_volume,
         tank_dip_change=actual_volume,
     )
@@ -1360,10 +1388,13 @@ def record_delivery(
         fuel_type=tank_config['fuel_type'],
         date=delivery_input.date,
         time=delivery_input.time,
-        volume_before=delivery_input.volume_before,
-        volume_after=delivery_input.volume_after,
+        before_delivery_dip_cm=delivery_input.before_delivery_dip_cm,
+        after_delivery_dip_cm=delivery_input.after_delivery_dip_cm,
+        volume_before=volume_before,
+        volume_after=volume_after,
         actual_volume_delivered=actual_volume,
-        expected_volume=delivery_input.expected_volume,
+        invoice_volume_liters=delivery_input.invoice_volume_liters,
+        expected_volume=delivery_input.invoice_volume_liters,  # recon compat
         delivery_variance=delivery_variance,
         variance_percent=variance_percent,
         supplier=delivery_input.supplier,
@@ -1373,22 +1404,21 @@ def record_delivery(
         validation_status=validation_status,
         validation_message=validation_message,
         **recon,
-        linked_reading_id=None,  # Initially unlinked, available for auto-linking
+        linked_reading_id=None,
         recorded_by=delivery_input.recorded_by,
         created_at=datetime.now().isoformat(),
         notes=delivery_input.notes
     )
 
-    # Store in database with linked_reading_id field
+    # Store in database
     delivery_dict = output.dict()
-    delivery_dict['linked_reading_id'] = None  # Explicitly set for auto-linking
     tank_deliveries_db[delivery_id] = delivery_dict
-    save_tank_deliveries(tank_deliveries_db, station_id)  # Persist to file
+    save_tank_deliveries(tank_deliveries_db, station_id)
 
     # Update tank current_level to reflect the delivery
     tanks_data = storage.get('tanks', {})
     if delivery_input.tank_id in tanks_data:
-        tanks_data[delivery_input.tank_id]["current_level"] = delivery_input.volume_after
+        tanks_data[delivery_input.tank_id]["current_level"] = volume_after
         tanks_data[delivery_input.tank_id]["last_updated"] = datetime.now().isoformat()
 
     return output
