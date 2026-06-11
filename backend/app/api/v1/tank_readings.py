@@ -521,8 +521,49 @@ def submit_tank_reading(
     deliveries = []
 
     # OPTION 1: Deliveries provided inline (new format from UI)
+    # Write-through: any delivery without a delivery_id gets a canonical DEL-* record in
+    # tank_deliveries.json so that store is always the single source of truth.
     if reading_input.deliveries and len(reading_input.deliveries) > 0:
-        deliveries = reading_input.deliveries
+        resolved = []
+        for d in reading_input.deliveries:
+            if not d.delivery_id:
+                new_del_id = f"DEL-{reading_input.tank_id}-{reading_input.date}-{uuid.uuid4().hex[:8]}"
+                tank_deliveries_db[new_del_id] = {
+                    "delivery_id": new_del_id,
+                    "tank_id": reading_input.tank_id,
+                    "fuel_type": tank_config.get("fuel_type", ""),
+                    "date": reading_input.date,
+                    "time": d.delivery_time,
+                    "volume_before": d.before_volume,
+                    "volume_after": d.after_volume,
+                    "actual_volume_delivered": d.volume_delivered,
+                    "supplier": d.supplier,
+                    "invoice_number": d.invoice_number,
+                    "flowmeter_volume": d.flowmeter_volume,
+                    "expected_volume": None,
+                    "delivery_variance": None,
+                    "variance_percent": None,
+                    "temperature": None,
+                    "validation_status": "PASS",
+                    "validation_message": "Recorded via daily reading submission",
+                    "linked_reading_id": None,
+                    "recorded_by": reading_input.recorded_by,
+                    "created_at": datetime.now().isoformat(),
+                    "notes": reading_input.notes,
+                }
+                resolved.append(DeliveryReference(
+                    delivery_id=new_del_id,
+                    volume_delivered=d.volume_delivered,
+                    delivery_time=d.delivery_time,
+                    supplier=d.supplier,
+                    invoice_number=d.invoice_number,
+                    before_volume=d.before_volume,
+                    after_volume=d.after_volume,
+                    flowmeter_volume=d.flowmeter_volume,
+                ))
+            else:
+                resolved.append(d)
+        deliveries = resolved
 
     # OPTION 2: Legacy single delivery (backward compatibility)
     elif reading_input.delivery_occurred and reading_input.after_offload_volume:
@@ -1251,6 +1292,10 @@ def record_delivery(
 
     This creates a delivery record and validates the delivery volume.
     """
+    role = ctx.get("role", "")
+    if role not in ("manager", "owner"):
+        raise HTTPException(status_code=403, detail="Only managers and owners can record fuel deliveries.")
+
     station_id = ctx["station_id"]
     storage = ctx["storage"]
     tank_deliveries_db = load_tank_deliveries(station_id)
@@ -1354,19 +1399,16 @@ def get_tank_deliveries(
     tank_id: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    date: Optional[str] = None,           # NEW: Specific date filter
-    shift_type: Optional[str] = None,     # NEW: Shift filter ("Day" or "Night")
-    unlinked_only: bool = False,          # NEW: Only unlinked deliveries
+    date: Optional[str] = None,
+    shift_type: Optional[str] = None,
+    unlinked_only: bool = False,
     ctx: dict = Depends(get_station_context)
 ):
-    """
-    Get delivery records for a specific tank with advanced filtering.
+    """Get delivery records for a specific tank with optional filtering."""
+    role = ctx.get("role", "")
+    if role not in ("manager", "owner"):
+        raise HTTPException(status_code=403, detail="Only managers and owners can view fuel delivery records.")
 
-    NEW Query Parameters:
-    - date: Filter to specific date (YYYY-MM-DD)
-    - shift_type: Filter to "Day" or "Night" shift
-    - unlinked_only: If true, only return deliveries not linked to readings
-    """
     tank_deliveries_db = load_tank_deliveries(ctx["station_id"])
 
     # Filter deliveries by tank_id

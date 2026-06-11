@@ -76,6 +76,7 @@ export default function FuelOperations() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'levels' | 'readings' | 'deliveries' | 'summary'>('levels')
+  const canManageDeliveries = user?.role === 'manager' || user?.role === 'owner'
   const { tanks: availableTanks } = useTanks()
   const [selectedTank, setSelectedTank] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -486,6 +487,7 @@ export default function FuelOperations() {
               >
                 Tank Levels
               </button>
+              {canManageDeliveries && (
               <button
                 onClick={() => setActiveTab('deliveries')}
                 className={`px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap flex-shrink-0 ${
@@ -496,6 +498,7 @@ export default function FuelOperations() {
               >
                 Deliveries
               </button>
+              )}
               <button
                 onClick={() => setActiveTab('readings')}
                 className={`px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap flex-shrink-0 ${
@@ -905,7 +908,7 @@ export default function FuelOperations() {
             )}
 
             {/* ===== Deliveries Tab ===== */}
-            {activeTab === 'deliveries' && (
+            {activeTab === 'deliveries' && canManageDeliveries && (
               <div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                   <h2 className="text-xl font-semibold">Fuel Deliveries</h2>

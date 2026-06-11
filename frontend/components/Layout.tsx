@@ -410,6 +410,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       children: [
         { path: '/tank-dips', label: 'Tank Dips', roles: ['manager'] },
         { path: '/daily-tank-reading', label: 'Daily Tank Reading', roles: ['manager'] },
+        { path: '/fuel-operations', label: 'Fuel Operations', roles: ['manager'] },
         { path: '/stores', label: 'Stores / Stock', roles: ['manager'] },
         { path: '/stock-takes', label: 'Stock Takes', roles: ['manager'] },
         { path: '/inventory', label: 'Tank Levels', roles: ['manager'] },

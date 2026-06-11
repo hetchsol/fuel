@@ -142,6 +142,7 @@ export default function DailyTankReading() {
 
   // Non-owners can view existing records but cannot edit or resubmit them.
   const isReadOnly = !!existingReadingId && user?.role !== 'owner'
+  const canManageDeliveries = user?.role === 'manager' || user?.role === 'owner'
 
   // Pull from Shift Dip Readings state
   const [shiftDipPulled, setShiftDipPulled] = useState(false)
@@ -2044,8 +2045,8 @@ export default function DailyTankReading() {
                 </div>
               )}
 
-              {/* NEW: Multiple Deliveries Section */}
-              <div className="rounded-lg p-6 mb-6 transition-colors duration-300" style={{
+              {/* Deliveries — manager/owner only */}
+              {canManageDeliveries && <div className="rounded-lg p-6 mb-6 transition-colors duration-300" style={{
                 backgroundColor: theme.accentLight,
                 borderColor: theme.accent,
                 borderWidth: '2px'
@@ -2597,11 +2598,11 @@ export default function DailyTankReading() {
                       No deliveries added yet
                     </p>
                     <p className="text-xs opacity-60" style={{ color: theme.textSecondary }}>
-                      Click "Add Delivery" to record a fuel delivery, or link an existing standalone delivery above
+                      Record deliveries in Fuel Operations, then link them here
                     </p>
                   </div>
                 )}
-              </div>
+              </div>}
 
               {/* Customer Allocation Section (DIESEL ONLY - Columns AR-BB) */}
               {isDiesel && customers.length > 0 && (
