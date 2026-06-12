@@ -105,8 +105,8 @@ def dip_to_volume(tank_id: str, dip_cm: float) -> float:
         if dip_cm < sorted_dips[0]:
             return 0.0
         else:
-            # Beyond maximum - use capacity
-            return float(config["capacity"])
+            # Beyond chart max — return the chart's maximum recorded volume
+            return float(chart[sorted_dips[-1]])
 
     # Linear interpolation
     lower_volume = chart[lower_dip]
