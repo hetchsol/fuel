@@ -18,6 +18,8 @@ interface DipRow {
   closing_dip_cm: string
   opening_volume: number | null
   closing_volume: number | null
+  opening_vol_error: boolean
+  closing_vol_error: boolean
   saving: boolean
   saved: boolean
 }
@@ -52,32 +54,40 @@ export default function TankDips() {
   }, [])
 
   const fetchExisting = useCallback(async (tankList: Tank[], d: string, st: string) => {
-    const res = await authFetch(
-      `${BASE}/tank-readings/dips?date=${d}&shift_type=${st}`,
-      { headers: getHeaders() }
-    )
-    const existing: Record<string, any> = {}
-    if (res.ok) {
-      const data: any[] = await res.json()
-      data.forEach(r => { existing[r.tank_id] = r })
-    }
-    setRows(tankList.map(t => {
-      const e = existing[t.tank_id]
-      return {
-        tank_id: t.tank_id,
-        opening_dip_cm: e?.opening_dip_cm != null ? String(e.opening_dip_cm) : '',
-        closing_dip_cm: e?.closing_dip_cm != null ? String(e.closing_dip_cm) : '',
-        opening_volume: e?.opening_volume ?? null,
-        closing_volume: e?.closing_volume ?? null,
-        saving: false,
-        saved: !!(e?.opening_dip_cm != null || e?.closing_dip_cm != null),
+    try {
+      const res = await authFetch(
+        `${BASE}/tank-readings/dips?date=${d}&shift_type=${st}`,
+        { headers: getHeaders() }
+      )
+      const existing: Record<string, any> = {}
+      if (res.ok) {
+        const data: any[] = await res.json()
+        data.forEach(r => { existing[r.tank_id] = r })
       }
-    }))
-    setLoading(false)
+      setRows(tankList.map(t => {
+        const e = existing[t.tank_id]
+        return {
+          tank_id: t.tank_id,
+          opening_dip_cm: e?.opening_dip_cm != null ? String(e.opening_dip_cm) : '',
+          closing_dip_cm: e?.closing_dip_cm != null ? String(e.closing_dip_cm) : '',
+          opening_volume: e?.opening_volume ?? null,
+          closing_volume: e?.closing_volume ?? null,
+          opening_vol_error: false,
+          closing_vol_error: false,
+          saving: false,
+          saved: !!(e?.opening_dip_cm != null || e?.closing_dip_cm != null),
+        }
+      }))
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
-    fetchTanks().then(tl => { if (tl.length) fetchExisting(tl, date, shiftType) })
+    fetchTanks().then(tl => {
+      if (tl.length) fetchExisting(tl, date, shiftType)
+      else setLoading(false)
+    })
   }, [])
 
   useEffect(() => {
@@ -87,25 +97,32 @@ export default function TankDips() {
     }
   }, [date, shiftType])
 
-  const convertDip = async (tankId: string, dip: string): Promise<number | null> => {
+  const convertDip = async (tankId: string, dip: string): Promise<{ volume: number | null; error: boolean }> => {
     const val = parseFloat(dip)
-    if (isNaN(val) || val <= 0) return null
-    const res = await authFetch(
-      `${BASE}/tank-calibrations/${tankId}/convert?dip_cm=${val}`,
-      { headers: getHeaders() }
-    )
-    if (res.ok) {
-      const data = await res.json()
-      return data.volume_liters ?? null
+    if (isNaN(val) || val <= 0) return { volume: null, error: false }
+    try {
+      const res = await authFetch(
+        `${BASE}/tank-calibrations/${tankId}/convert?dip_cm=${val}`,
+        { headers: getHeaders() }
+      )
+      if (res.ok) {
+        const data = await res.json()
+        return { volume: data.volume_liters ?? null, error: false }
+      }
+      return { volume: null, error: true }
+    } catch {
+      return { volume: null, error: true }
     }
-    return null
   }
 
   const handleBlur = async (idx: number, field: 'opening_dip_cm' | 'closing_dip_cm') => {
     const row = rows[idx]
-    const vol = await convertDip(row.tank_id, row[field])
+    const dipValue = row[field]
+    if (!dipValue) return
+    const { volume, error } = await convertDip(row.tank_id, dipValue)
     const volField = field === 'opening_dip_cm' ? 'opening_volume' : 'closing_volume'
-    setRows(prev => prev.map((r, i) => i === idx ? { ...r, [volField]: vol } : r))
+    const errField = field === 'opening_dip_cm' ? 'opening_vol_error' : 'closing_vol_error'
+    setRows(prev => prev.map((r, i) => i === idx ? { ...r, [volField]: volume, [errField]: error } : r))
   }
 
   const handleSave = async (idx: number) => {
@@ -235,8 +252,12 @@ export default function TankDips() {
                       type="text"
                       readOnly
                       value={row.opening_volume != null ? Math.round(row.opening_volume).toLocaleString() : ''}
-                      placeholder="auto"
-                      className="w-full px-3 py-2 border border-surface-border rounded-input text-sm bg-surface-bg text-content-secondary cursor-default"
+                      placeholder={row.opening_vol_error ? 'no calibration' : 'auto'}
+                      className={`w-full px-3 py-2 border rounded-input text-sm bg-surface-bg cursor-default ${
+                        row.opening_vol_error
+                          ? 'border-status-warning text-status-warning'
+                          : 'border-surface-border text-content-secondary'
+                      }`}
                     />
                   </div>
 
@@ -262,8 +283,12 @@ export default function TankDips() {
                       type="text"
                       readOnly
                       value={row.closing_volume != null ? Math.round(row.closing_volume).toLocaleString() : ''}
-                      placeholder="auto"
-                      className="w-full px-3 py-2 border border-surface-border rounded-input text-sm bg-surface-bg text-content-secondary cursor-default"
+                      placeholder={row.closing_vol_error ? 'no calibration' : 'auto'}
+                      className={`w-full px-3 py-2 border rounded-input text-sm bg-surface-bg cursor-default ${
+                        row.closing_vol_error
+                          ? 'border-status-warning text-status-warning'
+                          : 'border-surface-border text-content-secondary'
+                      }`}
                     />
                   </div>
                 </div>
