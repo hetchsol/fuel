@@ -30,34 +30,16 @@ def register_tank_calibration(tank_id: str, chart_data: Dict[float, float], capa
     logger.info(f"Registered dynamic calibration for tank {tank_id}")
 
 
-TANK_CALIBRATION: dict = {}  # All calibrations come from uploaded spreadsheets via Admin > Settings > Tank Calibration
-
-
-def _resolve_calibration(tank_id: str, fuel_type: str = None) -> dict:
+def _resolve_calibration(tank_id: str) -> dict:
     """
-    Resolve calibration config for a tank_id.
-    Priority: hardcoded TANK_CALIBRATION → dynamic registry.
-
-    Fuel-type and string-inferred fallbacks are intentionally removed: silently
-    using another tank's chart produced wrong volumes when two tanks of the same
-    fuel type had different capacities (e.g. two diesel tanks at 30,000 L and
-    14,000 L). Every tank must have its own uploaded chart.
-
-    Raises ValueError with a clear message if no chart is found, so callers
-    can surface a readable 400 to the user.
+    Resolve calibration config for a tank_id from the in-memory registry.
+    Raises ValueError if not loaded — callers must call ensure_calibration_loaded first.
     """
-    # 1. Hardcoded charts (legacy tanks that shipped with built-in charts)
-    if tank_id in TANK_CALIBRATION:
-        return TANK_CALIBRATION[tank_id]
-
-    # 2. Dynamic registry (uploaded via /tank-calibrations/upload or registered
-    #    at startup from tank_calibrations.json)
     if tank_id in _dynamic_calibrations:
         return _dynamic_calibrations[tank_id]
-
     raise ValueError(
         f"No calibration chart found for tank '{tank_id}'. "
-        f"Upload a chart via Infrastructure > Calibration before recording dips."
+        f"Upload a chart via Admin > Settings > Tank Calibration."
     )
 
 

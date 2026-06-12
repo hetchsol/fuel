@@ -264,19 +264,40 @@ def get_calibration(tank_id: str, ctx: dict = Depends(get_station_context)):
 @router.get("/{tank_id}/convert")
 def convert_dip(tank_id: str, dip_cm: float, ctx: dict = Depends(get_station_context)):
     """Convert a dip reading (cm) to volume (L) using the tank's calibration chart.
-    Used by the frontend to live-populate closing volume when a closing dip is entered."""
+    Always reads from DB — never relies on in-memory cache — to guarantee accuracy."""
     station_id = ctx["station_id"]
     storage = ctx["storage"]
     tanks = storage.get("tanks", {})
     if tank_id not in tanks:
         raise HTTPException(status_code=404, detail=f"Tank {tank_id} not found")
-    ensure_calibration_loaded(tank_id, station_id)
-    from ...services.dip_conversion import dip_to_volume
-    try:
-        volume = dip_to_volume(tank_id, dip_cm)
-        return {"tank_id": tank_id, "dip_cm": dip_cm, "volume_liters": volume}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+
+    calibrations = _load_calibrations(station_id)
+    cal = calibrations.get(tank_id)
+    if not cal or not cal.get("chart"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"No calibration chart uploaded for {tank_id}. Go to Admin > Settings > Tank Calibration."
+        )
+
+    chart = {float(k): float(v) for k, v in cal["chart"].items()}
+
+    if dip_cm <= 0:
+        return {"tank_id": tank_id, "dip_cm": dip_cm, "volume_liters": 0.0}
+
+    sorted_dips = sorted(chart)
+
+    if dip_cm in chart:
+        return {"tank_id": tank_id, "dip_cm": dip_cm, "volume_liters": round(chart[dip_cm], 2)}
+
+    for i in range(len(sorted_dips) - 1):
+        lo, hi = sorted_dips[i], sorted_dips[i + 1]
+        if lo <= dip_cm <= hi:
+            ratio = (dip_cm - lo) / (hi - lo)
+            vol = chart[lo] + ratio * (chart[hi] - chart[lo])
+            return {"tank_id": tank_id, "dip_cm": dip_cm, "volume_liters": round(vol, 2)}
+
+    # Beyond chart max — return the last known volume
+    return {"tank_id": tank_id, "dip_cm": dip_cm, "volume_liters": round(chart[sorted_dips[-1]], 2)}
 
 
 @router.delete("/{tank_id}")
