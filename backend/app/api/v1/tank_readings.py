@@ -40,6 +40,7 @@ from ...services.reconciliation_service import (
 )
 from ...api.v1.auth import get_current_user
 from .auth import get_station_context
+from .tank_calibrations import ensure_calibration_loaded
 from ...database.station_files import load_station_json, save_station_json
 from ...services.notification_service import create_notification
 
@@ -91,6 +92,7 @@ def record_tank_dips(
 
     station_id = ctx["station_id"]
     storage = ctx["storage"]
+    ensure_calibration_loaded(tank_id, station_id)
     tank_readings_db = load_tank_readings(station_id)
 
     # Find existing record for this tank/date/shift
@@ -422,6 +424,7 @@ def submit_tank_reading(
     station_id = ctx["station_id"]
     storage = ctx["storage"]
     role = ctx.get("role", "")
+    ensure_calibration_loaded(reading_input.tank_id, station_id)
     tank_readings_db = load_tank_readings(station_id)
     tank_deliveries_db = load_tank_deliveries(station_id)
 
@@ -1311,6 +1314,7 @@ def record_delivery(
         raise HTTPException(status_code=404, detail=f"Tank {delivery_input.tank_id} not found")
 
     tank_config = tanks[delivery_input.tank_id]
+    ensure_calibration_loaded(delivery_input.tank_id, station_id)
 
     # Derive volumes from dip readings via calibration chart
     try:

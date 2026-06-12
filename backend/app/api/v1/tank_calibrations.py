@@ -265,10 +265,12 @@ def get_calibration(tank_id: str, ctx: dict = Depends(get_station_context)):
 def convert_dip(tank_id: str, dip_cm: float, ctx: dict = Depends(get_station_context)):
     """Convert a dip reading (cm) to volume (L) using the tank's calibration chart.
     Used by the frontend to live-populate closing volume when a closing dip is entered."""
+    station_id = ctx["station_id"]
     storage = ctx["storage"]
     tanks = storage.get("tanks", {})
     if tank_id not in tanks:
         raise HTTPException(status_code=404, detail=f"Tank {tank_id} not found")
+    ensure_calibration_loaded(tank_id, station_id)
     from ...services.dip_conversion import dip_to_volume
     try:
         volume = dip_to_volume(tank_id, dip_cm)
@@ -304,14 +306,35 @@ def clear_calibration(tank_id: str, ctx: dict = Depends(require_owner)):
 
 
 def load_saved_calibrations(station_id: str):
-    """Load saved calibrations from JSON and register them. Called at startup."""
+    """Warm the in-memory cache at startup. Non-fatal — lazy-load handles any miss."""
     try:
         calibrations = _load_calibrations(station_id)
+        if not calibrations:
+            logger.warning(f"[calibration] No charts in DB for station {station_id}")
+            return
         for tank_id, cal_data in calibrations.items():
-            chart = cal_data.get("chart", {})
-            float_chart = {float(k): v for k, v in chart.items()}
+            float_chart = {float(k): v for k, v in cal_data.get("chart", {}).items()}
             if float_chart:
                 register_tank_calibration(tank_id, float_chart)
-                logger.info(f"[calibration] Loaded {len(float_chart)} points for {tank_id} at station {station_id}")
+                logger.info(f"[calibration] Loaded {len(float_chart)} points for {tank_id}")
+            else:
+                logger.warning(f"[calibration] Empty chart for {tank_id} at station {station_id}")
     except Exception as e:
-        logger.warning(f"[calibration] Failed to load calibrations for station {station_id}: {e}")
+        logger.error(f"[calibration] Startup load failed for {station_id}: {e}", exc_info=True)
+
+
+def ensure_calibration_loaded(tank_id: str, station_id: str) -> bool:
+    """Ensure tank calibration is in memory, loading from DB (Source 2) if not cached.
+    Returns True if calibration is available, False if not found anywhere."""
+    if tank_id in _dynamic_calibrations:
+        return True
+    try:
+        calibrations = _load_calibrations(station_id)
+        float_chart = {float(k): v for k, v in calibrations.get(tank_id, {}).get("chart", {}).items()}
+        if float_chart:
+            register_tank_calibration(tank_id, float_chart)
+            logger.info(f"[calibration] Lazy-loaded {len(float_chart)} points for {tank_id}")
+            return True
+    except Exception as e:
+        logger.error(f"[calibration] Lazy-load failed for {tank_id}: {e}", exc_info=True)
+    return False
