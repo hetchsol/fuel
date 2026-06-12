@@ -271,7 +271,7 @@ export default function TankDips() {
                     <input
                       type="text"
                       readOnly
-                      value={row.opening_volume != null ? Math.round(row.opening_volume).toLocaleString() : ''}
+                      value={row.opening_volume != null ? row.opening_volume.toLocaleString(undefined, { maximumFractionDigits: 1 }) : ''}
                       placeholder={row.opening_vol_error ? 'no calibration' : 'auto'}
                       className={`w-full px-3 py-2 border rounded-input text-sm bg-surface-bg cursor-default ${
                         row.opening_vol_error
@@ -302,7 +302,7 @@ export default function TankDips() {
                     <input
                       type="text"
                       readOnly
-                      value={row.closing_volume != null ? Math.round(row.closing_volume).toLocaleString() : ''}
+                      value={row.closing_volume != null ? row.closing_volume.toLocaleString(undefined, { maximumFractionDigits: 1 }) : ''}
                       placeholder={row.closing_vol_error ? 'no calibration' : 'auto'}
                       className={`w-full px-3 py-2 border rounded-input text-sm bg-surface-bg cursor-default ${
                         row.closing_vol_error
