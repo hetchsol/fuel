@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
 import { authFetch, getHeaders, isManagerOrAbove } from '../lib/api'
@@ -97,6 +97,8 @@ export default function TankDips() {
     }
   }, [date, shiftType])
 
+  const dipDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
   const convertDip = async (tankId: string, dip: string): Promise<{ volume: number | null; error: boolean }> => {
     const val = parseFloat(dip)
     if (isNaN(val) || val <= 0) return { volume: null, error: false }
@@ -115,14 +117,32 @@ export default function TankDips() {
     }
   }
 
-  const handleBlur = async (idx: number, field: 'opening_dip_cm' | 'closing_dip_cm') => {
-    const row = rows[idx]
-    const dipValue = row[field]
-    if (!dipValue) return
-    const { volume, error } = await convertDip(row.tank_id, dipValue)
+  const applyConversion = async (idx: number, field: 'opening_dip_cm' | 'closing_dip_cm', value: string, tankId: string) => {
     const volField = field === 'opening_dip_cm' ? 'opening_volume' : 'closing_volume'
     const errField = field === 'opening_dip_cm' ? 'opening_vol_error' : 'closing_vol_error'
+    if (!value || isNaN(parseFloat(value)) || parseFloat(value) <= 0) {
+      setRows(prev => prev.map((r, i) => i === idx ? { ...r, [volField]: null, [errField]: false } : r))
+      return
+    }
+    const { volume, error } = await convertDip(tankId, value)
     setRows(prev => prev.map((r, i) => i === idx ? { ...r, [volField]: volume, [errField]: error } : r))
+  }
+
+  const handleDipChange = (idx: number, field: 'opening_dip_cm' | 'closing_dip_cm', value: string, tankId: string) => {
+    setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value, saved: false } : r))
+    const key = `${idx}-${field}`
+    if (dipDebounceRef.current[key]) clearTimeout(dipDebounceRef.current[key])
+    dipDebounceRef.current[key] = setTimeout(() => applyConversion(idx, field, value, tankId), 400)
+  }
+
+  const handleBlur = (idx: number, field: 'opening_dip_cm' | 'closing_dip_cm', tankId: string) => {
+    // Cancel debounce and fire immediately on focus loss
+    const key = `${idx}-${field}`
+    if (dipDebounceRef.current[key]) {
+      clearTimeout(dipDebounceRef.current[key])
+      delete dipDebounceRef.current[key]
+    }
+    applyConversion(idx, field, rows[idx][field], tankId)
   }
 
   const handleSave = async (idx: number) => {
@@ -238,8 +258,8 @@ export default function TankDips() {
                       step="0.1"
                       min="0"
                       value={row.opening_dip_cm}
-                      onChange={e => setRows(prev => prev.map((r, i) => i === idx ? { ...r, opening_dip_cm: e.target.value, saved: false } : r))}
-                      onBlur={() => handleBlur(idx, 'opening_dip_cm')}
+                      onChange={e => handleDipChange(idx, 'opening_dip_cm', e.target.value, row.tank_id)}
+                      onBlur={() => handleBlur(idx, 'opening_dip_cm', row.tank_id)}
                       className="w-full px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
                       placeholder="e.g. 165.0"
                     />
@@ -269,8 +289,8 @@ export default function TankDips() {
                       step="0.1"
                       min="0"
                       value={row.closing_dip_cm}
-                      onChange={e => setRows(prev => prev.map((r, i) => i === idx ? { ...r, closing_dip_cm: e.target.value, saved: false } : r))}
-                      onBlur={() => handleBlur(idx, 'closing_dip_cm')}
+                      onChange={e => handleDipChange(idx, 'closing_dip_cm', e.target.value, row.tank_id)}
+                      onBlur={() => handleBlur(idx, 'closing_dip_cm', row.tank_id)}
                       className="w-full px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
                       placeholder="e.g. 152.5"
                     />
