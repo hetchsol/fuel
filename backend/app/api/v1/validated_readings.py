@@ -42,7 +42,8 @@ def create_new_validated_reading(payload: ValidatedReadingInput, ctx: dict = Dep
             electronic_reading=payload.electronic_reading,
             dip_reading_cm=payload.dip_reading_cm,
             recorded_by=payload.recorded_by,
-            notes=payload.notes
+            notes=payload.notes,
+            station_id=ctx["station_id"],
         )
 
         # Load existing readings

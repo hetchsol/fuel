@@ -5,11 +5,11 @@ from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime
 from typing import List, Optional
 from ...models.models import FuelTankLevel, StockDelivery
-from ...config import TANK_CONVERSION_FACTOR, get_allowable_loss_percent
+from ...config import get_allowable_loss_percent
 from .auth import get_station_context
 from .sales import load_sales
 from ...services.notification_service import create_notification
-from ...services.dip_conversion import register_tank_calibration, TANK_CALIBRATION
+from ...services.dip_conversion import register_tank_calibration
 from ...services.naming_convention import compute_tank_display_name
 import logging
 

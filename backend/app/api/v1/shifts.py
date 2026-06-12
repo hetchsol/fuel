@@ -474,9 +474,6 @@ def record_tank_dip_reading(shift_id: str, reading: TankDipReading, ctx: dict = 
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
 
-    # Validate tank exists
-    from ...config import TANK_CONVERSION_FACTOR
-
     tanks = storage.get('tanks', {})
     if reading.tank_id not in tanks:
         raise HTTPException(status_code=404, detail=f"Tank {reading.tank_id} not found")

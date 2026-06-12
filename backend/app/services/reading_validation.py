@@ -8,41 +8,6 @@ from typing import Tuple
 import uuid
 
 
-# Tank calibration: converts dip reading (cm) to volume (liters)
-# This is a simplified linear model - in reality, tank calibration charts are more complex
-TANK_CALIBRATION = {
-    "TANK-DIESEL": {
-        "capacity_liters": 50000,
-        "height_cm": 400,  # Tank height
-        "liters_per_cm": 125  # 50000 / 400
-    },
-    "TANK-PETROL": {
-        "capacity_liters": 50000,
-        "height_cm": 400,
-        "liters_per_cm": 125
-    }
-}
-
-
-def convert_dip_to_liters(tank_id: str, dip_cm: float) -> float:
-    """
-    Convert tank dip reading from centimeters to liters
-
-    Args:
-        tank_id: ID of the tank
-        dip_cm: Dip reading in centimeters
-
-    Returns:
-        Volume in liters
-    """
-    if tank_id not in TANK_CALIBRATION:
-        raise ValueError(f"Unknown tank ID: {tank_id}")
-
-    calibration = TANK_CALIBRATION[tank_id]
-    volume_liters = dip_cm * calibration["liters_per_cm"]
-
-    # Ensure volume doesn't exceed tank capacity
-    return min(volume_liters, calibration["capacity_liters"])
 
 
 def calculate_discrepancy_percent(value1: float, value2: float) -> float:
@@ -121,26 +86,18 @@ def create_validated_reading(
     electronic_reading: float,
     dip_reading_cm: float,
     recorded_by: str,
-    notes: str = None
+    notes: str = None,
+    station_id: str = None,
 ) -> dict:
     """
-    Create a validated reading record with full validation
-
-    Args:
-        shift_id: ID of the shift
-        tank_id: ID of the tank
-        reading_type: Type of reading (Opening or Closing)
-        mechanical_reading: Mechanical meter reading
-        electronic_reading: Electronic meter reading
-        dip_reading_cm: Tank dip reading in centimeters
-        recorded_by: User ID of person recording
-        notes: Optional notes
-
-    Returns:
-        Dictionary with validated reading data
+    Create a validated reading record with full validation.
+    Dip-to-volume uses the uploaded calibration chart for the tank.
     """
-    # Convert dip reading to liters
-    dip_reading_liters = convert_dip_to_liters(tank_id, dip_reading_cm)
+    from .dip_conversion import dip_to_volume
+    from ..api.v1.tank_calibrations import ensure_calibration_loaded
+    if station_id:
+        ensure_calibration_loaded(tank_id, station_id)
+    dip_reading_liters = dip_to_volume(tank_id, dip_reading_cm)
 
     # Calculate all discrepancies
     disc_mech_elec = calculate_discrepancy_percent(mechanical_reading, electronic_reading)
