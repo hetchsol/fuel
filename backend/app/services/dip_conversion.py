@@ -98,7 +98,7 @@ def dip_to_volume(tank_id: str, dip_cm: float) -> float:
     ratio = (dip_cm - lower_dip) / (upper_dip - lower_dip)
     volume = lower_volume + (ratio * (upper_volume - lower_volume))
 
-    return round(volume, 2)
+    return volume
 
 
 def volume_to_dip(tank_id: str, volume_liters: float) -> float:

@@ -287,14 +287,14 @@ def convert_dip(tank_id: str, dip_cm: float, ctx: dict = Depends(get_station_con
     sorted_dips = sorted(chart)
 
     if dip_cm in chart:
-        return {"tank_id": tank_id, "dip_cm": dip_cm, "volume_liters": round(chart[dip_cm], 2)}
+        return {"tank_id": tank_id, "dip_cm": dip_cm, "volume_liters": chart[dip_cm]}
 
     for i in range(len(sorted_dips) - 1):
         lo, hi = sorted_dips[i], sorted_dips[i + 1]
         if lo <= dip_cm <= hi:
             ratio = (dip_cm - lo) / (hi - lo)
             vol = chart[lo] + ratio * (chart[hi] - chart[lo])
-            return {"tank_id": tank_id, "dip_cm": dip_cm, "volume_liters": round(vol, 2)}
+            return {"tank_id": tank_id, "dip_cm": dip_cm, "volume_liters": vol}
 
     # Beyond chart max — return the last known volume
     return {"tank_id": tank_id, "dip_cm": dip_cm, "volume_liters": round(chart[sorted_dips[-1]], 2)}
