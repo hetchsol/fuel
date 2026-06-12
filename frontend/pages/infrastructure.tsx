@@ -112,7 +112,7 @@ export default function Infrastructure() {
     try {
       const entries = await Promise.all(tankList.map(async (t) => {
         try {
-          const res = await authFetch(`${BASE}/tank-calibrations/${t.tank_id}`, { headers: getHeaders() })
+          const res = await authFetch(`${BASE}/settings/tank-calibration/${t.tank_id}`, { headers: getHeaders() })
           if (res.ok) {
             const d = await res.json()
             return [t.tank_id, { found: !!d.found, point_count: d.point_count }] as const
@@ -126,7 +126,7 @@ export default function Infrastructure() {
 
   const downloadCalibTemplate = async () => {
     try {
-      const res = await authFetch(`${BASE}/tank-calibrations/template`, { headers: getHeaders() })
+      const res = await authFetch(`${BASE}/settings/tank-calibration/template`, { headers: getHeaders() })
       if (!res.ok) { setMessage({ type: 'error', text: 'Failed to download template' }); return }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -147,7 +147,7 @@ export default function Infrastructure() {
       const fd = new FormData()
       fd.append('file', file)
       // Plain fetch (not authFetch) so the browser sets the multipart boundary.
-      const res = await fetch(`${BASE}/tank-calibrations/upload?tank_id=${encodeURIComponent(tankId)}`, {
+      const res = await fetch(`${BASE}/settings/tank-calibration/upload?tank_id=${encodeURIComponent(tankId)}`, {
         method: 'POST',
         headers: getHeaders(),
         body: fd,

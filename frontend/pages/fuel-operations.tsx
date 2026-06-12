@@ -301,7 +301,7 @@ export default function FuelOperations() {
     }
     try {
       const res = await authFetch(
-        `${BASE}/tank-calibrations/${selectedTank}/convert?dip_cm=${parseFloat(dipCm)}`,
+        `${BASE}/settings/tank-calibration/${selectedTank}/convert?dip_cm=${parseFloat(dipCm)}`,
         { headers: getHeaders() }
       )
       if (res.ok) {

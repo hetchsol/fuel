@@ -698,7 +698,7 @@ export default function DailyTankReading() {
     if (isNaN(dipNum) || dipNum <= 0 || !selectedTank) return ''
     try {
       const res = await authFetch(
-        `${BASE}/tank-calibrations/${selectedTank}/convert?dip_cm=${dipNum}`,
+        `${BASE}/settings/tank-calibration/${selectedTank}/convert?dip_cm=${dipNum}`,
         { headers: getHeaders() }
       )
       if (res.ok) {

@@ -104,7 +104,7 @@ export default function TankDips() {
     if (isNaN(val) || val <= 0) return { volume: null, error: false }
     try {
       const res = await authFetch(
-        `${BASE}/tank-calibrations/${tankId}/convert?dip_cm=${val}`,
+        `${BASE}/settings/tank-calibration/${tankId}/convert?dip_cm=${val}`,
         { headers: getHeaders() }
       )
       if (res.ok) {
