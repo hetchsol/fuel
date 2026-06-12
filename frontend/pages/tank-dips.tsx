@@ -24,6 +24,18 @@ interface DipRow {
   saved: boolean
 }
 
+interface HistoryRow {
+  tank_id: string
+  display_name?: string
+  fuel_type: string
+  date: string
+  shift_type: string
+  opening_dip_cm: number | null
+  opening_volume: number | null
+  closing_dip_cm: number | null
+  closing_volume: number | null
+}
+
 export default function TankDips() {
   const router = useRouter()
   const [userRole, setUserRole] = useState('')
@@ -33,6 +45,13 @@ export default function TankDips() {
   const [shiftType, setShiftType] = useState('Day')
   const [rows, setRows] = useState<DipRow[]>([])
   const [loading, setLoading] = useState(true)
+
+  // History tab
+  const [activeTab, setActiveTab] = useState<'enter' | 'history'>('enter')
+  const [historyDate, setHistoryDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [historyShift, setHistoryShift] = useState('Day')
+  const [historyRows, setHistoryRows] = useState<HistoryRow[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -96,6 +115,44 @@ export default function TankDips() {
       fetchExisting(tanks, date, shiftType)
     }
   }, [date, shiftType])
+
+  const fetchHistory = useCallback(async (d: string, st: string) => {
+    setHistoryLoading(true)
+    try {
+      const res = await authFetch(
+        `${BASE}/tank-readings/dips?date=${d}&shift_type=${st}`,
+        { headers: getHeaders() }
+      )
+      if (res.ok) {
+        const data: any[] = await res.json()
+        const mapped: HistoryRow[] = data.map(r => {
+          const tank = tanks.find(t => t.tank_id === r.tank_id)
+          return {
+            tank_id: r.tank_id,
+            display_name: tank?.display_name,
+            fuel_type: tank?.fuel_type ?? '',
+            date: r.date,
+            shift_type: r.shift_type,
+            opening_dip_cm: r.opening_dip_cm ?? null,
+            opening_volume: r.opening_volume ?? null,
+            closing_dip_cm: r.closing_dip_cm ?? null,
+            closing_volume: r.closing_volume ?? null,
+          }
+        })
+        setHistoryRows(mapped)
+      } else {
+        setHistoryRows([])
+      }
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [tanks])
+
+  useEffect(() => {
+    if (activeTab === 'history' && tanks.length) {
+      fetchHistory(historyDate, historyShift)
+    }
+  }, [activeTab, historyDate, historyShift, tanks])
 
   const dipDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
@@ -192,12 +249,101 @@ export default function TankDips() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-content-primary tracking-tight">Tank Dips</h1>
-        <p className="mt-1 text-sm text-content-secondary">
-          Record opening and closing dip readings for each tank. Values are converted using the calibration chart.
-        </p>
+      <div className="mb-4 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-content-primary tracking-tight">Tank Dips</h1>
+          <p className="mt-1 text-sm text-content-secondary">
+            Record opening and closing dip readings for each tank. Values are converted using the calibration chart.
+          </p>
+        </div>
+        <div className="flex gap-1">
+          {([['enter', 'Enter Readings'], ['history', 'History']] as const).map(([tab, label]) => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className="px-4 py-1.5 text-sm font-medium rounded-full transition-colors"
+              style={{
+                backgroundColor: activeTab === tab ? 'var(--color-action-primary)' : 'transparent',
+                color: activeTab === tab ? '#fff' : 'var(--color-content-secondary)',
+                borderWidth: activeTab === tab ? 0 : 1,
+                borderColor: 'var(--color-surface-border)',
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* History tab */}
+      {activeTab === 'history' && (
+        <div>
+          <div className="glass-card p-4 mb-4 flex flex-wrap gap-4 items-end">
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Date</label>
+              <input type="date" value={historyDate}
+                onChange={e => setHistoryDate(e.target.value)}
+                className="px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Shift</label>
+              <select value={historyShift} onChange={e => setHistoryShift(e.target.value)}
+                className="px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary">
+                <option value="Day">Day</option>
+                <option value="Night">Night</option>
+              </select>
+            </div>
+          </div>
+
+          {historyLoading ? (
+            <div className="glass-card p-8 text-center text-content-secondary text-sm">Loading...</div>
+          ) : historyRows.length === 0 ? (
+            <div className="glass-card p-8 text-center text-content-secondary text-sm">
+              No dip readings recorded for {historyDate} {historyShift}.
+            </div>
+          ) : (
+            <div className="glass-card overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-surface-border">
+                    {['Tank', 'Fuel Type', 'Opening Dip (cm)', 'Opening Vol (L)', 'Closing Dip (cm)', 'Closing Vol (L)'].map(col => (
+                      <th key={col} className="px-4 py-3 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyRows.map(r => {
+                    const isDiesel = r.fuel_type === 'Diesel'
+                    return (
+                      <tr key={r.tank_id} className="border-t border-surface-border">
+                        <td className="px-4 py-3 font-medium text-content-primary">
+                          <span className={`inline-block w-2 h-2 rounded-full mr-2 ${isDiesel ? 'bg-fuel-diesel' : 'bg-fuel-petrol'}`} />
+                          {r.display_name || r.tank_id}
+                        </td>
+                        <td className="px-4 py-3 text-content-secondary">{r.fuel_type}</td>
+                        <td className="px-4 py-3 font-mono text-content-primary">
+                          {r.opening_dip_cm != null ? r.opening_dip_cm : <span className="text-content-secondary">-</span>}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-content-primary">
+                          {r.opening_volume != null ? r.opening_volume.toLocaleString() : <span className="text-content-secondary">-</span>}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-content-primary">
+                          {r.closing_dip_cm != null ? r.closing_dip_cm : <span className="text-content-secondary">-</span>}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-content-primary">
+                          {r.closing_volume != null ? r.closing_volume.toLocaleString() : <span className="text-content-secondary">-</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Enter Readings tab */}
+      {activeTab === 'enter' && <>
 
       {/* Date + Shift selector */}
       <div className="glass-card p-4 mb-6 flex flex-wrap gap-4 items-end">
@@ -228,6 +374,7 @@ export default function TankDips() {
       ) : (
         <div className="space-y-4">
           {rows.map((row, idx) => {
+
             const tank = tanks.find(t => t.tank_id === row.tank_id)
             const isDiesel = tank?.fuel_type === 'Diesel'
             return (
@@ -325,6 +472,7 @@ export default function TankDips() {
           })}
         </div>
       )}
+      </>}
     </div>
   )
 }

@@ -121,6 +121,9 @@ export default function HandoverReview() {
   // Expansion
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
+  // Readings modal
+  const [readingsModal, setReadingsModal] = useState<HandoverEntry | null>(null)
+
   // Selection for batch-approve
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -660,34 +663,42 @@ export default function HandoverReview() {
                       </span>
                     </td>
                     <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                      {canAct && (
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => {
-                              if (rs === 'flagged') {
-                                setApproveModalId(h); setApproveNote('')
-                              } else {
-                                handleApprove(h)
-                              }
-                            }}
-                            disabled={actionLoading}
-                            className="px-2 py-1 text-xs font-medium rounded text-white"
-                            style={{ backgroundColor: 'var(--color-status-success)' }}>
-                            Approve
-                          </button>
-                          <button onClick={() => { setReturnModalId(h); setReturnNote('') }}
-                            className="px-2 py-1 text-xs font-medium rounded"
-                            style={{ backgroundColor: 'var(--color-status-warning-light, #fff8e1)', color: 'var(--color-status-warning)' }}>
-                            Return
-                          </button>
-                        </div>
-                      )}
-                      {rs === 'approved' && (
-                        <span className="text-xs" style={{ color: 'var(--color-status-success)' }}>Done</span>
-                      )}
-                      {rs === 'returned' && (
-                        <span className="text-xs" style={{ color: 'var(--color-status-warning)' }}>Returned</span>
-                      )}
+                      <div className="flex gap-1 flex-wrap">
+                        <button
+                          onClick={() => setReadingsModal(h)}
+                          className="px-2 py-1 text-xs font-medium rounded"
+                          style={{ backgroundColor: theme.background, color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
+                          Readings
+                        </button>
+                        {canAct && (
+                          <>
+                            <button
+                              onClick={() => {
+                                if (rs === 'flagged') {
+                                  setApproveModalId(h); setApproveNote('')
+                                } else {
+                                  handleApprove(h)
+                                }
+                              }}
+                              disabled={actionLoading}
+                              className="px-2 py-1 text-xs font-medium rounded text-white"
+                              style={{ backgroundColor: 'var(--color-status-success)' }}>
+                              Approve
+                            </button>
+                            <button onClick={() => { setReturnModalId(h); setReturnNote('') }}
+                              className="px-2 py-1 text-xs font-medium rounded"
+                              style={{ backgroundColor: 'var(--color-status-warning-light, #fff8e1)', color: 'var(--color-status-warning)' }}>
+                              Return
+                            </button>
+                          </>
+                        )}
+                        {rs === 'approved' && (
+                          <span className="text-xs self-center" style={{ color: 'var(--color-status-success)' }}>Done</span>
+                        )}
+                        {rs === 'returned' && (
+                          <span className="text-xs self-center" style={{ color: 'var(--color-status-warning)' }}>Returned</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
 
@@ -705,6 +716,95 @@ export default function HandoverReview() {
           })}
         </table>
       </div>
+      )}
+
+      {/* Readings Modal */}
+      {readingsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setReadingsModal(null)}>
+          <div className="rounded-lg shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col"
+            style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}
+            onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4"
+              style={{ borderBottomColor: theme.border, borderBottomWidth: 1 }}>
+              <div>
+                <div className="font-semibold text-base" style={{ color: theme.textPrimary }}>
+                  Nozzle Readings
+                </div>
+                <div className="text-xs mt-0.5" style={{ color: theme.textSecondary }}>
+                  {readingsModal.attendant_name} — {readingsModal.date} {readingsModal.shift_type}
+                </div>
+              </div>
+              <button onClick={() => setReadingsModal(null)}
+                className="text-lg leading-none px-2 py-1 rounded hover:bg-surface-bg"
+                style={{ color: theme.textSecondary }}>
+                x
+              </button>
+            </div>
+            {/* Body */}
+            <div className="overflow-auto flex-1 p-5">
+              {(!readingsModal.nozzle_summaries || readingsModal.nozzle_summaries.length === 0) ? (
+                <p className="text-sm text-center py-6" style={{ color: theme.textSecondary }}>
+                  No nozzle readings recorded for this handover.
+                </p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ backgroundColor: theme.background }}>
+                      {['Nozzle', 'Fuel', 'Mech. Opening', 'Elect. Opening', 'Elect. Closing', 'Mech. Closing', 'Volume Sold (L)', 'Revenue (K)'].map(col => (
+                        <th key={col} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
+                          style={{ color: theme.textSecondary }}>{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {readingsModal.nozzle_summaries.map(ns => {
+                      const label = ns.nozzle_id.replace('ISL', '').replace('-', '')
+                      return (
+                        <tr key={ns.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                          <td className="px-3 py-2 font-semibold" style={{ color: theme.textPrimary }}>{label}</td>
+                          <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{ns.fuel_type}</td>
+                          <td className="px-3 py-2 font-mono text-right" style={{ color: theme.textSecondary }}>
+                            {ns.mechanical_opening != null ? ns.mechanical_opening.toLocaleString() : '-'}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-right" style={{ color: theme.textSecondary }}>
+                            {ns.opening_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-right" style={{ color: theme.textPrimary }}>
+                            {ns.closing_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-right" style={{ color: theme.textSecondary }}>
+                            {ns.mechanical_closing != null ? ns.mechanical_closing.toLocaleString() : '-'}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-right font-medium" style={{ color: theme.textPrimary }}>
+                            {ns.volume_sold.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-right font-medium" style={{ color: theme.textPrimary }}>
+                            {ns.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTopColor: theme.border, borderTopWidth: 2 }}>
+                      <td colSpan={6} className="px-3 py-2 text-xs font-medium uppercase text-right"
+                        style={{ color: theme.textSecondary }}>Total</td>
+                      <td className="px-3 py-2 font-mono text-right font-bold" style={{ color: theme.textPrimary }}>
+                        {readingsModal.nozzle_summaries.reduce((s, n) => s + n.volume_sold, 0)
+                          .toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-right font-bold" style={{ color: theme.textPrimary }}>
+                        {readingsModal.fuel_revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Return Modal */}
