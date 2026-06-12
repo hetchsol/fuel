@@ -212,7 +212,7 @@ export default function TankDips() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                   {/* Opening dip */}
                   <div>
                     <label className="block text-xs font-medium text-content-secondary mb-1">Opening Dip (cm)</label>
@@ -226,11 +226,18 @@ export default function TankDips() {
                       className="w-full px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
                       placeholder="e.g. 165.0"
                     />
-                    {row.opening_volume != null && (
-                      <p className="text-xs text-content-secondary mt-1">
-                        {Math.round(row.opening_volume).toLocaleString()} L
-                      </p>
-                    )}
+                  </div>
+
+                  {/* Opening volume (read-only, calibration-derived) */}
+                  <div>
+                    <label className="block text-xs font-medium text-content-secondary mb-1">Opening Volume (L)</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={row.opening_volume != null ? Math.round(row.opening_volume).toLocaleString() : ''}
+                      placeholder="auto"
+                      className="w-full px-3 py-2 border border-surface-border rounded-input text-sm bg-surface-bg text-content-secondary cursor-default"
+                    />
                   </div>
 
                   {/* Closing dip */}
@@ -246,11 +253,18 @@ export default function TankDips() {
                       className="w-full px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
                       placeholder="e.g. 152.5"
                     />
-                    {row.closing_volume != null && (
-                      <p className="text-xs text-content-secondary mt-1">
-                        {Math.round(row.closing_volume).toLocaleString()} L
-                      </p>
-                    )}
+                  </div>
+
+                  {/* Closing volume (read-only, calibration-derived) */}
+                  <div>
+                    <label className="block text-xs font-medium text-content-secondary mb-1">Closing Volume (L)</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={row.closing_volume != null ? Math.round(row.closing_volume).toLocaleString() : ''}
+                      placeholder="auto"
+                      className="w-full px-3 py-2 border border-surface-border rounded-input text-sm bg-surface-bg text-content-secondary cursor-default"
+                    />
                   </div>
                 </div>
 
