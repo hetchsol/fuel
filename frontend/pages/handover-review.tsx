@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useTheme } from '../contexts/ThemeContext'
@@ -114,7 +114,7 @@ export default function HandoverReview() {
 
   // Filters
   const [filterDate, setFilterDate] = useState('')
-  const [filterShift, setFilterShift] = useState('')
+  const [filterShiftType, setFilterShiftType] = useState<'' | 'Day' | 'Night'>('')
   const [filterAttendant, setFilterAttendant] = useState('')  // attendant_id, set when opened from a person card
   const [statusTab, setStatusTab] = useState<'all' | 'pending' | 'flagged' | 'awaiting' | 'approved'>('all')
 
@@ -158,14 +158,21 @@ export default function HandoverReview() {
       setStatusTab('all')  // show active + past for this person
     }
     if (typeof router.query.shift_id === 'string') {
-      setFilterShift(router.query.shift_id)
+      const sid = router.query.shift_id
+      const m = sid.match(/^(\d{4}-\d{2}-\d{2})-(Day|Night)$/)
+      if (m) {
+        setFilterDate(m[1])
+        setFilterShiftType(m[2] as 'Day' | 'Night')
+      } else if (sid === 'Day' || sid === 'Night') {
+        setFilterShiftType(sid)
+      }
     }
   }, [router.isReady, router.query.attendant_id, router.query.shift_id])
 
   const fetchQueue = useCallback(() => {
     const params = new URLSearchParams()
     if (filterDate) params.append('date', filterDate)
-    if (filterShift) params.append('shift_id', filterShift)
+    if (filterDate && filterShiftType) params.append('shift_id', `${filterDate}-${filterShiftType}`)
     const qs = params.toString() ? `?${params.toString()}` : ''
 
     authFetch(`${BASE}/handover/review-queue${qs}`, { headers: getAuthHeaders() })
@@ -187,7 +194,7 @@ export default function HandoverReview() {
         setError(err.message)
         setLoading(false)
       })
-  }, [filterDate, filterShift])
+  }, [filterDate, filterShiftType])
 
   useEffect(() => {
     fetchQueue()
@@ -198,14 +205,14 @@ export default function HandoverReview() {
   useEffect(() => {
     const params = new URLSearchParams()
     if (filterDate) params.append('date', filterDate)
-    if (filterShift) params.append('shift_id', filterShift)
+    if (filterDate && filterShiftType) params.append('shift_id', `${filterDate}-${filterShiftType}`)
     const qs = params.toString() ? `?${params.toString()}` : ''
 
     authFetch(`${BASE}/handover/entries${qs}`, { headers: getAuthHeaders() })
       .then(r => r.ok ? r.json() : [])
       .then(data => setAllHandovers(data))
       .catch(() => {})
-  }, [filterDate, filterShift, handovers])
+  }, [filterDate, filterShiftType, handovers])
 
   // Compute displayed list based on tab
   const displayedHandovers = (() => {
@@ -219,10 +226,24 @@ export default function HandoverReview() {
       const extra = allHandovers.filter(h => !queueIds.has(h.handover_id))
       list = [...handovers, ...extra]
     }
+    // Client-side shift type filter (when no date is set, server can't filter by shift_id)
+    if (filterShiftType) list = list.filter(h => h.shift_type === filterShiftType)
     // When opened for one attendant, narrow to their handovers (active + past).
     if (filterAttendant) list = list.filter(h => h.attendant_id === filterAttendant)
     return list
   })()
+
+  // Unique attendants for dropdown, derived from all loaded handovers
+  const uniqueAttendants = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const h of [...handovers, ...allHandovers]) {
+      if (h.attendant_id && !seen.has(h.attendant_id))
+        seen.set(h.attendant_id, h.attendant_name || h.attendant_id)
+    }
+    return Array.from(seen.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [handovers, allHandovers])
 
   // Display name for the attendant banner, derived from the filtered rows.
   const filterAttendantName = filterAttendant
@@ -472,10 +493,25 @@ export default function HandoverReview() {
             style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
         </div>
         <div>
-          <label className="text-xs font-medium block mb-1" style={{ color: theme.textSecondary }}>Shift ID</label>
-          <input type="text" placeholder="e.g. SH-..." value={filterShift} onChange={e => setFilterShift(e.target.value)}
-            className="px-2 py-1 text-sm rounded border w-full sm:w-40"
-            style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
+          <label className="text-xs font-medium block mb-1" style={{ color: theme.textSecondary }}>Shift</label>
+          <select value={filterShiftType} onChange={e => setFilterShiftType(e.target.value as '' | 'Day' | 'Night')}
+            className="px-2 py-1 text-sm rounded border"
+            style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+            <option value="">All</option>
+            <option value="Day">Day</option>
+            <option value="Night">Night</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-medium block mb-1" style={{ color: theme.textSecondary }}>Attendant</label>
+          <select value={filterAttendant} onChange={e => setFilterAttendant(e.target.value)}
+            className="px-2 py-1 text-sm rounded border"
+            style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+            <option value="">All</option>
+            {uniqueAttendants.map(a => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
         </div>
         <div className="flex-1" />
         {/* Status tabs */}
