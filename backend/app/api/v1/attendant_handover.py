@@ -770,13 +770,19 @@ def _create_reconciliation(nozzle_summaries, lpg_sales, lubricant_sales, accesso
         pass  # Non-critical
 
 
-def _update_nozzle_state(nozzle_readings, storage):
+def _update_nozzle_state(nozzle_readings, storage, shift_date=None, shift_type=None, attendant_name=None):
     """Update nozzle electronic/mechanical readings in islands data."""
     for reading in nozzle_readings:
         nozzle = get_nozzle(reading.nozzle_id, storage=storage)
         if nozzle:
             nozzle["electronic_reading"] = reading.closing_reading
             nozzle["mechanical_reading"] = reading.mechanical_closing
+            if shift_date:
+                nozzle["last_reading_shift_date"] = shift_date
+            if shift_type:
+                nozzle["last_reading_shift_type"] = shift_type
+            if attendant_name:
+                nozzle["last_reading_attendant"] = attendant_name
 
 
 def _create_credit_sale_records(new_items_to_create, handover_id, handover_output, shift, storage, station_id):
@@ -1425,7 +1431,9 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
         )
 
     # Update nozzle state and persist so carry-forward survives server restarts
-    _update_nozzle_state(data.nozzle_readings, storage)
+    _update_nozzle_state(data.nozzle_readings, storage,
+                         shift_date=shift.get("date"), shift_type=shift.get("shift_type"),
+                         attendant_name=user_name)
     save_station_storage(station_id)
 
     # Feed daily entry files
@@ -1737,7 +1745,9 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
                           data.credit_sales, expected_cash, data.actual_cash, difference,
                           shift, user_id, user_name, station_id, storage, data.notes)
 
-    _update_nozzle_state(data.nozzle_readings, storage)
+    _update_nozzle_state(data.nozzle_readings, storage,
+                         shift_date=shift.get("date"), shift_type=shift.get("shift_type"),
+                         attendant_name=user_name)
     save_station_storage(station_id)
 
     _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift, handover_id)

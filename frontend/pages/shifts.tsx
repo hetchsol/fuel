@@ -1649,6 +1649,9 @@ export default function Shifts() {
                               <tr className="text-left text-content-secondary border-b border-surface-border">
                                 <th className="py-1 pr-3 font-medium">Nozzle</th>
                                 <th className="py-1 pr-3 font-medium">Fuel</th>
+                                <th className="py-1 pr-3 font-medium">Date</th>
+                                <th className="py-1 pr-3 font-medium">Shift</th>
+                                <th className="py-1 pr-3 font-medium">Attendant</th>
                                 <th className="py-1 pr-3 font-medium text-right">Electronic</th>
                                 <th className="py-1 font-medium text-right">Mechanical</th>
                               </tr>
@@ -1657,12 +1660,24 @@ export default function Shifts() {
                               {attendant.nozzle_ids.map((nid: string) => {
                                 const nozzle = nozzles.find((n: any) => n.nozzle_id === nid)
                                 if (!nozzle) return null
+                                const shiftDate = nozzle.last_reading_shift_date
+                                const shiftType = nozzle.last_reading_shift_type
+                                const attendantName = nozzle.last_reading_attendant
                                 return (
                                   <tr key={nid} className="border-b border-surface-border/50">
                                     <td className="py-1 pr-3 font-medium text-content-primary">
                                       {nozzle.display_label || nid}
                                     </td>
                                     <td className="py-1 pr-3 text-content-secondary">{nozzle.fuel_type}</td>
+                                    <td className="py-1 pr-3 text-content-secondary">
+                                      {shiftDate || <span className="text-content-secondary/50">—</span>}
+                                    </td>
+                                    <td className="py-1 pr-3 text-content-secondary">
+                                      {shiftType || <span className="text-content-secondary/50">—</span>}
+                                    </td>
+                                    <td className="py-1 pr-3 text-content-secondary">
+                                      {attendantName || <span className="text-content-secondary/50">—</span>}
+                                    </td>
                                     <td className="py-1 pr-3 font-mono text-right text-content-primary">
                                       {nozzle.electronic_reading != null
                                         ? nozzle.electronic_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })
