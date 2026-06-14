@@ -391,7 +391,7 @@ export default function HandoverReview() {
     }
     const subtitle = [
       filterDate ? `Date: ${filterDate}` : '',
-      filterShift ? `Shift: ${filterShift}` : '',
+      filterShiftType ? `Shift: ${filterShiftType}` : '',
     ].filter(Boolean).join('  |  ') || undefined
     return {
       title: `Handover Review - ${tabLabel[statusTab] || 'All'}`,
