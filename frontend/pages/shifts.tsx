@@ -1625,6 +1625,7 @@ export default function Shifts() {
                           </div>
                         )
                       })}
+                    </div>
                   </div>
 
                   {/* Opening readings — manager+ only, shown when nozzles selected */}
