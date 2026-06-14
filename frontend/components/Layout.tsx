@@ -352,7 +352,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       roles: ['user', 'supervisor', 'owner'],
       children: [
         { path: '/shifts', label: 'Shifts', roles: ['supervisor', 'owner'] },
-        { path: '/enter-readings', label: 'Enter Readings', roles: ['supervisor'] },
         { path: '/handover-review', label: 'Handover Review', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/readings', label: 'OCR Reading Entry', roles: ['supervisor'], disabled: true },
         { path: '/tank-dips', label: 'Tank Dips', roles: ['manager', 'owner'] },

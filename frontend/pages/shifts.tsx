@@ -34,6 +34,9 @@ export default function Shifts() {
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null)
   const [showManageDropdown, setShowManageDropdown] = useState(false)
 
+  // Opening readings panel visibility per attendant in the creation modal
+  const [showOpeningReadings, setShowOpeningReadings] = useState<Record<string, boolean>>({})
+
   // Tank dip reading state
   const [tanks, setTanks] = useState<any[]>([])
   const [tankDipReadings, setTankDipReadings] = useState<any[]>([])
@@ -1622,8 +1625,62 @@ export default function Shifts() {
                           </div>
                         )
                       })}
-                    </div>
                   </div>
+
+                  {/* Opening readings — manager+ only, shown when nozzles selected */}
+                  {(currentUser?.role === 'manager' || currentUser?.role === 'owner') &&
+                    attendant.nozzle_ids?.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-surface-border">
+                      <button
+                        type="button"
+                        onClick={() => setShowOpeningReadings(prev => ({
+                          ...prev,
+                          [attendant.user_id]: !prev[attendant.user_id],
+                        }))}
+                        className="text-sm font-medium text-action-primary hover:underline"
+                      >
+                        {showOpeningReadings[attendant.user_id] ? 'Hide' : 'View'} opening readings
+                      </button>
+                      {showOpeningReadings[attendant.user_id] && (
+                        <div className="mt-2 overflow-x-auto">
+                          <table className="w-full text-xs border-collapse">
+                            <thead>
+                              <tr className="text-left text-content-secondary border-b border-surface-border">
+                                <th className="py-1 pr-3 font-medium">Nozzle</th>
+                                <th className="py-1 pr-3 font-medium">Fuel</th>
+                                <th className="py-1 pr-3 font-medium text-right">Electronic</th>
+                                <th className="py-1 font-medium text-right">Mechanical</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {attendant.nozzle_ids.map((nid: string) => {
+                                const nozzle = nozzles.find((n: any) => n.nozzle_id === nid)
+                                if (!nozzle) return null
+                                return (
+                                  <tr key={nid} className="border-b border-surface-border/50">
+                                    <td className="py-1 pr-3 font-medium text-content-primary">
+                                      {nozzle.display_label || nid}
+                                    </td>
+                                    <td className="py-1 pr-3 text-content-secondary">{nozzle.fuel_type}</td>
+                                    <td className="py-1 pr-3 font-mono text-right text-content-primary">
+                                      {nozzle.electronic_reading != null
+                                        ? nozzle.electronic_reading.toLocaleString(undefined, { minimumFractionDigits: 3 })
+                                        : 'N/A'}
+                                    </td>
+                                    <td className="py-1 font-mono text-right text-content-primary">
+                                      {nozzle.mechanical_reading != null
+                                        ? nozzle.mechanical_reading.toLocaleString(undefined, { minimumFractionDigits: 0 })
+                                        : 'N/A'}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
 

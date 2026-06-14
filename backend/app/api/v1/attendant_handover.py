@@ -15,7 +15,7 @@ from ...models.models import (
     HandoverCreditSaleItem, ShiftStockSnapshot, UserRole,
 )
 from ...config import resolve_fuel_price, resolve_fuel_price_for_shift, apply_due_price_changes
-from ...database.storage import get_nozzle
+from ...database.storage import get_nozzle, save_station_storage
 from ...services.inventory import process_credit_sale
 from .auth import get_current_user, require_supervisor_or_owner, get_station_context
 from ...services.audit_service import log_audit_event
@@ -60,6 +60,52 @@ def _load_opening_verifications(station_id: str) -> dict:
 
 def _save_opening_verifications(data: dict, station_id: str):
     save_station_json(station_id, 'opening_verifications.json', data)
+
+
+def _find_previous_shift_readings(shift: dict, user_id: str, storage: dict, station_id: str) -> dict:
+    """
+    Look up the previous shift's closing readings from attendant_readings.json.
+    Night -> same-date Day; Day -> previous-date Night.
+    Returns {nozzle_id: {electronic, mechanical}} or empty.
+    """
+    from datetime import timedelta
+    readings_db = _load_enter_readings(station_id)
+    shifts_data = storage.get('shifts', {})
+    current_date = shift.get("date", "")
+    current_type = shift.get("shift_type", "")
+
+    if current_type == "Day":
+        try:
+            dt = datetime.strptime(current_date, "%Y-%m-%d")
+            prev_date = (dt - timedelta(days=1)).strftime("%Y-%m-%d")
+        except Exception:
+            return {}
+        prev_type = "Night"
+    else:
+        prev_date = current_date
+        prev_type = "Day"
+
+    prev_shift_id = None
+    for sid, s in shifts_data.items():
+        if s.get("date") == prev_date and s.get("shift_type") == prev_type:
+            prev_shift_id = sid
+            break
+
+    if not prev_shift_id:
+        return {}
+
+    closing_key = f"AR-{prev_shift_id}-{user_id}-C"
+    record = readings_db.get(closing_key)
+    if not record:
+        return {}
+
+    result = {}
+    for nr in record.get("nozzle_readings", []):
+        result[nr["nozzle_id"]] = {
+            "electronic": nr["electronic_reading"],
+            "mechanical": nr["mechanical_reading"],
+        }
+    return result
 
 
 def notify_stale_readings(station_id: str) -> int:
@@ -239,7 +285,7 @@ def _validate_shift_and_assignment(shift_id: str, ctx: dict, storage: dict):
 
 def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, user_id, allowed_nozzle_ids,
                              shift_date=None, shift_type=None):
-    """Process nozzle readings and compute summaries. Returns (nozzle_summaries, fuel_revenue, had_er_closing)."""
+    """Process nozzle readings and compute summaries. Returns (nozzle_summaries, fuel_revenue)."""
     for reading in nozzle_readings:
         if reading.nozzle_id not in allowed_nozzle_ids:
             raise HTTPException(status_code=400, detail=f"Nozzle {reading.nozzle_id} is not in your assignment")
@@ -247,39 +293,14 @@ def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, use
     # Apply any due price changes lazily
     apply_due_price_changes(storage, station_id)
 
-    # Check for enter_readings closing data
-    enter_readings_db = _load_enter_readings(station_id)
-    er_opening_key = f"AR-{shift_id}-{user_id}-O"
-    er_closing_key = f"AR-{shift_id}-{user_id}-C"
-    er_opening = enter_readings_db.get(er_opening_key)
-    er_closing = enter_readings_db.get(er_closing_key)
-
-    er_nozzle_map = {}
-    if er_opening and er_closing:
-        opening_map = {}
-        for nr in er_opening.get("nozzle_readings", []):
-            opening_map[nr["nozzle_id"]] = nr
-        for nr in er_closing.get("nozzle_readings", []):
-            nid = nr["nozzle_id"]
-            onr = opening_map.get(nid, {})
-            er_nozzle_map[nid] = {
-                "opening": onr.get("electronic_reading", 0),
-                "closing": nr["electronic_reading"],
-            }
-
     nozzle_summaries = []
     fuel_revenue = 0.0
 
     for reading in nozzle_readings:
         fuel_type = _get_fuel_type(reading.nozzle_id, storage=storage)
 
-        if reading.nozzle_id in er_nozzle_map:
-            er = er_nozzle_map[reading.nozzle_id]
-            opening_val = er["opening"]
-            closing_val = er["closing"]
-        else:
-            opening_val = reading.opening_reading
-            closing_val = reading.closing_reading
+        opening_val = reading.opening_reading
+        closing_val = reading.closing_reading
 
         volume = closing_val - opening_val
         if volume < 0:
@@ -393,7 +414,7 @@ def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, use
             post_change_revenue=post_change_revenue,
         ))
 
-    return nozzle_summaries, round(fuel_revenue, 2), bool(er_closing)
+    return nozzle_summaries, round(fuel_revenue, 2)
 
 
 def _process_stock_snapshot(stock_snapshot, station_id, storage):
@@ -992,8 +1013,24 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
     # Apply any due price changes lazily
     apply_due_price_changes(storage, ctx["station_id"])
 
+    shift_id = my_shift.get("shift_id", "")
     shift_date = my_shift.get("date", "")
     shift_type_val = my_shift.get("shift_type", "")
+
+    # 3-tier opening priority per nozzle:
+    # 1. Already-submitted opening record for this shift (attendant_readings.json)
+    # 2. Previous shift's closing from attendant_readings.json
+    # 3. Nozzle's current electronic_reading in station storage
+    ar_db = _load_enter_readings(ctx["station_id"])
+    opening_key_ar = f"AR-{shift_id}-{user_id}-O"
+    opening_record_ar = ar_db.get(opening_key_ar, {})
+    opening_map_ar = {}
+    for nr in opening_record_ar.get("nozzle_readings", []):
+        opening_map_ar[nr["nozzle_id"]] = {
+            "electronic": nr["electronic_reading"],
+            "mechanical": nr["mechanical_reading"],
+        }
+    prev_readings = _find_previous_shift_readings(my_shift, user_id, storage, ctx["station_id"])
 
     nozzle_details = []
     price_change_detected = False
@@ -1016,11 +1053,20 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
                             break
                     if fuel_type_abbrev:
                         break
+            if nozzle_id in opening_map_ar:
+                elec_open = opening_map_ar[nozzle_id]["electronic"]
+                mech_open = opening_map_ar[nozzle_id]["mechanical"]
+            elif nozzle_id in prev_readings:
+                elec_open = prev_readings[nozzle_id]["electronic"]
+                mech_open = prev_readings[nozzle_id]["mechanical"]
+            else:
+                elec_open = nozzle.get("electronic_reading", 0) or 0
+                mech_open = nozzle.get("mechanical_reading", 0) or 0
             nozzle_details.append({
                 "nozzle_id": nozzle_id,
                 "fuel_type": fuel_type,
-                "opening_reading": nozzle.get("electronic_reading", 0) or 0,
-                "mechanical_opening_reading": nozzle.get("mechanical_reading") or 0,
+                "opening_reading": elec_open,
+                "mechanical_opening_reading": mech_open,
                 "price_per_liter": price,
                 "status": nozzle.get("status", "Active"),
                 "display_label": nozzle.get("display_label"),
@@ -1029,13 +1075,6 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
                 "old_price": price_info.get("old_price"),
                 "new_price": price_info.get("new_price"),
             })
-
-    # Check enter_readings status
-    enter_readings_db = _load_enter_readings(ctx["station_id"])
-    shift_id = my_shift.get("shift_id", "")
-    er_closing_key = f"AR-{shift_id}-{user_id}-C"
-    enter_readings_submitted = er_closing_key in enter_readings_db
-    enter_readings_closing = enter_readings_db.get(er_closing_key)
 
     # Check for existing Phase 1 handover (readings_verified)
     handovers = _load_handovers(ctx["station_id"])
@@ -1070,8 +1109,6 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
         "nozzles": nozzle_details,
         "meter_discrepancy_threshold": storage.get('validation_thresholds', {}).get('meter_discrepancy_threshold', 0.5),
         "nozzle_allowable_loss_liters": storage.get('fuel_settings', {}).get('nozzle_allowable_loss_liters', 0.8),
-        "enter_readings_submitted": enter_readings_submitted,
-        "enter_readings_closing": enter_readings_closing,
         "readings_verified_handover": readings_verified_handover,
         "opening_verified": opening_verified,
         "opening_verification": opening_verification,
@@ -1289,7 +1326,7 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
             detail="Start your shift first — verify your opening readings before ending the shift.",
         )
 
-    nozzle_summaries, fuel_revenue, had_er_closing = _process_nozzle_readings(
+    nozzle_summaries, fuel_revenue = _process_nozzle_readings(
         data.nozzle_readings, storage, station_id, data.shift_id, user_id, allowed_nozzle_ids,
         shift_date=shift.get("date"), shift_type=shift.get("shift_type"))
 
@@ -1387,9 +1424,9 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
             "Handover write-through to attendant_readings.json failed: %s", exc
         )
 
-    # Update nozzle state immediately
-    if not had_er_closing:
-        _update_nozzle_state(data.nozzle_readings, storage)
+    # Update nozzle state and persist so carry-forward survives server restarts
+    _update_nozzle_state(data.nozzle_readings, storage)
+    save_station_storage(station_id)
 
     # Feed daily entry files
     _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift, handover_id)
@@ -1594,7 +1631,7 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
 
     shift, my_assignment, allowed_nozzle_ids = _validate_shift_and_assignment(data.shift_id, ctx, storage)
 
-    nozzle_summaries, fuel_revenue, had_er_closing = _process_nozzle_readings(
+    nozzle_summaries, fuel_revenue = _process_nozzle_readings(
         data.nozzle_readings, storage, station_id, data.shift_id, user_id, allowed_nozzle_ids,
         shift_date=shift.get("date"), shift_type=shift.get("shift_type"))
 
@@ -1700,8 +1737,8 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
                           data.credit_sales, expected_cash, data.actual_cash, difference,
                           shift, user_id, user_name, station_id, storage, data.notes)
 
-    if not had_er_closing:
-        _update_nozzle_state(data.nozzle_readings, storage)
+    _update_nozzle_state(data.nozzle_readings, storage)
+    save_station_storage(station_id)
 
     _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift, handover_id)
 
