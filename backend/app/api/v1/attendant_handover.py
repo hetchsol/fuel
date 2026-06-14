@@ -1387,42 +1387,40 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
         ar_db = load_station_json(station_id, 'attendant_readings.json', default={})
         opening_key = f"AR-{data.shift_id}-{user_id}-O"
         closing_key = f"AR-{data.shift_id}-{user_id}-C"
-        if opening_key not in ar_db:
-            ar_db[opening_key] = {
-                "shift_id": data.shift_id,
-                "user_id": user_id,
-                "user_name": user_name,
-                "reading_type": "Opening",
-                "nozzle_readings": [
-                    {
-                        "nozzle_id": ns.nozzle_id,
-                        "electronic_reading": ns.opening_reading,
-                        "mechanical_reading": ns.mechanical_opening or 0,
-                    }
-                    for ns in nozzle_summaries
-                ],
-                "submitted_at": now_iso,
-                "review_status": "submitted",
-                "source": "handover",
-            }
-        if closing_key not in ar_db:
-            ar_db[closing_key] = {
-                "shift_id": data.shift_id,
-                "user_id": user_id,
-                "user_name": user_name,
-                "reading_type": "Closing",
-                "nozzle_readings": [
-                    {
-                        "nozzle_id": ns.nozzle_id,
-                        "electronic_reading": ns.closing_reading,
-                        "mechanical_reading": ns.mechanical_closing or 0,
-                    }
-                    for ns in nozzle_summaries
-                ],
-                "submitted_at": now_iso,
-                "review_status": "submitted",
-                "source": "handover",
-            }
+        ar_db[opening_key] = {
+            "shift_id": data.shift_id,
+            "user_id": user_id,
+            "user_name": user_name,
+            "reading_type": "Opening",
+            "nozzle_readings": [
+                {
+                    "nozzle_id": ns.nozzle_id,
+                    "electronic_reading": ns.opening_reading,
+                    "mechanical_reading": ns.mechanical_opening or 0,
+                }
+                for ns in nozzle_summaries
+            ],
+            "submitted_at": now_iso,
+            "review_status": "submitted",
+            "source": "handover",
+        }
+        ar_db[closing_key] = {
+            "shift_id": data.shift_id,
+            "user_id": user_id,
+            "user_name": user_name,
+            "reading_type": "Closing",
+            "nozzle_readings": [
+                {
+                    "nozzle_id": ns.nozzle_id,
+                    "electronic_reading": ns.closing_reading,
+                    "mechanical_reading": ns.mechanical_closing or 0,
+                }
+                for ns in nozzle_summaries
+            ],
+            "submitted_at": now_iso,
+            "review_status": "submitted",
+            "source": "handover",
+        }
         save_station_json(station_id, 'attendant_readings.json', ar_db)
     except Exception as exc:
         import logging
@@ -1744,6 +1742,51 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     _create_reconciliation(nozzle_summaries, lpg_sales, lubricant_sales, accessory_sales,
                           data.credit_sales, expected_cash, data.actual_cash, difference,
                           shift, user_id, user_name, station_id, storage, data.notes)
+
+    try:
+        ar_db = load_station_json(station_id, 'attendant_readings.json', default={})
+        opening_key = f"AR-{data.shift_id}-{user_id}-O"
+        closing_key = f"AR-{data.shift_id}-{user_id}-C"
+        ar_db[opening_key] = {
+            "shift_id": data.shift_id,
+            "user_id": user_id,
+            "user_name": user_name,
+            "reading_type": "Opening",
+            "nozzle_readings": [
+                {
+                    "nozzle_id": ns.nozzle_id,
+                    "electronic_reading": ns.opening_reading,
+                    "mechanical_reading": ns.mechanical_opening or 0,
+                }
+                for ns in nozzle_summaries
+            ],
+            "submitted_at": now_iso,
+            "review_status": "submitted",
+            "source": "handover",
+        }
+        ar_db[closing_key] = {
+            "shift_id": data.shift_id,
+            "user_id": user_id,
+            "user_name": user_name,
+            "reading_type": "Closing",
+            "nozzle_readings": [
+                {
+                    "nozzle_id": ns.nozzle_id,
+                    "electronic_reading": ns.closing_reading,
+                    "mechanical_reading": ns.mechanical_closing or 0,
+                }
+                for ns in nozzle_summaries
+            ],
+            "submitted_at": now_iso,
+            "review_status": "submitted",
+            "source": "handover",
+        }
+        save_station_json(station_id, 'attendant_readings.json', ar_db)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Legacy handover write-through to attendant_readings.json failed: %s", exc
+        )
 
     _update_nozzle_state(data.nozzle_readings, storage,
                          shift_date=shift.get("date"), shift_type=shift.get("shift_type"),
