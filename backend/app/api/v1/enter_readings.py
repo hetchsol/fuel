@@ -10,7 +10,7 @@ from ...models.models import (
     AttendantReadingsInput, NozzleDualReadingEntry, UserRole, SupervisorReviewInput
 )
 from ...config import get_fuel_price
-from ...database.storage import get_nozzle, get_nozzle_ids_for_tank, get_tank_id_for_nozzle
+from ...database.storage import get_nozzle, get_nozzle_ids_for_tank, get_tank_id_for_nozzle, save_station_storage
 from .auth import get_current_user, get_station_context
 from ...database.station_files import load_station_json, save_station_json
 
@@ -324,18 +324,22 @@ async def submit_readings(data: AttendantReadingsInput, ctx: dict = Depends(get_
         if key in readings_db and not _is_supervisor_or_owner(role):
             raise HTTPException(status_code=400, detail="Opening readings already submitted")
 
-        # For regular users: validate opening values match previous closing
+        # For regular users: validate opening values match nozzle state (canonical last closing)
         if not _is_supervisor_or_owner(role):
-            prev_readings = _find_previous_shift_readings(shift, user_id, storage, station_id)
             for nr in data.nozzle_readings:
-                if nr.nozzle_id in prev_readings:
-                    prev = prev_readings[nr.nozzle_id]
-                    if abs(nr.electronic_reading - prev["electronic"]) > 0.01 or \
-                       abs(nr.mechanical_reading - prev["mechanical"]) > 0.01:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Opening readings for {nr.nozzle_id} must match previous closing values"
-                        )
+                nozzle = get_nozzle(nr.nozzle_id, storage=storage)
+                if not nozzle:
+                    continue
+                expected_elec = nozzle.get("electronic_reading")
+                expected_mech = nozzle.get("mechanical_reading") or 0
+                if expected_elec is not None and (
+                    abs(nr.electronic_reading - expected_elec) > 0.01 or
+                    abs(nr.mechanical_reading - expected_mech) > 0.01
+                ):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Opening readings for {nr.nozzle_id} must match previous closing values"
+                    )
 
         record = {
             "shift_id": data.shift_id,
@@ -417,12 +421,13 @@ async def submit_readings(data: AttendantReadingsInput, ctx: dict = Depends(get_
         readings_db[closing_key] = record
         _save_readings(readings_db, station_id)
 
-        # Update nozzle state in islands data
+        # Update nozzle state in islands data and persist so carry-forward survives restarts
         for nr in data.nozzle_readings:
             nozzle = get_nozzle(nr.nozzle_id, storage=storage)
             if nozzle:
                 nozzle["electronic_reading"] = nr.electronic_reading
                 nozzle["mechanical_reading"] = nr.mechanical_reading
+        save_station_storage(station_id)
 
         # Push per-nozzle reading records to storage['readings'] for reports
         for nr in data.nozzle_readings:
