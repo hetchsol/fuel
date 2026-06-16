@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getHeaders, authFetch } from '../lib/api'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -240,7 +241,7 @@ export default function StockTakes() {
               return (
                 <tr key={t.take_id} className="border-t border-surface-border hover:bg-surface-bg">
                   <td className="px-3 py-2 font-mono text-xs text-content-primary">{t.take_id}</td>
-                  <td className="px-3 py-2 text-content-secondary">{t.date}</td>
+                  <td className="px-3 py-2 text-content-secondary">{formatDateToDisplay(t.date)}</td>
                   <td className="px-3 py-2 capitalize text-content-primary">{t.bin}</td>
                   <td className="px-3 py-2 font-mono text-content-secondary">{t.lines.length}</td>
                   <td className="px-3 py-2 font-mono text-content-secondary">{counted} / {t.lines.length}</td>
@@ -272,7 +273,7 @@ export default function StockTakes() {
             <div>
               <div className="font-semibold text-content-primary">{active.take_id}</div>
               <div className="text-xs text-content-secondary">
-                {active.date} · bin: <span className="capitalize">{active.bin}</span> · started by {active.started_by}
+                {formatDateToDisplay(active.date)} - bin: <span className="capitalize">{active.bin}</span> - started by {active.started_by}
               </div>
             </div>
             <div className="flex gap-2">

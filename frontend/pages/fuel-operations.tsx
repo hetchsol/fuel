@@ -5,6 +5,7 @@ import { getHeaders, authFetch } from '../lib/api'
 import { useTanks, tankLabel } from '../hooks/useTanks'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -885,7 +886,7 @@ export default function FuelOperations() {
                       <div key={reading.reading_id} className="border border-surface-border rounded-lg p-4 hover:shadow-md transition">
                         <div className="flex justify-between items-start mb-3">
                           <div>
-                            <h3 className="font-semibold text-lg">{reading.date}</h3>
+                            <h3 className="font-semibold text-lg">{formatDateToDisplay(reading.date)}</h3>
                             <p className="text-sm text-content-secondary">{reading.fuel_type}</p>
                           </div>
                           <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(reading.validation_status)}`}>
@@ -1217,7 +1218,7 @@ export default function FuelOperations() {
                             <div className="flex justify-between items-start">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-sm font-semibold">{delivery.date} at {delivery.time}</span>
+                                  <span className="text-sm font-semibold">{formatDateToDisplay(delivery.date)} at {delivery.time}</span>
                                   {delivery.status === 'submitted' && <span className="text-status-success text-sm">&#10003;</span>}
                                   {delivery.status === 'error' && <span className="text-status-error text-sm">&#10007;</span>}
                                 </div>
@@ -1277,7 +1278,7 @@ export default function FuelOperations() {
                       <div key={delivery.delivery_id} className="border border-surface-border rounded-lg p-4 hover:shadow-md transition">
                         <div className="flex justify-between items-start mb-3">
                           <div>
-                            <h3 className="font-semibold text-lg">{delivery.date} at {delivery.time}</h3>
+                            <h3 className="font-semibold text-lg">{formatDateToDisplay(delivery.date)} at {delivery.time}</h3>
                             <p className="text-sm text-content-secondary">{delivery.supplier}</p>
                           </div>
                           <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(delivery.validation_status)}`}>

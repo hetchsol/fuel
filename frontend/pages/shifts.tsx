@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getHeaders, authFetch } from '../lib/api'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -708,7 +709,7 @@ export default function Shifts() {
                         })
                         return sorted.map((shift: any) => (
                           <option key={shift.shift_id} value={shift.shift_id}>
-                            {shift.date} — {shift.shift_type} Shift ({shift.status.toUpperCase()})
+                            {formatDateToDisplay(shift.date)} — {shift.shift_type} Shift ({shift.status.toUpperCase()})
                           </option>
                         ))
                       })()}
@@ -760,7 +761,7 @@ export default function Shifts() {
                       : 'bg-surface-bg border-surface-border'
                     }`}>
                       <div className="flex items-center gap-3 mb-2">
-                        <span className="font-semibold text-content-primary text-sm">{shift.date} — {shift.shift_type === 'Day' ? 'Day Shift' : 'Night Shift'}</span>
+                        <span className="font-semibold text-content-primary text-sm">{formatDateToDisplay(shift.date)} — {shift.shift_type === 'Day' ? 'Day Shift' : 'Night Shift'}</span>
                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${getShiftStatusColor(shift.status)}`}>
                           {shift.status.toUpperCase()}
                         </span>
@@ -1183,7 +1184,7 @@ export default function Shifts() {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="font-semibold text-content-primary">{shift.date}</span>
+                        <span className="font-semibold text-content-primary">{formatDateToDisplay(shift.date)}</span>
                         <span className="ml-2 text-sm text-content-secondary">
                           {shift.shift_type === 'Day' ? 'Day Shift' : 'Night Shift'}
                         </span>
@@ -1288,7 +1289,7 @@ export default function Shifts() {
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <span className="font-semibold text-content-primary">{shift.date}</span>
+                          <span className="font-semibold text-content-primary">{formatDateToDisplay(shift.date)}</span>
                           <span className="ml-2 text-sm text-content-secondary">
                             {shift.shift_type === 'Day' ? 'Day Shift' : 'Night Shift'}
                           </span>

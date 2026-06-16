@@ -7,6 +7,7 @@ import ReasonChips, { REASON_PRESETS } from '../components/ReasonChips'
 import { getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -578,7 +579,7 @@ export default function HandoverReview() {
               <tbody>
                 {awaitingClosing.map(h => (
                   <tr key={h.handover_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                    <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.date}</td>
+                    <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{formatDateToDisplay(h.date)}</td>
                     <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{h.shift_type}</td>
                     <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{h.attendant_name}</td>
                     <td className="px-3 py-2 font-mono" style={{ color: theme.textSecondary }}>
@@ -660,7 +661,7 @@ export default function HandoverReview() {
                         )}
                       </td>
                     )}
-                    <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.date}</td>
+                    <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{formatDateToDisplay(h.date)}</td>
                     <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{h.shift_type}</td>
                     <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{h.attendant_name}</td>
                     <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
@@ -769,7 +770,7 @@ export default function HandoverReview() {
                   Nozzle Readings
                 </div>
                 <div className="text-xs mt-0.5" style={{ color: theme.textSecondary }}>
-                  {readingsModal.attendant_name} — {readingsModal.date} {readingsModal.shift_type}
+                  {readingsModal.attendant_name} — {formatDateToDisplay(readingsModal.date)} {readingsModal.shift_type}
                 </div>
               </div>
               <button onClick={() => setReadingsModal(null)}

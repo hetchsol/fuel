@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getHeaders, BASE, authFetch } from '../lib/api'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 interface Notification {
   id: string
@@ -69,7 +70,7 @@ function formatRelativeTime(timestamp: string) {
   if (hours < 24) return `${hours}h ago`
   const days = Math.floor(hours / 24)
   if (days < 7) return `${days}d ago`
-  return new Date(timestamp).toLocaleDateString()
+  return formatDateToDisplay(timestamp)
 }
 
 export default function NotificationsPage() {

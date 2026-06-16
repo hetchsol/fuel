@@ -6,6 +6,7 @@ import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
 import ThreeWayReconciliation from './three-way-reconciliation'
 import TankAnalysis from './tank-analysis'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -167,7 +168,7 @@ function ShiftReconciliationView() {
                 className="w-full px-3 py-2 border border-surface-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-action-primary">
                 <option value="">-- Select a shift --</option>
                 {shifts.map(s => (
-                  <option key={s.shift_id} value={s.shift_id}>{s.date} - {s.shift_type} ({s.shift_id})</option>
+                  <option key={s.shift_id} value={s.shift_id}>{formatDateToDisplay(s.date)} - {s.shift_type} ({s.shift_id})</option>
                 ))}
               </select>
             </div>
@@ -241,7 +242,7 @@ function ShiftReconciliationView() {
                   const fmt = (n: number) => n == null ? '-' : `ZMW ${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   return (
                     <tr key={i} className="border-b border-surface-border hover:bg-surface-bg transition-colors">
-                      <td className="px-4 py-3 font-medium">{recon.date}</td>
+                      <td className="px-4 py-3 font-medium">{formatDateToDisplay(recon.date)}</td>
                       <td className="px-4 py-3">{recon.shift_type}</td>
                       <td className="px-4 py-3 font-mono">{fmt(recon.total_expected)}</td>
                       <td className="px-4 py-3 font-mono">{fmt(recon.credit_sales_total)}</td>
@@ -279,7 +280,7 @@ function ShiftReconciliationView() {
                     {getShiftIcon(recon.shift_type)} {recon.shift_type} Shift Reconciliation
                   </h2>
                   <p className="text-sm text-content-secondary mt-1">
-                    {recon.date} | Shift ID: {recon.shift_id}
+                    {formatDateToDisplay(recon.date)} | Shift ID: {recon.shift_id}
                   </p>
                 </div>
                 {recon.difference !== null && (

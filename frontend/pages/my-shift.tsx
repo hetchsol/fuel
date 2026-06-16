@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import DoubleEntryModal from '../components/DoubleEntryModal'
 import { getHeaders, authFetch } from '../lib/api'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -945,7 +946,7 @@ export default function MyShift() {
                 <option value="">-- Select Shift --</option>
                 {availableShifts.map((s: any) => (
                   <option key={s.shift_id} value={s.shift_id}>
-                    {s.date} — {s.shift_type} Shift
+                    {formatDateToDisplay(s.date)} — {s.shift_type} Shift
                   </option>
                 ))}
               </select>
@@ -2622,7 +2623,7 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
                     {shift.shift_type === 'Day' ? '\u2600\uFE0F' : '\uD83C\uDF19'} {shift.shift_type} Shift
                   </h2>
                   <p className="text-sm" style={{ color: theme.textSecondary }}>
-                    {shift.date} &middot; {shift.shift_id}
+                    {formatDateToDisplay(shift.date)} | {shift.shift_id}
                   </p>
                 </div>
                 <span className="px-3 py-1 rounded-full text-xs font-semibold"
@@ -3042,7 +3043,7 @@ function PastHandoversTable({ handovers, theme, isAttendant = false }: { handove
                   style={{ borderTopColor: theme.border, borderTopWidth: 1 }}
                   onClick={() => isAttendant && isApproved && setExpandedId(isExpanded ? null : h.handover_id)}
                 >
-                  <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.date}</td>
+                  <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{formatDateToDisplay(h.date)}</td>
                   <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{h.shift_type}</td>
                   {!isAttendant && (
                     <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{h.attendant_name}</td>

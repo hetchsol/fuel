@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -273,7 +274,7 @@ export default function ThreeWayReconciliation() {
                   className="w-full px-3 py-2 border border-surface-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-action-primary">
                   <option value="">-- Select a shift --</option>
                   {shifts.map(s => (
-                    <option key={s.shift_id} value={s.shift_id}>{s.date} - {s.shift_type} ({s.shift_id})</option>
+                    <option key={s.shift_id} value={s.shift_id}>{formatDateToDisplay(s.date)} - {s.shift_type} ({s.shift_id})</option>
                   ))}
                 </select>
               </div>
@@ -333,7 +334,7 @@ export default function ThreeWayReconciliation() {
                       <tr key={i} className="border-b border-surface-border hover:bg-surface-bg transition-colors">
                         <td className="px-4 py-3 font-medium">
                           <button onClick={() => { setSelectedDate(day.date); fetchDailySummary(day.date); setRangeData([]) }}
-                            className="text-action-primary hover:underline">{day.date}</button>
+                            className="text-action-primary hover:underline">{formatDateToDisplay(day.date)}</button>
                         </td>
                         <td className="px-4 py-3">{day.total_shifts}</td>
                         <td className="px-4 py-3 text-status-success font-semibold">{day.balanced_shifts}</td>

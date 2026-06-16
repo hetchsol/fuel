@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getStaffList, getNozzleList, getIslandList, getProductList, getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -838,7 +839,7 @@ export default function AdvancedReports() {
                     {reportData.shift_breakdown.map((row: any, i: number) => (
                       <tr key={i} className={`hover:bg-surface-bg ${row.deviation_flagged ? 'bg-status-error-light' : ''}`}>
                         <td className="px-3 py-3 text-sm text-content-primary whitespace-nowrap">
-                          {row.date} {row.shift_type}
+                          {formatDateToDisplay(row.date)} {row.shift_type}
                         </td>
                         <td className="px-3 py-3 text-sm text-content-secondary">{row.staff_name}</td>
                         <td className="px-3 py-3 text-sm text-content-secondary text-right font-mono">{row.electronic_opening?.toLocaleString()}</td>

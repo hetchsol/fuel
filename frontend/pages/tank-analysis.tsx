@@ -5,6 +5,7 @@ import { getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
 import { useTanks, tankLabel } from '../hooks/useTanks'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -269,7 +270,7 @@ export default function TankAnalysis() {
                 <option value="">-- Select a shift --</option>
                 {shifts.map(s => (
                   <option key={s.shift_id} value={s.shift_id}>
-                    {s.date} - {s.shift_type} ({s.shift_id})
+                    {formatDateToDisplay(s.date)} - {s.shift_type} ({s.shift_id})
                   </option>
                 ))}
               </select>
@@ -507,7 +508,7 @@ export default function TankAnalysis() {
                     : 'text-content-secondary'
                   return (
                     <tr key={r.reading_id || i} className="border-b border-surface-border hover:bg-surface-bg transition-colors">
-                      <td className="px-4 py-3 font-medium">{r.date}</td>
+                      <td className="px-4 py-3 font-medium">{formatDateToDisplay(r.date)}</td>
                       <td className="px-4 py-3">{r.shift_type}</td>
                       <td className="px-4 py-3 font-mono text-right">{fmt(r.opening_volume)}</td>
                       <td className="px-4 py-3 font-mono text-right">{fmt(r.closing_volume)}</td>

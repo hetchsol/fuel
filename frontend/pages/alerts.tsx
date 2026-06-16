@@ -4,6 +4,7 @@ import { getHeaders, BASE, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
 import NotificationsPage from './notifications'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 interface Anomaly {
   tank_id: string
@@ -198,7 +199,7 @@ function AnomalyAlertsView() {
                         </div>
                         <div className="text-right text-sm shrink-0">
                           {a.date && (
-                            <p className="text-content-secondary">{a.date}</p>
+                            <p className="text-content-secondary">{formatDateToDisplay(a.date)}</p>
                           )}
                           {a.value !== null && (
                             <p className="font-mono text-content-primary">{a.value.toFixed(2)}L</p>

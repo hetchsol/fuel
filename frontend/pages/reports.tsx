@@ -7,6 +7,7 @@ import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
 import AdvancedReports from './advanced-reports'
 import TankReadingsReport from './tank-readings-report'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 interface Product {
     product_type: string;
@@ -428,7 +429,7 @@ function SalesReportsView() {
                                                     <td className="px-8 py-5 whitespace-nowrap font-bold text-content-primary text-lg">
                                                         <div className="flex items-center">
                                                             <div className="w-2 h-2 bg-indigo-500 rounded-full mr-3"></div>
-                                                            {day.date}
+                                                            {formatDateToDisplay(day.date)}
                                                         </div>
                                                     </td>
                                                     <td className="px-8 py-5 whitespace-nowrap">

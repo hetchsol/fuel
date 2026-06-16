@@ -6,6 +6,7 @@ import DayChecklist from '../components/DayChecklist'
 import AttendantShiftCard from '../components/AttendantShiftCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { useWorkingDay } from '../contexts/WorkingDayContext'
+import { formatDateTimeToDisplay } from '../lib/dateUtils'
 
 /* ── Empty State Illustration ─────────────────────── */
 function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
@@ -167,7 +168,7 @@ export default function Home() {
                   {flags.map((flag: any, idx: number) => (
                     <li key={idx} className="p-3 bg-status-error-light/50 border border-status-error/30 rounded-xl">
                       <p className="text-sm font-medium text-status-error">{flag.description}</p>
-                      <p className="text-xs text-status-error/60 mt-1">{flag.timestamp}</p>
+                      <p className="text-xs text-status-error/60 mt-1">{formatDateTimeToDisplay(flag.timestamp)}</p>
                     </li>
                   ))}
                 </ul>

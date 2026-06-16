@@ -7,6 +7,7 @@ import Link from 'next/link'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
 import { useWorkingDay } from '../contexts/WorkingDayContext'
+import { formatDateToDisplay, formatDateTimeToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -235,7 +236,7 @@ export default function DailyCloseOff() {
                 <div>
                   <h3 className="text-sm font-semibold text-status-success">Day Closed</h3>
                   <p className="text-xs text-content-secondary">
-                    Closed by {record.closed_by_name} on {new Date(record.closed_at).toLocaleString()}
+                    Closed by {record.closed_by_name} on {formatDateTimeToDisplay(record.closed_at)}
                   </p>
                 </div>
               </div>
@@ -535,7 +536,7 @@ export default function DailyCloseOff() {
                             className="border-b border-surface-border/50 hover:bg-white/[0.02] cursor-pointer transition-colors"
                             onClick={() => setSelectedDate(rec.date)}
                           >
-                            <td className="py-2.5 px-3 text-content-primary font-medium">{rec.date}</td>
+                            <td className="py-2.5 px-3 text-content-primary font-medium">{formatDateToDisplay(rec.date)}</td>
                             <td className="py-2.5 px-3 text-right text-content-secondary">{rec.shift_count}</td>
                             <td className="py-2.5 px-3 text-right text-content-primary">{fmt(rec.summary?.total_revenue || 0)}</td>
                             <td className="py-2.5 px-3 text-right text-content-primary">{fmt(rec.bank_deposit?.amount || 0)}</td>
@@ -543,7 +544,7 @@ export default function DailyCloseOff() {
                               {fmt(rec.bank_deposit?.variance || 0)}
                             </td>
                             <td className="py-2.5 px-3 text-content-secondary">{rec.closed_by_name}</td>
-                            <td className="py-2.5 px-3 text-content-secondary text-xs">{new Date(rec.closed_at).toLocaleString()}</td>
+                            <td className="py-2.5 px-3 text-content-secondary text-xs">{formatDateTimeToDisplay(rec.closed_at)}</td>
                           </tr>
                         ))}
                       </tbody>

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
 import { useTanks, tankLabel } from '../hooks/useTanks'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 interface NozzleReading {
   nozzle_id: string
@@ -409,7 +410,7 @@ export default function TankReadingsReport() {
                       {readings.map(r => (
                         <tr key={r.reading_id} className="hover:bg-surface-bg transition-colors">
                           <td className="px-4 py-3">
-                            <div className="text-sm font-medium text-content-primary">{r.date}</div>
+                            <div className="text-sm font-medium text-content-primary">{formatDateToDisplay(r.date)}</div>
                             <div className="text-xs text-content-secondary">{r.shift_type}</div>
                           </td>
                           <td className="px-4 py-3">
@@ -518,7 +519,7 @@ export default function TankReadingsReport() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Tank</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Opening</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Closing</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Movement</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Net Dispensed</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Delivery</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Status</th>
                       </tr>
@@ -531,11 +532,13 @@ export default function TankReadingsReport() {
                         return (
                           <tr key={r.reading_id} className={`hover:bg-surface-bg transition-colors ${rowCls}`}>
                             <td className="px-4 py-3">
-                              <div className="text-sm font-medium text-content-primary">{r.date}</div>
+                              <div className="text-sm font-medium text-content-primary">{formatDateToDisplay(r.date)}</div>
                               <div className="text-xs text-content-secondary">{r.shift_type}</div>
                             </td>
                             <td className="px-4 py-3">
-                              <div className="text-sm font-medium text-content-primary">{r.tank_id}</div>
+                              <div className="text-sm font-medium text-content-primary">
+                                {(() => { const t = availableTanks.find(t => t.tank_id === r.tank_id); return t ? tankLabel(t) : r.tank_id })()}
+                              </div>
                               <div className="text-xs text-content-secondary">{r.fuel_type || ''}</div>
                             </td>
                             <td className="px-4 py-3">
@@ -581,7 +584,7 @@ export default function TankReadingsReport() {
                   <div>
                     <h2 className="text-xl font-bold text-content-primary">Reading Details</h2>
                     <p className="text-sm text-content-secondary mt-0.5">
-                      {selectedReading.date} - {selectedReading.shift_type} Shift
+                      {formatDateToDisplay(selectedReading.date)} - {selectedReading.shift_type} Shift
                       {selectedReading.fuel_type && ` - ${selectedReading.fuel_type}`}
                     </p>
                   </div>

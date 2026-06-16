@@ -1037,8 +1037,34 @@ def _enrich_tank_record(r: dict, deliveries_db: dict, tanks: dict) -> None:
     o_vol = r.get('opening_volume') or r.get('opening_volume_liters') or 0
     c_vol = r.get('closing_volume') or r.get('closing_volume_liters') or 0
 
+    if not r.get('fuel_type'):
+        r['fuel_type'] = tanks.get(r.get('tank_id', ''), {}).get('fuel_type', '')
+    if r.get('nozzle_readings') is None:
+        r['nozzle_readings'] = []
+    if r.get('deliveries') is None:
+        r['deliveries'] = []
+
+    # Link delivery record before computing movement so the volume is included
+    delivery_id = r.get('delivery_id')
+    if delivery_id and not r['deliveries']:
+        d = deliveries_db.get(delivery_id)
+        if d:
+            r['deliveries'] = [{
+                'delivery_id': d.get('delivery_id', ''),
+                'supplier': d.get('supplier', ''),
+                'volume_delivered': d.get('actual_volume_delivered', 0),
+                'delivery_time': d.get('time', ''),
+                'invoice_number': d.get('invoice_number'),
+            }]
+
+    # Net sales = opening - closing + total delivered (positive = fuel dispensed).
+    # Only compute for simple dip records; comprehensive records already have this.
     if r.get('tank_volume_movement') is None:
-        r['tank_volume_movement'] = round(o_vol - c_vol, 3)
+        delivered = sum(
+            d.get('volume_delivered') or d.get('actual_volume_delivered') or 0
+            for d in r['deliveries']
+        )
+        r['tank_volume_movement'] = round(o_vol - c_vol + delivered, 3)
 
     for field, default in [
         ('total_electronic_dispensed', 0.0),
@@ -1056,24 +1082,6 @@ def _enrich_tank_record(r: dict, deliveries_db: dict, tanks: dict) -> None:
 
     if not r.get('validation_status'):
         r['validation_status'] = 'PASS'
-    if r.get('nozzle_readings') is None:
-        r['nozzle_readings'] = []
-    if r.get('deliveries') is None:
-        r['deliveries'] = []
-    if not r.get('fuel_type'):
-        r['fuel_type'] = tanks.get(r.get('tank_id', ''), {}).get('fuel_type', '')
-
-    delivery_id = r.get('delivery_id')
-    if delivery_id and not r['deliveries']:
-        d = deliveries_db.get(delivery_id)
-        if d:
-            r['deliveries'] = [{
-                'delivery_id': d.get('delivery_id', ''),
-                'supplier': d.get('supplier', ''),
-                'volume_delivered': d.get('actual_volume_delivered', 0),
-                'delivery_time': d.get('time', ''),
-                'invoice_number': d.get('invoice_number'),
-            }]
 
 
 @router.get("/dip-ledger")
