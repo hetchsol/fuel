@@ -77,11 +77,16 @@ def record_tank_dips(
     recorded_by: str,
     opening_dip_cm: Optional[float] = None,
     closing_dip_cm: Optional[float] = None,
+    delivery_supplier: Optional[str] = None,
+    delivery_invoice_number: Optional[str] = None,
+    delivery_time: Optional[str] = None,
+    delivery_volume_liters: Optional[float] = None,
     ctx: dict = Depends(get_station_context),
 ):
     """
     Manager+ only. Create or update dip readings for a single tank/date/shift.
-    This is the authoritative write path for tank dips.
+    When closing dip exceeds opening dip a delivery is required and written to
+    tank_deliveries.json in the same request — one path, one save.
     """
     from ...services.dip_conversion import dip_to_volume
     from ...database.storage import save_station_storage
@@ -106,6 +111,14 @@ def record_tank_dips(
 
     opening_volume = dip_to_volume(tank_id, opening_dip_cm) if opening_dip_cm is not None else None
     closing_volume = dip_to_volume(tank_id, closing_dip_cm) if closing_dip_cm is not None else None
+
+    if (opening_volume is not None and closing_volume is not None
+            and closing_volume > opening_volume
+            and not delivery_supplier):
+        raise HTTPException(
+            status_code=400,
+            detail="A delivery must be recorded when the closing dip exceeds the opening dip.",
+        )
 
     now = datetime.utcnow().isoformat()
 
@@ -138,6 +151,55 @@ def record_tank_dips(
             "deliveries": [],
         }
 
+    # Write or update delivery record when supplier is provided
+    delivery_id = tank_readings_db[reading_id].get("delivery_id")
+    if delivery_supplier:
+        tank_deliveries_db = load_tank_deliveries(station_id)
+        vol_delivered = (
+            delivery_volume_liters
+            if delivery_volume_liters is not None
+            else round((closing_volume or 0) - (opening_volume or 0), 1)
+        )
+        fuel_type = storage.get("tanks", {}).get(tank_id, {}).get("fuel_type", "")
+        if delivery_id and delivery_id in tank_deliveries_db:
+            d = tank_deliveries_db[delivery_id]
+            d["supplier"] = delivery_supplier
+            d["invoice_number"] = delivery_invoice_number
+            d["time"] = delivery_time or d.get("time", "12:00")
+            d["actual_volume_delivered"] = vol_delivered
+            d["volume_before"] = opening_volume
+            d["volume_after"] = closing_volume
+            d["updated_at"] = now
+        else:
+            delivery_id = f"DEL-{tank_id}-{date}-{uuid.uuid4().hex[:8]}"
+            tank_deliveries_db[delivery_id] = {
+                "delivery_id": delivery_id,
+                "tank_id": tank_id,
+                "fuel_type": fuel_type,
+                "date": date,
+                "time": delivery_time or "12:00",
+                "before_delivery_dip_cm": opening_dip_cm,
+                "after_delivery_dip_cm": closing_dip_cm,
+                "volume_before": opening_volume,
+                "volume_after": closing_volume,
+                "actual_volume_delivered": vol_delivered,
+                "supplier": delivery_supplier,
+                "invoice_number": delivery_invoice_number,
+                "flowmeter_volume": None,
+                "invoice_volume_liters": None,
+                "expected_volume": None,
+                "delivery_variance": None,
+                "variance_percent": None,
+                "temperature": None,
+                "validation_status": "PASS",
+                "validation_message": "Recorded via tank dip entry",
+                "linked_reading_id": reading_id,
+                "recorded_by": recorded_by,
+                "created_at": now,
+            }
+        tank_readings_db[reading_id]["delivery_id"] = delivery_id
+        save_tank_deliveries(tank_deliveries_db, station_id)
+
     # Keep tank.current_level in sync only when the dip is for today — retrospective
     # entries must not overwrite the live level with historical data.
     today = datetime.utcnow().strftime("%Y-%m-%d")
@@ -160,6 +222,7 @@ def record_tank_dips(
         "opening_volume": rec.get("opening_volume"),
         "closing_dip_cm": rec.get("closing_dip_cm"),
         "closing_volume": rec.get("closing_volume"),
+        "delivery_id": delivery_id,
     }
 
 
@@ -180,6 +243,7 @@ def get_tank_dips(
             "closing_volume": r.get("closing_volume"),
             "recorded_by": r.get("recorded_by"),
             "updated_at": r.get("updated_at") or r.get("created_at"),
+            "delivery_id": r.get("delivery_id"),
         }
         for r in tank_readings_db.values()
         if r.get("date") == date and r.get("shift_type", "").lower() == shift_type.lower()

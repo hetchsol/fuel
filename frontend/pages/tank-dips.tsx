@@ -14,14 +14,20 @@ interface Tank {
 
 interface DipRow {
   tank_id: string
-  opening_dip_cm: string
-  closing_dip_cm: string
+  opening_dip_cm: number | null
   opening_volume: number | null
+  opening_source: string | null
+  closing_dip_cm: string
   closing_volume: number | null
-  opening_vol_error: boolean
   closing_vol_error: boolean
   saving: boolean
   saved: boolean
+  requires_delivery: boolean
+  delivery_linked: boolean
+  delivery_supplier: string
+  delivery_invoice: string
+  delivery_time: string
+  delivery_volume: string
 }
 
 interface HistoryRow {
@@ -34,6 +40,21 @@ interface HistoryRow {
   opening_volume: number | null
   closing_dip_cm: number | null
   closing_volume: number | null
+  delivery_id?: string | null
+}
+
+function getPreviousShift(date: string, shiftType: string): { prevDate: string; prevShift: string } {
+  if (shiftType === 'Night') {
+    return { prevDate: date, prevShift: 'Day' }
+  }
+  const d = new Date(date + 'T12:00:00')
+  d.setDate(d.getDate() - 1)
+  return { prevDate: d.toISOString().split('T')[0], prevShift: 'Night' }
+}
+
+function formatShiftDate(date: string, shift: string): string {
+  const d = new Date(date + 'T12:00:00')
+  return `${d.getDate()} ${d.toLocaleString('en', { month: 'short' })} ${shift}`
 }
 
 export default function TankDips() {
@@ -46,7 +67,6 @@ export default function TankDips() {
   const [rows, setRows] = useState<DipRow[]>([])
   const [loading, setLoading] = useState(true)
 
-  // History tab
   const [activeTab, setActiveTab] = useState<'enter' | 'history'>('enter')
   const [historyDate, setHistoryDate] = useState(() => new Date().toISOString().split('T')[0])
   const [historyShift, setHistoryShift] = useState('Day')
@@ -74,27 +94,50 @@ export default function TankDips() {
 
   const fetchExisting = useCallback(async (tankList: Tank[], d: string, st: string) => {
     try {
-      const res = await authFetch(
-        `${BASE}/tank-readings/dips?date=${d}&shift_type=${st}`,
-        { headers: getHeaders() }
-      )
-      const existing: Record<string, any> = {}
-      if (res.ok) {
-        const data: any[] = await res.json()
-        data.forEach(r => { existing[r.tank_id] = r })
+      const { prevDate, prevShift } = getPreviousShift(d, st)
+      const [curRes, prevRes] = await Promise.all([
+        authFetch(`${BASE}/tank-readings/dips?date=${d}&shift_type=${st}`, { headers: getHeaders() }),
+        authFetch(`${BASE}/tank-readings/dips?date=${prevDate}&shift_type=${prevShift}`, { headers: getHeaders() }),
+      ])
+      const current: Record<string, any> = {}
+      if (curRes.ok) {
+        const data: any[] = await curRes.json()
+        data.forEach(r => { current[r.tank_id] = r })
       }
+      const prevClosing: Record<string, any> = {}
+      if (prevRes.ok) {
+        const data: any[] = await prevRes.json()
+        data.forEach(r => { prevClosing[r.tank_id] = r })
+      }
+
       setRows(tankList.map(t => {
-        const e = existing[t.tank_id]
+        const cur = current[t.tank_id]
+        const prev = prevClosing[t.tank_id]
+        const openingDip: number | null = cur?.opening_dip_cm ?? prev?.closing_dip_cm ?? null
+        const openingVol: number | null = cur?.opening_volume ?? prev?.closing_volume ?? null
+        const openingSource: string | null = cur?.opening_dip_cm != null
+          ? null
+          : prev ? `from ${formatShiftDate(prevDate, prevShift)}` : null
+        const closingVol: number | null = cur?.closing_volume ?? null
+        const requiresDelivery = openingVol !== null && closingVol !== null && closingVol > openingVol
         return {
           tank_id: t.tank_id,
-          opening_dip_cm: e?.opening_dip_cm != null ? String(e.opening_dip_cm) : '',
-          closing_dip_cm: e?.closing_dip_cm != null ? String(e.closing_dip_cm) : '',
-          opening_volume: e?.opening_volume ?? null,
-          closing_volume: e?.closing_volume ?? null,
-          opening_vol_error: false,
+          opening_dip_cm: openingDip,
+          opening_volume: openingVol,
+          opening_source: openingSource,
+          closing_dip_cm: cur?.closing_dip_cm != null ? String(cur.closing_dip_cm) : '',
+          closing_volume: closingVol,
           closing_vol_error: false,
           saving: false,
-          saved: !!(e?.opening_dip_cm != null || e?.closing_dip_cm != null),
+          saved: cur?.closing_dip_cm != null,
+          requires_delivery: requiresDelivery,
+          delivery_linked: !!cur?.delivery_id,
+          delivery_supplier: '',
+          delivery_invoice: '',
+          delivery_time: '',
+          delivery_volume: requiresDelivery && closingVol !== null && openingVol !== null
+            ? String(Math.round(closingVol - openingVol))
+            : '',
         }
       }))
     } finally {
@@ -137,6 +180,7 @@ export default function TankDips() {
             opening_volume: r.opening_volume ?? null,
             closing_dip_cm: r.closing_dip_cm ?? null,
             closing_volume: r.closing_volume ?? null,
+            delivery_id: r.delivery_id ?? null,
           }
         })
         setHistoryRows(mapped)
@@ -174,38 +218,57 @@ export default function TankDips() {
     }
   }
 
-  const applyConversion = async (idx: number, field: 'opening_dip_cm' | 'closing_dip_cm', value: string, tankId: string) => {
-    const volField = field === 'opening_dip_cm' ? 'opening_volume' : 'closing_volume'
-    const errField = field === 'opening_dip_cm' ? 'opening_vol_error' : 'closing_vol_error'
+  const applyClosingConversion = async (idx: number, value: string, tankId: string) => {
     if (!value || isNaN(parseFloat(value)) || parseFloat(value) <= 0) {
-      setRows(prev => prev.map((r, i) => i === idx ? { ...r, [volField]: null, [errField]: false } : r))
+      setRows(prev => prev.map((r, i) => i !== idx ? r : {
+        ...r, closing_volume: null, closing_vol_error: false, requires_delivery: false,
+      }))
       return
     }
     const { volume, error } = await convertDip(tankId, value)
-    setRows(prev => prev.map((r, i) => i === idx ? { ...r, [volField]: volume, [errField]: error } : r))
+    setRows(prev => prev.map((r, i) => {
+      if (i !== idx) return r
+      const requiresDelivery = volume !== null && r.opening_volume !== null && volume > r.opening_volume
+      return {
+        ...r,
+        closing_volume: volume,
+        closing_vol_error: error,
+        requires_delivery: requiresDelivery,
+        delivery_volume: requiresDelivery && volume !== null && r.opening_volume !== null
+          ? String(Math.round(volume - r.opening_volume))
+          : r.delivery_volume,
+      }
+    }))
   }
 
-  const handleDipChange = (idx: number, field: 'opening_dip_cm' | 'closing_dip_cm', value: string, tankId: string) => {
-    setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value, saved: false } : r))
-    const key = `${idx}-${field}`
+  const handleClosingDipChange = (idx: number, value: string, tankId: string) => {
+    setRows(prev => prev.map((r, i) => i === idx ? { ...r, closing_dip_cm: value, saved: false } : r))
+    const key = `${idx}-closing`
     if (dipDebounceRef.current[key]) clearTimeout(dipDebounceRef.current[key])
-    dipDebounceRef.current[key] = setTimeout(() => applyConversion(idx, field, value, tankId), 400)
+    dipDebounceRef.current[key] = setTimeout(() => applyClosingConversion(idx, value, tankId), 400)
   }
 
-  const handleBlur = (idx: number, field: 'opening_dip_cm' | 'closing_dip_cm', tankId: string) => {
-    // Cancel debounce and fire immediately on focus loss
-    const key = `${idx}-${field}`
+  const handleClosingBlur = (idx: number, tankId: string) => {
+    const key = `${idx}-closing`
     if (dipDebounceRef.current[key]) {
       clearTimeout(dipDebounceRef.current[key])
       delete dipDebounceRef.current[key]
     }
-    applyConversion(idx, field, rows[idx][field], tankId)
+    applyClosingConversion(idx, rows[idx].closing_dip_cm, tankId)
+  }
+
+  const updateDeliveryField = (idx: number, field: 'delivery_supplier' | 'delivery_invoice' | 'delivery_time' | 'delivery_volume', value: string) => {
+    setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
   }
 
   const handleSave = async (idx: number) => {
     const row = rows[idx]
-    if (!row.opening_dip_cm && !row.closing_dip_cm) {
-      toast.error('Enter at least one dip reading before saving.')
+    if (!row.closing_dip_cm) {
+      toast.error('Enter the closing dip reading before saving.')
+      return
+    }
+    if (row.requires_delivery && !row.delivery_linked && !row.delivery_supplier.trim()) {
+      toast.error('Enter the supplier name to record the delivery.')
       return
     }
     setRows(prev => prev.map((r, i) => i === idx ? { ...r, saving: true } : r))
@@ -216,9 +279,15 @@ export default function TankDips() {
         shift_type: shiftType,
         recorded_by: userName,
       })
-      if (row.opening_dip_cm) params.set('opening_dip_cm', row.opening_dip_cm)
-      if (row.closing_dip_cm) params.set('closing_dip_cm', row.closing_dip_cm)
-
+      if (row.opening_dip_cm != null) params.set('opening_dip_cm', String(row.opening_dip_cm))
+      params.set('closing_dip_cm', row.closing_dip_cm)
+      if (row.requires_delivery && !row.delivery_linked && row.delivery_supplier.trim()) {
+        params.set('delivery_supplier', row.delivery_supplier.trim())
+        if (row.delivery_invoice.trim()) params.set('delivery_invoice_number', row.delivery_invoice.trim())
+        if (row.delivery_time) params.set('delivery_time', row.delivery_time)
+        if (row.delivery_volume && !isNaN(parseFloat(row.delivery_volume)))
+          params.set('delivery_volume_liters', row.delivery_volume)
+      }
       const res = await authFetch(`${BASE}/tank-readings/dips?${params.toString()}`, {
         method: 'POST',
         headers: getHeaders(),
@@ -230,10 +299,10 @@ export default function TankDips() {
       const data = await res.json()
       setRows(prev => prev.map((r, i) => i === idx ? {
         ...r,
-        opening_volume: data.opening_volume ?? r.opening_volume,
         closing_volume: data.closing_volume ?? r.closing_volume,
         saving: false,
         saved: true,
+        delivery_linked: !!data.delivery_id,
       } : r))
       toast.success(`${row.tank_id} dip saved.`)
     } catch (err: any) {
@@ -242,8 +311,7 @@ export default function TankDips() {
     }
   }
 
-  const tankName = (t: Tank) =>
-    t.display_name || `${t.fuel_type} Tank (${t.tank_id})`
+  const tankName = (t: Tank) => t.display_name || `${t.fuel_type} Tank (${t.tank_id})`
 
   if (!userRole || !isManagerOrAbove(userRole)) return null
 
@@ -253,7 +321,7 @@ export default function TankDips() {
         <div>
           <h1 className="text-3xl font-bold text-content-primary tracking-tight">Tank Dips</h1>
           <p className="mt-1 text-sm text-content-secondary">
-            Record opening and closing dip readings for each tank. Values are converted using the calibration chart.
+            Record closing dip readings for each tank. Opening readings carry forward automatically from the previous shift.
           </p>
         </div>
         <div className="flex gap-1">
@@ -303,7 +371,7 @@ export default function TankDips() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-border">
-                    {['Tank', 'Fuel Type', 'Opening Dip (cm)', 'Opening Vol (L)', 'Closing Dip (cm)', 'Closing Vol (L)'].map(col => (
+                    {['Tank', 'Fuel Type', 'Opening Dip (cm)', 'Opening Vol (L)', 'Closing Dip (cm)', 'Closing Vol (L)', 'Delivery'].map(col => (
                       <th key={col} className="px-4 py-3 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">
                         {col}
                       </th>
@@ -332,6 +400,12 @@ export default function TankDips() {
                         <td className="px-4 py-3 font-mono text-content-primary">
                           {r.closing_volume != null ? r.closing_volume.toLocaleString() : <span className="text-content-secondary">-</span>}
                         </td>
+                        <td className="px-4 py-3">
+                          {r.delivery_id
+                            ? <span className="text-xs font-semibold text-status-success">Recorded</span>
+                            : <span className="text-xs text-content-secondary">-</span>
+                          }
+                        </td>
                       </tr>
                     )
                   })}
@@ -344,134 +418,140 @@ export default function TankDips() {
 
       {/* Enter Readings tab */}
       {activeTab === 'enter' && <>
-
-      {/* Date + Shift selector */}
-      <div className="glass-card p-4 mb-6 flex flex-wrap gap-4 items-end">
-        <div>
-          <label className="block text-xs font-medium text-content-secondary mb-1">Date</label>
-          <input
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-            className="px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
-          />
+        <div className="glass-card p-4 mb-6 flex flex-wrap gap-4 items-end">
+          <div>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              className="px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Shift</label>
+            <select value={shiftType} onChange={e => setShiftType(e.target.value)}
+              className="px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary">
+              <option value="Day">Day</option>
+              <option value="Night">Night</option>
+            </select>
+          </div>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-content-secondary mb-1">Shift</label>
-          <select
-            value={shiftType}
-            onChange={e => setShiftType(e.target.value)}
-            className="px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
-          >
-            <option value="Day">Day</option>
-            <option value="Night">Night</option>
-          </select>
-        </div>
-      </div>
 
-      {loading ? (
-        <div className="glass-card p-8 text-center text-content-secondary text-sm">Loading...</div>
-      ) : (
-        <div className="space-y-4">
-          {rows.map((row, idx) => {
-
-            const tank = tanks.find(t => t.tank_id === row.tank_id)
-            const isDiesel = tank?.fuel_type === 'Diesel'
-            return (
-              <div
-                key={row.tank_id}
-                className={`glass-card p-5 border-l-4 ${isDiesel ? 'border-l-fuel-diesel' : 'border-l-fuel-petrol'}`}
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-bold text-content-primary">{tank ? tankName(tank) : row.tank_id}</h3>
-                    <span className={`text-xs font-semibold ${isDiesel ? 'text-fuel-diesel' : 'text-fuel-petrol'}`}>
-                      {tank?.fuel_type}
-                    </span>
+        {loading ? (
+          <div className="glass-card p-8 text-center text-content-secondary text-sm">Loading...</div>
+        ) : (
+          <div className="space-y-4">
+            {rows.map((row, idx) => {
+              const tank = tanks.find(t => t.tank_id === row.tank_id)
+              const isDiesel = tank?.fuel_type === 'Diesel'
+              return (
+                <div key={row.tank_id} className={`glass-card p-5 border-l-4 ${isDiesel ? 'border-l-fuel-diesel' : 'border-l-fuel-petrol'}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-bold text-content-primary">{tank ? tankName(tank) : row.tank_id}</h3>
+                      <span className={`text-xs font-semibold ${isDiesel ? 'text-fuel-diesel' : 'text-fuel-petrol'}`}>
+                        {tank?.fuel_type}
+                      </span>
+                    </div>
+                    {row.saved && (
+                      <span className="text-xs font-semibold text-status-success bg-status-success-light px-2 py-1 rounded">Saved</span>
+                    )}
                   </div>
-                  {row.saved && (
-                    <span className="text-xs font-semibold text-status-success bg-status-success-light px-2 py-1 rounded">
-                      Saved
-                    </span>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    <div>
+                      <label className="block text-xs font-medium text-content-secondary mb-1">
+                        Opening Dip (cm)
+                        {row.opening_source && (
+                          <span className="ml-1 font-normal text-content-secondary/50">{row.opening_source}</span>
+                        )}
+                      </label>
+                      <input type="text" readOnly
+                        value={row.opening_dip_cm != null ? String(row.opening_dip_cm) : ''}
+                        placeholder="No previous record"
+                        className="w-full px-3 py-2 border border-surface-border rounded-input text-sm bg-surface-bg cursor-default text-content-secondary" />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-content-secondary mb-1">Opening Volume (L)</label>
+                      <input type="text" readOnly
+                        value={row.opening_volume != null ? row.opening_volume.toLocaleString() : ''}
+                        placeholder="auto"
+                        className="w-full px-3 py-2 border border-surface-border rounded-input text-sm bg-surface-bg cursor-default text-content-secondary" />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-content-secondary mb-1">Closing Dip (cm)</label>
+                      <input type="number" step="0.1" min="0"
+                        value={row.closing_dip_cm}
+                        onChange={e => handleClosingDipChange(idx, e.target.value, row.tank_id)}
+                        onBlur={() => handleClosingBlur(idx, row.tank_id)}
+                        className="w-full px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
+                        placeholder="e.g. 152.5" />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-content-secondary mb-1">Closing Volume (L)</label>
+                      <input type="text" readOnly
+                        value={row.closing_volume != null ? row.closing_volume.toLocaleString() : ''}
+                        placeholder={row.closing_vol_error ? 'no calibration' : 'auto'}
+                        className={`w-full px-3 py-2 border rounded-input text-sm bg-surface-bg cursor-default ${
+                          row.closing_vol_error
+                            ? 'border-status-warning text-status-warning'
+                            : 'border-surface-border text-content-secondary'
+                        }`} />
+                    </div>
+                  </div>
+
+                  {row.requires_delivery && (
+                    <div className="mt-2 mb-4 pt-4 border-t border-surface-border">
+                      {row.delivery_linked ? (
+                        <p className="text-xs font-semibold text-status-success">Delivery recorded</p>
+                      ) : (
+                        <>
+                          <p className="text-xs font-semibold text-status-warning mb-3">
+                            Closing dip exceeds opening — record the delivery before saving.
+                          </p>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-content-secondary mb-1">Supplier *</label>
+                              <input type="text" value={row.delivery_supplier}
+                                onChange={e => updateDeliveryField(idx, 'delivery_supplier', e.target.value)}
+                                className="w-full px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
+                                placeholder="e.g. Total Energies" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-content-secondary mb-1">Invoice No.</label>
+                              <input type="text" value={row.delivery_invoice}
+                                onChange={e => updateDeliveryField(idx, 'delivery_invoice', e.target.value)}
+                                className="w-full px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
+                                placeholder="Optional" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-content-secondary mb-1">Delivery Time</label>
+                              <input type="time" value={row.delivery_time}
+                                onChange={e => updateDeliveryField(idx, 'delivery_time', e.target.value)}
+                                className="w-full px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-content-secondary mb-1">Volume (L)</label>
+                              <input type="number" min="0" value={row.delivery_volume}
+                                onChange={e => updateDeliveryField(idx, 'delivery_volume', e.target.value)}
+                                className="w-full px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary" />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )}
+
+                  <button onClick={() => handleSave(idx)}
+                    disabled={row.saving || !row.closing_dip_cm}
+                    className="px-4 py-2 bg-action-primary text-white text-sm font-medium rounded-btn hover:bg-action-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">
+                    {row.saving ? 'Saving...' : 'Save'}
+                  </button>
                 </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                  {/* Opening dip */}
-                  <div>
-                    <label className="block text-xs font-medium text-content-secondary mb-1">Opening Dip (cm)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={row.opening_dip_cm}
-                      onChange={e => handleDipChange(idx, 'opening_dip_cm', e.target.value, row.tank_id)}
-                      onBlur={() => handleBlur(idx, 'opening_dip_cm', row.tank_id)}
-                      className="w-full px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
-                      placeholder="e.g. 165.0"
-                    />
-                  </div>
-
-                  {/* Opening volume (read-only, calibration-derived) */}
-                  <div>
-                    <label className="block text-xs font-medium text-content-secondary mb-1">Opening Volume (L)</label>
-                    <input
-                      type="text"
-                      readOnly
-                      value={row.opening_volume != null ? row.opening_volume.toLocaleString() : ''}
-                      placeholder={row.opening_vol_error ? 'no calibration' : 'auto'}
-                      className={`w-full px-3 py-2 border rounded-input text-sm bg-surface-bg cursor-default ${
-                        row.opening_vol_error
-                          ? 'border-status-warning text-status-warning'
-                          : 'border-surface-border text-content-secondary'
-                      }`}
-                    />
-                  </div>
-
-                  {/* Closing dip */}
-                  <div>
-                    <label className="block text-xs font-medium text-content-secondary mb-1">Closing Dip (cm)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={row.closing_dip_cm}
-                      onChange={e => handleDipChange(idx, 'closing_dip_cm', e.target.value, row.tank_id)}
-                      onBlur={() => handleBlur(idx, 'closing_dip_cm', row.tank_id)}
-                      className="w-full px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
-                      placeholder="e.g. 152.5"
-                    />
-                  </div>
-
-                  {/* Closing volume (read-only, calibration-derived) */}
-                  <div>
-                    <label className="block text-xs font-medium text-content-secondary mb-1">Closing Volume (L)</label>
-                    <input
-                      type="text"
-                      readOnly
-                      value={row.closing_volume != null ? row.closing_volume.toLocaleString() : ''}
-                      placeholder={row.closing_vol_error ? 'no calibration' : 'auto'}
-                      className={`w-full px-3 py-2 border rounded-input text-sm bg-surface-bg cursor-default ${
-                        row.closing_vol_error
-                          ? 'border-status-warning text-status-warning'
-                          : 'border-surface-border text-content-secondary'
-                      }`}
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleSave(idx)}
-                  disabled={row.saving || (!row.opening_dip_cm && !row.closing_dip_cm)}
-                  className="px-4 py-2 bg-action-primary text-white text-sm font-medium rounded-btn hover:bg-action-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {row.saving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            )
-          })}
-        </div>
-      )}
+              )
+            })}
+          </div>
+        )}
       </>}
     </div>
   )
