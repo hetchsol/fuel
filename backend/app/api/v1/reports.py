@@ -999,6 +999,7 @@ def get_date_range_report(
     report_data['generated_by'] = {
         'user_id': current_user['user_id'],
         'username': current_user['username'],
+        'full_name': current_user.get('full_name', current_user['username']),
         'role': current_user['role']
     }
     report_data['generated_at'] = datetime.now().isoformat()
