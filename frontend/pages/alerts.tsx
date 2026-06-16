@@ -201,8 +201,8 @@ function AnomalyAlertsView() {
                           {a.date && (
                             <p className="text-content-secondary">{formatDateToDisplay(a.date)}</p>
                           )}
-                          {a.value !== null && (
-                            <p className="font-mono text-content-primary">{a.value.toFixed(2)}L</p>
+                          {a.value != null && (
+                            <p className="font-mono text-content-primary">{Number(a.value).toFixed(2)}L</p>
                           )}
                         </div>
                       </div>

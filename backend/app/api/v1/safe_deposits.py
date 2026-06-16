@@ -92,8 +92,11 @@ def record_deposit(deposit: DepositInput, ctx: dict = Depends(get_station_contex
 
 
 @router.get("/{shift_id}")
-def get_shift_deposits(shift_id: str, ctx: dict = Depends(require_supervisor_or_owner)):
+def get_shift_deposits(shift_id: str, ctx: dict = Depends(get_station_context)):
     """Get all deposits for a shift, grouped by attendant. Supervisor/Manager/Owner only."""
+    role = ctx.get("role", "")
+    if role not in ["supervisor", "manager", "owner"]:
+        raise HTTPException(status_code=403, detail="Access restricted to supervisors, managers, and owners.")
     station_id = ctx["station_id"]
     storage = ctx["storage"]
     shifts_data = storage.get('shifts', {})
