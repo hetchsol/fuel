@@ -944,11 +944,16 @@ def get_date_range_report(
     storage = ctx["storage"]
     station_id = ctx["station_id"]
 
-    # Load all sales sources for this station
-    all_sales_sources = load_all_sales_sources(station_id, storage)
-
-    # Get reporting service
+    # Build reporting service first — it loads authoritative data from handovers
     service = _build_reporting_service(storage, ctx["station_id"])
+
+    # Build sales sources: handover-derived readings are the primary fuel_sales;
+    # any legacy sales.json records are appended behind them.
+    legacy = load_all_sales_sources(station_id, storage)
+    all_sales_sources = {
+        **legacy,
+        'fuel_sales': service.readings_data + legacy.get('fuel_sales', []),
+    }
 
     # Aggregate sales by date range
     report_data = service.aggregate_sales_by_date_range(

@@ -604,7 +604,7 @@ class ReportingService:
                 continue
 
             fuel_type = sale.get('fuel_type', 'Unknown')
-            volume = sale.get('average_volume', 0.0)
+            volume = sale.get('average_volume') or sale.get('volume', 0.0)
             revenue = sale.get('total_amount', 0.0)
 
             # Aggregate by product
