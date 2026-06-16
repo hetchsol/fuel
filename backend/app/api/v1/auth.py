@@ -396,7 +396,11 @@ def list_users(ctx: dict = Depends(get_station_context)):
     station_id = ctx.get("station_id")
 
     def visible(u: dict) -> bool:
-        if (u.get("station_id") or None) != station_id:
+        u_station = u.get("station_id") or None
+        # Owner accounts have no station_id; show them only to other owners
+        if u_station is None:
+            return caller_role == "owner" and u.get("role") == "owner"
+        if u_station != station_id:
             return False
         if visible_roles and u.get("role") not in visible_roles:
             return False
