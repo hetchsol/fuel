@@ -5,7 +5,7 @@ Endpoints for recording and retrieving tank volume readings with delivery tracki
 Implements Excel Column AM logic for calculating tank volume movement.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import List, Optional
@@ -1032,6 +1032,78 @@ def submit_tank_reading(
     return JSONResponse(content=jsonable_encoder(output_dict))
 
 
+def _enrich_tank_record(r: dict, deliveries_db: dict, tanks: dict) -> None:
+    """Normalize a tank reading record — fill in derived fields missing from simple dip records."""
+    o_vol = r.get('opening_volume') or r.get('opening_volume_liters') or 0
+    c_vol = r.get('closing_volume') or r.get('closing_volume_liters') or 0
+
+    if r.get('tank_volume_movement') is None:
+        r['tank_volume_movement'] = round(o_vol - c_vol, 3)
+
+    for field, default in [
+        ('total_electronic_dispensed', 0.0),
+        ('total_mechanical_dispensed', 0.0),
+        ('electronic_vs_tank_variance', 0.0),
+        ('mechanical_vs_tank_variance', 0.0),
+        ('electronic_vs_tank_percent', 0.0),
+        ('mechanical_vs_tank_percent', 0.0),
+        ('expected_amount_electronic', 0.0),
+        ('price_per_liter', 0.0),
+        ('loss_percent', 0.0),
+    ]:
+        if r.get(field) is None:
+            r[field] = default
+
+    if not r.get('validation_status'):
+        r['validation_status'] = 'PASS'
+    if r.get('nozzle_readings') is None:
+        r['nozzle_readings'] = []
+    if r.get('deliveries') is None:
+        r['deliveries'] = []
+    if not r.get('fuel_type'):
+        r['fuel_type'] = tanks.get(r.get('tank_id', ''), {}).get('fuel_type', '')
+
+    delivery_id = r.get('delivery_id')
+    if delivery_id and not r['deliveries']:
+        d = deliveries_db.get(delivery_id)
+        if d:
+            r['deliveries'] = [{
+                'delivery_id': d.get('delivery_id', ''),
+                'supplier': d.get('supplier', ''),
+                'volume_delivered': d.get('actual_volume_delivered', 0),
+                'delivery_time': d.get('time', ''),
+                'invoice_number': d.get('invoice_number'),
+            }]
+
+
+@router.get("/dip-ledger")
+def get_dip_ledger(
+    start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
+    end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
+    ctx: dict = Depends(get_station_context),
+):
+    """Return all tanks' dip records for the given date range, normalized."""
+    tank_readings_db = load_tank_readings(ctx["station_id"])
+    deliveries_db = load_tank_deliveries(ctx["station_id"])
+    tanks = ctx["storage"].get("tanks", {})
+
+    records = [
+        dict(r)
+        for r in tank_readings_db.values()
+        if start_date <= r.get('date', '') <= end_date
+        and (r.get('opening_dip_cm') is not None or r.get('closing_dip_cm') is not None)
+    ]
+    for r in records:
+        _enrich_tank_record(r, deliveries_db, tanks)
+
+    shift_order = {'Day': 0, 'Night': 1}
+    records.sort(
+        key=lambda x: (x.get('date', ''), shift_order.get(x.get('shift_type', ''), 0)),
+        reverse=True,
+    )
+    return JSONResponse(content=jsonable_encoder(records))
+
+
 @router.get("/readings/{tank_id}")
 def get_tank_readings(
     tank_id: str,
@@ -1046,7 +1118,7 @@ def get_tank_readings(
 
     # Filter readings by tank_id - return raw dicts to preserve all fields
     readings = [
-        r
+        dict(r)
         for r in tank_readings_db.values()
         if r['tank_id'] == tank_id
     ]
@@ -1067,18 +1139,11 @@ def get_tank_readings(
                     "shift_id": shift_id,
                     "opening_dip_cm": dip.get("opening_dip_cm"),
                     "closing_dip_cm": dip.get("closing_dip_cm"),
-                    "opening_volume_liters": dip.get("opening_volume_liters"),
-                    "closing_volume_liters": dip.get("closing_volume_liters"),
+                    "opening_volume": dip.get("opening_volume_liters"),
+                    "closing_volume": dip.get("closing_volume_liters"),
                     "recorded_by": dip.get("recorded_by", ""),
-                    "recorded_at": dip.get("recorded_at", ""),
                     "created_at": dip.get("recorded_at", ""),
-                    "source": "shift_dip",
                 }
-                # Calculate basic volume movement
-                if reading_entry["opening_volume_liters"] and reading_entry["closing_volume_liters"]:
-                    reading_entry["tank_volume_movement"] = round(
-                        reading_entry["closing_volume_liters"] - reading_entry["opening_volume_liters"], 2
-                    )
                 readings.append(reading_entry)
 
     # Filter by date range if provided
@@ -1086,6 +1151,12 @@ def get_tank_readings(
         readings = [r for r in readings if r.get('date', '') >= start_date]
     if end_date:
         readings = [r for r in readings if r.get('date', '') <= end_date]
+
+    # Normalize: fill in derived fields for dip-only records
+    deliveries_db = load_tank_deliveries(ctx["station_id"])
+    tanks = ctx["storage"].get("tanks", {})
+    for r in readings:
+        _enrich_tank_record(r, deliveries_db, tanks)
 
     # Sort by date (newest first)
     readings.sort(key=lambda x: x.get('date', ''), reverse=True)

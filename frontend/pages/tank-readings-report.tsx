@@ -1,32 +1,10 @@
-import { authFetch, BASE, getHeaders, downloadExport } from '../lib/api'
+import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
-import { useTheme, getFuelColorSet } from '../contexts/ThemeContext'
-import LoadingSpinner from '../components/LoadingSpinner'
-import { useTanks, tankLabel } from '../hooks/useTanks'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
-
-interface ValidatedReading {
-  reading_id: string
-  shift_id: string
-  tank_id: string
-  reading_type: string
-  mechanical_reading: number
-  electronic_reading: number
-  dip_reading_cm: number
-  dip_reading_liters: number
-  recorded_by: string
-  timestamp: string
-  validation_status: string
-  discrepancy_mech_elec_percent: number
-  discrepancy_mech_dip_percent: number
-  discrepancy_elec_dip_percent: number
-  max_discrepancy_percent: number
-  validation_message: string
-  notes?: string
-}
+import { useTanks, tankLabel } from '../hooks/useTanks'
 
 interface NozzleReading {
   nozzle_id: string
@@ -39,140 +17,154 @@ interface NozzleReading {
   mechanical_movement: number
 }
 
-interface CustomerAllocation {
-  customer_id: string
-  customer_name: string
-  volume: number
-  price_per_liter: number
-  amount: number
-}
-
 interface TankReading {
   reading_id: string
   tank_id: string
-  fuel_type: string
+  fuel_type?: string
   date: string
   shift_type: string
-  opening_dip_cm: number
-  closing_dip_cm: number
-  after_delivery_dip_cm: number | null
-  opening_volume: number
-  closing_volume: number
+  opening_dip_cm: number | null
+  closing_dip_cm: number | null
+  opening_volume: number | null
+  closing_volume: number | null
   tank_volume_movement: number
   total_electronic_dispensed: number
-  total_mechanical_dispensed: number
   electronic_vs_tank_variance: number
-  mechanical_vs_tank_variance: number
   electronic_vs_tank_percent: number
-  mechanical_vs_tank_percent: number
-  price_per_liter: number
   expected_amount_electronic: number
-  actual_cash_banked: number | null
-  cash_difference: number | null
-  loss_percent: number
+  price_per_liter: number
   validation_status: string
-  delivery_occurred: boolean
   nozzle_readings: NozzleReading[]
-  customer_allocations?: CustomerAllocation[]
-  allocation_balance_check?: number | null
-  total_customer_revenue?: number | null
-  recorded_by: string
-  created_at: string
-  notes: string
   deliveries?: any[]
+  delivery_id?: string | null
   delivery_timeline?: any
-  delivery_vat_amount?: number | null
-  delivery_net_price?: number | null
-  delivery_vat_per_liter?: number | null
+  recorded_by?: string
+  created_at?: string
+  notes?: string
+}
+
+interface LedgerRecord {
+  reading_id: string
+  tank_id: string
+  fuel_type?: string
+  date: string
+  shift_type: string
+  opening_dip_cm: number | null
+  closing_dip_cm: number | null
+  opening_volume: number | null
+  closing_volume: number | null
+  tank_volume_movement: number
+  validation_status: string
+  deliveries?: any[]
+  delivery_id?: string | null
+  recorded_by?: string
+}
+
+function statusBadge(status: string) {
+  const cls =
+    status === 'PASS' ? 'bg-status-success-light text-status-success border-status-success' :
+    status === 'WARNING' ? 'bg-status-pending-light text-status-warning border-status-warning' :
+    status === 'FAIL' ? 'bg-status-error-light text-status-error border-status-error' :
+    'bg-surface-bg text-content-secondary border-surface-border'
+  return (
+    <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${cls}`}>
+      {status || 'PASS'}
+    </span>
+  )
+}
+
+function fmtVol(v: number | null | undefined) {
+  if (v == null) return '-'
+  return v.toLocaleString('en-ZM', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' L'
+}
+
+function fmtCm(v: number | null | undefined) {
+  if (v == null) return '-'
+  return v.toFixed(1) + ' cm'
+}
+
+function fmtMove(v: number) {
+  if (!v && v !== 0) return '-'
+  const cls = v >= 0 ? 'text-status-success font-semibold' : 'text-status-error font-semibold'
+  return <span className={cls}>{v >= 0 ? '+' : ''}{v.toFixed(1)} L</span>
+}
+
+function deliveryBadge(deliveries: any[] | undefined, delivery_id: string | null | undefined) {
+  if (deliveries && deliveries.length > 0) {
+    const d = deliveries[0]
+    return (
+      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-action-primary-light text-action-primary border border-action-primary">
+        {d.supplier || 'Delivery'} {d.volume_delivered ? `${Math.round(d.volume_delivered)} L` : ''}
+      </span>
+    )
+  }
+  if (delivery_id) {
+    return (
+      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-action-primary-light text-action-primary border border-action-primary">
+        Delivery linked
+      </span>
+    )
+  }
+  return <span className="text-content-secondary text-sm">-</span>
 }
 
 export default function TankReadingsReport() {
-  const { theme } = useTheme()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'readings' | 'validated'>('readings')
+  const { tanks: availableTanks } = useTanks()
+  const [activeTab, setActiveTab] = useState<'readings' | 'ledger'>('readings')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const { tanks: availableTanks } = useTanks()
   const [selectedTank, setSelectedTank] = useState('')
   const [readings, setReadings] = useState<TankReading[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [selectedReading, setSelectedReading] = useState<TankReading | null>(null)
-
-  // Validated readings state (owner-only tab)
   const [user, setUser] = useState<any>(null)
-  const [validatedReadings, setValidatedReadings] = useState<ValidatedReading[]>([])
-  const [validatedLoading, setValidatedLoading] = useState(false)
-  const [filterStatus, setFilterStatus] = useState<string>('ALL')
-  const [filterShift, setFilterShift] = useState<string>('ALL')
-  const [selectedValidatedReading, setSelectedValidatedReading] = useState<ValidatedReading | null>(null)
 
-  // Default to first available tank on load
+  // Dip ledger state
+  const [ledger, setLedger] = useState<LedgerRecord[]>([])
+  const [ledgerLoading, setLedgerLoading] = useState(false)
+  const [ledgerTankFilter, setLedgerTankFilter] = useState('ALL')
+  const [ledgerStatusFilter, setLedgerStatusFilter] = useState('ALL')
+
+  useEffect(() => {
+    const u = localStorage.getItem('user')
+    if (u) setUser(JSON.parse(u))
+    if (router.query.tab === 'ledger') setActiveTab('ledger')
+  }, [router.query.tab])
+
+  useEffect(() => {
+    const today = new Date()
+    const ago = new Date()
+    ago.setDate(today.getDate() - 7)
+    setEndDate(today.toISOString().split('T')[0])
+    setStartDate(ago.toISOString().split('T')[0])
+  }, [])
+
   useEffect(() => {
     if (!selectedTank && availableTanks.length > 0) {
       setSelectedTank(availableTanks[0].tank_id)
     }
   }, [availableTanks, selectedTank])
 
-  // Get fuel type prefix and color based on tank
-  const getFuelTypePrefix = (tankId: string) => {
-    const tankData = availableTanks.find(t => t.tank_id === tankId)
-    if (tankData) return tankData.fuel_type === 'Diesel' ? 'LSD' : 'UNL'
-    return tankId === 'TANK-DIESEL' ? 'LSD' : 'UNL'
-  }
-
-  // Load user and handle tab query param
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (userData) {
-      setUser(JSON.parse(userData))
-    }
-    if (router.query.tab === 'validated') {
-      setActiveTab('validated')
-    }
-  }, [router.query.tab])
-
-  // Set default date range (last 7 days)
-  useEffect(() => {
-    const today = new Date()
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(today.getDate() - 7)
-
-    setEndDate(today.toISOString().split('T')[0])
-    setStartDate(sevenDaysAgo.toISOString().split('T')[0])
-  }, [])
-
-  // Load validated readings when tab switches to validated
-  useEffect(() => {
-    if (activeTab === 'validated' && user?.role === 'owner') {
-      loadValidatedReadings()
-    }
-  }, [activeTab, user])
-
-  // Load readings when date range or tank changes
-  useEffect(() => {
-    if (startDate && endDate) {
-      loadReadings()
-    }
+    if (startDate && endDate && selectedTank) loadReadings()
   }, [startDate, endDate, selectedTank])
+
+  useEffect(() => {
+    if (activeTab === 'ledger' && startDate && endDate) loadLedger()
+  }, [activeTab, startDate, endDate])
 
   const loadReadings = async () => {
     setLoading(true)
     setError('')
-
     try {
-      const url = `${BASE}/tank-readings/readings/${selectedTank}?start_date=${startDate}&end_date=${endDate}`
-
-      const res = await authFetch(url, {
-        headers: getHeaders()
-      })
-
-      if (!res.ok) {
-        throw new Error('Failed to load readings')
-      }
-
-      const data = await res.json()
-      setReadings(data)
+      const res = await authFetch(
+        `${BASE}/tank-readings/readings/${selectedTank}?start_date=${startDate}&end_date=${endDate}`,
+        { headers: getHeaders() }
+      )
+      if (!res.ok) throw new Error('Failed to load readings')
+      setReadings(await res.json())
     } catch (err: any) {
       setError(err.message || 'Error loading readings')
     } finally {
@@ -180,740 +172,555 @@ export default function TankReadingsReport() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-ZM', {
-      style: 'currency',
-      currency: 'ZMW',
-      minimumFractionDigits: 2
-    }).format(amount)
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'PASS':
-        return 'bg-status-success-light text-status-success border-status-success'
-      case 'WARNING':
-        return 'bg-status-pending-light text-status-warning border-status-warning'
-      case 'FAIL':
-        return 'bg-status-error-light text-status-error border-status-error'
-      default:
-        return 'bg-surface-bg text-content-primary border-surface-border'
-    }
-  }
-
-  const loadValidatedReadings = async () => {
-    setValidatedLoading(true)
+  const loadLedger = async () => {
+    setLedgerLoading(true)
     try {
-      const response = await authFetch(`${BASE}/validated-readings`, {
-        headers: getHeaders()
-      })
-      if (response.ok) {
-        const data = await response.json()
-        const sorted = data.sort((a: ValidatedReading, b: ValidatedReading) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        )
-        setValidatedReadings(sorted)
-      }
-    } catch (err) {
-      console.error('Error loading validated readings:', err)
+      const res = await authFetch(
+        `${BASE}/tank-readings/dip-ledger?start_date=${startDate}&end_date=${endDate}`,
+        { headers: getHeaders() }
+      )
+      if (res.ok) setLedger(await res.json())
+    } catch {
+      // silent — empty ledger shown
     } finally {
-      setValidatedLoading(false)
+      setLedgerLoading(false)
     }
   }
 
-  const getValidatedStatusIcon = (status: string) => {
-    switch (status) {
-      case 'PASS': return '\u2713'
-      case 'WARNING': return '\u26A0'
-      case 'FAIL': return '\u2717'
-      default: return '?'
-    }
-  }
-
-  const filteredValidatedReadings = validatedReadings.filter(r => {
-    if (filterStatus !== 'ALL' && r.validation_status !== filterStatus) return false
-    if (filterShift !== 'ALL' && r.shift_id !== filterShift) return false
+  const filteredLedger = ledger.filter(r => {
+    if (ledgerTankFilter !== 'ALL' && r.tank_id !== ledgerTankFilter) return false
+    if (ledgerStatusFilter !== 'ALL' && r.validation_status !== ledgerStatusFilter) return false
     return true
   })
 
-  const uniqueShifts = Array.from(new Set(validatedReadings.map(r => r.shift_id)))
-
-  const validatedStats = {
-    total: validatedReadings.length,
-    pass: validatedReadings.filter(r => r.validation_status === 'PASS').length,
-    warning: validatedReadings.filter(r => r.validation_status === 'WARNING').length,
-    fail: validatedReadings.filter(r => r.validation_status === 'FAIL').length
+  const ledgerStats = {
+    total: ledger.length,
+    complete: ledger.filter(r => r.opening_dip_cm != null && r.closing_dip_cm != null).length,
+    partial: ledger.filter(r => (r.opening_dip_cm != null) !== (r.closing_dip_cm != null)).length,
+    missing: ledger.filter(r => r.opening_dip_cm == null && r.closing_dip_cm == null).length,
   }
 
   const getExportConfig = useCallback((): ExportConfig | null => {
-    const data = activeTab === 'validated' ? filteredValidatedReadings : readings
-    if (!data.length) return null
-    if (activeTab === 'validated') {
+    if (activeTab === 'readings') {
+      if (!readings.length) return null
       return {
-        title: 'Validated Tank Readings',
-        filename: `tank_readings_validated_${new Date().toISOString().slice(0,10)}`,
-        summaryCards: [
-          { label: 'Total', value: validatedStats.total },
-          { label: 'Pass', value: validatedStats.pass },
-          { label: 'Warning', value: validatedStats.warning },
-          { label: 'Fail', value: validatedStats.fail },
-        ],
+        title: 'Tank Readings',
+        filename: `tank_readings_${selectedTank}_${startDate}_${endDate}`,
         columns: [
-          { header: 'Timestamp', key: 'timestamp' },
-          { header: 'Shift', key: 'shift_id' },
-          { header: 'Tank', key: 'tank_id' },
-          { header: 'Reading Type', key: 'reading_type' },
-          { header: 'Mechanical', key: 'mechanical_reading', format: 'number' },
-          { header: 'Electronic', key: 'electronic_reading', format: 'number' },
-          { header: 'Dip (cm)', key: 'dip_reading_cm', format: 'number' },
-          { header: 'Dip (L)', key: 'dip_reading_liters', format: 'number' },
-          { header: 'Max Variance %', key: 'max_discrepancy_percent', format: 'percent' },
+          { header: 'Date', key: 'date' },
+          { header: 'Shift', key: 'shift_type' },
+          { header: 'Opening cm', key: 'opening_dip_cm', format: 'number' },
+          { header: 'Opening L', key: 'opening_volume', format: 'number' },
+          { header: 'Closing cm', key: 'closing_dip_cm', format: 'number' },
+          { header: 'Closing L', key: 'closing_volume', format: 'number' },
+          { header: 'Movement L', key: 'tank_volume_movement', format: 'number' },
           { header: 'Status', key: 'validation_status' },
         ],
-        data: filteredValidatedReadings,
+        data: readings,
       }
     }
+    if (!filteredLedger.length) return null
     return {
-      title: 'Tank Readings History',
-      filename: `tank_readings_${new Date().toISOString().slice(0,10)}`,
+      title: 'Dip Ledger',
+      filename: `dip_ledger_${startDate}_${endDate}`,
       columns: [
         { header: 'Date', key: 'date' },
         { header: 'Shift', key: 'shift_type' },
         { header: 'Tank', key: 'tank_id' },
-        { header: 'Fuel Type', key: 'fuel_type' },
-        { header: 'Opening Dip (cm)', key: 'opening_dip_cm', format: 'number' },
-        { header: 'Closing Dip (cm)', key: 'closing_dip_cm', format: 'number' },
-        { header: 'Opening Vol (L)', key: 'opening_volume', format: 'number' },
-        { header: 'Closing Vol (L)', key: 'closing_volume', format: 'number' },
-        { header: 'Movement (L)', key: 'tank_volume_movement', format: 'number' },
+        { header: 'Fuel', key: 'fuel_type' },
+        { header: 'Opening cm', key: 'opening_dip_cm', format: 'number' },
+        { header: 'Opening L', key: 'opening_volume', format: 'number' },
+        { header: 'Closing cm', key: 'closing_dip_cm', format: 'number' },
+        { header: 'Closing L', key: 'closing_volume', format: 'number' },
+        { header: 'Movement L', key: 'tank_volume_movement', format: 'number' },
         { header: 'Status', key: 'validation_status' },
       ],
-      data: readings,
+      data: filteredLedger,
     }
-  }, [activeTab, readings, filteredValidatedReadings, validatedStats])
+  }, [activeTab, readings, filteredLedger, selectedTank, startDate, endDate])
+
+  const canSeeLedger = user?.role && ['supervisor', 'manager', 'owner'].includes(user.role)
 
   return (
-    <div className="min-h-screen p-6 transition-colors duration-300" style={{ backgroundColor: theme.background }}>
+    <div className="min-h-screen bg-surface-bg p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
+
         {/* Header */}
-        <div className="mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h1 className="text-3xl font-bold transition-colors duration-300" style={{ color: theme.textPrimary }}>
-                Tank Readings & Monitor
-              </h1>
-              <p className="mt-2 transition-colors duration-300" style={{ color: theme.textSecondary }}>
-                View tank readings history and validated readings monitor
-              </p>
-            </div>
-            <ExportButtons getConfig={getExportConfig} />
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-content-primary">Tank Readings</h1>
+            <p className="text-sm text-content-secondary mt-1">
+              Dip readings history and multi-tank ledger
+            </p>
           </div>
+          <ExportButtons getConfig={getExportConfig} />
         </div>
 
-        {/* Related Pages */}
-        <div className="mb-6 flex flex-wrap gap-3">
-          <span className="text-sm self-center font-medium" style={{ color: theme.textSecondary }}>Related:</span>
-          <Link href="/daily-tank-readings" className="text-sm px-3 py-1.5 rounded-lg border transition-colors hover:opacity-80" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.textPrimary }}>
-            Enter Daily Tank Readings
+        {/* Related pages */}
+        <div className="mb-6 flex flex-wrap gap-2">
+          <span className="text-sm text-content-secondary self-center">Related:</span>
+          <Link href="/tank-dips" className="text-sm px-3 py-1.5 bg-surface-card border border-surface-border rounded-lg hover:border-action-primary hover:text-action-primary transition-colors">
+            Enter Tank Dips
           </Link>
-          <Link href="/three-way-reconciliation" className="text-sm px-3 py-1.5 rounded-lg border transition-colors hover:opacity-80" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.textPrimary }}>
+          <Link href="/three-way-reconciliation" className="text-sm px-3 py-1.5 bg-surface-card border border-surface-border rounded-lg hover:border-action-primary hover:text-action-primary transition-colors">
             Three-Way Reconciliation
           </Link>
-          <Link href="/shift-reconciliation" className="text-sm px-3 py-1.5 rounded-lg border transition-colors hover:opacity-80" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.textPrimary }}>
+          <Link href="/shift-reconciliation" className="text-sm px-3 py-1.5 bg-surface-card border border-surface-border rounded-lg hover:border-action-primary hover:text-action-primary transition-colors">
             Shift Reconciliation
           </Link>
         </div>
 
-        {/* Tab Navigation */}
+        {/* Date range (shared across tabs) */}
+        <div className="bg-surface-card border border-surface-border rounded-xl p-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 bg-surface-bg border border-surface-border rounded-lg text-sm text-content-primary focus:outline-none focus:ring-1 focus:ring-action-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 bg-surface-bg border border-surface-border rounded-lg text-sm text-content-primary focus:outline-none focus:ring-1 focus:ring-action-primary"
+              />
+            </div>
+            {activeTab === 'readings' && (
+              <div>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Tank</label>
+                <select
+                  value={selectedTank}
+                  onChange={e => setSelectedTank(e.target.value)}
+                  className="w-full px-3 py-2 bg-surface-bg border border-surface-border rounded-lg text-sm text-content-primary focus:outline-none focus:ring-1 focus:ring-action-primary"
+                >
+                  {availableTanks.map(t => (
+                    <option key={t.tank_id} value={t.tank_id}>{tankLabel(t)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="flex items-end">
+              <button
+                onClick={activeTab === 'readings' ? loadReadings : loadLedger}
+                disabled={loading || ledgerLoading}
+                className="w-full px-4 py-2 bg-action-primary text-white rounded-lg text-sm font-medium hover:bg-action-primary-hover disabled:opacity-50 transition-colors"
+              >
+                {(loading || ledgerLoading) ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
         <div className="mb-6 border-b border-surface-border">
-          <nav className="-mb-px flex flex-wrap gap-2 sm:gap-8 overflow-x-auto">
+          <nav className="-mb-px flex gap-6">
             <button
               onClick={() => setActiveTab('readings')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
                 activeTab === 'readings'
                   ? 'border-action-primary text-action-primary'
-                  : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
+                  : 'border-transparent text-content-secondary hover:text-content-primary'
               }`}
             >
               Tank Readings
             </button>
-            {user?.role === 'owner' && (
+            {canSeeLedger && (
               <button
-                onClick={() => setActiveTab('validated')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'validated'
+                onClick={() => setActiveTab('ledger')}
+                className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+                  activeTab === 'ledger'
                     ? 'border-action-primary text-action-primary'
-                    : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
+                    : 'border-transparent text-content-secondary hover:text-content-primary'
                 }`}
               >
-                Validated Readings
+                Dip Ledger
               </button>
             )}
           </nav>
         </div>
 
-        {activeTab === 'readings' && (<>
-        {/* Filters */}
-        <div className="rounded-lg shadow p-6 mb-6 transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 transition-colors duration-300" style={{ color: theme.textPrimary }}>
-                Tank
-              </label>
-              <select
-                value={selectedTank}
-                onChange={(e) => {
-                  setSelectedTank(e.target.value)
-                }}
-                className="w-full px-3 py-2 border rounded-md focus:ring-2 transition-colors duration-300"
-                style={{
-                  backgroundColor: theme.cardBg,
-                  color: theme.textPrimary,
-                  borderColor: theme.border
-                }}
-              >
-                {availableTanks.map(t => (
-                  <option key={t.tank_id} value={t.tank_id}>
-                    {tankLabel(t)}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {/* ── TAB: TANK READINGS ── */}
+        {activeTab === 'readings' && (
+          <>
+            {error && (
+              <div className="bg-status-error-light border border-status-error rounded-lg p-4 mb-4 text-sm text-status-error">
+                {error}
+              </div>
+            )}
 
-            <div>
-              <label className="block text-sm font-medium mb-2 transition-colors duration-300" style={{ color: theme.textPrimary }}>
-                Start Date
-              </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md focus:ring-2 transition-colors duration-300"
-                style={{
-                  backgroundColor: theme.cardBg,
-                  color: theme.textPrimary,
-                  borderColor: theme.border
-                }}
-              />
-            </div>
+            {/* Summary cards */}
+            {readings.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                <div className="bg-surface-card border border-surface-border rounded-xl p-4">
+                  <div className="text-xs text-content-secondary mb-1">Readings</div>
+                  <div className="text-2xl font-bold text-content-primary">{readings.length}</div>
+                </div>
+                <div className="bg-surface-card border border-surface-border rounded-xl p-4">
+                  <div className="text-xs text-content-secondary mb-1">Total Dispensed</div>
+                  <div className="text-lg font-bold text-content-primary">
+                    {readings.reduce((s, r) => s + (r.tank_volume_movement || 0), 0).toLocaleString('en-ZM', { maximumFractionDigits: 0 })} L
+                  </div>
+                </div>
+                <div className="bg-surface-card border border-surface-border rounded-xl p-4">
+                  <div className="text-xs text-content-secondary mb-1">With Delivery</div>
+                  <div className="text-2xl font-bold text-content-primary">
+                    {readings.filter(r => (r.deliveries && r.deliveries.length > 0) || r.delivery_id).length}
+                  </div>
+                </div>
+                <div className="bg-surface-card border border-surface-border rounded-xl p-4">
+                  <div className="text-xs text-content-secondary mb-1">Issues</div>
+                  <div className="text-2xl font-bold text-status-error">
+                    {readings.filter(r => r.validation_status === 'FAIL' || r.validation_status === 'WARNING').length}
+                  </div>
+                </div>
+              </div>
+            )}
 
-            <div>
-              <label className="block text-sm font-medium mb-2 transition-colors duration-300" style={{ color: theme.textPrimary }}>
-                End Date
-              </label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md focus:ring-2 transition-colors duration-300"
-                style={{
-                  backgroundColor: theme.cardBg,
-                  color: theme.textPrimary,
-                  borderColor: theme.border
-                }}
-              />
-            </div>
-
-            <div className="flex items-end gap-2">
-              <button
-                onClick={loadReadings}
-                disabled={loading}
-                className="flex-1 px-4 py-2 text-white rounded-md hover:opacity-90 disabled:opacity-50 transition"
-                style={{ backgroundColor: theme.primary }}
-              >
-                {loading ? 'Loading...' : 'Load Report'}
-              </button>
-              {readings.length > 0 && (
-                <>
-                  <button
-                    onClick={() => downloadExport(`/exports/tank-readings?format=csv&tank_id=${selectedTank}&start_date=${startDate}&end_date=${endDate}`, 'tank_readings.csv')}
-                    className="px-3 py-2 text-sm border rounded-md hover:opacity-80 transition"
-                    style={{ borderColor: theme.primary, color: theme.primary }}
-                    title="Download CSV"
-                  >
-                    CSV
-                  </button>
-                  <button
-                    onClick={() => downloadExport(`/exports/tank-readings?format=excel&tank_id=${selectedTank}&start_date=${startDate}&end_date=${endDate}`, 'tank_readings.xlsx')}
-                    className="px-3 py-2 text-sm border rounded-md hover:opacity-80 transition"
-                    style={{ borderColor: theme.primary, color: theme.primary }}
-                    title="Download Excel"
-                  >
-                    Excel
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="bg-status-error-light border border-status-error rounded-md p-4 mb-6">
-            <p className="text-status-error">{error}</p>
-          </div>
+            {loading ? (
+              <div className="bg-surface-card border border-surface-border rounded-xl p-8 text-center text-content-secondary text-sm">
+                Loading readings...
+              </div>
+            ) : readings.length === 0 ? (
+              <div className="bg-surface-card border border-surface-border rounded-xl p-8 text-center text-content-secondary text-sm">
+                No readings found for the selected period.
+              </div>
+            ) : (
+              <div className="bg-surface-card border border-surface-border rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-surface-border">
+                    <thead className="bg-surface-bg">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Date / Shift</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Opening</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Closing</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Movement</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Delivery</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-border">
+                      {readings.map(r => (
+                        <tr key={r.reading_id} className="hover:bg-surface-bg transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="text-sm font-medium text-content-primary">{r.date}</div>
+                            <div className="text-xs text-content-secondary">{r.shift_type}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="text-sm text-content-primary font-mono">{fmtCm(r.opening_dip_cm)}</div>
+                            <div className="text-xs text-content-secondary">{fmtVol(r.opening_volume)}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="text-sm text-content-primary font-mono">{fmtCm(r.closing_dip_cm)}</div>
+                            <div className="text-xs text-content-secondary">{fmtVol(r.closing_volume)}</div>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {fmtMove(r.tank_volume_movement)}
+                          </td>
+                          <td className="px-4 py-3">
+                            {deliveryBadge(r.deliveries, r.delivery_id)}
+                          </td>
+                          <td className="px-4 py-3">
+                            {statusBadge(r.validation_status)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => setSelectedReading(r)}
+                              className="text-sm text-action-primary hover:underline font-medium"
+                            >
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
-        {/* Summary Statistics */}
-        {readings.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-            <div className="rounded-lg p-4 shadow transition-colors duration-300" style={{ backgroundColor: theme.primaryLight, borderColor: theme.primary, borderWidth: '2px' }}>
-              <p className="text-sm font-medium mb-1" style={{ color: theme.primary }}>Total Readings</p>
-              <p className="text-3xl font-bold" style={{ color: theme.primary }}>{readings.length}</p>
+        {/* ── TAB: DIP LEDGER ── */}
+        {activeTab === 'ledger' && canSeeLedger && (
+          <>
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+              <div className="bg-surface-card border border-surface-border rounded-xl p-4">
+                <div className="text-xs text-content-secondary mb-1">Total Records</div>
+                <div className="text-2xl font-bold text-content-primary">{ledgerStats.total}</div>
+              </div>
+              <div className="bg-surface-card border-l-4 border-status-success rounded-xl p-4">
+                <div className="text-xs text-content-secondary mb-1">Both Dips Entered</div>
+                <div className="text-2xl font-bold text-status-success">{ledgerStats.complete}</div>
+              </div>
+              <div className="bg-surface-card border-l-4 border-status-warning rounded-xl p-4">
+                <div className="text-xs text-content-secondary mb-1">Partial (1 of 2)</div>
+                <div className="text-2xl font-bold text-status-warning">{ledgerStats.partial}</div>
+              </div>
+              <div className="bg-surface-card border-l-4 border-status-error rounded-xl p-4">
+                <div className="text-xs text-content-secondary mb-1">Missing</div>
+                <div className="text-2xl font-bold text-status-error">{ledgerStats.missing}</div>
+              </div>
             </div>
 
-            <div className="rounded-lg p-4 shadow transition-colors duration-300" style={{ backgroundColor: theme.secondaryLight, borderColor: theme.secondary, borderWidth: '2px' }}>
-              <p className="text-sm font-medium mb-1" style={{ color: theme.secondary }}>Total Volume Dispensed</p>
-              <p className="text-3xl font-bold" style={{ color: theme.secondary }}>
-                {readings.reduce((sum, r) => sum + r.total_electronic_dispensed, 0).toFixed(2)} L
-              </p>
+            {/* Filters */}
+            <div className="bg-surface-card border border-surface-border rounded-xl p-4 mb-4 flex flex-wrap gap-4">
+              <div>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Tank</label>
+                <select
+                  value={ledgerTankFilter}
+                  onChange={e => setLedgerTankFilter(e.target.value)}
+                  className="px-3 py-2 bg-surface-bg border border-surface-border rounded-lg text-sm text-content-primary focus:outline-none focus:ring-1 focus:ring-action-primary"
+                >
+                  <option value="ALL">All Tanks</option>
+                  {availableTanks.map(t => (
+                    <option key={t.tank_id} value={t.tank_id}>{tankLabel(t)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Status</label>
+                <select
+                  value={ledgerStatusFilter}
+                  onChange={e => setLedgerStatusFilter(e.target.value)}
+                  className="px-3 py-2 bg-surface-bg border border-surface-border rounded-lg text-sm text-content-primary focus:outline-none focus:ring-1 focus:ring-action-primary"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="PASS">Pass</option>
+                  <option value="WARNING">Warning</option>
+                  <option value="FAIL">Fail</option>
+                </select>
+              </div>
             </div>
 
-            <div className="rounded-lg p-4 shadow transition-colors duration-300" style={{ backgroundColor: theme.accentLight, borderColor: theme.accent, borderWidth: '2px' }}>
-              <p className="text-sm font-medium mb-1" style={{ color: theme.accent }}>Total Expected Revenue</p>
-              <p className="text-2xl font-bold" style={{ color: theme.accent }}>
-                {formatCurrency(readings.reduce((sum, r) => sum + r.expected_amount_electronic, 0))}
-              </p>
-            </div>
-
-            <div className="rounded-lg p-4 shadow bg-surface-card border-2" style={{ borderColor: theme.border }}>
-              <p className="text-sm font-medium mb-1 text-content-secondary">Avg Variance</p>
-              <p className="text-3xl font-bold text-content-primary">
-                {(readings.reduce((sum, r) => sum + Math.abs(r.electronic_vs_tank_percent), 0) / readings.length).toFixed(2)}%
-              </p>
-            </div>
-          </div>
+            {ledgerLoading ? (
+              <div className="bg-surface-card border border-surface-border rounded-xl p-8 text-center text-content-secondary text-sm">
+                Loading ledger...
+              </div>
+            ) : filteredLedger.length === 0 ? (
+              <div className="bg-surface-card border border-surface-border rounded-xl p-8 text-center text-content-secondary text-sm">
+                No dip records found for this period.
+              </div>
+            ) : (
+              <div className="bg-surface-card border border-surface-border rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-surface-border">
+                    <thead className="bg-surface-bg">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Date / Shift</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Tank</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Opening</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Closing</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Movement</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Delivery</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-border">
+                      {filteredLedger.map(r => {
+                        const hasBoth = r.opening_dip_cm != null && r.closing_dip_cm != null
+                        const hasNeither = r.opening_dip_cm == null && r.closing_dip_cm == null
+                        const rowCls = hasBoth ? '' : hasNeither ? 'bg-status-error-light/30' : 'bg-status-pending-light/30'
+                        return (
+                          <tr key={r.reading_id} className={`hover:bg-surface-bg transition-colors ${rowCls}`}>
+                            <td className="px-4 py-3">
+                              <div className="text-sm font-medium text-content-primary">{r.date}</div>
+                              <div className="text-xs text-content-secondary">{r.shift_type}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-sm font-medium text-content-primary">{r.tank_id}</div>
+                              <div className="text-xs text-content-secondary">{r.fuel_type || ''}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-sm text-content-primary font-mono">{fmtCm(r.opening_dip_cm)}</div>
+                              <div className="text-xs text-content-secondary">{fmtVol(r.opening_volume)}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-sm text-content-primary font-mono">{fmtCm(r.closing_dip_cm)}</div>
+                              <div className="text-xs text-content-secondary">{fmtVol(r.closing_volume)}</div>
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              {hasBoth ? fmtMove(r.tank_volume_movement) : <span className="text-content-secondary">-</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              {deliveryBadge(r.deliveries, r.delivery_id)}
+                            </td>
+                            <td className="px-4 py-3">
+                              {statusBadge(r.validation_status)}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
-        {/* Readings Table */}
-        {loading ? (
-          <div className="rounded-lg shadow p-8 text-center transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
-            <p className="transition-colors duration-300" style={{ color: theme.textSecondary }}>Loading readings...</p>
-          </div>
-        ) : readings.length === 0 ? (
-          <div className="rounded-lg shadow p-8 text-center transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
-            <p className="transition-colors duration-300" style={{ color: theme.textSecondary }}>
-              No readings found for the selected date range.
-            </p>
-          </div>
-        ) : (
-          <div className="rounded-lg shadow overflow-hidden transition-colors duration-300" style={{ backgroundColor: theme.cardBg }}>
-            <table className="min-w-full divide-y" style={{ borderColor: theme.border }}>
-              <thead style={{ backgroundColor: theme.primaryLight }}>
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.primary }}>
-                    Date & Shift
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.primary }}>
-                    Tank Movement
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.primary }}>
-                    Electronic Dispensed
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.primary }}>
-                    Variance
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.primary }}>
-                    Expected Revenue
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.primary }}>
-                    Deliveries
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.primary }}>
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.primary }}>
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y" style={{ borderColor: theme.border }}>
-                {readings.map((reading) => (
-                  <tr key={reading.reading_id} className="hover:opacity-75 transition-opacity">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium transition-colors duration-300" style={{ color: theme.textPrimary }}>
-                        {reading.date}
-                      </div>
-                      <div className="text-sm transition-colors duration-300" style={{ color: theme.textSecondary }}>
-                        {reading.shift_type}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>
-                        {reading.tank_volume_movement.toFixed(3)} L
-                      </div>
-                      {reading.price_per_liter > 0 && <div className="text-xs font-mono" style={{ color: theme.textSecondary }}>ZMW {(Math.abs(reading.tank_volume_movement) * reading.price_per_liter).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>
-                        {reading.total_electronic_dispensed.toFixed(3)} L
-                      </div>
-                      {reading.price_per_liter > 0 && <div className="text-xs font-mono" style={{ color: theme.textSecondary }}>ZMW {(reading.total_electronic_dispensed * reading.price_per_liter).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm transition-colors duration-300" style={{ color: theme.textPrimary }}>
-                        {reading.electronic_vs_tank_variance.toFixed(3)} L
-                      </div>
-                      {reading.price_per_liter > 0 && <div className="text-xs font-mono" style={{ color: theme.textSecondary }}>ZMW {(Math.abs(reading.electronic_vs_tank_variance) * reading.price_per_liter).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
-                      <div className={`text-xs font-medium ${
-                        Math.abs(reading.electronic_vs_tank_percent) > 1 ? 'text-status-error' :
-                        Math.abs(reading.electronic_vs_tank_percent) > 0.5 ? 'text-status-warning' :
-                        'text-status-success'
-                      }`}>
-                        ({reading.electronic_vs_tank_percent.toFixed(2)}%)
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-semibold transition-colors duration-300" style={{ color: theme.textPrimary }}>
-                        {formatCurrency(reading.expected_amount_electronic)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {reading.deliveries && reading.deliveries.length > 0 ? (
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-action-primary-light text-action-primary border border-action-primary">
-                          {reading.deliveries.length}
-                        </span>
-                      ) : reading.delivery_timeline?.has_deliveries ? (
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-action-primary-light text-action-primary border border-action-primary">
-                          {reading.delivery_timeline.number_of_deliveries}
-                        </span>
-                      ) : (
-                        <span className="text-sm transition-colors duration-300" style={{ color: theme.textSecondary }}>-</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(reading.validation_status)}`}>
-                        {reading.validation_status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <button
-                        onClick={() => setSelectedReading(reading)}
-                        className="text-white px-3 py-1 rounded hover:opacity-80"
-                        style={{ backgroundColor: theme.primary }}
-                      >
-                        View Details
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Reading Details Modal */}
-        {activeTab === 'readings' && selectedReading && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setSelectedReading(null)}>
+        {/* ── READING DETAIL MODAL ── */}
+        {selectedReading && (
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={() => setSelectedReading(null)}
+          >
             <div
-              className="rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto transition-colors duration-300"
-              style={{ backgroundColor: theme.cardBg }}
-              onClick={(e) => e.stopPropagation()}
+              className="bg-surface-card rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
             >
               <div className="p-6">
                 <div className="flex justify-between items-start mb-6">
                   <div>
-                    <h2 className="text-2xl font-bold transition-colors duration-300" style={{ color: theme.textPrimary }}>
-                      Reading Details
-                    </h2>
-                    <p className="text-sm mt-1 transition-colors duration-300" style={{ color: theme.textSecondary }}>
+                    <h2 className="text-xl font-bold text-content-primary">Reading Details</h2>
+                    <p className="text-sm text-content-secondary mt-0.5">
                       {selectedReading.date} - {selectedReading.shift_type} Shift
+                      {selectedReading.fuel_type && ` - ${selectedReading.fuel_type}`}
                     </p>
                   </div>
                   <button
                     onClick={() => setSelectedReading(null)}
-                    className="text-content-secondary hover:text-content-primary text-2xl"
+                    className="text-content-secondary hover:text-content-primary text-2xl leading-none"
                   >
-                    ×
+                    &times;
                   </button>
                 </div>
 
-                {/* Nozzle Readings */}
+                {/* Dip Readings */}
                 <div className="mb-6">
-                  <h3 className="text-lg font-semibold mb-3 transition-colors duration-300" style={{ color: theme.textPrimary }}>
-                    Nozzle Readings
+                  <h3 className="text-sm font-semibold text-content-secondary uppercase tracking-wide mb-3">
+                    Tank Dip Readings
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {selectedReading.nozzle_readings.map((nozzle) => {
-                      const fuelPrefix = getFuelTypePrefix(selectedReading.tank_id)
-                      const fuelColors = getFuelColorSet(selectedReading.tank_id === 'TANK-DIESEL' ? 'diesel' : 'petrol')
-                      const fuelColor = fuelColors.main
-                      const fuelLightColor = fuelColors.light
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-surface-bg rounded-lg p-4 text-center">
+                      <div className="text-xs text-content-secondary mb-1">Opening</div>
+                      <div className="text-xl font-bold text-content-primary font-mono">
+                        {fmtCm(selectedReading.opening_dip_cm)}
+                      </div>
+                      <div className="text-sm text-content-secondary">{fmtVol(selectedReading.opening_volume)}</div>
+                    </div>
+                    <div className="bg-surface-bg rounded-lg p-4 text-center">
+                      <div className="text-xs text-content-secondary mb-1">Closing</div>
+                      <div className="text-xl font-bold text-content-primary font-mono">
+                        {fmtCm(selectedReading.closing_dip_cm)}
+                      </div>
+                      <div className="text-sm text-content-secondary">{fmtVol(selectedReading.closing_volume)}</div>
+                    </div>
+                    <div className="bg-surface-bg rounded-lg p-4 text-center">
+                      <div className="text-xs text-content-secondary mb-1">Movement</div>
+                      <div className="text-xl font-bold">
+                        {fmtMove(selectedReading.tank_volume_movement)}
+                      </div>
+                      <div className="mt-1">{statusBadge(selectedReading.validation_status)}</div>
+                    </div>
+                  </div>
+                </div>
 
-                      return (
-                        <div
-                          key={nozzle.nozzle_id}
-                          className="border-2 rounded-lg p-4"
-                          style={{
-                            borderColor: fuelColor,
-                            backgroundColor: fuelLightColor
-                          }}
-                        >
-                          <div className="flex justify-between items-center mb-3">
-                            <span className="font-bold text-lg" style={{ color: fuelColor }}>
-                              {fuelPrefix} {nozzle.nozzle_id}
-                            </span>
-                            <span className="text-sm font-medium px-2 py-1 rounded" style={{
-                              color: fuelColor,
-                              backgroundColor: theme.cardBg
-                            }}>
-                              {nozzle.attendant}
-                            </span>
-                          </div>
-                          <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                              <span style={{ color: theme.textSecondary }}>Electronic:</span>
-                              <span className="font-semibold" style={{ color: fuelColor }}>{nozzle.electronic_movement.toFixed(3)} L</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span style={{ color: theme.textSecondary }}>Mechanical:</span>
-                              <span className="font-semibold" style={{ color: fuelColor }}>{nozzle.mechanical_movement.toFixed(3)} L</span>
-                            </div>
-                          </div>
+                {/* Delivery */}
+                {((selectedReading.deliveries && selectedReading.deliveries.length > 0) || selectedReading.delivery_id) && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-content-secondary uppercase tracking-wide mb-3">
+                      Delivery
+                    </h3>
+                    <div className="bg-action-primary-light border border-action-primary rounded-lg p-4 space-y-2">
+                      {(selectedReading.deliveries && selectedReading.deliveries.length > 0 ? selectedReading.deliveries : [{ delivery_id: selectedReading.delivery_id }]).map((d: any, i: number) => (
+                        <div key={i} className="flex flex-wrap gap-4 text-sm text-action-primary">
+                          {d.supplier && <span><strong>Supplier:</strong> {d.supplier}</span>}
+                          {d.volume_delivered && <span><strong>Volume:</strong> {Math.round(d.volume_delivered)} L</span>}
+                          {d.delivery_time && <span><strong>Time:</strong> {d.delivery_time}</span>}
+                          {d.invoice_number && <span><strong>Invoice:</strong> {d.invoice_number}</span>}
+                          {d.delivery_id && <span className="text-xs opacity-60">{d.delivery_id}</span>}
                         </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Financial Summary */}
-                <div className="rounded-lg p-4 mb-4" style={{ backgroundColor: theme.primaryLight }}>
-                  <h3 className="text-lg font-semibold mb-3" style={{ color: theme.primary }}>Financial Summary</h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span style={{ color: theme.textSecondary }}>Price per Liter:</span>
-                      <p className="font-semibold text-lg" style={{ color: theme.primary }}>{formatCurrency(selectedReading.price_per_liter)}</p>
-                    </div>
-                    <div>
-                      <span style={{ color: theme.textSecondary }}>Expected Revenue:</span>
-                      <p className="font-semibold text-lg" style={{ color: theme.primary }}>
-                        {formatCurrency(selectedReading.expected_amount_electronic)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Customer Allocation (Diesel Only) */}
-                {selectedReading.tank_id === 'TANK-DIESEL' && selectedReading.customer_allocations && selectedReading.customer_allocations.length > 0 && (
-                  <div className="rounded-lg p-4 mb-4" style={{ backgroundColor: 'var(--color-fuel-diesel-light)', borderColor: 'var(--color-fuel-diesel)', borderWidth: '2px' }}>
-                    <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-lg font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>
-                        Customer Allocation
-                      </h3>
-                      {selectedReading.allocation_balance_check !== null && selectedReading.allocation_balance_check !== undefined && (
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          Math.abs(selectedReading.allocation_balance_check) <= 0.01 ? 'bg-status-success-light text-status-success' :
-                          Math.abs(selectedReading.allocation_balance_check) < selectedReading.total_electronic_dispensed * 0.01 ? 'bg-status-pending-light text-status-warning' :
-                          'bg-status-error-light text-status-error'
-                        }`}>
-                          Balance: {selectedReading.allocation_balance_check.toFixed(3)} L
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-sm">
-                        <thead>
-                          <tr className="border-b-2" style={{ borderColor: 'var(--color-fuel-diesel)' }}>
-                            <th className="text-left py-2 px-3 font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>Customer</th>
-                            <th className="text-right py-2 px-3 font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>Volume (L)</th>
-                            <th className="text-right py-2 px-3 font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>Price/L</th>
-                            <th className="text-right py-2 px-3 font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedReading.customer_allocations.map((allocation) => (
-                            <tr key={allocation.customer_id} className="border-b" style={{ borderColor: 'var(--color-fuel-diesel-light)' }}>
-                              <td className="py-2 px-3 font-medium" style={{ color: 'var(--color-fuel-diesel)' }}>
-                                {allocation.customer_name}
-                              </td>
-                              <td className="py-2 px-3 text-right font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>
-                                {allocation.volume.toFixed(3)}
-                              </td>
-                              <td className="py-2 px-3 text-right" style={{ color: 'var(--color-fuel-diesel)' }}>
-                                {formatCurrency(allocation.price_per_liter)}
-                              </td>
-                              <td className="py-2 px-3 text-right font-semibold" style={{ color: 'var(--color-fuel-diesel)' }}>
-                                {formatCurrency(allocation.amount)}
-                              </td>
-                            </tr>
-                          ))}
-                          <tr className="border-t-2" style={{ borderColor: 'var(--color-fuel-diesel)' }}>
-                            <td colSpan={3} className="py-2 px-3 text-right font-bold" style={{ color: 'var(--color-fuel-diesel)' }}>
-                              Total Customer Revenue:
-                            </td>
-                            <td className="py-2 px-3 text-right font-bold text-lg" style={{ color: 'var(--color-fuel-diesel)' }}>
-                              {formatCurrency(selectedReading.total_customer_revenue || 0)}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Column AW Check */}
-                    <div className="mt-3 p-2 rounded text-xs" style={{ backgroundColor: 'var(--color-fuel-diesel-light)' }}>
-                      <span style={{ color: 'var(--color-fuel-diesel)' }}>
-                        <strong>Balance Check:</strong> Total Electronic ({selectedReading.total_electronic_dispensed.toFixed(3)} L) -
-                        Sum of Allocations ({selectedReading.customer_allocations.reduce((sum, a) => sum + a.volume, 0).toFixed(3)} L) =
-                        {selectedReading.allocation_balance_check?.toFixed(3) || '0.000'} L
-                      </span>
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {/* Deliveries & Timeline */}
-                {(selectedReading.delivery_timeline?.has_deliveries || (selectedReading.deliveries && selectedReading.deliveries.length > 0)) && (
-                  <div className="rounded-lg p-4 mb-4 border-2 border-action-primary bg-action-primary-light">
-                    <h3 className="text-lg font-semibold mb-3 text-action-primary">Deliveries & Timeline</h3>
-
-                    {/* Delivery Summary */}
-                    <div className="flex items-center gap-4 mb-4 p-3 rounded-lg bg-action-primary-light border border-action-primary/30">
-                      <span className="text-2xl font-bold text-action-primary">
-                        {selectedReading.delivery_timeline?.number_of_deliveries || selectedReading.deliveries?.length || 0}
-                      </span>
-                      <span className="text-sm text-action-primary">
-                        {(selectedReading.delivery_timeline?.number_of_deliveries || selectedReading.deliveries?.length || 0) === 1 ? 'Delivery' : 'Deliveries'}
-                      </span>
-                      <span className="mx-2 text-action-primary">|</span>
-                      <span className="text-sm text-action-primary">
-                        Total Delivered: <strong>
-                          {(selectedReading.delivery_timeline?.total_delivered ||
-                            selectedReading.deliveries?.reduce((s: number, d: any) => s + (d.volume_delivered || 0), 0) || 0
-                          ).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} L
-                        </strong>
-                      </span>
-                    </div>
-
-                    {/* Delivery List */}
-                    {selectedReading.delivery_timeline?.timeline?.filter((e: any) => e.event_type === 'DELIVERY').map((event: any, idx: number) => (
-                      <div key={idx} className="flex items-center gap-3 mb-2 p-2 bg-surface-card rounded border border-action-primary text-sm">
-                        <span className="w-7 h-7 rounded-full bg-action-primary text-white flex items-center justify-center text-xs font-bold">
-                          {event.delivery_number || idx + 1}
-                        </span>
-                        <span className="text-action-primary">
-                          +{event.change?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}L
-                          {event.supplier && <> from <strong>{event.supplier}</strong></>}
-                          {event.time && <> at <strong>{event.time}</strong></>}
-                        </span>
-                      </div>
-                    ))}
-
-                    {/* Fallback: show deliveries array if no timeline events */}
-                    {!selectedReading.delivery_timeline?.timeline && selectedReading.deliveries?.map((d: any, idx: number) => (
-                      <div key={idx} className="flex items-center gap-3 mb-2 p-2 bg-surface-card rounded border border-action-primary text-sm">
-                        <span className="w-7 h-7 rounded-full bg-action-primary text-white flex items-center justify-center text-xs font-bold">
+                {/* Delivery timeline (from comprehensive readings) */}
+                {selectedReading.delivery_timeline?.has_deliveries && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-content-secondary uppercase tracking-wide mb-3">
+                      Delivery Timeline
+                    </h3>
+                    {selectedReading.delivery_timeline.timeline?.filter((e: any) => e.event_type === 'DELIVERY').map((event: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-3 mb-2 p-2 bg-action-primary-light rounded border border-action-primary text-sm text-action-primary">
+                        <span className="w-6 h-6 rounded-full bg-action-primary text-white flex items-center justify-center text-xs font-bold">
                           {idx + 1}
                         </span>
-                        <span className="text-action-primary">
-                          +{(d.volume_delivered || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}L
-                          {d.supplier && <> from <strong>{d.supplier}</strong></>}
-                          {d.delivery_time && <> at <strong>{d.delivery_time}</strong></>}
-                        </span>
+                        +{event.change?.toLocaleString('en-ZM', { maximumFractionDigits: 0 })} L
+                        {event.supplier && <> from <strong>{event.supplier}</strong></>}
+                        {event.time && <> at {event.time}</>}
                       </div>
                     ))}
-
-                    {/* Segment Sales Table */}
-                    {selectedReading.delivery_timeline?.inter_delivery_sales?.length > 0 && (
-                      <div className="mt-4 overflow-x-auto">
-                        <h4 className="text-sm font-semibold text-action-primary mb-2">Segment Sales Breakdown</h4>
-                        <table className="min-w-full text-sm border border-action-primary">
-                          <thead>
-                            <tr className="bg-action-primary-light">
-                              <th className="px-3 py-2 text-left text-xs font-medium text-action-primary uppercase">Segment</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-action-primary uppercase">Period</th>
-                              <th className="px-3 py-2 text-right text-xs font-medium text-action-primary uppercase">Start Level</th>
-                              <th className="px-3 py-2 text-right text-xs font-medium text-action-primary uppercase">End Level</th>
-                              <th className="px-3 py-2 text-right text-xs font-medium text-action-primary uppercase">Sales (L)</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {selectedReading.delivery_timeline.inter_delivery_sales.map((seg: any, idx: number) => (
-                              <tr key={idx} className="border-t border-action-primary">
-                                <td className="px-3 py-2 font-medium text-action-primary">{idx + 1}</td>
-                                <td className="px-3 py-2 text-action-primary">{seg.period}</td>
-                                <td className="px-3 py-2 text-right font-mono text-action-primary">{seg.start_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
-                                <td className="px-3 py-2 text-right font-mono text-action-primary">{seg.end_level?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
-                                <td className="px-3 py-2 text-right font-mono font-semibold text-action-primary">{seg.sales_volume?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                              </tr>
-                            ))}
-                            <tr className="border-t-2 border-action-primary bg-action-primary-light">
-                              <td colSpan={4} className="px-3 py-2 text-right font-bold text-action-primary">Total</td>
-                              <td className="px-3 py-2 text-right font-mono font-bold text-action-primary">
-                                {selectedReading.delivery_timeline.total_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {/* Cross-check */}
-                    {selectedReading.delivery_timeline?.formula_sales !== undefined && (
-                      <div className="mt-3 p-2 rounded bg-surface-card border border-action-primary text-xs text-action-primary">
-                        <strong>Cross-check:</strong> Formula sales = {selectedReading.delivery_timeline.formula_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L
-                        {' | '}Segment sum = {selectedReading.delivery_timeline.total_sales?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L
-                        {Math.abs((selectedReading.delivery_timeline.formula_sales || 0) - (selectedReading.delivery_timeline.total_sales || 0)) < 1
-                          ? <span className="ml-2 text-status-success font-semibold">Match</span>
-                          : <span className="ml-2 text-status-error font-semibold">Mismatch</span>
-                        }
-                      </div>
-                    )}
-
-                    {/* Validation */}
-                    {selectedReading.delivery_timeline?.validation?.warnings?.length > 0 && (
-                      <div className="mt-3 p-3 rounded bg-status-pending-light border border-status-warning">
-                        <p className="text-xs font-semibold text-status-warning mb-1">Warnings</p>
-                        <ul className="text-xs text-status-warning space-y-1">
-                          {selectedReading.delivery_timeline.validation.warnings.map((w: string, i: number) => (
-                            <li key={i}>- {w}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
                   </div>
                 )}
 
-                {/* Delivery VAT (Owner Only) */}
-                {user?.role === 'owner' && selectedReading.delivery_vat_amount != null && selectedReading.delivery_vat_amount > 0 && (
-                  <div className="rounded-lg p-4 mb-4 border-2 border-status-warning bg-status-pending-light">
-                    <h3 className="text-lg font-semibold mb-3 text-status-warning">Delivery VAT</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <span className="text-content-secondary">Net Price / Liter</span>
-                        <p className="font-semibold text-lg text-status-warning">
-                          {formatCurrency(selectedReading.delivery_net_price || 0)}
-                        </p>
-                        <p className="text-xs text-content-secondary mt-1">
-                          (Price - 1.44) / 1.16
-                        </p>
+                {/* Nozzle Readings */}
+                {selectedReading.nozzle_readings && selectedReading.nozzle_readings.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-content-secondary uppercase tracking-wide mb-3">
+                      Nozzle Readings
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {selectedReading.nozzle_readings.map(nozzle => (
+                        <div key={nozzle.nozzle_id} className="bg-surface-bg rounded-lg p-3 border border-surface-border">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-bold text-content-primary">{nozzle.nozzle_id}</span>
+                            <span className="text-xs text-content-secondary">{nozzle.attendant}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1 text-xs">
+                            <span className="text-content-secondary">Electronic:</span>
+                            <span className="text-right font-mono text-content-primary">{(nozzle.electronic_movement ?? 0).toFixed(3)} L</span>
+                            <span className="text-content-secondary">Mechanical:</span>
+                            <span className="text-right font-mono text-content-primary">{(nozzle.mechanical_movement ?? 0).toFixed(3)} L</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Financial (only if price data exists) */}
+                {(selectedReading.price_per_liter ?? 0) > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-content-secondary uppercase tracking-wide mb-3">
+                      Financial
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="bg-surface-bg rounded-lg p-3">
+                        <div className="text-xs text-content-secondary mb-1">Price per Litre</div>
+                        <div className="font-bold text-content-primary">
+                          K{(selectedReading.price_per_liter ?? 0).toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-content-secondary">VAT / Liter</span>
-                        <p className="font-semibold text-lg text-status-warning">
-                          {formatCurrency(selectedReading.delivery_vat_per_liter || 0)}
-                        </p>
-                        <p className="text-xs text-content-secondary mt-1">
-                          Net Price x 0.16
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-content-secondary">Total VAT Amount</span>
-                        <p className="font-semibold text-lg text-status-warning">
-                          {formatCurrency(selectedReading.delivery_vat_amount)}
-                        </p>
-                        <p className="text-xs text-content-secondary mt-1">
-                          Qty x Net Price x 16%
-                        </p>
+                      <div className="bg-surface-bg rounded-lg p-3">
+                        <div className="text-xs text-content-secondary mb-1">Expected Revenue</div>
+                        <div className="font-bold text-content-primary">
+                          K{(selectedReading.expected_amount_electronic ?? 0).toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {selectedReading.recorded_by && (
+                  <div className="text-xs text-content-secondary border-t border-surface-border pt-3 mt-3">
+                    Recorded by {selectedReading.recorded_by}
+                    {selectedReading.created_at && ` on ${new Date(selectedReading.created_at).toLocaleString('en-ZM')}`}
                   </div>
                 )}
 
                 <div className="flex justify-end mt-6">
                   <button
                     onClick={() => setSelectedReading(null)}
-                    className="px-6 py-2 rounded-md text-white hover:opacity-90"
-                    style={{ backgroundColor: theme.primary }}
+                    className="px-5 py-2 bg-action-primary text-white rounded-lg text-sm font-medium hover:bg-action-primary-hover transition-colors"
                   >
                     Close
                   </button>
@@ -922,235 +729,7 @@ export default function TankReadingsReport() {
             </div>
           </div>
         )}
-        </>)}
 
-        {/* Validated Readings Tab (Owner Only) */}
-        {activeTab === 'validated' && user?.role === 'owner' && (
-          <div>
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-              <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-action-primary">
-                <div className="text-sm text-content-secondary">Total Readings</div>
-                <div className="text-2xl font-bold">{validatedStats.total}</div>
-              </div>
-              <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-status-success">
-                <div className="text-sm text-content-secondary">Passed</div>
-                <div className="text-2xl font-bold text-status-success">{validatedStats.pass}</div>
-              </div>
-              <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-status-warning">
-                <div className="text-sm text-content-secondary">Warnings</div>
-                <div className="text-2xl font-bold text-status-warning">{validatedStats.warning}</div>
-              </div>
-              <div className="bg-surface-card p-4 rounded-lg shadow border-l-4 border-status-error">
-                <div className="text-sm text-content-secondary">Failed</div>
-                <div className="text-2xl font-bold text-status-error">{validatedStats.fail}</div>
-              </div>
-            </div>
-
-            {/* Filters */}
-            <div className="bg-surface-card p-4 rounded-lg shadow mb-6">
-              <div className="flex flex-wrap gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Status Filter</label>
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="px-3 py-2 border border-surface-border rounded-md"
-                  >
-                    <option value="ALL">All Statuses</option>
-                    <option value="PASS">Pass Only</option>
-                    <option value="WARNING">Warnings Only</option>
-                    <option value="FAIL">Failed Only</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Shift Filter</label>
-                  <select
-                    value={filterShift}
-                    onChange={(e) => setFilterShift(e.target.value)}
-                    className="px-3 py-2 border border-surface-border rounded-md"
-                  >
-                    <option value="ALL">All Shifts</option>
-                    {uniqueShifts.map(shift => (
-                      <option key={shift} value={shift}>{shift}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-end">
-                  <button
-                    onClick={loadValidatedReadings}
-                    className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover"
-                  >
-                    Refresh
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Validated Readings Table */}
-            <div className="bg-surface-card rounded-lg shadow overflow-hidden">
-              {validatedLoading ? (
-                <LoadingSpinner text="Loading validated readings..." />
-              ) : filteredValidatedReadings.length === 0 ? (
-                <div className="p-8 text-center text-content-secondary">No readings found matching filters.</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-surface-border">
-                    <thead className="bg-surface-bg">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Date/Time</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Shift</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Tank</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Type</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Mechanical (L)</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Electronic (L)</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Dip (L)</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Max Discrepancy</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Status</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-surface-card divide-y divide-surface-border">
-                      {filteredValidatedReadings.map((reading) => (
-                        <tr key={reading.reading_id} className="hover:bg-surface-bg">
-                          <td className="px-4 py-3 text-sm text-content-primary">{new Date(reading.timestamp).toLocaleString()}</td>
-                          <td className="px-4 py-3 text-sm text-content-primary">{reading.shift_id}</td>
-                          <td className="px-4 py-3 text-sm text-content-primary">{reading.tank_id}</td>
-                          <td className="px-4 py-3 text-sm text-content-primary">{reading.reading_type}</td>
-                          <td className="px-4 py-3 text-sm font-mono text-content-primary">{reading.mechanical_reading.toFixed(2)}</td>
-                          <td className="px-4 py-3 text-sm font-mono text-content-primary">{reading.electronic_reading.toFixed(2)}</td>
-                          <td className="px-4 py-3 text-sm font-mono text-content-primary">{reading.dip_reading_liters.toFixed(2)}</td>
-                          <td className="px-4 py-3 text-sm font-mono text-content-primary">
-                            <span className={reading.max_discrepancy_percent > 0.03 ? 'text-status-error font-bold' : ''}>
-                              {reading.max_discrepancy_percent.toFixed(4)}%
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(reading.validation_status)}`}>
-                              {getValidatedStatusIcon(reading.validation_status)} {reading.validation_status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <button
-                              onClick={() => setSelectedValidatedReading(reading)}
-                              className="text-action-primary hover:text-action-primary font-medium"
-                            >
-                              Details
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Validated Reading Details Modal */}
-        {selectedValidatedReading && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setSelectedValidatedReading(null)}>
-            <div className="bg-surface-card rounded-lg shadow-xl max-w-2xl w-full m-4 max-h-screen overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <h2 className="text-2xl font-bold">Reading Details</h2>
-                  <button onClick={() => setSelectedValidatedReading(null)} className="text-content-secondary hover:text-content-primary text-2xl">&times;</button>
-                </div>
-
-                <div className="space-y-4">
-                  {/* Status Banner */}
-                  <div className={`p-4 rounded-lg border-2 ${getStatusColor(selectedValidatedReading.validation_status)}`}>
-                    <div className="text-center">
-                      <div className="text-3xl font-bold mb-2">{getValidatedStatusIcon(selectedValidatedReading.validation_status)} {selectedValidatedReading.validation_status}</div>
-                      <div className="text-sm">{selectedValidatedReading.validation_message}</div>
-                    </div>
-                  </div>
-
-                  {/* Reading Information */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-content-secondary">Reading ID</label>
-                      <div className="text-sm">{selectedValidatedReading.reading_id}</div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-content-secondary">Timestamp</label>
-                      <div className="text-sm">{new Date(selectedValidatedReading.timestamp).toLocaleString()}</div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-content-secondary">Shift ID</label>
-                      <div className="text-sm">{selectedValidatedReading.shift_id}</div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-content-secondary">Tank ID</label>
-                      <div className="text-sm">{selectedValidatedReading.tank_id}</div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-content-secondary">Reading Type</label>
-                      <div className="text-sm">{selectedValidatedReading.reading_type}</div>
-                    </div>
-                  </div>
-
-                  {/* Three Readings Comparison */}
-                  <div className="border-t pt-4">
-                    <h3 className="font-semibold mb-3">Reading Comparison</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="bg-action-primary-light p-4 rounded-lg border border-action-primary">
-                        <div className="text-sm font-medium text-action-primary mb-1">Mechanical</div>
-                        <div className="text-2xl font-bold text-action-primary">{selectedValidatedReading.mechanical_reading.toFixed(2)}</div>
-                        <div className="text-xs text-action-primary">Liters</div>
-                      </div>
-                      <div className="bg-fuel-petrol-light p-4 rounded-lg border border-fuel-petrol-border">
-                        <div className="text-sm font-medium text-fuel-petrol mb-1">Electronic</div>
-                        <div className="text-2xl font-bold text-fuel-petrol">{selectedValidatedReading.electronic_reading.toFixed(2)}</div>
-                        <div className="text-xs text-status-success">Liters</div>
-                      </div>
-                      <div className="bg-fuel-diesel-light p-4 rounded-lg border border-fuel-diesel-border">
-                        <div className="text-sm font-medium text-fuel-diesel mb-1">Dip Reading</div>
-                        <div className="text-2xl font-bold text-fuel-diesel">{selectedValidatedReading.dip_reading_liters.toFixed(2)}</div>
-                        <div className="text-xs text-fuel-diesel">{selectedValidatedReading.dip_reading_cm.toFixed(1)} cm</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Discrepancy Analysis */}
-                  <div className="border-t pt-4">
-                    <h3 className="font-semibold mb-3">Discrepancy Analysis</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-content-secondary">Mechanical vs Electronic:</span>
-                        <span className="font-mono font-bold">{selectedValidatedReading.discrepancy_mech_elec_percent.toFixed(4)}%</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-content-secondary">Mechanical vs Dip:</span>
-                        <span className="font-mono font-bold">{selectedValidatedReading.discrepancy_mech_dip_percent.toFixed(4)}%</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-content-secondary">Electronic vs Dip:</span>
-                        <span className="font-mono font-bold">{selectedValidatedReading.discrepancy_elec_dip_percent.toFixed(4)}%</span>
-                      </div>
-                      <div className="flex justify-between items-center pt-2 border-t">
-                        <span className="text-sm font-semibold text-content-secondary">Maximum Discrepancy:</span>
-                        <span className={`font-mono font-bold text-lg ${selectedValidatedReading.max_discrepancy_percent > 0.03 ? 'text-status-error' : 'text-status-success'}`}>
-                          {selectedValidatedReading.max_discrepancy_percent.toFixed(4)}%
-                        </span>
-                      </div>
-                      <div className="text-xs text-content-secondary text-center mt-2">Tolerance: 0.03%</div>
-                    </div>
-                  </div>
-
-                  {/* Notes */}
-                  {selectedValidatedReading.notes && (
-                    <div className="border-t pt-4">
-                      <h3 className="font-semibold mb-2">Notes</h3>
-                      <div className="text-sm text-content-secondary bg-surface-bg p-3 rounded">{selectedValidatedReading.notes}</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
