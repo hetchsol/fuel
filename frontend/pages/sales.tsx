@@ -1,5 +1,8 @@
 import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
+import Pagination from '../components/Pagination'
+
+const PAGE_SIZE = 25
 
 interface SaleRecord {
   sale_id: string
@@ -21,6 +24,7 @@ export default function Sales() {
   const [records, setRecords] = useState<SaleRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     async function fetchSales() {
@@ -97,7 +101,7 @@ export default function Sales() {
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-border">
-              {records.map((r) => (
+              {records.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((r) => (
                 <tr key={r.sale_id} className="hover:bg-surface-bg">
                   <td className="px-4 py-3 text-sm text-content-primary">
                     {r.date || (r.created_at ? r.created_at.slice(0, 10) : '-')}
@@ -122,6 +126,7 @@ export default function Sales() {
               ))}
             </tbody>
           </table>
+          <Pagination total={records.length} pageSize={PAGE_SIZE} page={page} onPageChange={setPage} />
         </div>
       )}
     </div>

@@ -6,8 +6,11 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ReasonChips, { REASON_PRESETS } from '../components/ReasonChips'
 import { getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
+import Pagination from '../components/Pagination'
 import { ExportConfig } from '../lib/exportUtils'
 import { formatDateToDisplay } from '../lib/dateUtils'
+
+const PAGE_SIZE = 20
 
 const BASE = '/api/v1'
 
@@ -119,6 +122,10 @@ export default function HandoverReview() {
   const [filterAttendant, setFilterAttendant] = useState('')  // attendant_id, set when opened from a person card
   const [statusTab, setStatusTab] = useState<'all' | 'pending' | 'flagged' | 'awaiting' | 'approved'>('all')
 
+  // Pagination
+  const [page, setPage] = useState(1)
+  const [awaitingPage, setAwaitingPage] = useState(1)
+
   // Expansion
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -169,6 +176,11 @@ export default function HandoverReview() {
       }
     }
   }, [router.isReady, router.query.attendant_id, router.query.shift_id])
+
+  useEffect(() => {
+    setPage(1)
+    setAwaitingPage(1)
+  }, [statusTab, filterDate, filterShiftType, filterAttendant])
 
   const fetchQueue = useCallback(() => {
     const params = new URLSearchParams()
@@ -567,6 +579,7 @@ export default function HandoverReview() {
               No shifts awaiting closing
             </div>
           ) : (
+            <>
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
@@ -577,7 +590,7 @@ export default function HandoverReview() {
                 </tr>
               </thead>
               <tbody>
-                {awaitingClosing.map(h => (
+                {awaitingClosing.slice((awaitingPage - 1) * PAGE_SIZE, awaitingPage * PAGE_SIZE).map(h => (
                   <tr key={h.handover_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                     <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{formatDateToDisplay(h.date)}</td>
                     <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{h.shift_type}</td>
@@ -604,6 +617,8 @@ export default function HandoverReview() {
                 ))}
               </tbody>
             </table>
+            <Pagination total={awaitingClosing.length} pageSize={PAGE_SIZE} page={awaitingPage} onPageChange={setAwaitingPage} />
+            </>
           )}
         </div>
       )}
@@ -612,7 +627,7 @@ export default function HandoverReview() {
       {statusTab !== 'awaiting' && (
       <div className="rounded-lg shadow overflow-x-auto"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <table className="w-full text-sm">
+        <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ backgroundColor: theme.background }}>
               {statusTab !== 'approved' && (
@@ -641,9 +656,9 @@ export default function HandoverReview() {
               </tr>
             </tbody>
           )}
-          {displayedHandovers.map(h => {
+          {displayedHandovers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(h => {
             const rs = h.review_status || 'submitted'
-            const style = REVIEW_STATUS_STYLES[rs] || REVIEW_STATUS_STYLES.submitted
+            const styleMap = REVIEW_STATUS_STYLES[rs] || REVIEW_STATUS_STYLES.submitted
             const isExpanded = expandedId === h.handover_id
             const canSelect = rs === 'submitted'
             const canAct = rs === 'submitted' || rs === 'flagged'
@@ -695,8 +710,8 @@ export default function HandoverReview() {
                     </td>
                     <td className="px-3 py-2">
                       <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
-                        style={{ backgroundColor: style.bg, color: style.color }}>
-                        {style.label}
+                        style={{ backgroundColor: styleMap.bg, color: styleMap.color }}>
+                        {styleMap.label}
                       </span>
                     </td>
                     <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
@@ -752,6 +767,7 @@ export default function HandoverReview() {
             )
           })}
         </table>
+        <Pagination total={displayedHandovers.length} pageSize={PAGE_SIZE} page={page} onPageChange={setPage} />
       </div>
       )}
 

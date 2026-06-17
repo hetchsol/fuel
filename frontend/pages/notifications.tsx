@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getHeaders, BASE, authFetch } from '../lib/api'
 import { formatDateToDisplay } from '../lib/dateUtils'
+import Pagination from '../components/Pagination'
+
+const PAGE_SIZE = 25
 
 interface Notification {
   id: string
@@ -77,8 +80,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [hasMore, setHasMore] = useState(false)
-  const [limit, setLimit] = useState(50)
+  const [page, setPage] = useState(1)
 
   // Filters
   const [severity, setSeverity] = useState('')
@@ -87,12 +89,12 @@ export default function NotificationsPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
 
-  const fetchNotifications = useCallback(async (currentLimit: number) => {
+  const fetchNotifications = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
       const params = new URLSearchParams()
-      params.set('limit', String(currentLimit + 1))
+      params.set('limit', '500')
       if (severity) params.set('severity', severity)
       if (type) params.set('type', type)
       if (readFilter === 'unread') params.set('read', 'false')
@@ -105,14 +107,8 @@ export default function NotificationsPage() {
       })
       if (!res.ok) throw new Error('Failed to fetch notifications')
       const data: Notification[] = await res.json()
-
-      if (data.length > currentLimit) {
-        setHasMore(true)
-        setNotifications(data.slice(0, currentLimit))
-      } else {
-        setHasMore(false)
-        setNotifications(data)
-      }
+      setNotifications(data)
+      setPage(1)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -121,15 +117,8 @@ export default function NotificationsPage() {
   }, [severity, type, readFilter, startDate, endDate])
 
   useEffect(() => {
-    setLimit(50)
-    fetchNotifications(50)
+    fetchNotifications()
   }, [fetchNotifications])
-
-  const loadMore = () => {
-    const newLimit = limit + 50
-    setLimit(newLimit)
-    fetchNotifications(newLimit)
-  }
 
   const markRead = (id: string) => {
     authFetch(`${BASE}/notifications/${id}/read`, {
@@ -270,8 +259,9 @@ export default function NotificationsPage() {
           <p className="text-lg text-content-secondary">No notifications</p>
         </div>
       ) : (
+        <>
         <div className="space-y-3">
-          {notifications.map(n => {
+          {notifications.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(n => {
             const style = SEVERITY_STYLES[n.severity] || SEVERITY_STYLES.info
             return (
               <div
@@ -308,18 +298,9 @@ export default function NotificationsPage() {
               </div>
             )
           })}
-
-          {hasMore && (
-            <div className="text-center py-4">
-              <button
-                onClick={loadMore}
-                className="px-6 py-2 text-sm font-medium bg-surface-card text-action-primary border border-surface-border rounded-md hover:bg-surface-bg transition-colors"
-              >
-                Load more
-              </button>
-            </div>
-          )}
         </div>
+        <Pagination total={notifications.length} pageSize={PAGE_SIZE} page={page} onPageChange={setPage} />
+        </>
       )}
     </div>
   )

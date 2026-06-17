@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
+import Pagination from '../components/Pagination'
 import { getHeaders, authFetch } from '../lib/api'
 import { formatDateToDisplay } from '../lib/dateUtils'
+
+const HISTORY_PAGE_SIZE = 20
 
 const BASE = '/api/v1'
 
@@ -29,6 +32,7 @@ export default function Shifts() {
   // Shift history state
   const [allShifts, setAllShifts] = useState<any[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [historyPage, setHistoryPage] = useState(1)
 
   // Manage existing shift state
   const [selectedShiftId, setSelectedShiftId] = useState<string>('')
@@ -1153,7 +1157,7 @@ export default function Shifts() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-content-primary">Shift History</h2>
             <button
-              onClick={() => { setShowHistory(!showHistory); if (!showHistory) fetchAllShifts() }}
+              onClick={() => { setShowHistory(!showHistory); if (!showHistory) { fetchAllShifts(); setHistoryPage(1) } }}
               className="px-3 py-1 text-sm bg-surface-bg hover:bg-surface-border text-content-secondary rounded-md border"
             >
               {showHistory ? 'Hide' : 'Show'} History
@@ -1165,7 +1169,8 @@ export default function Shifts() {
               {allShifts.length === 0 ? (
                 <p className="text-content-secondary text-sm">No shifts found.</p>
               ) : (
-                allShifts.map((shift: any) => (
+                <>
+                {allShifts.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE).map((shift: any) => (
                   <div
                     key={shift.shift_id}
                     className={`p-4 rounded-lg border-2 ${
@@ -1229,7 +1234,9 @@ export default function Shifts() {
                       </p>
                     ) : null}
                   </div>
-                ))
+                ))}
+                <Pagination total={allShifts.length} pageSize={HISTORY_PAGE_SIZE} page={historyPage} onPageChange={setHistoryPage} />
+                </>
               )}
             </div>
           )}

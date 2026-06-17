@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getHeaders, BASE, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
+import Pagination from '../components/Pagination'
 import { ExportConfig } from '../lib/exportUtils'
+
+const PAGE_SIZE = 25
 
 const ACTION_OPTIONS = [
   '',
@@ -70,6 +73,7 @@ export default function AuditLogPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [expandedRow, setExpandedRow] = useState<number | null>(null)
+  const [page, setPage] = useState(1)
 
   // Filters
   const [action, setAction] = useState('')
@@ -77,10 +81,8 @@ export default function AuditLogPage() {
   const [performedBy, setPerformedBy] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [limit, setLimit] = useState(50)
-  const [hasMore, setHasMore] = useState(false)
 
-  const fetchEntries = async (currentLimit: number) => {
+  const fetchEntries = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -90,7 +92,7 @@ export default function AuditLogPage() {
       if (performedBy) params.set('performed_by', performedBy)
       if (startDate) params.set('start_date', startDate)
       if (endDate) params.set('end_date', endDate)
-      params.set('limit', String(currentLimit))
+      params.set('limit', '200')
 
       const res = await authFetch(`${BASE}/audit/?${params.toString()}`, {
         headers: getHeaders(),
@@ -98,27 +100,20 @@ export default function AuditLogPage() {
       if (!res.ok) throw new Error('Failed to fetch audit log')
       const data: AuditEntry[] = await res.json()
       setEntries(data)
-      setHasMore(data.length >= currentLimit)
+      setPage(1)
     } catch (err: any) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
-  }
+  }, [action, entityType, performedBy, startDate, endDate])
 
   useEffect(() => {
-    fetchEntries(limit)
+    fetchEntries()
   }, [])
 
   const handleApply = () => {
-    setLimit(50)
-    fetchEntries(50)
-  }
-
-  const handleLoadMore = () => {
-    const newLimit = limit + 50
-    setLimit(newLimit)
-    fetchEntries(newLimit)
+    fetchEntries()
   }
 
   const getExportConfig = useCallback((): ExportConfig | null => {
@@ -252,11 +247,13 @@ export default function AuditLogPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-surface-card divide-y divide-surface-border">
-                  {entries.map((entry, idx) => (
+                  {entries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((entry, idx) => {
+                    const absIdx = (page - 1) * PAGE_SIZE + idx
+                    return (
                     <tr
-                      key={idx}
+                      key={absIdx}
                       className="hover:bg-surface-bg cursor-pointer"
-                      onClick={() => setExpandedRow(expandedRow === idx ? null : idx)}
+                      onClick={() => setExpandedRow(expandedRow === absIdx ? null : absIdx)}
                     >
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-content-primary">
                         {formatTimestamp(entry.timestamp)}
@@ -276,7 +273,7 @@ export default function AuditLogPage() {
                         {entry.performed_by || '-'}
                       </td>
                       <td className="px-4 py-3 text-sm text-content-secondary max-w-[300px]">
-                        {expandedRow === idx ? (
+                        {expandedRow === absIdx ? (
                           <pre className="whitespace-pre-wrap text-xs bg-surface-bg p-2 rounded">
                             {JSON.stringify(entry.details, null, 2)}
                             {entry.notes && `\nNote: ${entry.notes}`}
@@ -288,23 +285,13 @@ export default function AuditLogPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
+            <Pagination total={entries.length} pageSize={PAGE_SIZE} page={page} onPageChange={p => { setPage(p); setExpandedRow(null) }} />
           </div>
-
-          {/* Load more */}
-          {hasMore && (
-            <div className="mt-4 text-center">
-              <button
-                onClick={handleLoadMore}
-                className="px-6 py-2 text-sm font-medium text-action-primary bg-action-primary-light rounded-md hover:bg-action-primary hover:text-white transition-colors"
-              >
-                Load More
-              </button>
-            </div>
-          )}
         </>
       )}
     </div>
