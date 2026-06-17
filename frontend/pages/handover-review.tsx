@@ -528,7 +528,7 @@ export default function HandoverReview() {
         </div>
         <div className="flex-1" />
         {/* Status tabs */}
-        <div className="flex gap-1">
+        <div className="flex gap-1 overflow-x-auto flex-nowrap">
           {([
             ['all', 'All'],
             ['awaiting', 'Awaiting Closing'],
@@ -537,7 +537,7 @@ export default function HandoverReview() {
             ['approved', 'Approved'],
           ] as const).map(([tab, label]) => (
             <button key={tab} onClick={() => setStatusTab(tab)}
-              className="px-3 py-1 text-xs font-medium rounded-full transition-colors"
+              className="px-3 py-1 text-xs font-medium rounded-full transition-colors whitespace-nowrap"
               style={{
                 backgroundColor: statusTab === tab ? 'var(--color-action-primary)' : 'transparent',
                 color: statusTab === tab ? '#fff' : theme.textSecondary,
