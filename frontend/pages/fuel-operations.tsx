@@ -897,15 +897,15 @@ export default function FuelOperations() {
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-3">
                           <div>
                             <p className="text-xs text-content-secondary">Opening</p>
-                            <p className="font-semibold">{reading.opening_volume.toLocaleString()} L</p>
+                            <p className="font-semibold">{(reading.opening_volume ?? 0).toLocaleString()} L</p>
                           </div>
                           <div>
                             <p className="text-xs text-content-secondary">Closing</p>
-                            <p className="font-semibold">{reading.closing_volume.toLocaleString()} L</p>
+                            <p className="font-semibold">{(reading.closing_volume ?? 0).toLocaleString()} L</p>
                           </div>
                           <div>
                             <p className="text-xs text-content-secondary">Movement</p>
-                            <p className="font-semibold text-action-primary">{reading.tank_volume_movement.toLocaleString()} L</p>
+                            <p className="font-semibold text-action-primary">{(reading.tank_volume_movement ?? 0).toLocaleString()} L</p>
                           </div>
                           {reading.delivery_occurred && reading.delivery_volume && (
                             <div>
@@ -924,7 +924,7 @@ export default function FuelOperations() {
                           </div>
                         )}
 
-                        {reading.validation_messages.length > 0 && (
+                        {(reading.validation_messages?.length ?? 0) > 0 && (
                           <div className="text-xs text-status-warning bg-status-pending-light p-2 rounded">
                             {reading.validation_messages.map((msg, i) => (
                               <p key={i}>{msg}</p>
