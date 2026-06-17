@@ -38,6 +38,7 @@ interface ReportData {
     generated_by?: {
         user_id: string;
         username: string;
+        full_name?: string;
         role: string;
     };
     generated_at?: string;
