@@ -321,9 +321,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const toggleMenu = (menuLabel: string) => {
     setOpenMenus(prev =>
-      prev.includes(menuLabel)
-        ? prev.filter(m => m !== menuLabel)
-        : [...prev, menuLabel]
+      prev.includes(menuLabel) ? [] : [menuLabel]
     )
   }
 
