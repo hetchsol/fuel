@@ -255,13 +255,15 @@ export default function Home() {
               ) : (
                 <ul className="space-y-2 max-h-64 overflow-y-auto">
                   {flags.map((flag: any, idx: number) => (
-                    <li key={idx} className="p-3 bg-status-error-light/50 border border-status-error/30 rounded-xl">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-status-error/70">{flag.severity}</span>
-                        <span className="text-[10px] text-status-error/50">{flag.tank_id} - {flag.fuel_type}</span>
+                    <li key={idx} className="px-3 py-2 bg-status-error-light/50 border border-status-error/30 rounded-lg">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-status-error/70 shrink-0">{flag.severity}</span>
+                          <span className="text-xs font-medium text-status-error truncate">{flag.message}</span>
+                        </div>
+                        <span className="text-[10px] text-status-error/50 shrink-0">{formatDateToDisplay(flag.date)}</span>
                       </div>
-                      <p className="text-sm font-medium text-status-error">{flag.message}</p>
-                      <p className="text-xs text-status-error/60 mt-1">{formatDateToDisplay(flag.date)}</p>
+                      <p className="text-[10px] text-status-error/40 mt-0.5">{flag.tank_id} - {flag.fuel_type}</p>
                     </li>
                   ))}
                 </ul>
