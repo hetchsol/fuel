@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
@@ -6,6 +7,7 @@ const BASE = '/api/v1'
 type SettingsTab = 'system' | 'fuel' | 'tax-levy' | 'validation' | 'stock-alerts' | 'recon-tolerances' | 'email' | 'tank-calibration'
 
 export default function Settings() {
+  const router = useRouter()
   const [settings, setSettings] = useState({
     diesel_price_per_liter: 150.0,
     petrol_price_per_liter: 160.0,
@@ -268,15 +270,15 @@ export default function Settings() {
         const err = await res.json()
         throw new Error(err.detail || 'Failed to update profile')
       }
-      // Refresh the cached user in localStorage so the nav updates immediately
+      // Patch localStorage so the header picks up the new name on reload
       const stored = localStorage.getItem('user')
       if (stored) {
         const parsed = JSON.parse(stored)
         parsed.full_name = profileName.trim()
         localStorage.setItem('user', JSON.stringify(parsed))
       }
-      setProfileMessage('Display name updated. Refresh the page to see the change in the header.')
-      setTimeout(() => setProfileMessage(''), 5000)
+      // Reload the page so Layout re-reads localStorage and the header updates
+      router.reload()
     } catch (err: any) {
       setProfileError(err.message || 'Failed to update profile')
     } finally {
