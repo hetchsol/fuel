@@ -38,6 +38,7 @@ export default function UsersManagement() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<string>('')
   const [currentUserStationId, setCurrentUserStationId] = useState<string>('')
+  const [currentLoggedInUsername, setCurrentLoggedInUsername] = useState<string>('')
   const [stations, setStations] = useState<Array<{ station_id: string; name?: string; status?: string }>>([])
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export default function UsersManagement() {
       const parsed = JSON.parse(userData)
       setCurrentUserRole(parsed.role || '')
       setCurrentUserStationId(parsed.station_id || '')
+      setCurrentLoggedInUsername(parsed.username || '')
     }
     fetchUsers()
     // Real stations for the Station dropdown (no more typing free-text IDs).
@@ -122,6 +124,16 @@ export default function UsersManagement() {
       if (!res.ok) {
         const errorData = await res.json()
         throw new Error(errorData.detail || 'Failed to save user')
+      }
+
+      // If the owner just updated their own record, refresh localStorage so the nav reflects the new name
+      if (editingUser && editingUser.username === currentLoggedInUsername && formData.full_name) {
+        const stored = localStorage.getItem('user')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          parsed.full_name = formData.full_name
+          localStorage.setItem('user', JSON.stringify(parsed))
+        }
       }
 
       setShowModal(false)

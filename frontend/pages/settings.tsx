@@ -82,12 +82,19 @@ export default function Settings() {
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('system')
   const [currentUserRole, setCurrentUserRole] = useState<string>('')
+  const [currentUsername, setCurrentUsername] = useState<string>('')
+  const [profileName, setProfileName] = useState<string>('')
+  const [profileLoading, setProfileLoading] = useState(false)
+  const [profileMessage, setProfileMessage] = useState('')
+  const [profileError, setProfileError] = useState('')
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
     if (userData) {
       const parsed = JSON.parse(userData)
       setCurrentUserRole(parsed.role || '')
+      setCurrentUsername(parsed.username || '')
+      setProfileName(parsed.full_name || '')
       // Managers cannot see system/email tabs, default to fuel
       if (parsed.role === 'manager') {
         setActiveTab('fuel')
@@ -242,6 +249,38 @@ export default function Settings() {
       setError(err.message || 'Failed to update settings')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!profileName.trim()) return
+    setProfileLoading(true)
+    setProfileError('')
+    setProfileMessage('')
+    try {
+      const res = await authFetch(`${BASE}/auth/users/${currentUsername}`, {
+        method: 'PUT',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_name: profileName.trim() }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Failed to update profile')
+      }
+      // Refresh the cached user in localStorage so the nav updates immediately
+      const stored = localStorage.getItem('user')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        parsed.full_name = profileName.trim()
+        localStorage.setItem('user', JSON.stringify(parsed))
+      }
+      setProfileMessage('Display name updated. Refresh the page to see the change in the header.')
+      setTimeout(() => setProfileMessage(''), 5000)
+    } catch (err: any) {
+      setProfileError(err.message || 'Failed to update profile')
+    } finally {
+      setProfileLoading(false)
     }
   }
 
@@ -513,6 +552,38 @@ export default function Settings() {
 
       {/* ── System Information Tab ── */}
       {activeTab === 'system' && (
+        <div className="space-y-6">
+
+        {/* Your Profile (owner only) */}
+        {currentUserRole === 'owner' && (
+          <div className="bg-surface-card rounded-lg shadow p-6">
+            <form onSubmit={handleProfileUpdate}>
+              <h2 className="text-xl font-semibold text-content-primary mb-4">Your Profile</h2>
+              <div className="max-w-sm">
+                <label className="block text-sm font-medium text-content-secondary mb-1">Display Name</label>
+                <input
+                  type="text"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  placeholder="Your full name"
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  required
+                />
+                <p className="mt-1 text-xs text-content-secondary">This name appears in the navigation header and reports.</p>
+              </div>
+              {profileMessage && <p className="mt-3 text-sm text-status-success">{profileMessage}</p>}
+              {profileError && <p className="mt-3 text-sm text-status-error">{profileError}</p>}
+              <button
+                type="submit"
+                disabled={profileLoading}
+                className="mt-4 px-4 py-2 bg-action-primary text-white text-sm font-medium rounded-md hover:bg-action-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {profileLoading ? 'Saving...' : 'Save Display Name'}
+              </button>
+            </form>
+          </div>
+        )}
+
         <div className="bg-surface-card rounded-lg shadow p-6">
           <form onSubmit={handleSystemUpdate} className="space-y-6">
             <div className="border-b pb-6">
@@ -606,6 +677,7 @@ export default function Settings() {
               {systemLoading ? 'Saving...' : 'Save System Information'}
             </button>
           </form>
+        </div>
         </div>
       )}
 

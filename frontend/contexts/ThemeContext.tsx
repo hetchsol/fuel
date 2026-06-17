@@ -93,10 +93,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isDark, setIsDark] = useState(false)
   const [fuelType, setFuelType] = useState<'diesel' | 'petrol' | null>(null)
 
-  // Hydrate dark-mode preference from localStorage
+  // Hydrate dark-mode preference from localStorage — dark is the default
   useEffect(() => {
     const stored = localStorage.getItem('theme-mode')
-    if (stored === 'dark') {
+    if (stored !== 'light') {
       setIsDark(true)
       document.documentElement.classList.add('dark')
     }
