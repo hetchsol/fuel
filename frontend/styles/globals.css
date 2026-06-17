@@ -2,79 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Light Mode (Deep Blue) ─────────────────────────────────── */
+/* ── Light Mode ─────────────────────────────────────────────── */
 :root {
-  /* Surface — deep navy */
-  --color-bg: #0F1E36;
-  --color-bg-card: #162A4A;
-  --color-border: #1E3A60;
+  /* Surface */
+  --color-bg: #F0F4FA;
+  --color-bg-card: #FFFFFF;
+  --color-border: #D1DCE8;
 
   /* Glass card */
-  --color-glass-bg: rgba(22, 42, 74, 0.65);
-  --color-glass-border: rgba(255, 255, 255, 0.08);
-  --color-glass-highlight: rgba(255, 255, 255, 0.04);
+  --color-glass-bg: rgba(255, 255, 255, 0.82);
+  --color-glass-border: rgba(0, 0, 0, 0.07);
+  --color-glass-highlight: rgba(255, 255, 255, 0.95);
 
-  /* Content — white on blue */
-  --color-text-primary: #F0F4FF;
-  --color-text-secondary: #8BA3C7;
+  /* Content */
+  --color-text-primary: #0F1E36;
+  --color-text-secondary: #5A7A9A;
 
-  /* Action – Primary (Vibrant Blue) */
-  --color-action-primary: #007AFF;
-  --color-action-primary-hover: #339AFF;
-  --color-action-primary-light: #0A1F3D;
+  /* Action – Primary */
+  --color-action-primary: #0066CC;
+  --color-action-primary-hover: #0052A3;
+  --color-action-primary-light: #EAF2FF;
 
-  /* Action – Secondary (Teal) */
-  --color-action-secondary: #26A69A;
-  --color-action-secondary-hover: #4DB6AC;
-  --color-action-secondary-light: #0F2A28;
+  /* Action – Secondary */
+  --color-action-secondary: #00897B;
+  --color-action-secondary-hover: #00796B;
+  --color-action-secondary-light: #E0F7FA;
 
-  /* Fuel – Diesel (Purple — bright for dark bg) */
-  --color-fuel-diesel: #CE93D8;
-  --color-fuel-diesel-light: #1E1533;
-  --color-fuel-diesel-border: #8E24AA;
+  /* Fuel – Diesel (Purple) */
+  --color-fuel-diesel: #7B1FA2;
+  --color-fuel-diesel-light: #F3E5F5;
+  --color-fuel-diesel-border: #CE93D8;
 
-  /* Fuel – Petrol (Green — bright for dark bg) */
-  --color-fuel-petrol: #66BB6A;
-  --color-fuel-petrol-light: #122E14;
-  --color-fuel-petrol-border: #43A047;
+  /* Fuel – Petrol (Green) */
+  --color-fuel-petrol: #2E7D32;
+  --color-fuel-petrol-light: #E8F5E9;
+  --color-fuel-petrol-border: #A5D6A7;
 
   /* Status */
-  --color-status-success: #4DB6AC;
-  --color-status-success-light: #0F2A28;
-  --color-status-pending: #FFD54F;
-  --color-status-pending-light: #2A2510;
-  --color-status-warning: #FFC107;
-  --color-status-warning-light: #2A2510;
-  --color-status-error: #EF5350;
-  --color-status-error-light: #2E1215;
+  --color-status-success: #00897B;
+  --color-status-success-light: #E0F2F1;
+  --color-status-pending: #F9A825;
+  --color-status-pending-light: #FFF8E1;
+  --color-status-warning: #EF8C00;
+  --color-status-warning-light: #FFF3E0;
+  --color-status-error: #C62828;
+  --color-status-error-light: #FFEBEE;
 
   /* Header / Footer */
   --color-header-bg: #007AFF;
   --color-header-text: #FFFFFF;
-  --color-footer-bg: #081428;
+  --color-footer-bg: #0F1E36;
   --color-footer-text: #8BA3C7;
 
-  /* Category (non-fuel entity badges) */
-  --color-category-a: #CE93D8;
-  --color-category-a-light: #1E1533;
-  --color-category-a-border: #8E24AA;
+  /* Category badges */
+  --color-category-a: #7B1FA2;
+  --color-category-a-light: #F3E5F5;
+  --color-category-a-border: #CE93D8;
 
-  --color-category-b: #66BB6A;
-  --color-category-b-light: #122E14;
-  --color-category-b-border: #43A047;
+  --color-category-b: #2E7D32;
+  --color-category-b-light: #E8F5E9;
+  --color-category-b-border: #A5D6A7;
 
-  --color-category-c: #FFB74D;
-  --color-category-c-light: #2A1F0F;
-  --color-category-c-border: #EF6C00;
+  --color-category-c: #E65100;
+  --color-category-c-light: #FFF3E0;
+  --color-category-c-border: #FFCC80;
 
-  --color-category-d: #7986CB;
-  --color-category-d-light: #121833;
-  --color-category-d-border: #3F51B5;
+  --color-category-d: #3949AB;
+  --color-category-d-light: #E8EAF6;
+  --color-category-d-border: #9FA8DA;
 }
 
-/* ── Dark Mode (Deeper Navy) ─────────────────────────────────── */
+/* ── Dark Mode (Deep Navy) ───────────────────────────────────── */
 .dark {
-  /* Surface — even deeper */
+  /* Surface */
   --color-bg: #0A1525;
   --color-bg-card: #0F1E38;
   --color-border: #162D50;
@@ -88,7 +88,7 @@
   --color-text-primary: #F0F4FF;
   --color-text-secondary: #7B96BA;
 
-  /* Action – Primary (brighter for contrast) */
+  /* Action – Primary */
   --color-action-primary: #0A84FF;
   --color-action-primary-hover: #339AFF;
   --color-action-primary-light: #081A30;
@@ -99,9 +99,11 @@
   --color-action-secondary-light: #0A2220;
 
   /* Fuel */
+  --color-fuel-diesel: #CE93D8;
   --color-fuel-diesel-light: #1A1230;
   --color-fuel-diesel-border: #8E24AA;
 
+  --color-fuel-petrol: #66BB6A;
   --color-fuel-petrol-light: #0E2610;
   --color-fuel-petrol-border: #43A047;
 
@@ -122,28 +124,36 @@
   --color-footer-text: #7B96BA;
 
   /* Category */
+  --color-category-a: #CE93D8;
   --color-category-a-light: #1A1230;
   --color-category-a-border: #8E24AA;
 
+  --color-category-b: #66BB6A;
   --color-category-b-light: #0E2610;
   --color-category-b-border: #43A047;
 
+  --color-category-c: #FFB74D;
   --color-category-c-light: #281A0A;
   --color-category-c-border: #EF6C00;
 
+  --color-category-d: #7986CB;
   --color-category-d-light: #0E1230;
   --color-category-d-border: #3F51B5;
 }
 
-/* ── Blue Gradient Page Background ──────────────────────────── */
+/* ── Page Background ─────────────────────────────────────────── */
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: linear-gradient(135deg, #1A4F8C 0%, #0F2847 40%, #0A1B30 100%);
+  background: linear-gradient(135deg, #EBF2FF 0%, #F4F7FB 50%, #F8FAFC 100%);
   background-attachment: fixed;
   min-height: 100vh;
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.dark body {
+  background: linear-gradient(135deg, #1A4F8C 0%, #0F2847 40%, #0A1B30 100%);
 }
 
 /* ── Page Fade-In ──────────────────────────────────────────── */
@@ -192,15 +202,36 @@ body {
   }
 
   .glass-nav {
-    background: rgba(0, 122, 255, 0.85);
+    background: rgba(0, 122, 255, 0.92);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
   }
 
   .dark .glass-nav {
-    background: rgba(0, 102, 214, 0.85);
+    background: rgba(0, 102, 214, 0.88);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  }
+
+  .glass-card {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04),
+      inset 0 1px 0 var(--color-glass-highlight);
+  }
+
+  .dark .glass-card {
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18), 0 1px 4px rgba(0, 0, 0, 0.10),
+      inset 0 1px 0 var(--color-glass-highlight);
+  }
+
+  .glass-card-static {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04),
+      inset 0 1px 0 var(--color-glass-highlight);
+  }
+
+  .dark .glass-card-static {
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18), 0 1px 4px rgba(0, 0, 0, 0.10),
+      inset 0 1px 0 var(--color-glass-highlight);
   }
 
   /* Stat card with gradient accent */
@@ -259,11 +290,11 @@ textarea::placeholder {
   opacity: 0.7;
 }
 
-/* Date/time input icons (calendar, clock) — make them visible on dark bg */
-input[type='date']::-webkit-calendar-picker-indicator,
-input[type='month']::-webkit-calendar-picker-indicator,
-input[type='datetime-local']::-webkit-calendar-picker-indicator,
-input[type='time']::-webkit-calendar-picker-indicator {
+/* Date/time input icons — invert only on dark backgrounds */
+.dark input[type='date']::-webkit-calendar-picker-indicator,
+.dark input[type='month']::-webkit-calendar-picker-indicator,
+.dark input[type='datetime-local']::-webkit-calendar-picker-indicator,
+.dark input[type='time']::-webkit-calendar-picker-indicator {
   filter: invert(0.8);
 }
 
@@ -308,11 +339,19 @@ button:active:not(:disabled) {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.12);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 
