@@ -6,7 +6,15 @@ import DayChecklist from '../components/DayChecklist'
 import AttendantShiftCard from '../components/AttendantShiftCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { useWorkingDay } from '../contexts/WorkingDayContext'
-import { formatDateTimeToDisplay } from '../lib/dateUtils'
+import { formatDateToDisplay } from '../lib/dateUtils'
+
+function fmtZMW(n: number) {
+  return `ZMW ${n.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function fmtL(n: number) {
+  return `${n.toLocaleString('en-ZM', { minimumFractionDigits: 0, maximumFractionDigits: 1 })} L`
+}
 
 /* ── Empty State Illustration ─────────────────────── */
 function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
@@ -129,10 +137,10 @@ export default function Home() {
           {daily && (
             <div className="grid grid-cols-2 gap-4">
               {[
-                { label: 'Date', value: daily.date || 'N/A' },
-                { label: 'Volume Records', value: daily.volumes?.length || 0 },
-                { label: 'Cash Variance', value: daily.cash_variance?.length || 0 },
-                { label: 'Flags', value: daily.flags?.length || 0 },
+                { label: 'Date', value: formatDateToDisplay(daily.date) || 'N/A' },
+                { label: 'Transactions', value: daily.summary?.total_transactions ?? 0 },
+                { label: 'Volume Sold', value: daily.summary?.total_volume != null ? fmtL(daily.summary.total_volume) : '—' },
+                { label: 'Revenue', value: daily.summary?.total_revenue != null ? fmtZMW(daily.summary.total_revenue) : '—' },
               ].map((item) => (
                 <div key={item.label} className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
                   <p className="text-xs text-content-secondary mb-1">{item.label}</p>
@@ -167,8 +175,12 @@ export default function Home() {
                 <ul className="space-y-2 max-h-64 overflow-y-auto">
                   {flags.map((flag: any, idx: number) => (
                     <li key={idx} className="p-3 bg-status-error-light/50 border border-status-error/30 rounded-xl">
-                      <p className="text-sm font-medium text-status-error">{flag.description}</p>
-                      <p className="text-xs text-status-error/60 mt-1">{formatDateTimeToDisplay(flag.timestamp)}</p>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-status-error/70">{flag.severity}</span>
+                        <span className="text-[10px] text-status-error/50">{flag.tank_id} - {flag.fuel_type}</span>
+                      </div>
+                      <p className="text-sm font-medium text-status-error">{flag.message}</p>
+                      <p className="text-xs text-status-error/60 mt-1">{formatDateToDisplay(flag.date)}</p>
                     </li>
                   ))}
                 </ul>
@@ -180,7 +192,7 @@ export default function Home() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 animate-fade-in-up-4">
-        {/* Total Nozzles */}
+        {/* Volume Sold */}
         <div className="stat-card glass-card border border-action-primary/20" style={{ background: 'linear-gradient(135deg, rgba(0,122,255,0.08) 0%, rgba(22,42,74,0.65) 100%)' }}>
           <div className="flex items-start justify-between mb-4">
             <div className="w-12 h-12 rounded-2xl bg-action-primary/15 flex items-center justify-center shadow-glow-blue">
@@ -188,11 +200,13 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
               </svg>
             </div>
-            <span className="text-[10px] font-semibold text-action-primary bg-action-primary/10 px-2 py-1 rounded-badge">LIVE</span>
+            <span className="text-[10px] font-semibold text-action-primary bg-action-primary/10 px-2 py-1 rounded-badge">TODAY</span>
           </div>
-          <p className="text-4xl font-extrabold text-action-primary tracking-tight">-</p>
-          <p className="text-sm font-medium text-content-secondary mt-1">Total Nozzles</p>
-          <p className="text-xs text-content-secondary/50 mt-0.5">Active monitoring</p>
+          <p className="text-2xl font-extrabold text-action-primary tracking-tight">
+            {daily?.summary?.total_volume != null ? fmtL(daily.summary.total_volume) : '-'}
+          </p>
+          <p className="text-sm font-medium text-content-secondary mt-1">Volume Sold</p>
+          <p className="text-xs text-content-secondary/50 mt-0.5">Total litres dispensed</p>
         </div>
 
         {/* Today's Sales */}
@@ -205,9 +219,11 @@ export default function Home() {
             </div>
             <span className="text-[10px] font-semibold text-status-success bg-status-success/10 px-2 py-1 rounded-badge">TODAY</span>
           </div>
-          <p className="text-4xl font-extrabold text-status-success tracking-tight">-</p>
-          <p className="text-sm font-medium text-content-secondary mt-1">Today&apos;s Sales</p>
-          <p className="text-xs text-content-secondary/50 mt-0.5">Total transactions</p>
+          <p className="text-2xl font-extrabold text-status-success tracking-tight">
+            {daily?.summary?.total_revenue != null ? fmtZMW(daily.summary.total_revenue) : '-'}
+          </p>
+          <p className="text-sm font-medium text-content-secondary mt-1">Today&apos;s Revenue</p>
+          <p className="text-xs text-content-secondary/50 mt-0.5">Total sales amount</p>
         </div>
 
         {/* Alerts */}
@@ -221,8 +237,8 @@ export default function Home() {
             <span className="text-[10px] font-semibold text-status-warning bg-status-warning/10 px-2 py-1 rounded-badge">ALERTS</span>
           </div>
           <p className="text-4xl font-extrabold text-status-warning tracking-tight">{flags?.length || 0}</p>
-          <p className="text-sm font-medium text-content-secondary mt-1">Alerts</p>
-          <p className="text-xs text-content-secondary/50 mt-0.5">Requires attention</p>
+          <p className="text-sm font-medium text-content-secondary mt-1">Discrepancies</p>
+          <p className="text-xs text-content-secondary/50 mt-0.5">Last 7 days</p>
         </div>
       </div>
     </div>
