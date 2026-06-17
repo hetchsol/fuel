@@ -497,38 +497,41 @@ export default function HandoverReview() {
       )}
 
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-3 rounded-lg p-3 shadow"
+      <div className="rounded-lg p-3 shadow space-y-3"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <div>
-          <label className="text-xs font-medium block mb-1" style={{ color: theme.textSecondary }}>Date</label>
-          <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
-            className="px-2 py-1 text-sm rounded border"
-            style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
+        {/* Row 1: filters */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="text-xs font-medium block mb-1" style={{ color: theme.textSecondary }}>Date</label>
+            <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
+              className="px-2 py-1.5 text-sm rounded border"
+              style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
+          </div>
+          <div>
+            <label className="text-xs font-medium block mb-1" style={{ color: theme.textSecondary }}>Shift</label>
+            <select value={filterShiftType} onChange={e => setFilterShiftType(e.target.value as '' | 'Day' | 'Night')}
+              className="px-2 py-1.5 text-sm rounded border"
+              style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+              <option value="">All</option>
+              <option value="Day">Day</option>
+              <option value="Night">Night</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium block mb-1" style={{ color: theme.textSecondary }}>Attendant</label>
+            <select value={filterAttendant} onChange={e => setFilterAttendant(e.target.value)}
+              className="px-2 py-1.5 text-sm rounded border"
+              style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+              <option value="">All</option>
+              {uniqueAttendants.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div>
-          <label className="text-xs font-medium block mb-1" style={{ color: theme.textSecondary }}>Shift</label>
-          <select value={filterShiftType} onChange={e => setFilterShiftType(e.target.value as '' | 'Day' | 'Night')}
-            className="px-2 py-1 text-sm rounded border"
-            style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
-            <option value="">All</option>
-            <option value="Day">Day</option>
-            <option value="Night">Night</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs font-medium block mb-1" style={{ color: theme.textSecondary }}>Attendant</label>
-          <select value={filterAttendant} onChange={e => setFilterAttendant(e.target.value)}
-            className="px-2 py-1 text-sm rounded border"
-            style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
-            <option value="">All</option>
-            {uniqueAttendants.map(a => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex-1" />
-        {/* Status tabs */}
-        <div className="flex gap-1 overflow-x-auto flex-nowrap">
+        {/* Row 2: status tabs — own full-width row, never competes with filters */}
+        <div className="flex gap-1.5 overflow-x-auto flex-nowrap pt-2.5"
+          style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
           {([
             ['all', 'All'],
             ['awaiting', 'Awaiting Closing'],
@@ -537,12 +540,12 @@ export default function HandoverReview() {
             ['approved', 'Approved'],
           ] as const).map(([tab, label]) => (
             <button key={tab} onClick={() => setStatusTab(tab)}
-              className="px-3 py-1 text-xs font-medium rounded-full transition-colors whitespace-nowrap"
+              className="px-3 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap"
               style={{
                 backgroundColor: statusTab === tab ? 'var(--color-action-primary)' : 'transparent',
                 color: statusTab === tab ? '#fff' : theme.textSecondary,
-                borderWidth: statusTab === tab ? 0 : 1,
-                borderColor: theme.border,
+                borderWidth: 1,
+                borderColor: statusTab === tab ? 'var(--color-action-primary)' : theme.border,
               }}>
               {label}
             </button>

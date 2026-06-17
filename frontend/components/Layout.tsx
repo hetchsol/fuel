@@ -498,10 +498,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </select>
                 )}
 
-                {/* Dark mode toggle */}
+                {/* Dark mode toggle — desktop only; drawer handles mobile/tablet */}
                 <button
                   onClick={toggleDark}
-                  className="p-2 rounded-btn text-white/80 hover:text-white hover:bg-white/10 transition-all"
+                  className="hidden lg:inline-flex p-2 rounded-btn text-white/80 hover:text-white hover:bg-white/10 transition-all"
                   title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
                 >
                   {isDark ? (
@@ -584,8 +584,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </div>
                 )}
 
-                {/* User info */}
-                <div className="hidden sm:flex items-center gap-3 pl-3 border-l border-white/20">
+                {/* User info — desktop only */}
+                <div className="hidden lg:flex items-center gap-3 pl-3 border-l border-white/20">
                   <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-semibold text-white">
                     {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
                   </div>
@@ -606,15 +606,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
                 <button
                   onClick={handleLogout}
-                  className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-sm font-medium rounded-btn border border-white/10 transition-all"
+                  className="hidden lg:inline-flex px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-sm font-medium rounded-btn border border-white/10 transition-all"
                 >
                   Logout
                 </button>
 
-                {/* Mobile hamburger */}
+                {/* Hamburger — visible on mobile and tablet */}
                 <button
                   onClick={() => setMobileNavOpen(!mobileNavOpen)}
-                  className="sm:hidden p-2 rounded-btn text-white/80 hover:text-white hover:bg-white/10 transition-all"
+                  className="lg:hidden p-2 rounded-btn text-white/80 hover:text-white hover:bg-white/10 transition-all"
                 >
                   {mobileNavOpen ? (
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -630,8 +630,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             )}
           </div>
 
-          {/* Desktop nav */}
-          <div className="hidden sm:flex sm:items-center sm:gap-1 h-11 -mb-px">
+          {/* Desktop nav — 1024px and above */}
+          <div className="hidden lg:flex lg:items-center lg:gap-1 h-11 -mb-px">
             {navItems.map((item: any) => (
               item.children ? (
                 <div key={item.label} className="relative group">
@@ -694,89 +694,154 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      {/* Mobile Navigation */}
+      {/* Mobile / Tablet Drawer */}
       {mobileNavOpen && (
-        <div className="sm:hidden glass-card-static border-b border-surface-border dropdown-enter">
-          <div className="px-3 pt-2 pb-3 space-y-1">
-            {navItems.map((item: any) => (
-              item.children ? (
-                <div key={item.label}>
-                  <button
-                    onClick={() => toggleMenu(item.label)}
-                    className="w-full flex justify-between items-center px-3 py-2.5 rounded-btn text-base font-medium text-content-primary hover:bg-white/5 transition-colors"
-                  >
-                    <span className="flex items-center gap-2">
-                      {icons[item.label]}
-                      {item.label}
-                    </span>
-                    <svg className={`w-4 h-4 transition-transform ${openMenus.includes(item.label) ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  {openMenus.includes(item.label) && (
-                    <div className="pl-4 space-y-0.5 mt-0.5">
-                      {item.children.map((child: any) => (
-                        child.disabled ? (
-                          <span
-                            key={child.path}
-                            className="block px-3 py-2 rounded-btn text-sm text-content-secondary/30 cursor-not-allowed select-none"
-                          >
-                            {child.label}
-                            <span className="ml-2 text-[10px] font-medium bg-white/5 px-1.5 py-0.5 rounded">Soon</span>
-                          </span>
-                        ) : (
-                          <Link
-                            key={child.path}
-                            href={child.path}
-                            className={`block px-3 py-2 rounded-btn text-sm transition-all ${
-                              isActive(child.path)
-                                ? 'bg-action-primary/10 text-action-primary font-medium'
-                                : 'text-content-secondary hover:text-content-primary hover:bg-white/5'
-                            }`}
-                          >
-                            {child.label}
-                          </Link>
-                        )
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Link
-                  key={item.path}
-                  href={item.path}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-btn text-base font-medium transition-all ${
-                    isActive(item.path)
-                      ? 'bg-action-primary/10 text-action-primary'
-                      : 'text-content-primary hover:bg-white/5'
-                  }`}
-                >
-                  {icons[item.label]}
-                  {item.label}
-                </Link>
-              )
-            ))}
+        <div className="lg:hidden">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          {/* Drawer panel */}
+          <div className="fixed inset-y-0 left-0 z-50 flex flex-col w-72 max-w-[85vw] bg-surface-card shadow-2xl">
+            {/* User header */}
             {user && (
-              <div className="px-3 py-2.5 mt-2 pt-3 border-t border-surface-border flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-action-primary/20 flex items-center justify-center text-sm font-semibold text-action-primary">
-                  {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
+              <div className="flex items-center justify-between px-4 py-4 border-b border-surface-border bg-action-primary/5 shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-full bg-action-primary/20 flex items-center justify-center text-base font-bold text-action-primary shrink-0">
+                    {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-content-primary truncate">{user.full_name}</p>
+                    <p className="text-xs text-content-secondary">
+                      {user.role === 'user' && 'Attendant'}
+                      {user.role === 'supervisor' && 'Supervisor'}
+                      {user.role === 'manager' && 'Manager'}
+                      {user.role === 'owner' && 'Owner'}
+                    </p>
+                    {depositOverdue && (
+                      <p className="text-[10px] text-status-warning font-semibold animate-pulse">Safe deposit overdue</p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-content-primary">{user.full_name}</p>
-                  <p className="text-xs text-content-secondary">
-                    {user.role === 'user' && 'Attendant'}
-                    {user.role === 'supervisor' && 'Supervisor'}
-                    {user.role === 'manager' && 'Manager'}
-                    {user.role === 'owner' && 'Owner'}
-                  </p>
-                </div>
+                <button
+                  onClick={() => setMobileNavOpen(false)}
+                  className="p-2 rounded-btn text-content-secondary hover:text-content-primary hover:bg-surface-bg shrink-0"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             )}
+
+            {/* Nav items */}
+            <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
+              {navItems.map((item: any) => (
+                item.children ? (
+                  <div key={item.label}>
+                    <button
+                      onClick={() => toggleMenu(item.label)}
+                      className="w-full flex justify-between items-center px-3 py-3 rounded-btn text-sm font-medium text-content-primary hover:bg-surface-bg transition-colors min-h-[48px]"
+                    >
+                      <span className="flex items-center gap-2.5">
+                        {icons[item.label]}
+                        {item.label}
+                      </span>
+                      <svg className={`w-4 h-4 text-content-secondary transition-transform shrink-0 ${openMenus.includes(item.label) ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {openMenus.includes(item.label) && (
+                      <div className="pl-9 space-y-0.5 mb-1">
+                        {item.children.map((child: any) => (
+                          child.disabled ? (
+                            <span
+                              key={child.path}
+                              className="flex items-center px-3 py-2.5 rounded-btn text-sm text-content-secondary/40 cursor-not-allowed select-none"
+                            >
+                              {child.label}
+                              <span className="ml-2 text-[10px] font-medium bg-surface-bg px-1.5 py-0.5 rounded">Soon</span>
+                            </span>
+                          ) : (
+                            <Link
+                              key={child.path}
+                              href={child.path}
+                              className={`flex items-center px-3 py-2.5 rounded-btn text-sm transition-all min-h-[44px] ${
+                                isActive(child.path)
+                                  ? 'bg-action-primary/10 text-action-primary font-medium'
+                                  : 'text-content-secondary hover:text-content-primary hover:bg-surface-bg'
+                              }`}
+                            >
+                              {child.label}
+                            </Link>
+                          )
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Link
+                    key={item.path}
+                    href={item.path}
+                    className={`flex items-center gap-2.5 px-3 py-3 rounded-btn text-sm font-medium transition-all min-h-[48px] ${
+                      isActive(item.path)
+                        ? 'bg-action-primary/10 text-action-primary'
+                        : 'text-content-primary hover:bg-surface-bg'
+                    }`}
+                  >
+                    {icons[item.label]}
+                    {item.label}
+                  </Link>
+                )
+              ))}
+            </nav>
+
+            {/* Drawer footer: station selector + dark mode + logout */}
+            <div className="shrink-0 px-3 py-3 border-t border-surface-border space-y-2">
+              {user?.role === 'owner' && stations.length > 0 && (
+                <select
+                  value={activeStationId}
+                  onChange={(e) => handleStationChange(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm rounded-btn border border-surface-border bg-surface-bg text-content-primary focus:outline-none focus:ring-2 focus:ring-action-primary"
+                >
+                  {stations.map((s: any) => (
+                    <option key={s.station_id} value={s.station_id}>{s.name}</option>
+                  ))}
+                </select>
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={toggleDark}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-btn border border-surface-border text-sm text-content-secondary hover:bg-surface-bg transition-colors"
+                >
+                  {isDark ? (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                  {isDark ? 'Light mode' : 'Dark mode'}
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-btn border border-surface-border text-sm text-status-error hover:bg-status-error-light transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Logout
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full relative">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 w-full relative">
         {children}
       </main>
 
