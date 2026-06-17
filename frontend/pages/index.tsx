@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import useSWR from 'swr'
-import { getDaily, getFlags, getTankLevels, isManagerOrAbove } from '../lib/api'
+import { getDaily, getFlags, getTankLevels, isManagerOrAbove, authFetch, getHeaders } from '../lib/api'
 import TankCard from '../components/TankCard'
 import DayChecklist from '../components/DayChecklist'
 import AttendantShiftCard from '../components/AttendantShiftCard'
@@ -14,6 +14,30 @@ function fmtZMW(n: number) {
 
 function fmtL(n: number) {
   return `${n.toLocaleString('en-ZM', { minimumFractionDigits: 0, maximumFractionDigits: 1 })} L`
+}
+
+const BASE = '/api/v1'
+type CardPeriod = 'today' | 'week' | 'month'
+const PERIOD_LABELS: Record<CardPeriod, string> = { today: 'TODAY', week: 'THIS WEEK', month: 'THIS MONTH' }
+const NEXT_PERIOD: Record<CardPeriod, CardPeriod> = { today: 'week', week: 'month', month: 'today' }
+
+function getPeriodTotals(salesSummary: any, daily: any, date: string, period: CardPeriod) {
+  const dates: any[] = salesSummary?.dates || []
+  if (period === 'today') {
+    const d = dates.find((x: any) => x.date === date)
+    return {
+      volume:  d?.total_volume  ?? daily?.summary?.total_volume  ?? null,
+      revenue: d?.total_amount  ?? daily?.summary?.total_revenue ?? null,
+    }
+  }
+  const cutoff = new Date(date)
+  cutoff.setDate(cutoff.getDate() - (period === 'week' ? 6 : 29))
+  const cutoffStr = cutoff.toISOString().slice(0, 10)
+  const relevant = dates.filter((x: any) => x.date >= cutoffStr && x.date <= date)
+  return {
+    volume:  relevant.reduce((s: number, x: any) => s + (x.total_volume ?? 0), 0),
+    revenue: relevant.reduce((s: number, x: any) => s + (x.total_amount ?? 0), 0),
+  }
 }
 
 /* ── Empty State Illustration ─────────────────────── */
@@ -37,6 +61,8 @@ function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
 export default function Home() {
   const { date, setDate } = useWorkingDay()
   const [userRole, setUserRole] = useState<string>('')
+  const [cardPeriod, setCardPeriod] = useState<CardPeriod>('today')
+  const [alertsExpanded, setAlertsExpanded] = useState(false)
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -48,8 +74,30 @@ export default function Home() {
   const { data: tanks, error: tanksError, mutate: mutateTanks } = useSWR('tanks', getTankLevels, {
     refreshInterval: 30000,
   })
+  const { data: salesSummary } = useSWR(
+    isManagerOrAbove(userRole) ? 'salesSummary' : null,
+    () => authFetch(`${BASE}/sales-reports/summary`, { headers: getHeaders() }).then(r => r.ok ? r.json() : null),
+  )
+  const { data: notifications } = useSWR(
+    isManagerOrAbove(userRole) ? 'notifications-brief' : null,
+    () => authFetch(`${BASE}/notifications/?limit=50`, { headers: getHeaders() }).then(r => r.ok ? r.json() : []),
+  )
+  const { data: allShifts } = useSWR('shifts-dashboard', () =>
+    authFetch(`${BASE}/shifts/`, { headers: getHeaders() }).then(r => r.ok ? r.json() : []),
+  )
 
   const allTanks = tanks || []
+  const periodTotals = getPeriodTotals(salesSummary, daily, date, cardPeriod)
+  const todayShift = (allShifts || []).find((s: any) => s.date === date && s.status === 'active')
+  const onShiftNames: string[] = todayShift?.attendants || []
+  const shiftType: string = todayShift?.shift_type || ''
+  const notifs: any[] = Array.isArray(notifications) ? notifications : []
+  const notifCounts = {
+    critical: notifs.filter(n => n.severity === 'critical').length,
+    high:     notifs.filter(n => n.severity === 'high').length,
+    medium:   notifs.filter(n => n.severity === 'medium').length,
+    info:     notifs.filter(n => n.severity === 'info').length,
+  }
 
   return (
     <div>
@@ -85,6 +133,39 @@ export default function Home() {
           <AttendantShiftCard />
         </div>
       )}
+
+      {/* On Shift Now */}
+      <div className="mb-6 animate-fade-in-up-2">
+        <div className="glass-card-static p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-action-secondary/15 flex items-center justify-center">
+                <svg className="w-5 h-5 text-action-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-content-secondary uppercase tracking-wide">On Shift Now</p>
+                {shiftType && <p className="text-[10px] text-content-secondary/50">{shiftType} Shift</p>}
+              </div>
+            </div>
+            <div className="flex-1 flex flex-wrap gap-2">
+              {!allShifts ? (
+                <span className="text-xs text-content-secondary/50">Loading...</span>
+              ) : onShiftNames.length === 0 ? (
+                <span className="text-xs text-content-secondary/50">No active shift for this date</span>
+              ) : (
+                onShiftNames.map((name, i) => (
+                  <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-action-secondary/10 border border-action-secondary/20 text-xs font-medium text-action-secondary">
+                    <span className="w-1.5 h-1.5 rounded-full bg-action-secondary animate-pulse" />
+                    {name}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Tank Cards */}
       <div className="grid gap-6 mb-6 animate-fade-in-up-2" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 320px), 1fr))` }}>
@@ -192,42 +273,54 @@ export default function Home() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 animate-fade-in-up-4">
-        {/* Volume Sold */}
-        <div className="stat-card glass-card border border-action-primary/20" style={{ background: 'linear-gradient(135deg, rgba(0,122,255,0.08) 0%, rgba(22,42,74,0.65) 100%)' }}>
+        {/* Volume Sold — click cycles today / week / month */}
+        <button
+          onClick={() => setCardPeriod(p => NEXT_PERIOD[p])}
+          className="stat-card glass-card border border-action-primary/20 text-left"
+          style={{ background: 'linear-gradient(135deg, rgba(0,122,255,0.08) 0%, rgba(22,42,74,0.65) 100%)' }}
+        >
           <div className="flex items-start justify-between mb-4">
             <div className="w-12 h-12 rounded-2xl bg-action-primary/15 flex items-center justify-center shadow-glow-blue">
               <svg className="w-6 h-6 text-action-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
               </svg>
             </div>
-            <span className="text-[10px] font-semibold text-action-primary bg-action-primary/10 px-2 py-1 rounded-badge">TODAY</span>
+            <span className="text-[10px] font-semibold text-action-primary bg-action-primary/10 px-2 py-1 rounded-badge">{PERIOD_LABELS[cardPeriod]}</span>
           </div>
           <p className="text-2xl font-extrabold text-action-primary tracking-tight">
-            {daily?.summary?.total_volume != null ? fmtL(daily.summary.total_volume) : '-'}
+            {periodTotals.volume != null ? fmtL(periodTotals.volume) : '-'}
           </p>
           <p className="text-sm font-medium text-content-secondary mt-1">Volume Sold</p>
-          <p className="text-xs text-content-secondary/50 mt-0.5">Total litres dispensed</p>
-        </div>
+          <p className="text-xs text-content-secondary/50 mt-0.5">Tap to cycle period</p>
+        </button>
 
-        {/* Today's Sales */}
-        <div className="stat-card glass-card border border-status-success/20" style={{ background: 'linear-gradient(135deg, rgba(77,182,172,0.08) 0%, rgba(22,42,74,0.65) 100%)' }}>
+        {/* Revenue — shares same period */}
+        <button
+          onClick={() => setCardPeriod(p => NEXT_PERIOD[p])}
+          className="stat-card glass-card border border-status-success/20 text-left"
+          style={{ background: 'linear-gradient(135deg, rgba(77,182,172,0.08) 0%, rgba(22,42,74,0.65) 100%)' }}
+        >
           <div className="flex items-start justify-between mb-4">
             <div className="w-12 h-12 rounded-2xl bg-status-success/15 flex items-center justify-center shadow-glow-success">
               <svg className="w-6 h-6 text-status-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <span className="text-[10px] font-semibold text-status-success bg-status-success/10 px-2 py-1 rounded-badge">TODAY</span>
+            <span className="text-[10px] font-semibold text-status-success bg-status-success/10 px-2 py-1 rounded-badge">{PERIOD_LABELS[cardPeriod]}</span>
           </div>
           <p className="text-2xl font-extrabold text-status-success tracking-tight">
-            {daily?.summary?.total_revenue != null ? fmtZMW(daily.summary.total_revenue) : '-'}
+            {periodTotals.revenue != null ? fmtZMW(periodTotals.revenue) : '-'}
           </p>
-          <p className="text-sm font-medium text-content-secondary mt-1">Today&apos;s Revenue</p>
-          <p className="text-xs text-content-secondary/50 mt-0.5">Total sales amount</p>
-        </div>
+          <p className="text-sm font-medium text-content-secondary mt-1">Revenue</p>
+          <p className="text-xs text-content-secondary/50 mt-0.5">Tap to cycle period</p>
+        </button>
 
-        {/* Alerts */}
-        <div className="stat-card glass-card border border-status-warning/20" style={{ background: 'linear-gradient(135deg, rgba(255,193,7,0.08) 0%, rgba(22,42,74,0.65) 100%)' }}>
+        {/* Alerts — click toggles to notification severity breakdown */}
+        <button
+          onClick={() => setAlertsExpanded(e => !e)}
+          className="stat-card glass-card border border-status-warning/20 text-left"
+          style={{ background: 'linear-gradient(135deg, rgba(255,193,7,0.08) 0%, rgba(22,42,74,0.65) 100%)' }}
+        >
           <div className="flex items-start justify-between mb-4">
             <div className="w-12 h-12 rounded-2xl bg-status-warning/15 flex items-center justify-center shadow-glow-warning">
               <svg className="w-6 h-6 text-status-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -236,10 +329,31 @@ export default function Home() {
             </div>
             <span className="text-[10px] font-semibold text-status-warning bg-status-warning/10 px-2 py-1 rounded-badge">ALERTS</span>
           </div>
-          <p className="text-4xl font-extrabold text-status-warning tracking-tight">{flags?.length || 0}</p>
-          <p className="text-sm font-medium text-content-secondary mt-1">Discrepancies</p>
-          <p className="text-xs text-content-secondary/50 mt-0.5">Last 7 days</p>
-        </div>
+          {!alertsExpanded ? (
+            <>
+              <p className="text-4xl font-extrabold text-status-warning tracking-tight">{flags?.length || 0}</p>
+              <p className="text-sm font-medium text-content-secondary mt-1">Discrepancies</p>
+              <p className="text-xs text-content-secondary/50 mt-0.5">Tap to see notifications</p>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2 mt-1">
+                {([
+                  { label: 'Critical', count: notifCounts.critical, color: 'text-status-error' },
+                  { label: 'High',     count: notifCounts.high,     color: 'text-status-warning' },
+                  { label: 'Medium',   count: notifCounts.medium,   color: 'text-action-primary' },
+                  { label: 'Info',     count: notifCounts.info,     color: 'text-content-secondary' },
+                ] as const).map(row => (
+                  <div key={row.label} className="flex items-center justify-between">
+                    <span className={`text-xs font-medium ${row.color}`}>{row.label}</span>
+                    <span className={`text-sm font-bold ${row.color}`}>{row.count}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-content-secondary/50 mt-3">Tap to go back</p>
+            </>
+          )}
+        </button>
       </div>
     </div>
   )
