@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import Layout from '../components/Layout'
 import { authFetch } from '../lib/api'
 import {
   PAYROLL, fmtZMW, periodLabel, MONTH_NAMES,
@@ -1309,11 +1308,10 @@ export default function PayrollPage() {
 
   useEffect(() => { loadAll() }, [loadAll])
 
-  if (loading) return <Layout><div className="p-8 text-center text-content-secondary">Loading payroll...</div></Layout>
+  if (loading) return <div className="p-8 text-center text-content-secondary">Loading payroll...</div>
 
   return (
-    <Layout>
-      <div className="max-w-7xl mx-auto px-4 py-6">
+    <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="mb-5">
           <h1 className="text-2xl font-bold text-content-primary">Payroll</h1>
           <p className="text-sm text-content-secondary mt-0.5">Zambian statutory payroll — PAYE, NAPSA, NHIMA, WCF</p>
@@ -1361,7 +1359,6 @@ export default function PayrollPage() {
           <StatutoryTab runs={runs} rates={rates} leaveTypes={leaveTypes} wcfCategories={wcfCategories}
             holidays={holidays} onRefresh={loadAll} userRole={user?.role || ''} />
         )}
-      </div>
-    </Layout>
+    </div>
   )
 }
