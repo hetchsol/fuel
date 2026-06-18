@@ -46,7 +46,7 @@ def _aggregate_handovers(handovers: list) -> dict:
     credit_sales = sum(h.get("credit_sales", 0) for h in handovers)
     total_expected_cash = sum(h.get("expected_cash", 0) for h in handovers)
     total_actual_cash = sum(h.get("actual_cash", 0) for h in handovers)
-    net_variance = total_actual_cash - total_expected_cash
+    net_variance = total_expected_cash - total_actual_cash
 
     return {
         "fuel_revenue": round(fuel_revenue, 2),
@@ -110,7 +110,7 @@ async def get_close_off_summary(
             "credit_sales": h.get("credit_sales", 0),
             "expected_cash": h.get("expected_cash", 0),
             "actual_cash": h.get("actual_cash", 0),
-            "difference": h.get("difference", 0),
+            "difference": round(h.get("expected_cash", 0) - h.get("actual_cash", 0), 2),
             "auto_flag_reasons": h.get("auto_flag_reasons", []),
         })
 

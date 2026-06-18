@@ -333,7 +333,7 @@ export default function DailyCloseOff() {
                           <td className="py-2.5 px-3 text-right text-content-primary">{fmt(h.accessory_sales)}</td>
                           <td className="py-2.5 px-3 text-right text-content-primary font-medium">{fmt(h.expected_cash)}</td>
                           <td className="py-2.5 px-3 text-right text-content-primary font-medium">{fmt(h.actual_cash)}</td>
-                          <td className={`py-2.5 px-3 text-right font-bold ${h.difference >= 0 ? 'text-status-success' : 'text-status-error'}`}>
+                          <td className={`py-2.5 px-3 text-right font-bold ${h.difference <= 0 ? 'text-status-success' : 'text-status-error'}`}>
                             {fmt(h.difference)}
                           </td>
                         </tr>
@@ -378,7 +378,7 @@ export default function DailyCloseOff() {
                   { label: 'Credit Sales', value: totals.credit_sales, color: 'text-status-warning', negative: true },
                   { label: 'Expected Cash', value: totals.total_expected_cash, color: 'text-content-primary', bold: true },
                   { label: 'Actual Cash', value: totals.total_actual_cash, color: 'text-content-primary', bold: true },
-                  { label: 'Net Variance', value: totals.net_variance, color: totals.net_variance >= 0 ? 'text-status-success' : 'text-status-error', bold: true },
+                  { label: 'Net Variance', value: totals.net_variance, color: totals.net_variance <= 0 ? 'text-status-success' : 'text-status-error', bold: true },
                   { label: 'Shifts', value: totals.shift_count, isCount: true, color: 'text-content-secondary' },
                 ].map((item) => (
                   <div key={item.label} className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
