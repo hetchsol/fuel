@@ -1142,6 +1142,7 @@ class EmployeeProfile(BaseModel):
     preferred_payment_method: PaymentMethod = PaymentMethod.BANK
     wcf_category_id: Optional[str] = None
     is_active: bool = True
+    pending_deactivation: bool = False
 
 class EmployeeProfileUpsert(BaseModel):
     basic_salary: float = 0

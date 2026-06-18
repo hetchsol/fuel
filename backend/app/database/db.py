@@ -190,6 +190,7 @@ def init_db():
                 preferred_payment_method  TEXT NOT NULL DEFAULT 'bank',
                 wcf_category_id           TEXT REFERENCES wcf_categories(category_id),
                 is_active                 BOOLEAN NOT NULL DEFAULT TRUE,
+                pending_deactivation      BOOLEAN NOT NULL DEFAULT FALSE,
                 created_at                TIMESTAMP DEFAULT NOW(),
                 updated_at                TIMESTAMP DEFAULT NOW(),
                 UNIQUE(user_id, station_id)
@@ -449,12 +450,16 @@ def init_db():
         except Exception:
             pass
 
-        # Add is_active column if it doesn't exist (migration)
-        try:
-            _conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE")
-            logger.info("[db] Migrations applied")
-        except Exception as e:
-            logger.warning(f"[db] Migration skipped (non-fatal): {e}")
+        # Migrations — safe to re-run (IF NOT EXISTS / ON CONFLICT)
+        for migration_sql in [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS pending_deactivation BOOLEAN NOT NULL DEFAULT FALSE",
+        ]:
+            try:
+                _conn.execute(migration_sql)
+            except Exception as e:
+                logger.warning(f"[db] Migration skipped (non-fatal): {e}")
+        logger.info("[db] Migrations applied")
 
         # Performance indexes (best effort — skip if slow)
         for idx_sql in [

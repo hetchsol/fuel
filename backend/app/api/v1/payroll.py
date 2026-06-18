@@ -165,6 +165,47 @@ def upsert_employee(
     return _str_dates(row)
 
 
+@router.patch("/employees/{user_id}/toggle-active", response_model=EmployeeProfile)
+def toggle_employee_active(
+    user_id: str,
+    ctx: dict = Depends(get_station_context),
+    current_user: dict = Depends(require_manager_or_owner),
+):
+    _require_db()
+    conn = _get_connection()
+    station_id = _station_id(ctx)
+    row = _fetchone(conn,
+        "SELECT * FROM employee_profiles WHERE user_id = %s AND station_id = %s",
+        (user_id, station_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="Employee profile not found")
+
+    # State machine:
+    #   inactive               → reactivate immediately (is_active=TRUE, pending=FALSE)
+    #   active, pending=FALSE  → queue deactivation (is_active stays TRUE, pending=TRUE)
+    #   active, pending=TRUE   → cancel pending deactivation (pending=FALSE)
+    if not row["is_active"]:
+        new_active, new_pending = True, False
+    elif not row["pending_deactivation"]:
+        new_active, new_pending = True, True   # queued — still runs in next payroll
+    else:
+        new_active, new_pending = True, False  # cancel the queue
+
+    try:
+        conn.execute(
+            "UPDATE employee_profiles SET is_active = %s, pending_deactivation = %s, updated_at = NOW() "
+            "WHERE user_id = %s AND station_id = %s",
+            (new_active, new_pending, user_id, station_id))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    row = _fetchone(conn,
+        "SELECT * FROM employee_profiles WHERE user_id = %s AND station_id = %s",
+        (user_id, station_id))
+    return _str_dates(row)
+
+
 # ══════════════════════════════════════════════════════════
 # Statutory rates
 # GET /payroll/rates
@@ -1011,6 +1052,13 @@ def create_run(
         totals["total_net"], totals["total_employer_cost"],
         rates["rate_id"], current_user["user_id"],
     ))
+    conn.commit()
+
+    # Employees queued for deactivation are now paid — apply it.
+    conn.execute(
+        "UPDATE employee_profiles SET is_active = FALSE, pending_deactivation = FALSE, updated_at = NOW() "
+        "WHERE station_id = %s AND pending_deactivation = TRUE",
+        (station_id,))
     conn.commit()
 
     run = _fetchone(conn, "SELECT * FROM payroll_runs WHERE run_id = %s", (run_id,))

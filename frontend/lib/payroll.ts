@@ -8,6 +8,7 @@ export const PAYROLL = {
   // Employee profiles
   employees:          ()          => `/api/v1/payroll/employees`,
   employee:           (uid: string) => `/api/v1/payroll/employees/${uid}`,
+  employeeToggle:     (uid: string) => `/api/v1/payroll/employees/${uid}/toggle-active`,
 
   // Statutory rates
   rates:              ()          => `/api/v1/payroll/rates`,
@@ -133,6 +134,7 @@ export interface EmployeeProfile {
   preferred_payment_method: PaymentMethod
   wcf_category_id?: string
   is_active: boolean
+  pending_deactivation: boolean
 }
 
 export interface LeaveType {

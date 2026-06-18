@@ -188,7 +188,20 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
   const [editing, setEditing] = useState<string | null>(null)
   const [form, setForm] = useState<any>({})
   const [saving, setSaving] = useState(false)
+  const [toggling, setToggling] = useState(false)
   const [error, setError] = useState('')
+
+  const toggleActive = async () => {
+    if (!editing) return
+    setToggling(true)
+    setError('')
+    try {
+      const res = await authFetch(PAYROLL.employeeToggle(editing), { method: 'PATCH' })
+      if (!res.ok) throw new Error((await res.json()).detail || 'Toggle failed')
+      onSave()
+    } catch (e: any) { setError(e.message) }
+    setToggling(false)
+  }
 
   const openEdit = (uid: string) => {
     const p = profiles.find(p => p.user_id === uid) || {}
@@ -255,15 +268,19 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
           </div>
           {users.map(u => {
             const p = profiles.find(p => p.user_id === u.user_id)
-            const isActive = editing === u.user_id
+            const isSelected = editing === u.user_id
+            const inactive = p && !p.is_active
+            const pending = p && p.is_active && p.pending_deactivation
             return (
               <button
                 key={u.user_id}
                 onClick={() => openEdit(u.user_id)}
-                className={`w-full text-left px-3 py-2.5 border-b border-border last:border-0 transition-colors ${isActive ? 'bg-brand/10 border-l-2 border-l-brand' : 'hover:bg-surface-hover'}`}
+                className={`w-full text-left px-3 py-2.5 border-b border-border last:border-0 transition-colors ${isSelected ? 'bg-brand/10 border-l-2 border-l-brand' : 'hover:bg-surface-hover'} ${inactive ? 'opacity-50' : ''}`}
               >
-                <p className={`text-sm font-medium truncate ${isActive ? 'text-brand' : 'text-content-primary'}`}>{u.full_name}</p>
-                <p className="text-xs text-content-secondary capitalize">{u.role} {p ? '' : '· not set up'}</p>
+                <p className={`text-sm font-medium truncate ${isSelected ? 'text-brand' : 'text-content-primary'}`}>{u.full_name}</p>
+                <p className="text-xs text-content-secondary capitalize">
+                  {u.role}{!p ? ' · not set up' : inactive ? ' · inactive' : pending ? ' · leaving after pay run' : ''}
+                </p>
               </button>
             )
           })}
@@ -279,10 +296,35 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
           </div>
         ) : (
           <div className="bg-surface-card border border-border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-content-primary">{editingUser?.full_name}</h3>
-              {error && <p className="text-red-600 text-sm">{error}</p>}
-            </div>
+            {(() => {
+              const ep = profiles.find(p => p.user_id === editing)
+              const epInactive = ep && !ep.is_active
+              const epPending = ep && ep.is_active && ep.pending_deactivation
+              return (
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-semibold text-content-primary">{editingUser?.full_name}</h3>
+                    {ep && (
+                      epInactive
+                        ? <span className="text-xs text-content-secondary bg-surface-hover border border-border px-2 py-0.5 rounded">Inactive</span>
+                        : epPending
+                          ? <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">Leaving after pay run</span>
+                          : <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded">Active</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {error && <p className="text-red-600 text-sm">{error}</p>}
+                    {ep && (
+                      epInactive
+                        ? <Btn variant="ghost" onClick={toggleActive} disabled={toggling}>{toggling ? 'Reactivating...' : 'Reactivate'}</Btn>
+                        : epPending
+                          ? <Btn variant="ghost" onClick={toggleActive} disabled={toggling}>{toggling ? 'Cancelling...' : 'Cancel deactivation'}</Btn>
+                          : <Btn variant="ghost" onClick={toggleActive} disabled={toggling}>{toggling ? 'Queueing...' : 'Deactivate'}</Btn>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Salary & Employment — single dense row */}
             <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-wide mb-2">Salary & Employment</p>
