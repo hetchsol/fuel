@@ -316,10 +316,10 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
                     {error && <p className="text-red-600 text-sm">{error}</p>}
                     {ep && (
                       epInactive
-                        ? <Btn variant="ghost" onClick={toggleActive} disabled={toggling}>{toggling ? 'Reactivating...' : 'Reactivate'}</Btn>
+                        ? <Btn variant="secondary" onClick={toggleActive} disabled={toggling}>{toggling ? 'Reactivating...' : 'Reactivate'}</Btn>
                         : epPending
-                          ? <Btn variant="ghost" onClick={toggleActive} disabled={toggling}>{toggling ? 'Cancelling...' : 'Cancel deactivation'}</Btn>
-                          : <Btn variant="ghost" onClick={toggleActive} disabled={toggling}>{toggling ? 'Queueing...' : 'Deactivate'}</Btn>
+                          ? <Btn variant="secondary" onClick={toggleActive} disabled={toggling}>{toggling ? 'Cancelling...' : 'Cancel deactivation'}</Btn>
+                          : <Btn variant="secondary" onClick={toggleActive} disabled={toggling}>{toggling ? 'Queueing...' : 'Deactivate'}</Btn>
                     )}
                   </div>
                 </div>
