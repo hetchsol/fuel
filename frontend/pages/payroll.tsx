@@ -247,8 +247,8 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
   return (
     <div className="space-y-4">
       {editing && (
-        <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
-          <div className="bg-surface-card border border-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-5">
+        <div className="fixed inset-0 bg-black/40 z-40 overflow-y-auto py-4 px-4">
+          <div className="bg-surface-card border border-border rounded-lg w-full max-w-2xl mx-auto p-5">
             <h3 className="font-semibold text-content-primary mb-4">
               Employee Payroll Profile — {users.find(u => u.user_id === editing)?.full_name || editing}
             </h3>
@@ -732,8 +732,8 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
     <div className="space-y-4">
       {/* Override modal */}
       {overrideSlip && (
-        <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
-          <div className="bg-surface-card border border-border rounded-lg w-full max-w-lg p-5">
+        <div className="fixed inset-0 bg-black/40 z-40 overflow-y-auto py-4 px-4">
+          <div className="bg-surface-card border border-border rounded-lg w-full max-w-lg mx-auto p-5">
             <h3 className="font-semibold mb-4">Override Deductions — {users.find(u => u.user_id === overrideSlip.user_id)?.full_name}</h3>
             <p className="text-xs text-content-secondary mb-3">Leave blank to use calculated value. Set to a number to override.</p>
             <div className="space-y-3">
@@ -1311,11 +1311,11 @@ export default function PayrollPage() {
   if (loading) return <div className="p-8 text-center text-content-secondary">Loading payroll...</div>
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="mb-5">
-          <h1 className="text-2xl font-bold text-content-primary">Payroll</h1>
-          <p className="text-sm text-content-secondary mt-0.5">Zambian statutory payroll — PAYE, NAPSA, NHIMA, WCF</p>
-        </div>
+    <div>
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold text-content-primary">Payroll</h1>
+        <p className="text-sm text-content-secondary mt-0.5">Zambian statutory payroll — PAYE, NAPSA, NHIMA, WCF</p>
+      </div>
 
         {/* Tab bar */}
         <div className="flex gap-1 mb-5 border-b border-border overflow-x-auto">
