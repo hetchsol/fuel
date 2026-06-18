@@ -135,6 +135,312 @@ def init_db():
                 expires_at TIMESTAMP NOT NULL
             );
         """)
+        logger.info("[db] Core tables created")
+
+        # ── Payroll tables ─────────────────────────────────────────
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS wcf_categories (
+                category_id    TEXT PRIMARY KEY,
+                category_name  TEXT NOT NULL,
+                rate_percent   NUMERIC(7,4) NOT NULL DEFAULT 0.01,
+                description    TEXT,
+                effective_from DATE NOT NULL DEFAULT CURRENT_DATE,
+                is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at     TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS statutory_rates (
+                rate_id                     TEXT PRIMARY KEY,
+                paye_bands                  JSONB NOT NULL,
+                napsa_employee_rate         NUMERIC(7,4) NOT NULL DEFAULT 0.05,
+                napsa_employer_rate         NUMERIC(7,4) NOT NULL DEFAULT 0.05,
+                napsa_monthly_ceiling       NUMERIC(12,2) NOT NULL DEFAULT 1073.18,
+                nhima_employee_rate         NUMERIC(7,4) NOT NULL DEFAULT 0.01,
+                nhima_employer_rate         NUMERIC(7,4) NOT NULL DEFAULT 0.01,
+                overtime_weekday_multiplier NUMERIC(4,2) NOT NULL DEFAULT 1.5,
+                overtime_weekend_multiplier NUMERIC(4,2) NOT NULL DEFAULT 2.0,
+                standard_hours_per_week     INTEGER NOT NULL DEFAULT 48,
+                effective_from              DATE NOT NULL,
+                created_by                  TEXT REFERENCES users(user_id),
+                created_at                  TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS employee_profiles (
+                profile_id                TEXT PRIMARY KEY,
+                user_id                   TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                station_id                TEXT,
+                basic_salary              NUMERIC(12,2) NOT NULL DEFAULT 0,
+                housing_allowance         NUMERIC(12,2) NOT NULL DEFAULT 0,
+                transport_allowance       NUMERIC(12,2) NOT NULL DEFAULT 0,
+                employment_type           TEXT NOT NULL DEFAULT 'permanent',
+                contracted_hours_per_week INTEGER NOT NULL DEFAULT 48,
+                annual_leave_days         INTEGER NOT NULL DEFAULT 24,
+                start_date                DATE,
+                nrc_number                TEXT,
+                tpin                      TEXT,
+                napsa_number              TEXT,
+                nhima_number              TEXT,
+                bank_name                 TEXT,
+                bank_branch               TEXT,
+                bank_account_number       TEXT,
+                mobile_money_provider     TEXT,
+                mobile_money_number       TEXT,
+                preferred_payment_method  TEXT NOT NULL DEFAULT 'bank',
+                wcf_category_id           TEXT REFERENCES wcf_categories(category_id),
+                is_active                 BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at                TIMESTAMP DEFAULT NOW(),
+                updated_at                TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, station_id)
+            );
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS leave_types (
+                type_id                TEXT PRIMARY KEY,
+                type_name              TEXT NOT NULL UNIQUE,
+                days_per_year          NUMERIC(5,1),
+                full_pay_days          INTEGER,
+                half_pay_days          INTEGER,
+                requires_documentation BOOLEAN NOT NULL DEFAULT FALSE,
+                is_system              BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at             TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS leave_balances (
+                balance_id    TEXT PRIMARY KEY,
+                user_id       TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                leave_type_id TEXT NOT NULL REFERENCES leave_types(type_id),
+                year          INTEGER NOT NULL,
+                days_entitled NUMERIC(5,1) NOT NULL DEFAULT 0,
+                days_accrued  NUMERIC(5,1) NOT NULL DEFAULT 0,
+                days_taken    NUMERIC(5,1) NOT NULL DEFAULT 0,
+                carry_forward NUMERIC(5,1) NOT NULL DEFAULT 0,
+                UNIQUE(user_id, leave_type_id, year)
+            );
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS leave_requests (
+                request_id     TEXT PRIMARY KEY,
+                user_id        TEXT NOT NULL REFERENCES users(user_id),
+                leave_type_id  TEXT NOT NULL REFERENCES leave_types(type_id),
+                start_date     DATE NOT NULL,
+                end_date       DATE NOT NULL,
+                days_requested NUMERIC(5,1) NOT NULL,
+                status         TEXT NOT NULL DEFAULT 'pending',
+                approved_by    TEXT REFERENCES users(user_id),
+                notes          TEXT,
+                manager_notes  TEXT,
+                created_at     TIMESTAMP DEFAULT NOW(),
+                updated_at     TIMESTAMP DEFAULT NOW(),
+                approved_at    TIMESTAMP
+            );
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS attendance_records (
+                record_id        TEXT PRIMARY KEY,
+                user_id          TEXT NOT NULL REFERENCES users(user_id),
+                station_id       TEXT,
+                work_date        DATE NOT NULL,
+                status           TEXT NOT NULL DEFAULT 'present',
+                regular_hours    NUMERIC(4,2) NOT NULL DEFAULT 8.0,
+                overtime_hours   NUMERIC(4,2) NOT NULL DEFAULT 0,
+                overtime_type    TEXT NOT NULL DEFAULT 'none',
+                leave_request_id TEXT REFERENCES leave_requests(request_id),
+                notes            TEXT,
+                recorded_by      TEXT REFERENCES users(user_id),
+                created_at       TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, work_date)
+            );
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS public_holidays (
+                holiday_id       TEXT PRIMARY KEY,
+                holiday_name     TEXT NOT NULL,
+                holiday_date     DATE NOT NULL,
+                is_recurring     BOOLEAN NOT NULL DEFAULT FALSE,
+                recurrence_month INTEGER,
+                recurrence_day   INTEGER,
+                notes            TEXT,
+                created_at       TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS salary_advances (
+                advance_id          TEXT PRIMARY KEY,
+                user_id             TEXT NOT NULL REFERENCES users(user_id),
+                station_id          TEXT,
+                amount              NUMERIC(12,2) NOT NULL,
+                reason              TEXT,
+                approved_by         TEXT REFERENCES users(user_id),
+                date_issued         DATE,
+                repayment_months    INTEGER NOT NULL DEFAULT 1,
+                monthly_deduction   NUMERIC(12,2) NOT NULL,
+                outstanding_balance NUMERIC(12,2) NOT NULL,
+                status              TEXT NOT NULL DEFAULT 'pending',
+                created_at          TIMESTAMP DEFAULT NOW(),
+                updated_at          TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS payroll_runs (
+                run_id               TEXT PRIMARY KEY,
+                station_id           TEXT NOT NULL,
+                period_month         INTEGER NOT NULL,
+                period_year          INTEGER NOT NULL,
+                status               TEXT NOT NULL DEFAULT 'draft',
+                is_historical        BOOLEAN NOT NULL DEFAULT FALSE,
+                total_gross          NUMERIC(14,2) DEFAULT 0,
+                total_basic          NUMERIC(14,2) DEFAULT 0,
+                total_allowances     NUMERIC(14,2) DEFAULT 0,
+                total_overtime       NUMERIC(14,2) DEFAULT 0,
+                total_paye           NUMERIC(14,2) DEFAULT 0,
+                total_napsa_employee NUMERIC(14,2) DEFAULT 0,
+                total_napsa_employer NUMERIC(14,2) DEFAULT 0,
+                total_nhima_employee NUMERIC(14,2) DEFAULT 0,
+                total_nhima_employer NUMERIC(14,2) DEFAULT 0,
+                total_wcf_employer   NUMERIC(14,2) DEFAULT 0,
+                total_advances       NUMERIC(14,2) DEFAULT 0,
+                total_net            NUMERIC(14,2) DEFAULT 0,
+                total_employer_cost  NUMERIC(14,2) DEFAULT 0,
+                statutory_rate_id    TEXT REFERENCES statutory_rates(rate_id),
+                created_by           TEXT REFERENCES users(user_id),
+                approved_by          TEXT REFERENCES users(user_id),
+                created_at           TIMESTAMP DEFAULT NOW(),
+                approved_at          TIMESTAMP,
+                UNIQUE(station_id, period_month, period_year)
+            );
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS payslips (
+                payslip_id              TEXT PRIMARY KEY,
+                run_id                  TEXT NOT NULL REFERENCES payroll_runs(run_id) ON DELETE CASCADE,
+                user_id                 TEXT NOT NULL REFERENCES users(user_id),
+                station_id              TEXT,
+                is_historical           BOOLEAN NOT NULL DEFAULT FALSE,
+                basic_salary            NUMERIC(12,2) NOT NULL DEFAULT 0,
+                housing_allowance       NUMERIC(12,2) NOT NULL DEFAULT 0,
+                transport_allowance     NUMERIC(12,2) NOT NULL DEFAULT 0,
+                other_allowances        NUMERIC(12,2) NOT NULL DEFAULT 0,
+                overtime_pay            NUMERIC(12,2) NOT NULL DEFAULT 0,
+                overtime_details        JSONB DEFAULT '[]',
+                gross_salary            NUMERIC(12,2) NOT NULL DEFAULT 0,
+                napsa_employee_calc     NUMERIC(12,2) NOT NULL DEFAULT 0,
+                nhima_employee_calc     NUMERIC(12,2) NOT NULL DEFAULT 0,
+                paye_calc               NUMERIC(12,2) NOT NULL DEFAULT 0,
+                napsa_employee_override NUMERIC(12,2),
+                nhima_employee_override NUMERIC(12,2),
+                paye_override           NUMERIC(12,2),
+                custom_deductions       JSONB DEFAULT '[]',
+                advances_deducted       NUMERIC(12,2) NOT NULL DEFAULT 0,
+                total_deductions        NUMERIC(12,2) NOT NULL DEFAULT 0,
+                net_pay                 NUMERIC(12,2) NOT NULL DEFAULT 0,
+                napsa_employer          NUMERIC(12,2) NOT NULL DEFAULT 0,
+                nhima_employer          NUMERIC(12,2) NOT NULL DEFAULT 0,
+                wcf_employer            NUMERIC(12,2) NOT NULL DEFAULT 0,
+                total_employer_cost     NUMERIC(12,2) NOT NULL DEFAULT 0,
+                attendance_days         INTEGER,
+                leave_days_taken        NUMERIC(5,1),
+                notes                   TEXT,
+                created_at              TIMESTAMP DEFAULT NOW(),
+                updated_at              TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS advance_repayments (
+                repayment_id   TEXT PRIMARY KEY,
+                advance_id     TEXT NOT NULL REFERENCES salary_advances(advance_id),
+                payslip_id     TEXT REFERENCES payslips(payslip_id),
+                amount         NUMERIC(12,2) NOT NULL,
+                repayment_date DATE NOT NULL,
+                created_at     TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS payroll_payments (
+                payment_id            TEXT PRIMARY KEY,
+                run_id                TEXT NOT NULL REFERENCES payroll_runs(run_id),
+                user_id               TEXT NOT NULL REFERENCES users(user_id),
+                payslip_id            TEXT REFERENCES payslips(payslip_id),
+                net_amount            NUMERIC(12,2) NOT NULL,
+                payment_method        TEXT NOT NULL DEFAULT 'bank',
+                bank_name             TEXT,
+                bank_account_number   TEXT,
+                mobile_money_provider TEXT,
+                mobile_money_number   TEXT,
+                payment_reference     TEXT,
+                status                TEXT NOT NULL DEFAULT 'pending',
+                submitted_at          TIMESTAMP,
+                confirmed_at          TIMESTAMP,
+                notes                 TEXT,
+                created_at            TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        logger.info("[db] Payroll tables created")
+
+        # ── Payroll seed data (idempotent) ─────────────────────────
+        _conn.execute("""
+            INSERT INTO wcf_categories
+                (category_id, category_name, rate_percent, description, effective_from)
+            VALUES ('WCF001','Petroleum Retail',0.01,'Fuel stations and petroleum retail outlets','2024-01-01')
+            ON CONFLICT (category_id) DO NOTHING;
+        """)
+        _conn.execute("""
+            INSERT INTO statutory_rates (
+                rate_id, paye_bands,
+                napsa_employee_rate, napsa_employer_rate, napsa_monthly_ceiling,
+                nhima_employee_rate, nhima_employer_rate,
+                overtime_weekday_multiplier, overtime_weekend_multiplier,
+                standard_hours_per_week, effective_from
+            ) VALUES (
+                'RATE2024',
+                '[{"min":0,"max":4800,"rate":0.00,"label":"0%"},{"min":4800.01,"max":6800,"rate":0.20,"label":"20%"},{"min":6800.01,"max":8000,"rate":0.30,"label":"30%"},{"min":8000.01,"max":null,"rate":0.375,"label":"37.5%"}]',
+                0.05,0.05,1073.18,0.01,0.01,1.5,2.0,48,'2024-01-01'
+            ) ON CONFLICT (rate_id) DO NOTHING;
+        """)
+        for lt in [
+            ("LT001","Annual",       24.0, None, None, False, True),
+            ("LT002","Sick",         None,   42,   42, True,  True),
+            ("LT003","Maternity",    None,   98, None, True,  True),
+            ("LT004","Paternity",     5.0, None, None, False, True),
+            ("LT005","Compassionate", 5.0, None, None, True,  True),
+            ("LT006","Unpaid",       None, None, None, False, True),
+        ]:
+            _conn.execute("""
+                INSERT INTO leave_types
+                    (type_id,type_name,days_per_year,full_pay_days,half_pay_days,requires_documentation,is_system)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (type_name) DO NOTHING;
+            """, lt)
+        # Official Zambian public holidays 2026 — fully configurable via payroll settings
+        for h in [
+            ("PH001","New Year's Day",                         "2026-01-01",True, 1, 1, None),
+            ("PH002","International Women's Day",              "2026-03-08",True, 3, 8, None),
+            ("PH003","Day off for International Women's Day",  "2026-03-09",False,None,None,"Observed Monday when Women's Day falls on Sunday"),
+            ("PH004","Youth Day",                              "2026-03-12",True, 3,12, None),
+            ("PH005","Good Friday",                            "2026-04-03",False,None,None,None),
+            ("PH006","Holy Saturday",                          "2026-04-04",False,None,None,None),
+            ("PH007","Easter Monday",                          "2026-04-06",False,None,None,None),
+            ("PH008","Kenneth Kaunda Day",                     "2026-04-28",True, 4,28, None),
+            ("PH009","Labour Day",                             "2026-05-01",True, 5, 1, None),
+            ("PH010","Africa Freedom Day",                     "2026-05-25",True, 5,25, None),
+            ("PH011","Heroes' Day",                            "2026-07-06",False,None,None,"First Monday of July"),
+            ("PH012","Unity Day",                              "2026-07-07",False,None,None,"First Tuesday of July"),
+            ("PH013","Farmers' Day",                           "2026-08-03",False,None,None,"First Monday of August"),
+            ("PH014","Prayer Day",                             "2026-10-18",True,10,18, None),
+            ("PH015","Day off for Prayer Day",                 "2026-10-19",False,None,None,"Observed Monday when Prayer Day falls on Sunday"),
+            ("PH016","Independence Day",                       "2026-10-24",True,10,24, None),
+            ("PH017","Christmas Day",                          "2026-12-25",True,12,25, None),
+            ("PH018","Declaration of Zambia as a Christian Nation","2026-12-29",False,None,None,"Tentative"),
+        ]:
+            _conn.execute("""
+                INSERT INTO public_holidays
+                    (holiday_id,holiday_name,holiday_date,is_recurring,recurrence_month,recurrence_day,notes)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (holiday_id) DO NOTHING;
+            """, h)
+        logger.info("[db] Payroll seed data inserted")
         logger.info("[db] Tables created")
 
         # Set statement timeout to prevent hanging on slow Neon connections

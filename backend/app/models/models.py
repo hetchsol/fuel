@@ -1000,3 +1000,418 @@ class SupervisorReviewInput(BaseModel):
     attendant_id: str
     action: str  # "approve" or "return"
     overall_note: Optional[str] = None  # Required when returning
+
+
+# ══════════════════════════════════════════════════════════
+# Payroll models
+# All enums, IDs and field names match the canonical contract
+# in lib/payroll.ts and project_payroll_api_contract.md
+# ══════════════════════════════════════════════════════════
+
+class EmploymentType(str, Enum):
+    PERMANENT = "permanent"
+    CONTRACT = "contract"
+    CASUAL = "casual"
+
+class PayrollRunStatus(str, Enum):
+    DRAFT = "draft"
+    APPROVED = "approved"
+    PAID = "paid"
+
+class AdvanceStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    ACTIVE = "active"
+    SETTLED = "settled"
+
+class LeaveRequestStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
+
+class AttendanceStatus(str, Enum):
+    PRESENT = "present"
+    ABSENT = "absent"
+    ON_LEAVE = "on_leave"
+    PUBLIC_HOLIDAY = "public_holiday"
+    OFF_DAY = "off_day"
+
+class OvertimeType(str, Enum):
+    NONE = "none"
+    WEEKDAY = "weekday"
+    WEEKEND = "weekend"
+    PUBLIC_HOLIDAY = "public_holiday"
+
+class PaymentMethod(str, Enum):
+    BANK = "bank"
+    MOBILE_MONEY = "mobile_money"
+    CASH = "cash"
+
+class PaymentStatus(str, Enum):
+    PENDING = "pending"
+    SUBMITTED = "submitted"
+    CONFIRMED = "confirmed"
+
+class MobileMoneyProvider(str, Enum):
+    AIRTEL = "airtel"
+    MTN = "mtn"
+    ZAMTEL = "zamtel"
+
+# ── Statutory rates ───────────────────────────────────────
+
+class PayeBand(BaseModel):
+    min: float
+    max: Optional[float] = None
+    rate: float
+    label: str
+
+class StatutoryRates(BaseModel):
+    rate_id: str
+    paye_bands: List[PayeBand]
+    napsa_employee_rate: float
+    napsa_employer_rate: float
+    napsa_monthly_ceiling: float
+    nhima_employee_rate: float
+    nhima_employer_rate: float
+    overtime_weekday_multiplier: float
+    overtime_weekend_multiplier: float
+    standard_hours_per_week: int
+    effective_from: str
+    created_by: Optional[str] = None
+    created_at: Optional[str] = None
+
+class StatutoryRatesCreate(BaseModel):
+    paye_bands: List[PayeBand]
+    napsa_employee_rate: float
+    napsa_employer_rate: float
+    napsa_monthly_ceiling: float
+    nhima_employee_rate: float
+    nhima_employer_rate: float
+    overtime_weekday_multiplier: float = 1.5
+    overtime_weekend_multiplier: float = 2.0
+    standard_hours_per_week: int = 48
+    effective_from: str
+
+# ── WCF categories ────────────────────────────────────────
+
+class WcfCategory(BaseModel):
+    category_id: str
+    category_name: str
+    rate_percent: float
+    description: Optional[str] = None
+    effective_from: str
+    is_active: bool = True
+
+class WcfCategoryCreate(BaseModel):
+    category_name: str
+    rate_percent: float
+    description: Optional[str] = None
+    effective_from: str
+
+class WcfCategoryUpdate(BaseModel):
+    category_name: Optional[str] = None
+    rate_percent: Optional[float] = None
+    description: Optional[str] = None
+    effective_from: Optional[str] = None
+    is_active: Optional[bool] = None
+
+# ── Employee profile ──────────────────────────────────────
+
+class EmployeeProfile(BaseModel):
+    profile_id: str
+    user_id: str
+    station_id: Optional[str] = None
+    basic_salary: float = 0
+    housing_allowance: float = 0
+    transport_allowance: float = 0
+    employment_type: EmploymentType = EmploymentType.PERMANENT
+    contracted_hours_per_week: int = 48
+    annual_leave_days: int = 24
+    start_date: Optional[str] = None
+    nrc_number: Optional[str] = None
+    tpin: Optional[str] = None
+    napsa_number: Optional[str] = None
+    nhima_number: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_branch: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    mobile_money_provider: Optional[MobileMoneyProvider] = None
+    mobile_money_number: Optional[str] = None
+    preferred_payment_method: PaymentMethod = PaymentMethod.BANK
+    wcf_category_id: Optional[str] = None
+    is_active: bool = True
+
+class EmployeeProfileUpsert(BaseModel):
+    basic_salary: float = 0
+    housing_allowance: float = 0
+    transport_allowance: float = 0
+    employment_type: EmploymentType = EmploymentType.PERMANENT
+    contracted_hours_per_week: int = 48
+    annual_leave_days: int = 24
+    start_date: Optional[str] = None
+    nrc_number: Optional[str] = None
+    tpin: Optional[str] = None
+    napsa_number: Optional[str] = None
+    nhima_number: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_branch: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    mobile_money_provider: Optional[MobileMoneyProvider] = None
+    mobile_money_number: Optional[str] = None
+    preferred_payment_method: PaymentMethod = PaymentMethod.BANK
+    wcf_category_id: Optional[str] = None
+
+# ── Leave ─────────────────────────────────────────────────
+
+class LeaveType(BaseModel):
+    type_id: str
+    type_name: str
+    days_per_year: Optional[float] = None
+    full_pay_days: Optional[int] = None
+    half_pay_days: Optional[int] = None
+    requires_documentation: bool = False
+    is_system: bool = False
+
+class LeaveTypeCreate(BaseModel):
+    type_name: str
+    days_per_year: Optional[float] = None
+    full_pay_days: Optional[int] = None
+    half_pay_days: Optional[int] = None
+    requires_documentation: bool = False
+
+class LeaveTypeUpdate(BaseModel):
+    type_name: Optional[str] = None
+    days_per_year: Optional[float] = None
+    full_pay_days: Optional[int] = None
+    half_pay_days: Optional[int] = None
+    requires_documentation: Optional[bool] = None
+
+class LeaveBalance(BaseModel):
+    balance_id: str
+    user_id: str
+    leave_type_id: str
+    year: int
+    days_entitled: float
+    days_accrued: float
+    days_taken: float
+    carry_forward: float
+    days_remaining: float
+
+class LeaveRequest(BaseModel):
+    request_id: str
+    user_id: str
+    leave_type_id: str
+    start_date: str
+    end_date: str
+    days_requested: float
+    status: LeaveRequestStatus
+    approved_by: Optional[str] = None
+    notes: Optional[str] = None
+    manager_notes: Optional[str] = None
+    created_at: Optional[str] = None
+    approved_at: Optional[str] = None
+
+class LeaveRequestCreate(BaseModel):
+    leave_type_id: str
+    start_date: str
+    end_date: str
+    days_requested: float
+    notes: Optional[str] = None
+
+class LeaveRequestAction(BaseModel):
+    manager_notes: Optional[str] = None
+
+# ── Attendance ────────────────────────────────────────────
+
+class AttendanceRecord(BaseModel):
+    record_id: str
+    user_id: str
+    station_id: Optional[str] = None
+    work_date: str
+    status: AttendanceStatus
+    regular_hours: float = 8.0
+    overtime_hours: float = 0.0
+    overtime_type: OvertimeType = OvertimeType.NONE
+    leave_request_id: Optional[str] = None
+    notes: Optional[str] = None
+
+class AttendanceUpsert(BaseModel):
+    status: AttendanceStatus = AttendanceStatus.PRESENT
+    regular_hours: float = 8.0
+    overtime_hours: float = 0.0
+    overtime_type: OvertimeType = OvertimeType.NONE
+    leave_request_id: Optional[str] = None
+    notes: Optional[str] = None
+
+class AttendanceBulkEntry(BaseModel):
+    user_id: str
+    work_date: str
+    status: AttendanceStatus = AttendanceStatus.PRESENT
+    regular_hours: float = 8.0
+    overtime_hours: float = 0.0
+    overtime_type: OvertimeType = OvertimeType.NONE
+    leave_request_id: Optional[str] = None
+    notes: Optional[str] = None
+
+class AttendanceBulkUpsert(BaseModel):
+    records: List[AttendanceBulkEntry]
+
+# ── Public holidays ───────────────────────────────────────
+
+class PublicHoliday(BaseModel):
+    holiday_id: str
+    holiday_name: str
+    holiday_date: str
+    is_recurring: bool = False
+    recurrence_month: Optional[int] = None
+    recurrence_day: Optional[int] = None
+    notes: Optional[str] = None
+
+class PublicHolidayCreate(BaseModel):
+    holiday_name: str
+    holiday_date: str
+    is_recurring: bool = False
+    recurrence_month: Optional[int] = None
+    recurrence_day: Optional[int] = None
+    notes: Optional[str] = None
+
+# ── Salary advances ───────────────────────────────────────
+
+class SalaryAdvance(BaseModel):
+    advance_id: str
+    user_id: str
+    station_id: Optional[str] = None
+    amount: float
+    reason: Optional[str] = None
+    approved_by: Optional[str] = None
+    date_issued: Optional[str] = None
+    repayment_months: int
+    monthly_deduction: float
+    outstanding_balance: float
+    status: AdvanceStatus
+    created_at: Optional[str] = None
+
+class SalaryAdvanceCreate(BaseModel):
+    user_id: str
+    amount: float
+    reason: Optional[str] = None
+    repayment_months: int = 1
+
+# ── Payslip ───────────────────────────────────────────────
+
+class CustomDeduction(BaseModel):
+    label: str
+    amount: float
+
+class PayslipOverrides(BaseModel):
+    napsa_employee_override: Optional[float] = None
+    nhima_employee_override: Optional[float] = None
+    paye_override: Optional[float] = None
+    custom_deductions: Optional[List[CustomDeduction]] = None
+    notes: Optional[str] = None
+
+class Payslip(BaseModel):
+    payslip_id: str
+    run_id: str
+    user_id: str
+    station_id: Optional[str] = None
+    is_historical: bool = False
+    basic_salary: float
+    housing_allowance: float
+    transport_allowance: float
+    other_allowances: float
+    overtime_pay: float
+    overtime_details: List = []
+    gross_salary: float
+    napsa_employee_calc: float
+    nhima_employee_calc: float
+    paye_calc: float
+    napsa_employee_override: Optional[float] = None
+    nhima_employee_override: Optional[float] = None
+    paye_override: Optional[float] = None
+    custom_deductions: List = []
+    advances_deducted: float
+    total_deductions: float
+    net_pay: float
+    napsa_employer: float
+    nhima_employer: float
+    wcf_employer: float
+    total_employer_cost: float
+    attendance_days: Optional[int] = None
+    leave_days_taken: Optional[float] = None
+    notes: Optional[str] = None
+
+# ── Payroll run ───────────────────────────────────────────
+
+class PayrollRun(BaseModel):
+    run_id: str
+    station_id: str
+    period_month: int
+    period_year: int
+    status: PayrollRunStatus
+    is_historical: bool = False
+    total_gross: float = 0
+    total_basic: float = 0
+    total_allowances: float = 0
+    total_overtime: float = 0
+    total_paye: float = 0
+    total_napsa_employee: float = 0
+    total_napsa_employer: float = 0
+    total_nhima_employee: float = 0
+    total_nhima_employer: float = 0
+    total_wcf_employer: float = 0
+    total_advances: float = 0
+    total_net: float = 0
+    total_employer_cost: float = 0
+    statutory_rate_id: Optional[str] = None
+    created_by: Optional[str] = None
+    approved_by: Optional[str] = None
+    created_at: Optional[str] = None
+    approved_at: Optional[str] = None
+
+class PayrollRunCreate(BaseModel):
+    period_month: int
+    period_year: int
+
+class PayrollRunDetail(PayrollRun):
+    payslips: List[Payslip] = []
+
+# ── Payroll payment ───────────────────────────────────────
+
+class PayrollPayment(BaseModel):
+    payment_id: str
+    run_id: str
+    user_id: str
+    payslip_id: Optional[str] = None
+    net_amount: float
+    payment_method: PaymentMethod
+    bank_name: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    mobile_money_provider: Optional[str] = None
+    mobile_money_number: Optional[str] = None
+    payment_reference: Optional[str] = None
+    status: PaymentStatus
+    submitted_at: Optional[str] = None
+    confirmed_at: Optional[str] = None
+    notes: Optional[str] = None
+
+# ── Historical import ─────────────────────────────────────
+
+class HistoricalPayslipRow(BaseModel):
+    user_id: str
+    basic_salary: float
+    housing_allowance: float = 0
+    transport_allowance: float = 0
+    gross_salary: float
+    paye: float
+    napsa_employee: float
+    nhima_employee: float
+    net_pay: float
+    notes: Optional[str] = None
+
+class HistoricalImport(BaseModel):
+    period_month: int
+    period_year: int
+    payslips: List[HistoricalPayslipRow]
