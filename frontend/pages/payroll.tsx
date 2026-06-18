@@ -243,92 +243,101 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
   }
 
   const stf = (k: string) => (v: string) => setForm((f: any) => ({ ...f, [k]: v }))
+  const editingUser = users.find(u => u.user_id === editing)
 
   return (
-    <div className="space-y-4">
-      {editing && (
-        <div className="fixed inset-0 bg-black/40 z-40 overflow-y-auto py-4 px-4">
-          <div className="bg-surface-card border border-border rounded-lg w-full max-w-2xl mx-auto p-5">
-            <h3 className="font-semibold text-content-primary mb-4">
-              Employee Payroll Profile — {users.find(u => u.user_id === editing)?.full_name || editing}
-            </h3>
-            {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
-            <div className="space-y-4">
-              <p className="text-xs font-semibold text-content-secondary uppercase tracking-wide">Salary</p>
-              <div className="grid grid-cols-3 gap-3">
-                <Input label="Basic Salary (ZMW)" value={form.basic_salary} onChange={stf('basic_salary')} type="number" step="0.01" />
-                <Input label="Housing Allowance (ZMW)" value={form.housing_allowance} onChange={stf('housing_allowance')} type="number" step="0.01" />
-                <Input label="Transport Allowance (ZMW)" value={form.transport_allowance} onChange={stf('transport_allowance')} type="number" step="0.01" />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <Select label="Employment Type" value={form.employment_type} onChange={stf('employment_type')}
-                  options={[{value:'permanent',label:'Permanent'},{value:'contract',label:'Contract'},{value:'casual',label:'Casual'}]} />
-                <Input label="Contracted Hours / Week" value={form.contracted_hours_per_week} onChange={stf('contracted_hours_per_week')} type="number" />
-                <Input label="Annual Leave Days" value={form.annual_leave_days} onChange={stf('annual_leave_days')} type="number" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Input label="Start Date" value={form.start_date} onChange={stf('start_date')} type="date" />
+    <div className="flex gap-4 items-start">
+      {/* Left: employee list */}
+      <div className="w-56 shrink-0">
+        <div className="bg-surface-card border border-border rounded-lg overflow-hidden">
+          <div className="px-3 py-2 border-b border-border">
+            <p className="text-xs font-semibold text-content-secondary uppercase tracking-wide">Employees</p>
+          </div>
+          {users.map(u => {
+            const p = profiles.find(p => p.user_id === u.user_id)
+            const isActive = editing === u.user_id
+            return (
+              <button
+                key={u.user_id}
+                onClick={() => openEdit(u.user_id)}
+                className={`w-full text-left px-3 py-2.5 border-b border-border last:border-0 transition-colors ${isActive ? 'bg-brand/10 border-l-2 border-l-brand' : 'hover:bg-surface-hover'}`}
+              >
+                <p className={`text-sm font-medium truncate ${isActive ? 'text-brand' : 'text-content-primary'}`}>{u.full_name}</p>
+                <p className="text-xs text-content-secondary capitalize">{u.role} {p ? '' : '· not set up'}</p>
+              </button>
+            )
+          })}
+          {users.length === 0 && <p className="px-3 py-4 text-sm text-content-secondary">No staff found</p>}
+        </div>
+      </div>
+
+      {/* Right: form or placeholder */}
+      <div className="flex-1 min-w-0">
+        {!editing ? (
+          <div className="bg-surface-card border border-border rounded-lg flex items-center justify-center h-48">
+            <p className="text-sm text-content-secondary">Select an employee to edit their payroll profile</p>
+          </div>
+        ) : (
+          <div className="bg-surface-card border border-border rounded-lg p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-content-primary">{editingUser?.full_name}</h3>
+              {error && <p className="text-red-600 text-sm">{error}</p>}
+            </div>
+
+            {/* Salary & Employment — single dense row */}
+            <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-wide mb-2">Salary & Employment</p>
+            <div className="grid grid-cols-5 gap-2 mb-3">
+              <Input label="Basic (ZMW)" value={form.basic_salary} onChange={stf('basic_salary')} type="number" step="0.01" />
+              <Input label="Housing (ZMW)" value={form.housing_allowance} onChange={stf('housing_allowance')} type="number" step="0.01" />
+              <Input label="Transport (ZMW)" value={form.transport_allowance} onChange={stf('transport_allowance')} type="number" step="0.01" />
+              <Select label="Type" value={form.employment_type} onChange={stf('employment_type')}
+                options={[{value:'permanent',label:'Permanent'},{value:'contract',label:'Contract'},{value:'casual',label:'Casual'}]} />
+              <Input label="Hrs / Week" value={form.contracted_hours_per_week} onChange={stf('contracted_hours_per_week')} type="number" />
+            </div>
+            <div className="grid grid-cols-5 gap-2 mb-4">
+              <Input label="Leave Days / Yr" value={form.annual_leave_days} onChange={stf('annual_leave_days')} type="number" />
+              <Input label="Start Date" value={form.start_date} onChange={stf('start_date')} type="date" />
+              <div className="col-span-2">
                 <Select label="WCF Category" value={form.wcf_category_id} onChange={stf('wcf_category_id')}
                   options={[{value:'',label:'— None —'}, ...wcfCategories.map(c => ({value:c.category_id,label:`${c.category_name} (${(c.rate_percent*100).toFixed(2)}%)`}))]} />
               </div>
-              <p className="text-xs font-semibold text-content-secondary uppercase tracking-wide mt-2">Statutory Numbers</p>
-              <div className="grid grid-cols-3 gap-3">
-                <Input label="NRC Number" value={form.nrc_number} onChange={stf('nrc_number')} />
-                <Input label="TPIN" value={form.tpin} onChange={stf('tpin')} />
-                <Input label="NAPSA Number" value={form.napsa_number} onChange={stf('napsa_number')} />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <Input label="NHIMA Number" value={form.nhima_number} onChange={stf('nhima_number')} />
-              </div>
-              <p className="text-xs font-semibold text-content-secondary uppercase tracking-wide mt-2">Payment Details</p>
-              <Select label="Preferred Payment Method" value={form.preferred_payment_method} onChange={stf('preferred_payment_method')}
-                options={[{value:'bank',label:'Bank Transfer'},{value:'mobile_money',label:'Mobile Money'},{value:'cash',label:'Cash'}]} />
-              <div className="grid grid-cols-3 gap-3">
-                <Input label="Bank Name" value={form.bank_name} onChange={stf('bank_name')} />
-                <Input label="Bank Branch" value={form.bank_branch} onChange={stf('bank_branch')} />
-                <Input label="Account Number" value={form.bank_account_number} onChange={stf('bank_account_number')} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Select label="Mobile Money Provider" value={form.mobile_money_provider} onChange={stf('mobile_money_provider')}
-                  options={[{value:'',label:'— None —'},{value:'airtel',label:'Airtel Money'},{value:'mtn',label:'MTN Mobile Money'},{value:'zamtel',label:'Zamtel Kwacha'}]} />
-                <Input label="Mobile Money Number" value={form.mobile_money_number} onChange={stf('mobile_money_number')} />
-              </div>
+              <div />
             </div>
-            <div className="flex gap-2 mt-5">
+
+            {/* Statutory numbers */}
+            <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-wide mb-2">Statutory Numbers</p>
+            <div className="grid grid-cols-5 gap-2 mb-4">
+              <Input label="NRC Number" value={form.nrc_number} onChange={stf('nrc_number')} />
+              <Input label="TPIN" value={form.tpin} onChange={stf('tpin')} />
+              <Input label="NAPSA Number" value={form.napsa_number} onChange={stf('napsa_number')} />
+              <Input label="NHIMA Number" value={form.nhima_number} onChange={stf('nhima_number')} />
+              <div />
+            </div>
+
+            {/* Payment details */}
+            <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-wide mb-2">Payment Details</p>
+            <div className="grid grid-cols-5 gap-2 mb-4">
+              <Select label="Method" value={form.preferred_payment_method} onChange={stf('preferred_payment_method')}
+                options={[{value:'bank',label:'Bank Transfer'},{value:'mobile_money',label:'Mobile Money'},{value:'cash',label:'Cash'}]} />
+              <Input label="Bank Name" value={form.bank_name} onChange={stf('bank_name')} />
+              <Input label="Branch" value={form.bank_branch} onChange={stf('bank_branch')} />
+              <Input label="Account Number" value={form.bank_account_number} onChange={stf('bank_account_number')} />
+              <div />
+            </div>
+            <div className="grid grid-cols-5 gap-2 mb-4">
+              <Select label="Mobile Provider" value={form.mobile_money_provider} onChange={stf('mobile_money_provider')}
+                options={[{value:'',label:'— None —'},{value:'airtel',label:'Airtel Money'},{value:'mtn',label:'MTN Mobile Money'},{value:'zamtel',label:'Zamtel Kwacha'}]} />
+              <Input label="Mobile Number" value={form.mobile_money_number} onChange={stf('mobile_money_number')} />
+              <div /><div /><div />
+            </div>
+
+            <div className="flex gap-2 pt-1 border-t border-border">
               <Btn variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</Btn>
               <Btn onClick={() => setEditing(null)}>Cancel</Btn>
             </div>
           </div>
-        </div>
-      )}
-      <Card title="Employee Payroll Profiles">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              <Th>Name</Th><Th>Role</Th><Th>Type</Th><Th>Basic</Th><Th>Housing</Th><Th>Transport</Th><Th>WCF</Th><Th>Action</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map(u => {
-              const p = profiles.find(p => p.user_id === u.user_id)
-              const cat = p?.wcf_category_id ? wcfCategories.find(c => c.category_id === p.wcf_category_id)?.category_name : '—'
-              return (
-                <tr key={u.user_id} className="border-b border-border last:border-0">
-                  <Td>{u.full_name}</Td>
-                  <Td><span className="capitalize text-content-secondary">{u.role}</span></Td>
-                  <Td>{p ? <span className="capitalize">{p.employment_type}</span> : <span className="text-content-secondary">Not set</span>}</Td>
-                  <Td right>{p ? fmt(p.basic_salary) : '—'}</Td>
-                  <Td right>{p ? fmt(p.housing_allowance) : '—'}</Td>
-                  <Td right>{p ? fmt(p.transport_allowance) : '—'}</Td>
-                  <Td>{cat}</Td>
-                  <Td><Btn small onClick={() => openEdit(u.user_id)}>Edit</Btn></Td>
-                </tr>
-              )
-            })}
-            {users.length === 0 && <tr><td colSpan={8} className="text-center py-6 text-content-secondary text-sm">No staff found</td></tr>}
-          </tbody>
-        </table>
-      </Card>
+        )}
+      </div>
     </div>
   )
 }
