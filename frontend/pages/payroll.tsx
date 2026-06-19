@@ -61,8 +61,8 @@ function Card({ title, children, action }: { title: string; children: React.Reac
     </div>
   )
 }
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-3 py-2 text-left text-xs font-semibold text-content-secondary uppercase tracking-wide">{children}</th>
+function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
+  return <th className={`px-3 py-2 text-xs font-semibold text-content-secondary uppercase tracking-wide ${right ? 'text-right' : 'text-left'}`}>{children}</th>
 }
 function Td({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return <td className={`px-3 py-2 text-sm text-content-primary ${right ? 'text-right tabular-nums' : ''}`}>{children}</td>
@@ -158,7 +158,7 @@ function OverviewTab({ runs, pendingLeave, pendingAdvances, onTabChange }: {
       )}
       <Card title="Recent Runs">
         <table className="w-full text-sm">
-          <thead><tr className="border-b border-surface-border"><Th>Period</Th><Th>Status</Th><Th>Net</Th><Th>Employer Cost</Th></tr></thead>
+          <thead><tr className="border-b border-surface-border"><Th>Period</Th><Th>Status</Th><Th right>Net</Th><Th right>Employer Cost</Th></tr></thead>
           <tbody>
             {runs.slice(0, 6).map(r => (
               <tr key={r.run_id} className="border-b border-surface-border last:border-0">
@@ -578,7 +578,7 @@ function LeaveTab({ users, leaveTypes, onRefresh }: {
         <Card title={`Leave Balances — ${new Date().getFullYear()}`}>
           <table className="w-full text-sm">
             <thead><tr className="border-b border-surface-border">
-              <Th>Employee</Th><Th>Leave Type</Th><Th>Entitled</Th><Th>Accrued</Th><Th>Taken</Th><Th>Carry Fwd</Th><Th>Remaining</Th>
+              <Th>Employee</Th><Th>Leave Type</Th><Th right>Entitled</Th><Th right>Accrued</Th><Th right>Taken</Th><Th right>Carry Fwd</Th><Th right>Remaining</Th>
             </tr></thead>
             <tbody>
               {balances.map(b => (
@@ -670,7 +670,7 @@ function AdvancesTab({ users, onRefresh }: { users: any[]; onRefresh: () => void
       <Card title="Salary Advances">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-surface-border">
-            <Th>Employee</Th><Th>Amount</Th><Th>Monthly</Th><Th>Outstanding</Th><Th>Months</Th><Th>Reason</Th><Th>Status</Th><Th>Actions</Th>
+            <Th>Employee</Th><Th right>Amount</Th><Th right>Monthly</Th><Th right>Outstanding</Th><Th right>Months</Th><Th>Reason</Th><Th>Status</Th><Th>Actions</Th>
           </tr></thead>
           <tbody>
             {advances.map(a => (
@@ -878,7 +878,7 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-surface-border">
-                <Th>Employee</Th><Th>Gross</Th><Th>NAPSA</Th><Th>NHIMA</Th><Th>PAYE</Th><Th>Advances</Th><Th>Other</Th><Th>Net Pay</Th>
+                <Th>Employee</Th><Th right>Gross</Th><Th right>NAPSA</Th><Th right>NHIMA</Th><Th right>PAYE</Th><Th right>Advances</Th><Th right>Other</Th><Th right>Net Pay</Th>
                 {runDetail.status === 'draft' && <Th>Override</Th>}
               </tr>
             </thead>
@@ -925,7 +925,7 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
       {/* Run list */}
       <Card title="All Runs">
         <table className="w-full text-sm">
-          <thead><tr className="border-b border-surface-border"><Th>Period</Th><Th>Status</Th><Th>Gross</Th><Th>Net</Th><Th>Employer Cost</Th><Th>Action</Th></tr></thead>
+          <thead><tr className="border-b border-surface-border"><Th>Period</Th><Th>Status</Th><Th right>Gross</Th><Th right>Net</Th><Th right>Employer Cost</Th><Th>Action</Th></tr></thead>
           <tbody>
             {runs.map(r => (
               <tr key={r.run_id} className="border-b border-surface-border last:border-0">
@@ -1007,7 +1007,7 @@ function PaymentsTab({ runs, users, onRefresh, userRole }: {
       </Card>
       <Card title="Run Summary">
         <table className="w-full text-sm">
-          <thead><tr className="border-b border-surface-border"><Th>Period</Th><Th>Status</Th><Th>Net Pay</Th><Th>Approved</Th></tr></thead>
+          <thead><tr className="border-b border-surface-border"><Th>Period</Th><Th>Status</Th><Th right>Net Pay</Th><Th>Approved</Th></tr></thead>
           <tbody>
             {approvedRuns.map(r => (
               <tr key={r.run_id} className="border-b border-surface-border last:border-0">
