@@ -52,7 +52,7 @@ function Badge({ status }: { status: string }) {
 }
 function Card({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <div className="bg-surface-card border border-border rounded-lg p-4">
+    <div className="bg-surface-card border border-surface-border rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-content-primary">{title}</h3>
         {action}
@@ -72,9 +72,9 @@ function Btn({ onClick, children, variant = 'secondary', disabled, small }: {
   disabled?: boolean; small?: boolean
 }) {
   const base = `font-medium rounded-btn transition-colors ${small ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`
-  const cls = variant === 'primary' ? `${base} bg-brand text-white hover:bg-brand-dark`
-            : variant === 'danger'  ? `${base} bg-red-600 text-white hover:bg-red-700`
-            : `${base} border border-border text-content-primary hover:bg-surface-hover`
+  const cls = variant === 'primary' ? `${base} bg-action-primary text-white hover:bg-action-primary-hover`
+            : variant === 'danger'  ? `${base} bg-status-error text-white hover:bg-status-error/90`
+            : `${base} border border-surface-border text-content-primary hover:bg-action-primary-light`
   return <button className={cls} onClick={disabled ? undefined : onClick} disabled={disabled}>{children}</button>
 }
 function Input({ label, value, onChange, type = 'text', step }: {
@@ -87,7 +87,7 @@ function Input({ label, value, onChange, type = 'text', step }: {
       <input
         type={type} step={step} value={value}
         onChange={e => onChange(e.target.value)}
-        className="w-full px-2 py-1.5 text-sm border border-border rounded bg-surface-input text-content-primary focus:outline-none focus:ring-1 focus:ring-brand"
+        className="w-full px-2 py-1.5 text-sm border border-surface-border rounded bg-surface-card text-content-primary focus:outline-none focus:ring-1 focus:ring-action-primary"
       />
     </label>
   )
@@ -101,7 +101,7 @@ function Select({ label, value, onChange, options }: {
       <span className="text-xs text-content-secondary mb-1 block">{label}</span>
       <select
         value={value} onChange={e => onChange(e.target.value)}
-        className="w-full px-2 py-1.5 text-sm border border-border rounded bg-surface-input text-content-primary focus:outline-none focus:ring-1 focus:ring-brand"
+        className="w-full px-2 py-1.5 text-sm border border-surface-border rounded bg-surface-card text-content-primary focus:outline-none focus:ring-1 focus:ring-action-primary"
       >
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
@@ -130,7 +130,7 @@ function OverviewTab({ runs, pendingLeave, pendingAdvances, onTabChange }: {
           { label: 'Advance Pending', value: String(pendingAdvances), sub: 'advances awaiting approval', onClick: () => onTabChange('Advances') },
         ].map(c => (
           <div key={c.label}
-            className={`bg-surface-card border border-border rounded-lg p-4 ${c.onClick ? 'cursor-pointer hover:border-brand transition-colors' : ''}`}
+            className={`bg-surface-card border border-surface-border rounded-lg p-4 ${c.onClick ? 'cursor-pointer hover:border-action-primary transition-colors' : ''}`}
             onClick={c.onClick}
           >
             <p className="text-xs text-content-secondary">{c.label}</p>
@@ -158,10 +158,10 @@ function OverviewTab({ runs, pendingLeave, pendingAdvances, onTabChange }: {
       )}
       <Card title="Recent Runs">
         <table className="w-full text-sm">
-          <thead><tr className="border-b border-border"><Th>Period</Th><Th>Status</Th><Th>Net</Th><Th>Employer Cost</Th></tr></thead>
+          <thead><tr className="border-b border-surface-border"><Th>Period</Th><Th>Status</Th><Th>Net</Th><Th>Employer Cost</Th></tr></thead>
           <tbody>
             {runs.slice(0, 6).map(r => (
-              <tr key={r.run_id} className="border-b border-border last:border-0">
+              <tr key={r.run_id} className="border-b border-surface-border last:border-0">
                 <Td>{periodLabel(r.period_month, r.period_year)}</Td>
                 <Td><Badge status={r.status} />{r.is_historical && <span className="ml-1 text-xs text-content-secondary">(historical)</span>}</Td>
                 <Td right>{fmt(r.total_net)}</Td>
@@ -263,8 +263,8 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
     <div className="flex gap-4 items-start">
       {/* Left: employee list */}
       <div className="w-56 shrink-0">
-        <div className="bg-surface-card border border-border rounded-lg overflow-hidden">
-          <div className="px-3 py-2 border-b border-border">
+        <div className="bg-surface-card border border-surface-border rounded-lg overflow-hidden">
+          <div className="px-3 py-2 border-b border-surface-border">
             <p className="text-xs font-semibold text-content-secondary uppercase tracking-wide">Employees</p>
           </div>
           {users.map(u => {
@@ -276,9 +276,9 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
               <button
                 key={u.user_id}
                 onClick={() => openEdit(u.user_id)}
-                className={`w-full text-left px-3 py-2.5 border-b border-border last:border-0 transition-colors ${isSelected ? 'bg-brand/10 border-l-2 border-l-brand' : 'hover:bg-surface-hover'} ${inactive ? 'opacity-50' : ''}`}
+                className={`w-full text-left px-3 py-2.5 border-b border-surface-border last:border-0 transition-colors ${isSelected ? 'bg-action-primary/10 border-l-2 border-l-action-primary' : 'hover:bg-action-primary-light'} ${inactive ? 'opacity-50' : ''}`}
               >
-                <p className={`text-sm font-medium truncate ${isSelected ? 'text-brand' : 'text-content-primary'}`}>{u.full_name}</p>
+                <p className={`text-sm font-medium truncate ${isSelected ? 'text-action-primary' : 'text-content-primary'}`}>{u.full_name}</p>
                 <p className="text-xs text-content-secondary capitalize">
                   {u.role}{!p ? ' · not set up' : inactive ? ' · inactive' : pending ? ' · leaving after pay run' : ''}
                 </p>
@@ -292,11 +292,11 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
       {/* Right: form or placeholder */}
       <div className="flex-1 min-w-0">
         {!editing ? (
-          <div className="bg-surface-card border border-border rounded-lg flex items-center justify-center h-48">
+          <div className="bg-surface-card border border-surface-border rounded-lg flex items-center justify-center h-48">
             <p className="text-sm text-content-secondary">Select an employee to edit their payroll profile</p>
           </div>
         ) : (
-          <div className="bg-surface-card border border-border rounded-lg p-4">
+          <div className="bg-surface-card border border-surface-border rounded-lg p-4">
             {(() => {
               const ep = profiles.find(p => p.user_id === editing)
               const epInactive = ep && !ep.is_active
@@ -307,7 +307,7 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
                     <h3 className="font-semibold text-content-primary">{editingUser?.full_name}</h3>
                     {ep && (
                       epInactive
-                        ? <span className="text-xs text-content-secondary bg-surface-hover border border-border px-2 py-0.5 rounded">Inactive</span>
+                        ? <span className="text-xs text-content-secondary bg-action-primary-light border border-surface-border px-2 py-0.5 rounded">Inactive</span>
                         : epPending
                           ? <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">Leaving after pay run</span>
                           : <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded">Active</span>
@@ -374,7 +374,7 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
               <div /><div /><div />
             </div>
 
-            <div className="flex gap-2 pt-1 border-t border-border">
+            <div className="flex gap-2 pt-1 border-t border-surface-border">
               <Btn variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</Btn>
               <Btn onClick={() => setEditing(null)}>Cancel</Btn>
             </div>
@@ -436,11 +436,11 @@ function AttendanceTab({ users, holidays }: { users: any[]; holidays: PublicHoli
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <select className="px-2 py-1.5 text-sm border border-border rounded bg-surface-input"
+        <select className="px-2 py-1.5 text-sm border border-surface-border rounded bg-surface-card"
           value={month} onChange={e => setMonth(parseInt(e.target.value))}>
           {MONTH_NAMES.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
         </select>
-        <select className="px-2 py-1.5 text-sm border border-border rounded bg-surface-input"
+        <select className="px-2 py-1.5 text-sm border border-surface-border rounded bg-surface-card"
           value={year} onChange={e => setYear(parseInt(e.target.value))}>
           {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
         </select>
@@ -449,12 +449,12 @@ function AttendanceTab({ users, holidays }: { users: any[]; holidays: PublicHoli
         <table className="text-xs border-collapse">
           <thead>
             <tr>
-              <th className="px-2 py-1.5 text-left bg-surface-card border border-border min-w-[140px] sticky left-0 z-10">Employee</th>
+              <th className="px-2 py-1.5 text-left bg-surface-card border border-surface-border min-w-[140px] sticky left-0 z-10">Employee</th>
               {Array.from({length: daysInMonth}, (_, i) => i + 1).map(d => {
                 const dow = new Date(year, month - 1, d).getDay()
                 const isHol = holidayDates.has(d)
                 return (
-                  <th key={d} className={`px-1 py-1.5 text-center border border-border min-w-[32px] ${isHol ? 'bg-purple-50' : dow === 0 ? 'bg-gray-50' : 'bg-surface-card'}`}>
+                  <th key={d} className={`px-1 py-1.5 text-center border border-surface-border min-w-[32px] ${isHol ? 'bg-purple-50' : dow === 0 ? 'bg-gray-50' : 'bg-surface-card'}`}>
                     <div className="font-semibold">{d}</div>
                     <div className="text-content-secondary font-normal">{'SMTWTFS'[dow]}</div>
                   </th>
@@ -464,8 +464,8 @@ function AttendanceTab({ users, holidays }: { users: any[]; holidays: PublicHoli
           </thead>
           <tbody>
             {users.map(u => (
-              <tr key={u.user_id} className="hover:bg-surface-hover">
-                <td className="px-2 py-1 border border-border bg-surface-card sticky left-0 z-10 font-medium text-content-primary">{u.full_name}</td>
+              <tr key={u.user_id} className="hover:bg-action-primary-light">
+                <td className="px-2 py-1 border border-surface-border bg-surface-card sticky left-0 z-10 font-medium text-content-primary">{u.full_name}</td>
                 {Array.from({length: daysInMonth}, (_, i) => i + 1).map(d => {
                   const rec = getRecord(u.user_id, d)
                   const dow = new Date(year, month - 1, d).getDay()
@@ -473,7 +473,7 @@ function AttendanceTab({ users, holidays }: { users: any[]; holidays: PublicHoli
                   const defaultStatus: AttendanceStatus = isHol ? 'public_holiday' : dow === 0 ? 'off_day' : 'present'
                   const status = rec?.status || defaultStatus
                   return (
-                    <td key={d} className="border border-border p-0">
+                    <td key={d} className="border border-surface-border p-0">
                       <select
                         value={status}
                         onChange={e => updateDay(u.user_id, d, e.target.value as AttendanceStatus)}
@@ -546,12 +546,12 @@ function LeaveTab({ users, leaveTypes, onRefresh }: {
       {subTab === 'requests' && (
         <Card title="Leave Requests">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-border">
+            <thead><tr className="border-b border-surface-border">
               <Th>Employee</Th><Th>Type</Th><Th>From</Th><Th>To</Th><Th>Days</Th><Th>Status</Th><Th>Notes</Th><Th>Actions</Th>
             </tr></thead>
             <tbody>
               {requests.map(r => (
-                <tr key={r.request_id} className="border-b border-border last:border-0">
+                <tr key={r.request_id} className="border-b border-surface-border last:border-0">
                   <Td>{users.find(u => u.user_id === r.user_id)?.full_name || r.user_id}</Td>
                   <Td>{leaveTypes.find(t => t.type_id === r.leave_type_id)?.type_name || r.leave_type_id}</Td>
                   <Td>{r.start_date}</Td>
@@ -577,12 +577,12 @@ function LeaveTab({ users, leaveTypes, onRefresh }: {
       {subTab === 'balances' && (
         <Card title={`Leave Balances — ${new Date().getFullYear()}`}>
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-border">
+            <thead><tr className="border-b border-surface-border">
               <Th>Employee</Th><Th>Leave Type</Th><Th>Entitled</Th><Th>Accrued</Th><Th>Taken</Th><Th>Carry Fwd</Th><Th>Remaining</Th>
             </tr></thead>
             <tbody>
               {balances.map(b => (
-                <tr key={b.balance_id} className="border-b border-border last:border-0">
+                <tr key={b.balance_id} className="border-b border-surface-border last:border-0">
                   <Td>{users.find(u => u.user_id === b.user_id)?.full_name || b.user_id}</Td>
                   <Td>{leaveTypes.find(t => t.type_id === b.leave_type_id)?.type_name || b.leave_type_id}</Td>
                   <Td right>{b.days_entitled}</Td>
@@ -669,12 +669,12 @@ function AdvancesTab({ users, onRefresh }: { users: any[]; onRefresh: () => void
       )}
       <Card title="Salary Advances">
         <table className="w-full text-sm">
-          <thead><tr className="border-b border-border">
+          <thead><tr className="border-b border-surface-border">
             <Th>Employee</Th><Th>Amount</Th><Th>Monthly</Th><Th>Outstanding</Th><Th>Months</Th><Th>Reason</Th><Th>Status</Th><Th>Actions</Th>
           </tr></thead>
           <tbody>
             {advances.map(a => (
-              <tr key={a.advance_id} className="border-b border-border last:border-0">
+              <tr key={a.advance_id} className="border-b border-surface-border last:border-0">
                 <Td>{users.find(u => u.user_id === a.user_id)?.full_name || a.user_id}</Td>
                 <Td right>{fmt(a.amount)}</Td>
                 <Td right>{fmt(a.monthly_deduction)}</Td>
@@ -785,7 +785,7 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
       {/* Override modal */}
       {overrideSlip && (
         <div className="fixed inset-0 bg-black/40 z-40 overflow-y-auto py-4 px-4">
-          <div className="bg-surface-card border border-border rounded-lg w-full max-w-lg mx-auto p-5">
+          <div className="bg-surface-card border border-surface-border rounded-lg w-full max-w-lg mx-auto p-5">
             <h3 className="font-semibold mb-4">Override Deductions — {users.find(u => u.user_id === overrideSlip.user_id)?.full_name}</h3>
             <p className="text-xs text-content-secondary mb-3">Leave blank to use calculated value. Set to a number to override.</p>
             <div className="space-y-3">
@@ -801,10 +801,10 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
                 <p className="text-xs text-content-secondary mb-1">Additional deductions</p>
                 {overrideForm.custom.map((d: CustomDeduction, i: number) => (
                   <div key={i} className="flex gap-2 mb-1">
-                    <input className="flex-1 px-2 py-1 text-sm border border-border rounded"
+                    <input className="flex-1 px-2 py-1 text-sm border border-surface-border rounded"
                       placeholder="Label" value={d.label}
                       onChange={e => setOverrideForm((f: any) => { const c = [...f.custom]; c[i] = {...c[i], label: e.target.value}; return {...f, custom: c} })} />
-                    <input className="w-28 px-2 py-1 text-sm border border-border rounded"
+                    <input className="w-28 px-2 py-1 text-sm border border-surface-border rounded"
                       type="number" placeholder="Amount" value={d.amount}
                       onChange={e => setOverrideForm((f: any) => { const c = [...f.custom]; c[i] = {...c[i], amount: parseFloat(e.target.value)||0}; return {...f, custom: c} })} />
                     <Btn small variant="danger" onClick={() => setOverrideForm((f: any) => ({...f, custom: f.custom.filter((_: any, j: number) => j !== i)}))}>X</Btn>
@@ -828,14 +828,14 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
         <div className="flex items-end gap-3 flex-wrap">
           <div>
             <p className="text-xs text-content-secondary mb-1">Month</p>
-            <select className="px-2 py-1.5 text-sm border border-border rounded bg-surface-input"
+            <select className="px-2 py-1.5 text-sm border border-surface-border rounded bg-surface-card"
               value={selMonth} onChange={e => setSelMonth(parseInt(e.target.value))}>
               {MONTH_NAMES.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
             </select>
           </div>
           <div>
             <p className="text-xs text-content-secondary mb-1">Year</p>
-            <select className="px-2 py-1.5 text-sm border border-border rounded bg-surface-input"
+            <select className="px-2 py-1.5 text-sm border border-surface-border rounded bg-surface-card"
               value={selYear} onChange={e => setSelYear(parseInt(e.target.value))}>
               {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
@@ -877,7 +877,7 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
           </div>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border">
+              <tr className="border-b border-surface-border">
                 <Th>Employee</Th><Th>Gross</Th><Th>NAPSA</Th><Th>NHIMA</Th><Th>PAYE</Th><Th>Advances</Th><Th>Other</Th><Th>Net Pay</Th>
                 {runDetail.status === 'draft' && <Th>Override</Th>}
               </tr>
@@ -890,7 +890,7 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
                 const customTotal = s.custom_deductions.reduce((a, d) => a + d.amount, 0)
                 const hasOverride = s.napsa_employee_override != null || s.nhima_employee_override != null || s.paye_override != null || s.custom_deductions.length > 0
                 return (
-                  <tr key={s.payslip_id} className={`border-b border-border last:border-0 ${hasOverride ? 'bg-yellow-50' : ''}`}>
+                  <tr key={s.payslip_id} className={`border-b border-surface-border last:border-0 ${hasOverride ? 'bg-yellow-50' : ''}`}>
                     <Td>{users.find(u => u.user_id === s.user_id)?.full_name || s.user_id}</Td>
                     <Td right>{fmt(s.gross_salary)}</Td>
                     <Td right>
@@ -925,10 +925,10 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
       {/* Run list */}
       <Card title="All Runs">
         <table className="w-full text-sm">
-          <thead><tr className="border-b border-border"><Th>Period</Th><Th>Status</Th><Th>Gross</Th><Th>Net</Th><Th>Employer Cost</Th><Th>Action</Th></tr></thead>
+          <thead><tr className="border-b border-surface-border"><Th>Period</Th><Th>Status</Th><Th>Gross</Th><Th>Net</Th><Th>Employer Cost</Th><Th>Action</Th></tr></thead>
           <tbody>
             {runs.map(r => (
-              <tr key={r.run_id} className="border-b border-border last:border-0">
+              <tr key={r.run_id} className="border-b border-surface-border last:border-0">
                 <Td>{periodLabel(r.period_month, r.period_year)}</Td>
                 <Td><Badge status={r.status} />{r.is_historical && <span className="ml-1 text-xs text-content-secondary">(hist)</span>}</Td>
                 <Td right>{fmt(r.total_gross)}</Td>
@@ -979,7 +979,7 @@ function PaymentsTab({ runs, users, onRefresh, userRole }: {
         <div className="flex items-end gap-3 flex-wrap">
           <div>
             <p className="text-xs text-content-secondary mb-1">Select run</p>
-            <select className="px-2 py-1.5 text-sm border border-border rounded bg-surface-input"
+            <select className="px-2 py-1.5 text-sm border border-surface-border rounded bg-surface-card"
               value={selRunId || ''} onChange={e => setSelRunId(e.target.value || null)}>
               <option value="">— Select a run —</option>
               {approvedRuns.map(r => (
@@ -1007,10 +1007,10 @@ function PaymentsTab({ runs, users, onRefresh, userRole }: {
       </Card>
       <Card title="Run Summary">
         <table className="w-full text-sm">
-          <thead><tr className="border-b border-border"><Th>Period</Th><Th>Status</Th><Th>Net Pay</Th><Th>Approved</Th></tr></thead>
+          <thead><tr className="border-b border-surface-border"><Th>Period</Th><Th>Status</Th><Th>Net Pay</Th><Th>Approved</Th></tr></thead>
           <tbody>
             {approvedRuns.map(r => (
-              <tr key={r.run_id} className="border-b border-border last:border-0">
+              <tr key={r.run_id} className="border-b border-surface-border last:border-0">
                 <Td>{periodLabel(r.period_month, r.period_year)}</Td>
                 <Td><Badge status={r.status} /></Td>
                 <Td right>{fmt(r.total_net)}</Td>
@@ -1096,7 +1096,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
           <div className="flex gap-3 items-end flex-wrap">
             <div>
               <p className="text-xs text-content-secondary mb-1">Monthly report — select run</p>
-              <select className="px-2 py-1.5 text-sm border border-border rounded bg-surface-input"
+              <select className="px-2 py-1.5 text-sm border border-surface-border rounded bg-surface-card"
                 value={selRunId || ''} onChange={e => setSelRunId(e.target.value || null)}>
                 <option value="">— Select run —</option>
                 {runs.filter(r => r.status !== 'draft').map(r => (
@@ -1106,7 +1106,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
             </div>
             <div>
               <p className="text-xs text-content-secondary mb-1">YTD year</p>
-              <select className="px-2 py-1.5 text-sm border border-border rounded bg-surface-input"
+              <select className="px-2 py-1.5 text-sm border border-surface-border rounded bg-surface-card"
                 value={selYear} onChange={e => setSelYear(parseInt(e.target.value))}>
                 {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
@@ -1147,10 +1147,10 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
               ].map(({ title, data, cols, row, footer }) => (
                 <Card key={title} title={title}>
                   <table className="w-full text-sm">
-                    <thead><tr className="border-b border-border">{cols.map(c => <Th key={c}>{c}</Th>)}</tr></thead>
+                    <thead><tr className="border-b border-surface-border">{cols.map(c => <Th key={c}>{c}</Th>)}</tr></thead>
                     <tbody>
                       {data.lines.map((l: any, i: number) => (
-                        <tr key={i} className="border-b border-border last:border-0">
+                        <tr key={i} className="border-b border-surface-border last:border-0">
                           {row(l).map((v: string, j: number) => <Td key={j} right={j>1}>{v}</Td>)}
                         </tr>
                       ))}
@@ -1183,10 +1183,10 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
           </div>
           <p className="text-xs font-semibold text-content-secondary uppercase mb-2">PAYE Bands</p>
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-border"><Th>Min (ZMW)</Th><Th>Max (ZMW)</Th><Th>Rate</Th></tr></thead>
+            <thead><tr className="border-b border-surface-border"><Th>Min (ZMW)</Th><Th>Max (ZMW)</Th><Th>Rate</Th></tr></thead>
             <tbody>
               {rates.paye_bands.map((b, i) => (
-                <tr key={i} className="border-b border-border last:border-0">
+                <tr key={i} className="border-b border-surface-border last:border-0">
                   <Td right>{fmt(b.min)}</Td>
                   <Td right>{b.max != null ? fmt(b.max) : 'No limit'}</Td>
                   <Td right>{b.label}</Td>
@@ -1203,10 +1203,10 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
       {subTab === 'leavetypes' && (
         <Card title="Leave Types">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-border"><Th>Type</Th><Th>Days / Year</Th><Th>Full Pay Days</Th><Th>Half Pay Days</Th><Th>Docs Required</Th><Th>System</Th></tr></thead>
+            <thead><tr className="border-b border-surface-border"><Th>Type</Th><Th>Days / Year</Th><Th>Full Pay Days</Th><Th>Half Pay Days</Th><Th>Docs Required</Th><Th>System</Th></tr></thead>
             <tbody>
               {leaveTypes.map(t => (
-                <tr key={t.type_id} className="border-b border-border last:border-0">
+                <tr key={t.type_id} className="border-b border-surface-border last:border-0">
                   <Td>{t.type_name}</Td>
                   <Td right>{t.days_per_year ?? '—'}</Td>
                   <Td right>{t.full_pay_days ?? '—'}</Td>
@@ -1223,10 +1223,10 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
       {subTab === 'wcf' && (
         <Card title="WCF Categories">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-border"><Th>Category</Th><Th>Rate</Th><Th>Description</Th><Th>Effective From</Th><Th>Active</Th></tr></thead>
+            <thead><tr className="border-b border-surface-border"><Th>Category</Th><Th>Rate</Th><Th>Description</Th><Th>Effective From</Th><Th>Active</Th></tr></thead>
             <tbody>
               {wcfCategories.map(c => (
-                <tr key={c.category_id} className="border-b border-border last:border-0">
+                <tr key={c.category_id} className="border-b border-surface-border last:border-0">
                   <Td>{c.category_name}</Td>
                   <Td right>{(c.rate_percent * 100).toFixed(2)}%</Td>
                   <Td><span className="text-content-secondary text-xs">{c.description || '—'}</span></Td>
@@ -1257,13 +1257,13 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
           )}
           <Card title={`Public Holidays — ${new Date().getFullYear()}`}>
             <table className="w-full text-sm">
-              <thead><tr className="border-b border-border"><Th>Date</Th><Th>Day</Th><Th>Name</Th><Th>Recurring</Th><Th>Notes</Th>{userRole === 'owner' && <Th>Remove</Th>}</tr></thead>
+              <thead><tr className="border-b border-surface-border"><Th>Date</Th><Th>Day</Th><Th>Name</Th><Th>Recurring</Th><Th>Notes</Th>{userRole === 'owner' && <Th>Remove</Th>}</tr></thead>
               <tbody>
                 {holidays.map(h => {
                   const d = new Date(h.holiday_date)
                   const dow = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()]
                   return (
-                    <tr key={h.holiday_id} className="border-b border-border last:border-0">
+                    <tr key={h.holiday_id} className="border-b border-surface-border last:border-0">
                       <Td>{h.holiday_date}</Td>
                       <Td>{dow}</Td>
                       <Td>{h.holiday_name}</Td>
@@ -1288,21 +1288,21 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <p className="text-xs text-content-secondary mb-1">Month</p>
-              <select className="w-full px-2 py-1.5 text-sm border border-border rounded bg-surface-input"
+              <select className="w-full px-2 py-1.5 text-sm border border-surface-border rounded bg-surface-card"
                 value={importMonth} onChange={e => setImportMonth(parseInt(e.target.value))}>
                 {MONTH_NAMES.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
               </select>
             </div>
             <div>
               <p className="text-xs text-content-secondary mb-1">Year</p>
-              <select className="w-full px-2 py-1.5 text-sm border border-border rounded bg-surface-input"
+              <select className="w-full px-2 py-1.5 text-sm border border-surface-border rounded bg-surface-card"
                 value={importYear} onChange={e => setImportYear(parseInt(e.target.value))}>
                 {[2023,2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
           </div>
           <textarea
-            className="w-full h-40 px-2 py-2 text-xs font-mono border border-border rounded bg-surface-input text-content-primary mb-3"
+            className="w-full h-40 px-2 py-2 text-xs font-mono border border-surface-border rounded bg-surface-card text-content-primary mb-3"
             placeholder='[{"user_id":"...","gross_salary":5000,"paye":40,"napsa_employee":250,"nhima_employee":50,"net_pay":4660,...}]'
             value={importJson}
             onChange={e => setImportJson(e.target.value)}
@@ -1372,13 +1372,13 @@ export default function PayrollPage() {
       </div>
 
         {/* Tab bar */}
-        <div className="flex gap-1 mb-5 border-b border-border overflow-x-auto">
+        <div className="flex gap-1 mb-5 border-b border-surface-border overflow-x-auto">
           {TABS.map(t => (
             <button key={t}
               onClick={() => setTab(t)}
               className={`px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px
                 ${tab === t
-                  ? 'border-brand text-brand'
+                  ? 'border-action-primary text-action-primary'
                   : 'border-transparent text-content-secondary hover:text-content-primary'}`}
             >
               {t}

@@ -924,7 +924,9 @@ def create_run(
 
     run_id = _uid()
     payslip_rows = []
+    from psycopg.types.json import Jsonb
 
+    # Phase 1: calculate all payslips in memory (no DB writes yet)
     for profile in profiles:
         uid = profile["user_id"]
         wcf_rate = _wcf_rate(conn, profile.get("wcf_category_id"))
@@ -939,7 +941,7 @@ def create_run(
         """, (uid, body.period_month, body.period_year))
 
         active_advances = _fetchall(conn,
-            "SELECT monthly_deduction, outstanding_balance FROM salary_advances "
+            "SELECT advance_id, monthly_deduction, outstanding_balance FROM salary_advances "
             "WHERE user_id=%s AND status='active'", (uid,))
 
         att_summary = _fetchone(conn, """
@@ -962,71 +964,17 @@ def create_run(
         )
 
         payslip_id = _uid()
-        from psycopg.types.json import Jsonb
-        conn.execute("""
-            INSERT INTO payslips (
-                payslip_id,run_id,user_id,station_id,
-                basic_salary,housing_allowance,transport_allowance,other_allowances,
-                overtime_pay,overtime_details,gross_salary,
-                napsa_employee_calc,nhima_employee_calc,paye_calc,
-                napsa_employee_override,nhima_employee_override,paye_override,
-                custom_deductions,advances_deducted,
-                total_deductions,net_pay,
-                napsa_employer,nhima_employer,wcf_employer,total_employer_cost,
-                attendance_days,leave_days_taken
-            ) VALUES (
-                %s,%s,%s,%s,
-                %s,%s,%s,%s,
-                %s,%s,%s,
-                %s,%s,%s,
-                %s,%s,%s,
-                %s,%s,
-                %s,%s,
-                %s,%s,%s,%s,
-                %s,%s
-            )
-        """, (
-            payslip_id, run_id, uid, station_id,
-            calc["basic_salary"], calc["housing_allowance"],
-            calc["transport_allowance"], calc["other_allowances"],
-            calc["overtime_pay"], Jsonb(calc["overtime_details"]), calc["gross_salary"],
-            calc["napsa_employee_calc"], calc["nhima_employee_calc"], calc["paye_calc"],
-            None, None, None,
-            Jsonb([]), calc["advances_deducted"],
-            calc["total_deductions"], calc["net_pay"],
-            calc["napsa_employer"], calc["nhima_employer"],
-            calc["wcf_employer"], calc["total_employer_cost"],
-            calc["attendance_days"], calc["leave_days_taken"],
-        ))
+        payslip_rows.append({
+            **calc,
+            "payslip_id": payslip_id,
+            "run_id": run_id,
+            "user_id": uid,
+            "station_id": station_id,
+            "is_historical": False,
+            "active_advances": active_advances,
+        })
 
-        payslip_rows.append({**calc, "payslip_id": payslip_id, "run_id": run_id,
-                              "user_id": uid, "station_id": station_id, "is_historical": False})
-
-        # Deduct advance repayments
-        if calc["advances_deducted"] > 0:
-            for adv in active_advances:
-                deduction = min(float(adv["monthly_deduction"]), float(adv["outstanding_balance"]))
-                if deduction <= 0:
-                    continue
-                adv_row = _fetchone(conn,
-                    "SELECT advance_id FROM salary_advances "
-                    "WHERE user_id=%s AND status='active' AND outstanding_balance>0 LIMIT 1",
-                    (uid,))
-                if adv_row:
-                    new_balance = max(0, float(adv["outstanding_balance"]) - deduction)
-                    new_status = "settled" if new_balance == 0 else "active"
-                    conn.execute("""
-                        UPDATE salary_advances
-                        SET outstanding_balance=%s, status=%s, updated_at=NOW()
-                        WHERE advance_id=%s
-                    """, (new_balance, new_status, adv_row["advance_id"]))
-                    conn.execute("""
-                        INSERT INTO advance_repayments
-                            (repayment_id,advance_id,payslip_id,amount,repayment_date)
-                        VALUES (%s,%s,%s,%s,%s)
-                    """, (_uid(), adv_row["advance_id"], payslip_id,
-                          deduction, date.today().isoformat()))
-
+    # Phase 2: insert payroll_run first (payslips FK references this)
     totals = aggregate_run_totals(payslip_rows)
     conn.execute("""
         INSERT INTO payroll_runs (
@@ -1054,6 +1002,65 @@ def create_run(
         totals["total_net"], totals["total_employer_cost"],
         rates["rate_id"], current_user["user_id"],
     ))
+
+    # Phase 3: insert payslips and advance repayments
+    for row in payslip_rows:
+        active_advances = row.pop("active_advances")
+        conn.execute("""
+            INSERT INTO payslips (
+                payslip_id,run_id,user_id,station_id,
+                basic_salary,housing_allowance,transport_allowance,other_allowances,
+                overtime_pay,overtime_details,gross_salary,
+                napsa_employee_calc,nhima_employee_calc,paye_calc,
+                napsa_employee_override,nhima_employee_override,paye_override,
+                custom_deductions,advances_deducted,
+                total_deductions,net_pay,
+                napsa_employer,nhima_employer,wcf_employer,total_employer_cost,
+                attendance_days,leave_days_taken
+            ) VALUES (
+                %s,%s,%s,%s,
+                %s,%s,%s,%s,
+                %s,%s,%s,
+                %s,%s,%s,
+                %s,%s,%s,
+                %s,%s,
+                %s,%s,
+                %s,%s,%s,%s,
+                %s,%s
+            )
+        """, (
+            row["payslip_id"], row["run_id"], row["user_id"], row["station_id"],
+            row["basic_salary"], row["housing_allowance"],
+            row["transport_allowance"], row["other_allowances"],
+            row["overtime_pay"], Jsonb(row["overtime_details"]), row["gross_salary"],
+            row["napsa_employee_calc"], row["nhima_employee_calc"], row["paye_calc"],
+            None, None, None,
+            Jsonb([]), row["advances_deducted"],
+            row["total_deductions"], row["net_pay"],
+            row["napsa_employer"], row["nhima_employer"],
+            row["wcf_employer"], row["total_employer_cost"],
+            row["attendance_days"], row["leave_days_taken"],
+        ))
+
+        if row["advances_deducted"] > 0:
+            for adv in active_advances:
+                deduction = min(float(adv["monthly_deduction"]), float(adv["outstanding_balance"]))
+                if deduction <= 0:
+                    continue
+                new_balance = max(0, float(adv["outstanding_balance"]) - deduction)
+                new_status = "settled" if new_balance == 0 else "active"
+                conn.execute("""
+                    UPDATE salary_advances
+                    SET outstanding_balance=%s, status=%s, updated_at=NOW()
+                    WHERE advance_id=%s
+                """, (new_balance, new_status, adv["advance_id"]))
+                conn.execute("""
+                    INSERT INTO advance_repayments
+                        (repayment_id,advance_id,payslip_id,amount,repayment_date)
+                    VALUES (%s,%s,%s,%s,%s)
+                """, (_uid(), adv["advance_id"], row["payslip_id"],
+                      deduction, date.today().isoformat()))
+
     conn.commit()
 
     # Employees queued for deactivation are now paid — apply it.
