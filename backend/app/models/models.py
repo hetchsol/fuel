@@ -1,5 +1,5 @@
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, List
 from enum import Enum
 
@@ -1163,6 +1163,11 @@ class EmployeeProfileUpsert(BaseModel):
     mobile_money_number: Optional[str] = None
     preferred_payment_method: PaymentMethod = PaymentMethod.BANK
     wcf_category_id: Optional[str] = None
+
+    @field_validator('start_date', mode='before')
+    @classmethod
+    def empty_str_to_none(cls, v):
+        return None if v == '' else v
 
 # ── Leave ─────────────────────────────────────────────────
 

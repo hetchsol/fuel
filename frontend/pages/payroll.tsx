@@ -244,6 +244,7 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
           transport_allowance: parseFloat(form.transport_allowance) || 0,
           contracted_hours_per_week: parseInt(form.contracted_hours_per_week) || 48,
           annual_leave_days: parseInt(form.annual_leave_days) || 24,
+          start_date: form.start_date || null,
           wcf_category_id: form.wcf_category_id || null,
           mobile_money_provider: form.mobile_money_provider || null,
         }),

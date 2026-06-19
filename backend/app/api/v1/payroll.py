@@ -141,6 +141,8 @@ def upsert_employee(
         "SELECT profile_id FROM employee_profiles WHERE user_id = %s AND station_id = %s",
         (user_id, station_id))
     data = body.model_dump()
+    if data.get("start_date") == "":
+        data["start_date"] = None
     try:
         if existing:
             sets = ", ".join(f"{k} = %s" for k in data)
