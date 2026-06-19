@@ -71,15 +71,19 @@ export default function App({ Component, pageProps }: AppProps) {
           },
         }}
       />
-      <Layout>
-        {loading ? (
-          <LoadingSpinner fullPage text="Loading page..." />
-        ) : (
-          <div className="page-fade-in" key={router.asPath}>
-            <Component {...pageProps} />
-          </div>
-        )}
-      </Layout>
+      {router.pathname === '/payroll-print' ? (
+        <Component {...pageProps} />
+      ) : (
+        <Layout>
+          {loading ? (
+            <LoadingSpinner fullPage text="Loading page..." />
+          ) : (
+            <div className="page-fade-in" key={router.asPath}>
+              <Component {...pageProps} />
+            </div>
+          )}
+        </Layout>
+      )}
     </WorkingDayProvider>
     </ThemeProvider>
     </ErrorBoundary>

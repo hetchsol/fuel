@@ -31,7 +31,7 @@ from ...services.payroll_calculator import (
 )
 from ...database.db import _get_connection, is_db_active
 from ...services.audit_service import log_audit_event
-from .auth import get_current_user, get_station_context, require_manager_or_owner, require_owner
+from .auth import get_current_user, get_station_context, require_owner
 
 router = APIRouter()
 
@@ -101,7 +101,7 @@ def _str_dates(row: dict) -> dict:
 @router.get("/employees", response_model=List[EmployeeProfile])
 def list_employees(
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -115,7 +115,7 @@ def list_employees(
 def get_employee(
     user_id: str,
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -132,7 +132,7 @@ def upsert_employee(
     user_id: str,
     body: EmployeeProfileUpsert,
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -169,7 +169,7 @@ def upsert_employee(
 def toggle_employee_active(
     user_id: str,
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -214,7 +214,7 @@ def toggle_employee_active(
 # ══════════════════════════════════════════════════════════
 
 @router.get("/rates", response_model=List[StatutoryRates])
-def list_rates(current_user: dict = Depends(require_manager_or_owner)):
+def list_rates(current_user: dict = Depends(require_owner)):
     _require_db()
     conn = _get_connection()
     rows = _fetchall(conn, "SELECT * FROM statutory_rates ORDER BY effective_from DESC")
@@ -225,7 +225,7 @@ def list_rates(current_user: dict = Depends(require_manager_or_owner)):
 
 
 @router.get("/rates/active", response_model=StatutoryRates)
-def get_active_rates(current_user: dict = Depends(require_manager_or_owner)):
+def get_active_rates(current_user: dict = Depends(require_owner)):
     _require_db()
     conn = _get_connection()
     return _str_dates(_active_rates(conn))
@@ -276,7 +276,7 @@ def create_rates(
 # ══════════════════════════════════════════════════════════
 
 @router.get("/wcf-categories", response_model=List[WcfCategory])
-def list_wcf_categories(current_user: dict = Depends(require_manager_or_owner)):
+def list_wcf_categories(current_user: dict = Depends(require_owner)):
     _require_db()
     conn = _get_connection()
     rows = _fetchall(conn, "SELECT * FROM wcf_categories ORDER BY category_name")
@@ -338,7 +338,7 @@ def update_wcf_category(
 # ══════════════════════════════════════════════════════════
 
 @router.get("/leave-types", response_model=List[LeaveType])
-def list_leave_types(current_user: dict = Depends(require_manager_or_owner)):
+def list_leave_types(current_user: dict = Depends(require_owner)):
     _require_db()
     conn = _get_connection()
     return _fetchall(conn, "SELECT * FROM leave_types ORDER BY type_name")
@@ -417,7 +417,7 @@ def _ensure_balances(conn, user_id: str, year: int):
 def list_leave_balances(
     year: int = Query(default=None),
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -437,7 +437,7 @@ def list_leave_balances(
 def get_leave_balance(
     user_id: str,
     year: int = Query(default=None),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -466,7 +466,7 @@ def list_leave_requests(
     status: Optional[str] = Query(default=None),
     user_id: Optional[str] = Query(default=None),
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -543,7 +543,7 @@ def _update_leave_request_status(conn, request_id: str, new_status: str,
 def approve_leave_request(
     request_id: str,
     body: LeaveRequestAction = LeaveRequestAction(),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -555,7 +555,7 @@ def approve_leave_request(
 def reject_leave_request(
     request_id: str,
     body: LeaveRequestAction = LeaveRequestAction(),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -573,7 +573,7 @@ def cancel_leave_request(
     row = _fetchone(conn, "SELECT * FROM leave_requests WHERE request_id = %s", (request_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Leave request not found")
-    if row["user_id"] != current_user["user_id"] and current_user["role"] not in ("manager", "owner"):
+    if row["user_id"] != current_user["user_id"] and current_user["role"] != "owner":
         raise HTTPException(status_code=403, detail="Not authorized to cancel this request")
     if row["status"] not in ("pending",):
         raise HTTPException(status_code=400, detail=f"Cannot cancel a request with status '{row['status']}'")
@@ -602,7 +602,7 @@ def get_attendance(
     year: int = Query(...),
     user_id: Optional[str] = Query(default=None),
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -628,7 +628,7 @@ def upsert_attendance(
     work_date: str,
     body: AttendanceUpsert,
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -667,7 +667,7 @@ def upsert_attendance(
 def bulk_upsert_attendance(
     body: AttendanceBulkUpsert,
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -715,7 +715,7 @@ def bulk_upsert_attendance(
 @router.get("/public-holidays", response_model=List[PublicHoliday])
 def list_public_holidays(
     year: int = Query(default=None),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -779,7 +779,7 @@ def delete_public_holiday(
 @router.get("/advances", response_model=List[SalaryAdvance])
 def list_advances(
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -792,7 +792,7 @@ def list_advances(
 @router.get("/advances/{advance_id}", response_model=SalaryAdvance)
 def get_advance(
     advance_id: str,
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -806,7 +806,7 @@ def get_advance(
 def create_advance(
     body: SalaryAdvanceCreate,
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -863,7 +863,7 @@ def approve_advance(
 @router.put("/advances/{advance_id}/reject", response_model=SalaryAdvance)
 def reject_advance(
     advance_id: str,
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -883,7 +883,7 @@ def reject_advance(
 def list_runs(
     year: Optional[int] = Query(default=None),
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -901,7 +901,7 @@ def list_runs(
 def create_run(
     body: PayrollRunCreate,
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -1069,7 +1069,7 @@ def create_run(
 @router.get("/runs/{run_id}", response_model=PayrollRunDetail)
 def get_run(
     run_id: str,
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -1109,13 +1109,67 @@ def approve_run(
 @router.get("/runs/{run_id}/payslips", response_model=List[Payslip])
 def get_run_payslips(
     run_id: str,
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
     slips = _fetchall(conn,
         "SELECT * FROM payslips WHERE run_id = %s ORDER BY user_id", (run_id,))
     return [_str_dates(s) for s in slips]
+
+
+@router.get("/runs/{run_id}/print-data")
+def get_run_print_data(
+    run_id: str,
+    ctx: dict = Depends(get_station_context),
+    current_user: dict = Depends(require_owner),
+):
+    """All data needed to render print-ready payslips for a run."""
+    _require_db()
+    conn = _get_connection()
+    station_id = _station_id(ctx)
+
+    run = _fetchone(conn,
+        "SELECT * FROM payroll_runs WHERE run_id = %s AND station_id = %s",
+        (run_id, station_id))
+    if not run:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
+
+    rows = _fetchall(conn, """
+        SELECT ps.*,
+               u.full_name,
+               ep.tpin, ep.nrc_number, ep.napsa_number, ep.nhima_number,
+               ep.bank_name, ep.bank_branch, ep.bank_account_number,
+               ep.mobile_money_provider, ep.mobile_money_number,
+               ep.preferred_payment_method
+        FROM payslips ps
+        JOIN users u ON u.user_id = ps.user_id
+        LEFT JOIN employee_profiles ep
+               ON ep.user_id = ps.user_id AND ep.station_id = %s
+        WHERE ps.run_id = %s
+        ORDER BY u.full_name
+    """, (station_id, run_id))
+
+    for r in rows:
+        _str_dates(r)
+        if isinstance(r.get("custom_deductions"), str):
+            r["custom_deductions"] = json.loads(r["custom_deductions"])
+        if isinstance(r.get("overtime_details"), str):
+            r["overtime_details"] = json.loads(r["overtime_details"])
+
+    sys_settings = ctx["storage"].get("system_settings", {})
+    business_info = {
+        "business_name": sys_settings.get("business_name", ""),
+        "station_location": sys_settings.get("station_location", ""),
+        "contact_phone": sys_settings.get("contact_phone", ""),
+        "contact_email": sys_settings.get("contact_email", ""),
+    }
+
+    return {
+        "business_info": business_info,
+        "run": _str_dates(run),
+        "payslips": rows,
+    }
 
 
 # ══════════════════════════════════════════════════════════
@@ -1127,7 +1181,7 @@ def get_run_payslips(
 @router.get("/payslips/{payslip_id}", response_model=Payslip)
 def get_payslip(
     payslip_id: str,
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -1141,7 +1195,7 @@ def get_payslip(
 def apply_overrides(
     payslip_id: str,
     body: PayslipOverrides,
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -1234,7 +1288,7 @@ def apply_overrides(
 @router.get("/runs/{run_id}/payments", response_model=List[PayrollPayment])
 def get_payments(
     run_id: str,
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -1247,7 +1301,7 @@ def get_payments(
 @router.get("/runs/{run_id}/payment-file")
 def download_payment_file(
     run_id: str,
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -1334,7 +1388,7 @@ def mark_paid(
 @router.get("/runs/{run_id}/statutory")
 def get_statutory_report(
     run_id: str,
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
@@ -1395,7 +1449,7 @@ def get_statutory_report(
 def get_ytd_statutory(
     year: int = Query(...),
     ctx: dict = Depends(get_station_context),
-    current_user: dict = Depends(require_manager_or_owner),
+    current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()

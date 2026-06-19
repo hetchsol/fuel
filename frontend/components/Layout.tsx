@@ -379,7 +379,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       roles: ['manager', 'owner'],
       children: [
         { path: '/daily-close-off', label: 'Daily Close-Off', roles: ['manager', 'owner'] },
-        { path: '/payroll', label: 'Payroll', roles: ['manager', 'owner'] },
+        { path: '/payroll', label: 'Payroll', roles: ['owner'] },
         { path: '/stations', label: 'Stations', roles: ['owner'] },
         { path: '/infrastructure', label: 'Infrastructure', roles: ['owner'] },
         { path: '/settings', label: 'Settings', roles: ['manager', 'owner'] },
@@ -424,7 +424,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Admin',
       roles: ['manager'],
       children: [
-        { path: '/payroll', label: 'Payroll', roles: ['manager'] },
+        { path: '/payroll', label: 'Payroll', roles: ['owner'] },
         { path: '/settings', label: 'Settings', roles: ['manager'] },
         { path: '/users', label: 'Users', roles: ['manager'] },
         { path: '/audit', label: 'Audit Log', roles: ['manager'] },

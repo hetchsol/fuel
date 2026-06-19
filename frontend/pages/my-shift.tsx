@@ -966,54 +966,6 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* Shift Info Card — collapsible */}
-      <div className="rounded-lg shadow mb-6 overflow-hidden"
-        style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <button onClick={() => setShowShiftInfo(!showShiftInfo)}
-          className="w-full p-4 flex justify-between items-center text-left">
-          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: theme.textSecondary }}>
-            Shift Information
-          </h2>
-          <span className="text-xs" style={{ color: theme.textSecondary }}>{showShiftInfo ? '−' : '+'}</span>
-        </button>
-        {showShiftInfo && (
-        <div className="px-4 pb-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div>
-            <div className="text-xs" style={{ color: theme.textSecondary }}>Shift ID</div>
-            <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>{shiftInfo?.shift_id}</div>
-          </div>
-          <div>
-            <div className="text-xs" style={{ color: theme.textSecondary }}>Date</div>
-            <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>{shiftInfo?.date}</div>
-          </div>
-          <div>
-            <div className="text-xs" style={{ color: theme.textSecondary }}>Shift Type</div>
-            <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>{shiftInfo?.shift_type}</div>
-          </div>
-          <div>
-            <div className="text-xs" style={{ color: theme.textSecondary }}>Status</div>
-            <div className="font-medium text-sm" style={{ color: 'var(--color-status-success)' }}>{shiftInfo?.status}</div>
-          </div>
-          <div>
-            <div className="text-xs" style={{ color: theme.textSecondary }}>Attendant</div>
-            <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>{assignmentInfo?.attendant_name}</div>
-          </div>
-          <div>
-            <div className="text-xs" style={{ color: theme.textSecondary }}>Assigned Islands</div>
-            <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>
-              {assignmentInfo?.island_ids?.join(', ') || 'N/A'}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs" style={{ color: theme.textSecondary }}>Assigned Nozzles</div>
-            <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>
-              {assignmentInfo?.nozzle_ids?.join(', ') || 'N/A'}
-            </div>
-          </div>
-        </div>
-        )}
-      </div>
-
       {/* On This Shift — supervisor/manager view of all attendants + deposits */}
       {!isAttendant && shiftFound && shiftInfo && (
         <div className="rounded-lg shadow mb-6 overflow-hidden"
@@ -1075,6 +1027,54 @@ export default function MyShift() {
           )}
         </div>
       )}
+
+      {/* Shift Info Card — collapsible */}
+      <div className="rounded-lg shadow mb-6 overflow-hidden"
+        style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+        <button onClick={() => setShowShiftInfo(!showShiftInfo)}
+          className="w-full p-4 flex justify-between items-center text-left">
+          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: theme.textSecondary }}>
+            Shift Information
+          </h2>
+          <span className="text-xs" style={{ color: theme.textSecondary }}>{showShiftInfo ? '−' : '+'}</span>
+        </button>
+        {showShiftInfo && (
+        <div className="px-4 pb-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div>
+            <div className="text-xs" style={{ color: theme.textSecondary }}>Shift ID</div>
+            <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>{shiftInfo?.shift_id}</div>
+          </div>
+          <div>
+            <div className="text-xs" style={{ color: theme.textSecondary }}>Date</div>
+            <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>{shiftInfo?.date}</div>
+          </div>
+          <div>
+            <div className="text-xs" style={{ color: theme.textSecondary }}>Shift Type</div>
+            <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>{shiftInfo?.shift_type}</div>
+          </div>
+          <div>
+            <div className="text-xs" style={{ color: theme.textSecondary }}>Status</div>
+            <div className="font-medium text-sm" style={{ color: 'var(--color-status-success)' }}>{shiftInfo?.status}</div>
+          </div>
+          <div>
+            <div className="text-xs" style={{ color: theme.textSecondary }}>Attendant</div>
+            <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>{assignmentInfo?.attendant_name}</div>
+          </div>
+          <div>
+            <div className="text-xs" style={{ color: theme.textSecondary }}>Assigned Islands</div>
+            <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>
+              {assignmentInfo?.island_ids?.join(', ') || 'N/A'}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs" style={{ color: theme.textSecondary }}>Assigned Nozzles</div>
+            <div className="font-medium text-sm" style={{ color: theme.textPrimary }}>
+              {assignmentInfo?.nozzle_ids?.join(', ') || 'N/A'}
+            </div>
+          </div>
+        </div>
+        )}
+      </div>
 
       {/* Handover returned by supervisor — surface the note (item 6, read-only) */}
       {isAttendant && returnedHandover && (

@@ -853,9 +853,12 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
       {runDetail && (
         <Card title={`${periodLabel(runDetail.period_month, runDetail.period_year)} — ${runDetail.status.toUpperCase()}`}
           action={
-            runDetail.status === 'draft' && userRole === 'owner' ? (
-              <Btn variant="primary" onClick={() => approveRun(runDetail.run_id)}>Approve Run</Btn>
-            ) : null
+            <div className="flex items-center gap-2">
+              <Btn small onClick={() => window.open(`/payroll-print?run_id=${runDetail.run_id}`, '_blank')}>Print Payslips</Btn>
+              {runDetail.status === 'draft' && userRole === 'owner' && (
+                <Btn variant="primary" onClick={() => approveRun(runDetail.run_id)}>Approve Run</Btn>
+              )}
+            </div>
           }
         >
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
@@ -1365,7 +1368,6 @@ export default function PayrollPage() {
     <div>
       <div className="mb-5">
         <h1 className="text-2xl font-bold text-content-primary">Payroll</h1>
-        <p className="text-sm text-content-secondary mt-0.5">Zambian statutory payroll — PAYE, NAPSA, NHIMA, WCF</p>
       </div>
 
         {/* Tab bar */}

@@ -52,6 +52,7 @@ export const PAYROLL = {
   run:                (id: string) => `/api/v1/payroll/runs/${id}`,
   runApprove:         (id: string) => `/api/v1/payroll/runs/${id}/approve`,
   runPayslips:        (id: string) => `/api/v1/payroll/runs/${id}/payslips`,
+  runPrintData:       (id: string) => `/api/v1/payroll/runs/${id}/print-data`,
   runPayments:        (id: string) => `/api/v1/payroll/runs/${id}/payments`,
   runPaymentFile:     (id: string) => `/api/v1/payroll/runs/${id}/payment-file`,
   runMarkPaid:        (id: string) => `/api/v1/payroll/runs/${id}/mark-paid`,
