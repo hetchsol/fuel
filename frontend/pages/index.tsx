@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import useSWR from 'swr'
 import { getDaily, getFlags, getTankLevels, isManagerOrAbove, authFetch, getHeaders } from '../lib/api'
 import TankCard from '../components/TankCard'
@@ -60,13 +61,18 @@ function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
 
 export default function Home() {
   const { date, setDate } = useWorkingDay()
+  const router = useRouter()
   const [userRole, setUserRole] = useState<string>('')
   const [cardPeriod, setCardPeriod] = useState<CardPeriod>('today')
   const [alertsExpanded, setAlertsExpanded] = useState(false)
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
-    if (userData) setUserRole(JSON.parse(userData).role || '')
+    if (userData) {
+      const role = JSON.parse(userData).role || ''
+      setUserRole(role)
+      if (role === 'user') router.replace('/my-shift')
+    }
   }, [])
 
   const { data: daily, error: dailyError } = useSWR(['daily', date], () => getDaily(date))
