@@ -108,6 +108,7 @@ export default function HandoverReview() {
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
   const [handovers, setHandovers] = useState<HandoverEntry[]>([])
   const [summaryPending, setSummaryPending] = useState(0)
   const [summaryFlagged, setSummaryFlagged] = useState(0)
@@ -302,9 +303,12 @@ export default function HandoverReview() {
       }
       setApproveModalId(null)
       setApproveNote('')
+      setError('')
+      setSuccessMsg('Handover approved.')
       fetchQueue()
       setExpandedId(null)
     } catch (err: any) {
+      setSuccessMsg('')
       setError(err.message)
     } finally {
       setActionLoading(false)
@@ -355,6 +359,7 @@ export default function HandoverReview() {
 
   const handleBatchApprove = async () => {
     if (selectedIds.size === 0) return
+    const count = selectedIds.size
     setActionLoading(true)
     try {
       const res = await authFetch(`${BASE}/handover/batch-approve`, {
@@ -367,8 +372,11 @@ export default function HandoverReview() {
         throw new Error(err.detail)
       }
       setSelectedIds(new Set())
+      setError('')
+      setSuccessMsg(`${count} handover${count !== 1 ? 's' : ''} approved.`)
       fetchQueue()
     } catch (err: any) {
+      setSuccessMsg('')
       setError(err.message)
     } finally {
       setActionLoading(false)
@@ -458,6 +466,13 @@ export default function HandoverReview() {
         <div className="p-3 rounded text-sm" style={{ backgroundColor: 'var(--color-status-error-light, #fde8e8)', color: 'var(--color-status-error)' }}>
           {error}
           <button onClick={() => setError('')} className="ml-2 underline text-xs">dismiss</button>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="p-3 rounded text-sm" style={{ backgroundColor: 'var(--color-status-success-light, #e6f9e6)', color: 'var(--color-status-success)' }}>
+          {successMsg}
+          <button onClick={() => setSuccessMsg('')} className="ml-2 underline text-xs">dismiss</button>
         </div>
       )}
 
@@ -663,8 +678,9 @@ export default function HandoverReview() {
             const rs = h.review_status || 'submitted'
             const styleMap = REVIEW_STATUS_STYLES[rs] || REVIEW_STATUS_STYLES.submitted
             const isExpanded = expandedId === h.handover_id
-            const canSelect = rs === 'submitted'
-            const canAct = rs === 'submitted' || rs === 'flagged'
+            const isFullySubmitted = h.phase == null || h.phase === 'completed'
+            const canSelect = rs === 'submitted' && isFullySubmitted
+            const canAct = (rs === 'submitted' || rs === 'flagged') && isFullySubmitted
 
             return (
               <tbody key={h.handover_id}>
