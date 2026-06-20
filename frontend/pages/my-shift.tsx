@@ -167,7 +167,9 @@ export default function MyShift() {
 
   // Collapsible sections
   const [showShiftInfo, setShowShiftInfo] = useState(true)
-  const [showNozzles, setShowNozzles] = useState(true)
+  const [showStartShift, setShowStartShift] = useState(false)
+  const [showEndShift, setShowEndShift] = useState(false)
+  const [showNozzles, setShowNozzles] = useState(false)
   const [showLpg, setShowLpg] = useState(false)
   const [showLubs, setShowLubs] = useState(false)
   const [showAccessories, setShowAccessories] = useState(false)
@@ -931,7 +933,7 @@ export default function MyShift() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>
-              {isAttendant ? 'My Shift' : 'Readings Verification'}
+              {isAttendant ? "Today's Shift" : 'Readings Verification'}
             </h1>
             <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
               {handoverResult ? 'Readings verified — proceed to office for shift closing' : isAttendant ? '' : stepSubtitles[currentStep]}
@@ -1128,8 +1130,8 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* Safe Deposits — shown during active shift; for attendants only after opening confirmed */}
-      {shiftFound && !handoverResult && (!isAttendant || openingVerified) && (
+      {/* Safe Deposits — for attendants only when End Shift is expanded */}
+      {shiftFound && !handoverResult && (!isAttendant || (openingVerified && showEndShift)) && (
         <div className="rounded-lg shadow mb-6 overflow-hidden"
           style={{ backgroundColor: theme.cardBg, borderColor: depositOverdue ? 'var(--color-status-warning)' : theme.border, borderWidth: depositOverdue ? 2 : 1 }}>
           <button
@@ -1200,21 +1202,25 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* START SHIFT section — always visible for attendants with an active shift */}
+      {/* START SHIFT — collapsible, always visible for attendants with an active shift */}
       {isAttendant && shiftFound && !handoverResult && (
         <div className="rounded-lg shadow mb-6 overflow-hidden"
           style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-          <div className="p-4 flex items-center justify-between"
-            style={{ borderBottomColor: theme.border, borderBottomWidth: 1 }}>
+          <button
+            onClick={() => setShowStartShift(p => !p)}
+            className="w-full p-4 flex justify-between items-center text-left">
             <h2 className="text-base font-semibold" style={{ color: theme.textPrimary }}>Start Shift</h2>
-            {openingVerified && (
-              <span className="text-xs font-semibold px-2 py-1 rounded"
-                style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }}>
-                Opening confirmed
-              </span>
-            )}
-          </div>
-        <div className="space-y-6 p-4">
+            <div className="flex items-center gap-2">
+              {openingVerified && (
+                <span className="text-xs font-semibold px-2 py-1 rounded"
+                  style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }}>
+                  Opening confirmed
+                </span>
+              )}
+              <span className="text-xs" style={{ color: theme.textSecondary }}>{showStartShift ? '−' : '+'}</span>
+            </div>
+          </button>
+        {showStartShift && <div className="space-y-6 p-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
 
           {/* Opening readings (read-only) */}
           <div className="rounded-lg shadow overflow-hidden" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
@@ -1245,11 +1251,11 @@ export default function MyShift() {
             </table>
           </div>
 
-          {/* Opening stock summary (read-only) — only items carried with stock */}
+          {/* Opening stock summary (read-only) — filtered by assignment */}
           {(() => {
-            const lpgOpen = lpgRows.filter(r => (r.opening_full || 0) > 0 || (r.opening_empty || 0) > 0)
-            const accOpen = accessoryRows.filter(r => (r.opening_stock || 0) > 0)
-            const lubOpen = lubricantRows.filter(r => (r.opening_stock || 0) > 0)
+            const lpgOpen = assignmentInfo?.assigned_lpg ? lpgRows.filter(r => (r.opening_full || 0) > 0 || (r.opening_empty || 0) > 0) : []
+            const accOpen = assignmentInfo?.assigned_accessories ? accessoryRows.filter(r => (r.opening_stock || 0) > 0) : []
+            const lubOpen = assignmentInfo?.assigned_lubricants ? lubricantRows.filter(r => (r.opening_stock || 0) > 0) : []
             if (lpgOpen.length === 0 && accOpen.length === 0 && lubOpen.length === 0) return null
             return (
               <div className="rounded-lg shadow p-4" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
@@ -1301,29 +1307,28 @@ export default function MyShift() {
               </button>
             </div>
           )}
-        </div>
+        </div>}
         </div>
       )}
 
-      {/* END SHIFT section header — always visible for attendants with active shift */}
+      {/* END SHIFT — collapsible header, always visible for attendants with active shift */}
       {isAttendant && shiftFound && !handoverResult && (
         <div className="rounded-lg shadow mb-6 overflow-hidden"
           style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-          <div className="p-4" style={{ borderBottomColor: openingVerified ? theme.border : 'transparent', borderBottomWidth: openingVerified ? 1 : 0 }}>
+          <button
+            onClick={() => openingVerified && setShowEndShift(p => !p)}
+            className="w-full p-4 flex justify-between items-center text-left"
+            style={{ opacity: openingVerified ? 1 : 0.5 }}>
             <h2 className="text-base font-semibold" style={{ color: theme.textPrimary }}>End Shift</h2>
-          </div>
-          {!openingVerified && (
-            <div className="px-4 pb-4 pt-3">
-              <p className="text-sm" style={{ color: theme.textSecondary }}>
-                Complete Start Shift first — confirm your opening readings before entering closing figures.
-              </p>
-            </div>
-          )}
+            <span className="text-xs" style={{ color: theme.textSecondary }}>
+              {openingVerified ? (showEndShift ? '−' : '+') : 'Complete Start Shift first'}
+            </span>
+          </button>
         </div>
       )}
 
-      {/* Step Indicator — visible to attendants only, before submission, with active shift */}
-      {isAttendant && shiftFound && !handoverResult && openingVerified && (
+      {/* Step Indicator — visible to attendants only when End Shift is expanded */}
+      {isAttendant && shiftFound && !handoverResult && openingVerified && showEndShift && (
         <div className="rounded-lg shadow p-4 mb-6 flex items-center justify-center"
           style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
           {/* Step 1 */}
@@ -1370,7 +1375,7 @@ export default function MyShift() {
       {/* STEP 1: Enter Readings & Stock Counts         */}
       {/* Financial columns (Price, Revenue, Value) hidden */}
       {/* ============================================= */}
-      {currentStep === 1 && !handoverResult && (!isAttendant || openingVerified) && (
+      {currentStep === 1 && !handoverResult && (!isAttendant || (openingVerified && showEndShift)) && (
         <>
           {/* What's left to submit — live checklist of the existing submit gates (item 4) */}
           <div className="rounded-lg shadow p-4 mb-6"
@@ -1611,8 +1616,8 @@ export default function MyShift() {
           )}
           </div>
 
-          {/* LPG Cylinders — collapsible */}
-          <div className="rounded-lg shadow mb-6 overflow-hidden"
+          {/* LPG Cylinders — collapsible, only shown if assigned */}
+          {(!isAttendant || assignmentInfo?.assigned_lpg) && <div className="rounded-lg shadow mb-6 overflow-hidden"
             style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
             <button onClick={() => setShowLpg(!showLpg)}
               className="w-full p-4 flex justify-between items-center text-left font-semibold text-sm"
@@ -1809,10 +1814,10 @@ export default function MyShift() {
             )}
             </div>
             )}
-          </div>
+          </div>}
 
-          {/* Accessories — collapsible */}
-          {accessoryRows.length > 0 && (
+          {/* Accessories — collapsible, only shown if assigned */}
+          {accessoryRows.length > 0 && (!isAttendant || assignmentInfo?.assigned_accessories) && (
             <div className="rounded-lg shadow mb-6 overflow-hidden"
               style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
               <button onClick={() => setShowAccessories(!showAccessories)}
@@ -1904,8 +1909,8 @@ export default function MyShift() {
             </div>
           )}
 
-          {/* Lubricants — collapsible */}
-          {lubricantRows.length > 0 && (
+          {/* Lubricants — collapsible, only shown if assigned */}
+          {lubricantRows.length > 0 && (!isAttendant || assignmentInfo?.assigned_lubricants) && (
             <div className="rounded-lg shadow mb-6 overflow-hidden"
               style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
               <button onClick={() => setShowLubs(!showLubs)}
@@ -2032,7 +2037,7 @@ export default function MyShift() {
       {/* ============================================= */}
       {/* STEP 2: Review & Confirm (read-only, no money)*/}
       {/* ============================================= */}
-      {currentStep === 2 && !handoverResult && (!isAttendant || openingVerified) && (
+      {currentStep === 2 && !handoverResult && (!isAttendant || (openingVerified && showEndShift)) && (
         <>
           {/* Nozzle Readings Review */}
           <div className="rounded-lg shadow mb-6 overflow-x-auto"
