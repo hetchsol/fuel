@@ -930,9 +930,11 @@ export default function MyShift() {
       <div className="mb-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Readings Verification</h1>
+            <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>
+              {isAttendant ? 'My Shift' : 'Readings Verification'}
+            </h1>
             <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
-              {handoverResult ? 'Readings verified — proceed to office for shift closing' : stepSubtitles[currentStep]}
+              {handoverResult ? 'Readings verified — proceed to office for shift closing' : isAttendant ? '' : stepSubtitles[currentStep]}
             </p>
           </div>
           {availableShifts.length > 1 && (
@@ -1028,8 +1030,8 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* Shift Info Card — collapsible */}
-      <div className="rounded-lg shadow mb-6 overflow-hidden"
+      {/* Shift Info Card — collapsible, hidden for attendants */}
+      {!isAttendant && <div className="rounded-lg shadow mb-6 overflow-hidden"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
         <button onClick={() => setShowShiftInfo(!showShiftInfo)}
           className="w-full p-4 flex justify-between items-center text-left">
@@ -1074,7 +1076,7 @@ export default function MyShift() {
           </div>
         </div>
         )}
-      </div>
+      </div>}
 
       {/* Handover returned by supervisor — surface the note (item 6, read-only) */}
       {isAttendant && returnedHandover && (
@@ -1126,8 +1128,8 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* Safe Deposits — visible on all steps during active shift */}
-      {shiftFound && !handoverResult && (
+      {/* Safe Deposits — shown during active shift; for attendants only after opening confirmed */}
+      {shiftFound && !handoverResult && (!isAttendant || openingVerified) && (
         <div className="rounded-lg shadow mb-6 overflow-hidden"
           style={{ backgroundColor: theme.cardBg, borderColor: depositOverdue ? 'var(--color-status-warning)' : theme.border, borderWidth: depositOverdue ? 2 : 1 }}>
           <button
@@ -1198,15 +1200,21 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* Start of shift: verify the carried-forward opening readings & stock */}
-      {inStartMode && (
-        <div className="space-y-6">
-          <div className="rounded-lg shadow p-4" style={{ backgroundColor: 'var(--color-action-primary-light)', borderColor: 'var(--color-action-primary)', borderWidth: 1 }}>
-            <h2 className="text-lg font-bold" style={{ color: 'var(--color-action-primary)' }}>Start of shift — verify your opening</h2>
-            <p className="text-sm mt-1" style={{ color: 'var(--color-action-primary)' }}>
-              These opening figures carry over from the previous shift&rsquo;s close. Check them against the pumps and stock, then confirm to begin. If anything doesn&rsquo;t match, note it below.
-            </p>
+      {/* START SHIFT section — always visible for attendants with an active shift */}
+      {isAttendant && shiftFound && !handoverResult && (
+        <div className="rounded-lg shadow mb-6 overflow-hidden"
+          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+          <div className="p-4 flex items-center justify-between"
+            style={{ borderBottomColor: theme.border, borderBottomWidth: 1 }}>
+            <h2 className="text-base font-semibold" style={{ color: theme.textPrimary }}>Start Shift</h2>
+            {openingVerified && (
+              <span className="text-xs font-semibold px-2 py-1 rounded"
+                style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }}>
+                Opening confirmed
+              </span>
+            )}
           </div>
+        <div className="space-y-6 p-4">
 
           {/* Opening readings (read-only) */}
           <div className="rounded-lg shadow overflow-hidden" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
@@ -1270,42 +1278,47 @@ export default function MyShift() {
             )
           })()}
 
-          {/* Optional discrepancy note + confirm */}
-          <div className="rounded-lg shadow p-4" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-            <label className="block text-sm font-medium mb-1" style={{ color: theme.textSecondary }}>
-              Discrepancy note (optional)
-            </label>
-            <textarea
-              rows={2}
-              value={openingDiscrepancyNote}
-              onChange={e => setOpeningDiscrepancyNote(e.target.value)}
-              placeholder="e.g. UNL 1A pump shows 12350 but handover says 12345"
-              className="w-full px-3 py-2 text-sm rounded border"
-              style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}
-            />
-            <button
-              onClick={handleVerifyOpening}
-              disabled={verifyingOpening}
-              className="mt-3 w-full sm:w-auto px-6 py-3 rounded-lg text-base font-semibold text-white disabled:opacity-50"
-              style={{ backgroundColor: theme.primary }}>
-              {verifyingOpening ? 'Confirming...' : 'Confirm opening & begin shift'}
-            </button>
-          </div>
+          {/* Discrepancy note + confirm — only before opening is confirmed */}
+          {!openingVerified && (
+            <div className="rounded-lg p-4" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
+              <label className="block text-sm font-medium mb-1" style={{ color: theme.textSecondary }}>
+                Discrepancy note (optional)
+              </label>
+              <textarea
+                rows={2}
+                value={openingDiscrepancyNote}
+                onChange={e => setOpeningDiscrepancyNote(e.target.value)}
+                placeholder="e.g. UNL 1A pump shows 12350 but handover says 12345"
+                className="w-full px-3 py-2 text-sm rounded border"
+                style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}
+              />
+              <button
+                onClick={handleVerifyOpening}
+                disabled={verifyingOpening}
+                className="mt-3 w-full sm:w-auto px-6 py-3 rounded-lg text-base font-semibold text-white disabled:opacity-50"
+                style={{ backgroundColor: theme.primary }}>
+                {verifyingOpening ? 'Confirming...' : 'Confirm opening & begin shift'}
+              </button>
+            </div>
+          )}
+        </div>
         </div>
       )}
 
-      {/* Gate: tried to End Shift before verifying the opening */}
-      {mustStartFirst && (
-        <div className="rounded-lg shadow p-6 text-center" style={{ backgroundColor: theme.cardBg, borderColor: 'var(--color-status-warning)', borderWidth: 2 }}>
-          <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-status-warning)' }}>Start your shift first</h2>
-          <p className="text-sm mb-4" style={{ color: theme.textSecondary }}>
-            Before you can end your shift, verify the opening readings and stock you&rsquo;re taking over.
-          </p>
-          <Link href="/my-shift?mode=start"
-            className="inline-block px-6 py-3 rounded-lg text-base font-semibold text-white"
-            style={{ backgroundColor: theme.primary }}>
-            Go to Start Shift
-          </Link>
+      {/* END SHIFT section header — always visible for attendants with active shift */}
+      {isAttendant && shiftFound && !handoverResult && (
+        <div className="rounded-lg shadow mb-6 overflow-hidden"
+          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+          <div className="p-4" style={{ borderBottomColor: openingVerified ? theme.border : 'transparent', borderBottomWidth: openingVerified ? 1 : 0 }}>
+            <h2 className="text-base font-semibold" style={{ color: theme.textPrimary }}>End Shift</h2>
+          </div>
+          {!openingVerified && (
+            <div className="px-4 pb-4 pt-3">
+              <p className="text-sm" style={{ color: theme.textSecondary }}>
+                Complete Start Shift first — confirm your opening readings before entering closing figures.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -1357,7 +1370,7 @@ export default function MyShift() {
       {/* STEP 1: Enter Readings & Stock Counts         */}
       {/* Financial columns (Price, Revenue, Value) hidden */}
       {/* ============================================= */}
-      {currentStep === 1 && !handoverResult && !inStartMode && !mustStartFirst && (
+      {currentStep === 1 && !handoverResult && (!isAttendant || openingVerified) && (
         <>
           {/* What's left to submit — live checklist of the existing submit gates (item 4) */}
           <div className="rounded-lg shadow p-4 mb-6"
@@ -2019,7 +2032,7 @@ export default function MyShift() {
       {/* ============================================= */}
       {/* STEP 2: Review & Confirm (read-only, no money)*/}
       {/* ============================================= */}
-      {currentStep === 2 && !handoverResult && !inStartMode && !mustStartFirst && (
+      {currentStep === 2 && !handoverResult && (!isAttendant || openingVerified) && (
         <>
           {/* Nozzle Readings Review */}
           <div className="rounded-lg shadow mb-6 overflow-x-auto"
