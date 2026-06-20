@@ -1327,8 +1327,8 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* Step Indicator — visible to attendants only when End Shift is expanded */}
-      {isAttendant && shiftFound && !handoverResult && openingVerified && showEndShift && (
+      {/* Step Indicator — visible to non-attendants only */}
+      {!isAttendant && shiftFound && !handoverResult && openingVerified && showEndShift && (
         <div className="rounded-lg shadow p-4 mb-6 flex items-center justify-center"
           style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
           {/* Step 1 */}
@@ -1377,8 +1377,8 @@ export default function MyShift() {
       {/* ============================================= */}
       {currentStep === 1 && !handoverResult && (!isAttendant || (openingVerified && showEndShift)) && (
         <>
-          {/* What's left to submit — live checklist of the existing submit gates (item 4) */}
-          <div className="rounded-lg shadow p-4 mb-6"
+          {/* What's left to submit — hidden for attendants */}
+          {!isAttendant && <div className="rounded-lg shadow p-4 mb-6"
             style={{ backgroundColor: theme.cardBg, borderColor: pendingItems.length === 0 ? 'var(--color-status-success)' : theme.border, borderWidth: 1 }}>
             {pendingItems.length === 0 ? (
               <p className="text-sm font-medium" style={{ color: 'var(--color-status-success)' }}>
@@ -1399,7 +1399,7 @@ export default function MyShift() {
                 </ul>
               </>
             )}
-          </div>
+          </div>}
 
           {/* Price change banner */}
           {priceChangeDetected && (
