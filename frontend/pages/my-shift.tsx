@@ -2761,6 +2761,26 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
                           </div>
                         )
                       })()}
+
+                      {/* Review button for manager — shown when attendant has a pending/flagged handover */}
+                      {(() => {
+                        const attId = assignment.attendant_id
+                        const hStatus = attendantStatus[attId]
+                        if (hStatus !== 'submitted' && hStatus !== 'flagged') return null
+                        return (
+                          <div className="mt-3 pt-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                            <button
+                              onClick={e => {
+                                e.stopPropagation()
+                                router.push(`/handover-review?attendant_id=${encodeURIComponent(attId || '')}`)
+                              }}
+                              className="w-full px-3 py-1.5 text-xs font-semibold rounded text-white"
+                              style={{ backgroundColor: hStatus === 'flagged' ? 'var(--color-status-error)' : 'var(--color-action-primary)' }}>
+                              {hStatus === 'flagged' ? 'Review (Flagged)' : 'Review'}
+                            </button>
+                          </div>
+                        )
+                      })()}
                     </div>
                   ))}
                 </div>

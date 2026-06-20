@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -23,6 +24,7 @@ interface CreditItem {
 
 export default function ShiftClosing() {
   const { theme } = useTheme()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -321,8 +323,17 @@ export default function ShiftClosing() {
         </div>
       )}
       {success && (
-        <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)', borderWidth: 1, borderColor: 'var(--color-status-success)' }}>
-          {success}
+        <div className="rounded-lg p-3 mb-4 text-sm flex items-center justify-between gap-3"
+          style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)', borderWidth: 1, borderColor: 'var(--color-status-success)' }}>
+          <span>{success}</span>
+          {isManagerRole && result?.handover_id && (
+            <button
+              onClick={() => router.push('/handover-review')}
+              className="text-sm font-semibold underline whitespace-nowrap"
+              style={{ color: 'var(--color-status-success)' }}>
+              Review now
+            </button>
+          )}
         </div>
       )}
 

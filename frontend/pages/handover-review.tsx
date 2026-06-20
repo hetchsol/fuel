@@ -121,7 +121,7 @@ export default function HandoverReview() {
   const [filterDate, setFilterDate] = useState('')
   const [filterShiftType, setFilterShiftType] = useState<'' | 'Day' | 'Night'>('')
   const [filterAttendant, setFilterAttendant] = useState('')  // attendant_id, set when opened from a person card
-  const [statusTab, setStatusTab] = useState<'all' | 'pending' | 'flagged' | 'awaiting' | 'approved'>('all')
+  const [statusTab, setStatusTab] = useState<'todo' | 'all' | 'pending' | 'flagged' | 'awaiting' | 'approved'>('todo')
 
   // Pagination
   const [page, setPage] = useState(1)
@@ -164,7 +164,7 @@ export default function HandoverReview() {
     if (!router.isReady) return
     if (typeof router.query.attendant_id === 'string') {
       setFilterAttendant(router.query.attendant_id)
-      setStatusTab('all')  // show active + past for this person
+      setStatusTab('all')
     }
     if (typeof router.query.shift_id === 'string') {
       const sid = router.query.shift_id
@@ -231,7 +231,12 @@ export default function HandoverReview() {
   // Compute displayed list based on tab
   const displayedHandovers = (() => {
     let list: HandoverEntry[]
-    if (statusTab === 'pending') list = handovers.filter(h => (h.review_status || 'submitted') === 'submitted')
+    if (statusTab === 'todo') {
+      const flagged = handovers.filter(h => h.review_status === 'flagged')
+      const submitted = handovers.filter(h => (h.review_status || 'submitted') === 'submitted')
+      list = [...flagged, ...submitted, ...awaitingClosing]
+    }
+    else if (statusTab === 'pending') list = handovers.filter(h => (h.review_status || 'submitted') === 'submitted')
     else if (statusTab === 'flagged') list = handovers.filter(h => h.review_status === 'flagged')
     else if (statusTab === 'approved') list = allHandovers.filter(h => h.review_status === 'approved')
     else {
@@ -548,11 +553,9 @@ export default function HandoverReview() {
         <div className="flex gap-1.5 overflow-x-auto flex-nowrap pt-2.5"
           style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
           {([
-            ['all', 'All'],
-            ['awaiting', 'Awaiting Closing'],
-            ['pending', 'Pending'],
-            ['flagged', 'Flagged'],
+            ['todo', 'Action Required'],
             ['approved', 'Approved'],
+            ['all', 'All'],
           ] as const).map(([tab, label]) => (
             <button key={tab} onClick={() => setStatusTab(tab)}
               className="px-3 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap"
@@ -678,15 +681,16 @@ export default function HandoverReview() {
             const rs = h.review_status || 'submitted'
             const styleMap = REVIEW_STATUS_STYLES[rs] || REVIEW_STATUS_STYLES.submitted
             const isExpanded = expandedId === h.handover_id
+            const isAwaiting = statusTab === 'todo' && h.phase === 'readings_verified'
             const isFullySubmitted = h.phase == null || h.phase === 'completed'
             const canSelect = rs === 'submitted' && isFullySubmitted
             const canAct = (rs === 'submitted' || rs === 'flagged') && isFullySubmitted
 
             return (
               <tbody key={h.handover_id}>
-                  <tr className="hover:bg-surface-bg cursor-pointer"
+                  <tr className={`hover:bg-surface-bg ${isAwaiting ? '' : 'cursor-pointer'}`}
                     style={{ borderTopColor: theme.border, borderTopWidth: 1 }}
-                    onClick={() => setExpandedId(isExpanded ? null : h.handover_id)}>
+                    onClick={() => { if (!isAwaiting) setExpandedId(isExpanded ? null : h.handover_id) }}>
                     {statusTab !== 'approved' && (
                       <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                         {canSelect && (
@@ -699,82 +703,112 @@ export default function HandoverReview() {
                     <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{h.shift_type}</td>
                     <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{h.attendant_name}</td>
                     <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
-                      {h.source === 'readings' ? '—' : `K${h.expected_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                      {isAwaiting || h.source === 'readings' ? '—' : `K${h.expected_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
                     </td>
                     <td className="px-3 py-2 text-right font-mono" style={{ color: theme.textPrimary }}>
-                      {h.source === 'readings' ? '—' : `K${h.actual_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                      {isAwaiting || h.source === 'readings' ? '—' : `K${h.actual_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
                     </td>
                     <td className="px-3 py-2 text-right font-mono font-bold"
-                      style={{ color: h.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
-                      {h.source === 'readings' ? '—' : `${h.difference >= 0 ? '+' : ''}K${h.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                      style={{ color: isAwaiting ? theme.textSecondary : h.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
+                      {isAwaiting || h.source === 'readings' ? '—' : `${h.difference >= 0 ? '+' : ''}K${h.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
                     </td>
                     <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {h.source === 'readings' && (
-                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
-                            style={{ backgroundColor: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
-                            Enter Readings
-                          </span>
-                        )}
-                        {(h.auto_flag_reasons || []).map(flag => (
-                          <span key={flag} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
-                            style={{ backgroundColor: 'var(--color-status-error-light, #fde8e8)', color: 'var(--color-status-error)' }}>
-                            {FLAG_LABELS[flag] || flag}
-                          </span>
-                        ))}
-                        {!h.source && (!h.auto_flag_reasons || h.auto_flag_reasons.length === 0) && (
-                          <span className="text-xs" style={{ color: theme.textSecondary }}>-</span>
-                        )}
-                      </div>
+                      {isAwaiting ? (
+                        <div className="flex flex-wrap gap-1 items-center">
+                          {h.hours_waiting != null && (
+                            <span className="text-xs font-mono" style={{ color: theme.textSecondary }}>{h.hours_waiting}h waiting</span>
+                          )}
+                          {h.is_stale && (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                              style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+                              Stale
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {h.source === 'readings' && (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                              style={{ backgroundColor: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
+                              Enter Readings
+                            </span>
+                          )}
+                          {(h.auto_flag_reasons || []).map(flag => (
+                            <span key={flag} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                              style={{ backgroundColor: 'var(--color-status-error-light, #fde8e8)', color: 'var(--color-status-error)' }}>
+                              {FLAG_LABELS[flag] || flag}
+                            </span>
+                          ))}
+                          {!h.source && (!h.auto_flag_reasons || h.auto_flag_reasons.length === 0) && (
+                            <span className="text-xs" style={{ color: theme.textSecondary }}>-</span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2">
-                      <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
-                        style={{ backgroundColor: styleMap.bg, color: styleMap.color }}>
-                        {styleMap.label}
-                      </span>
+                      {isAwaiting ? (
+                        <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                          style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+                          Awaiting closing
+                        </span>
+                      ) : (
+                        <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                          style={{ backgroundColor: styleMap.bg, color: styleMap.color }}>
+                          {styleMap.label}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                      <div className="flex gap-1 flex-wrap">
+                      {isAwaiting ? (
                         <button
-                          onClick={() => setReadingsModal(h)}
-                          className="px-2 py-1 text-xs font-medium rounded"
-                          style={{ backgroundColor: theme.background, color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
-                          Readings
+                          onClick={() => router.push(`/shift-closing?handover_id=${encodeURIComponent(h.handover_id)}`)}
+                          className="px-2 py-1 text-xs font-medium rounded text-white"
+                          style={{ backgroundColor: 'var(--color-action-primary)' }}>
+                          Complete closing
                         </button>
-                        {canAct && (
-                          <>
-                            <button
-                              onClick={() => {
-                                if (rs === 'flagged') {
-                                  setApproveModalId(h); setApproveNote('')
-                                } else {
-                                  handleApprove(h)
-                                }
-                              }}
-                              disabled={actionLoading}
-                              className="px-2 py-1 text-xs font-medium rounded text-white"
-                              style={{ backgroundColor: 'var(--color-status-success)' }}>
-                              Approve
-                            </button>
-                            <button onClick={() => { setReturnModalId(h); setReturnNote('') }}
-                              className="px-2 py-1 text-xs font-medium rounded"
-                              style={{ backgroundColor: 'var(--color-status-warning-light, #fff8e1)', color: 'var(--color-status-warning)' }}>
-                              Return
-                            </button>
-                          </>
-                        )}
-                        {rs === 'approved' && (
-                          <span className="text-xs self-center" style={{ color: 'var(--color-status-success)' }}>Done</span>
-                        )}
-                        {rs === 'returned' && (
-                          <span className="text-xs self-center" style={{ color: 'var(--color-status-warning)' }}>Returned</span>
-                        )}
-                      </div>
+                      ) : (
+                        <div className="flex gap-1 flex-wrap">
+                          <button
+                            onClick={() => setReadingsModal(h)}
+                            className="px-2 py-1 text-xs font-medium rounded"
+                            style={{ backgroundColor: theme.background, color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
+                            Readings
+                          </button>
+                          {canAct && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  if (rs === 'flagged') {
+                                    setApproveModalId(h); setApproveNote('')
+                                  } else {
+                                    handleApprove(h)
+                                  }
+                                }}
+                                disabled={actionLoading}
+                                className="px-2 py-1 text-xs font-medium rounded text-white"
+                                style={{ backgroundColor: 'var(--color-status-success)' }}>
+                                Approve
+                              </button>
+                              <button onClick={() => { setReturnModalId(h); setReturnNote('') }}
+                                className="px-2 py-1 text-xs font-medium rounded"
+                                style={{ backgroundColor: 'var(--color-status-warning-light, #fff8e1)', color: 'var(--color-status-warning)' }}>
+                                Return
+                              </button>
+                            </>
+                          )}
+                          {rs === 'approved' && (
+                            <span className="text-xs self-center" style={{ color: 'var(--color-status-success)' }}>Done</span>
+                          )}
+                          {rs === 'returned' && (
+                            <span className="text-xs self-center" style={{ color: 'var(--color-status-warning)' }}>Returned</span>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
 
-                  {/* Expanded detail */}
-                  {isExpanded && (
+                  {/* Expanded detail — not available for awaiting rows (no Phase 2 data yet) */}
+                  {isExpanded && !isAwaiting && (
                     <tr>
                       <td colSpan={statusTab !== 'approved' ? 10 : 9}
                         style={{ backgroundColor: theme.background, borderTopColor: theme.border, borderTopWidth: 1 }}>
