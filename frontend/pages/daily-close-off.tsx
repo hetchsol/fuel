@@ -165,6 +165,7 @@ export default function DailyCloseOff() {
         { header: 'Accessories', key: 'accessory_sales', format: 'currency' },
         { header: 'Expected Cash', key: 'expected_cash', format: 'currency' },
         { header: 'Actual Cash', key: 'actual_cash', format: 'currency' },
+        { header: 'POS Receipts', key: 'pos_receipts', format: 'currency' },
         { header: 'Difference', key: 'difference', format: 'currency' },
       ],
       data: summary.approved_handovers,
@@ -312,6 +313,7 @@ export default function DailyCloseOff() {
                       <th className="text-right py-2 px-3 text-xs font-semibold text-content-secondary">Acc.</th>
                       <th className="text-right py-2 px-3 text-xs font-semibold text-content-secondary">Expected</th>
                       <th className="text-right py-2 px-3 text-xs font-semibold text-content-secondary">Actual</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-content-secondary">POS</th>
                       <th className="text-right py-2 px-3 text-xs font-semibold text-content-secondary">Diff</th>
                     </tr>
                   </thead>
@@ -333,6 +335,7 @@ export default function DailyCloseOff() {
                           <td className="py-2.5 px-3 text-right text-content-primary">{fmt(h.accessory_sales)}</td>
                           <td className="py-2.5 px-3 text-right text-content-primary font-medium">{fmt(h.expected_cash)}</td>
                           <td className="py-2.5 px-3 text-right text-content-primary font-medium">{fmt(h.actual_cash)}</td>
+                          <td className="py-2.5 px-3 text-right text-content-secondary">{h.pos_receipts > 0 ? fmt(h.pos_receipts) : '—'}</td>
                           <td className={`py-2.5 px-3 text-right font-bold ${h.difference <= 0 ? 'text-status-success' : 'text-status-error'}`}>
                             {fmt(h.difference)}
                           </td>

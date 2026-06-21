@@ -79,7 +79,11 @@ export default function ShiftClosing() {
       const depRes = await authFetch(`${BASE}/safe-deposits/${shiftId}`, { headers: getAuthHeaders() })
       if (depRes.ok) {
         const depData = await depRes.json()
-        setSafeDepositTotal(depData.total_amount || 0)
+        const depTotal = depData.total_amount || 0
+        setSafeDepositTotal(depTotal)
+        if (depTotal > 0) {
+          setActualCash(prev => prev === '' ? depTotal.toFixed(2) : prev)
+        }
       }
     } catch {}
   }

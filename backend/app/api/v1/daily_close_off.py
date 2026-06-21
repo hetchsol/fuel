@@ -110,7 +110,10 @@ async def get_close_off_summary(
             "credit_sales": h.get("credit_sales", 0),
             "expected_cash": h.get("expected_cash", 0),
             "actual_cash": h.get("actual_cash", 0),
-            "difference": round(h.get("expected_cash", 0) - h.get("actual_cash", 0), 2),
+            "pos_receipts": h.get("pos_receipts", 0),
+            "difference": round(
+                h.get("expected_cash", 0) - h.get("actual_cash", 0) - h.get("pos_receipts", 0), 2
+            ),
             "auto_flag_reasons": h.get("auto_flag_reasons", []),
         })
 
