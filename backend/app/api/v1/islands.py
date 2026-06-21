@@ -673,7 +673,7 @@ async def apply_island_preset(
 
 # ── Owner CRUD endpoints ─────────────────────────────────
 
-@router.post("/")
+@router.post("/", dependencies=[Depends(require_owner)])
 async def create_island(island: Island, ctx: dict = Depends(get_station_context)):
     """
     Create a new island with pump station and nozzles (Owner only).
@@ -699,7 +699,7 @@ async def create_island(island: Island, ctx: dict = Depends(get_station_context)
     return {"status": "success", "island": island}
 
 
-@router.delete("/{island_id}")
+@router.delete("/{island_id}", dependencies=[Depends(require_owner)])
 async def delete_island(island_id: str, ctx: dict = Depends(get_station_context)):
     """Delete an island (Owner only)"""
     storage = ctx["storage"]
@@ -749,7 +749,7 @@ async def update_pump_tank_mapping(island_id: str, tank_id: str, ctx: dict = Dep
     }
 
 
-@router.post("/{island_id}/nozzle")
+@router.post("/{island_id}/nozzle", dependencies=[Depends(require_owner)])
 async def add_nozzle(island_id: str, nozzle: Nozzle, ctx: dict = Depends(get_station_context)):
     """
     Add a nozzle to an island's pump station (Owner only).

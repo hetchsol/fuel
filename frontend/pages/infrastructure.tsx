@@ -83,6 +83,15 @@ export default function Infrastructure() {
   })
   const [tankLoading, setTankLoading] = useState(false)
 
+  // Create island state
+  const [showCreateIsland, setShowCreateIsland] = useState(false)
+  const [newIslandName, setNewIslandName] = useState('')
+  const [newIslandNozzleCount, setNewIslandNozzleCount] = useState(2)
+  const [islandCreateLoading, setIslandCreateLoading] = useState(false)
+
+  // Add-nozzle busy state (keyed by island_id)
+  const [addNozzleBusy, setAddNozzleBusy] = useState<string | null>(null)
+
   // Per-island preset draft (keyed by island_id). Used to stage tank selections
   // before clicking Apply.
   const [presetDraft, setPresetDraft] = useState<Record<string, IslandPresetDraft>>({})
@@ -335,6 +344,123 @@ export default function Infrastructure() {
       setMessage({ type: 'error', text: 'Network error' })
     } finally {
       setLoading(false)
+    }
+  }
+
+  // ─── Island / nozzle creation helpers ──────────────────────────────────
+
+  /** Derive the next island ID from the highest numeric suffix in use. */
+  const nextIslandId = (): string => {
+    const nums = islands.map(i => {
+      const m = i.island_id.match(/(\d+)$/)
+      return m ? parseInt(m[1], 10) : 0
+    })
+    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1
+    return `ISL-${String(next).padStart(3, '0')}`
+  }
+
+  /** Strip leading zeros from an island_id numeric part for nozzle IDs.
+   *  ISL-007 → "7", ISL-010 → "10" */
+  const islandNumStr = (islandId: string): string =>
+    String(parseInt(islandId.replace('ISL-', ''), 10))
+
+  const createIsland = async () => {
+    const name = newIslandName.trim()
+    if (!name) { setMessage({ type: 'error', text: 'Island name is required' }); return }
+    setIslandCreateLoading(true)
+    setMessage(null)
+    try {
+      const islandId = nextIslandId()
+      const numStr = islandNumStr(islandId)
+      const pumpStationId = islandId.replace('ISL-', 'PS-')
+      const nozzles = Array.from({ length: newIslandNozzleCount }, (_, i) => ({
+        nozzle_id: `ISL${numStr}-${String.fromCharCode(65 + i)}`,
+        pump_station_id: pumpStationId,
+        fuel_type: 'Diesel',
+        status: 'Active',
+        electronic_reading: 0,
+        mechanical_reading: 0,
+        tank_id: null,
+        display_label: null,
+        fuel_type_abbrev: null,
+        custom_label: null,
+      }))
+      const payload = {
+        island_id: islandId,
+        name,
+        location: null,
+        status: 'inactive',
+        product_type: null,
+        display_number: null,
+        fuel_type_abbrev: null,
+        pump_station: {
+          pump_station_id: pumpStationId,
+          island_id: islandId,
+          name: `Pump ${numStr}`,
+          tank_id: null,
+          nozzles,
+        },
+      }
+      const res = await authFetch(`${BASE}/islands/`, {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        setMessage({ type: 'success', text: `${name} (${islandId}) created. Configure its fuel type below.` })
+        setShowCreateIsland(false)
+        setNewIslandName('')
+        setNewIslandNozzleCount(2)
+        fetchIslands()
+        setTimeout(() => setMessage(null), 6000)
+      } else {
+        const err = await res.json()
+        setMessage({ type: 'error', text: err.detail || 'Failed to create island' })
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'Network error' })
+    } finally {
+      setIslandCreateLoading(false)
+    }
+  }
+
+  const addNozzle = async (island: Island) => {
+    if (!island.pump_station) { setMessage({ type: 'error', text: 'Island has no pump station' }); return }
+    setAddNozzleBusy(island.island_id)
+    setMessage(null)
+    try {
+      const existingCount = island.pump_station.nozzles.length
+      const numStr = islandNumStr(island.island_id)
+      const nozzleId = `ISL${numStr}-${String.fromCharCode(65 + existingCount)}`
+      const nozzle = {
+        nozzle_id: nozzleId,
+        pump_station_id: island.pump_station.pump_station_id,
+        fuel_type: 'Diesel',
+        status: 'Active',
+        electronic_reading: 0,
+        mechanical_reading: 0,
+        tank_id: null,
+        display_label: null,
+        fuel_type_abbrev: null,
+        custom_label: null,
+      }
+      const res = await authFetch(`${BASE}/islands/${island.island_id}/nozzle`, {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(nozzle),
+      })
+      if (res.ok) {
+        setMessage({ type: 'success', text: `Nozzle ${nozzleId} added. Re-apply the configuration to wire it to a tank.` })
+        fetchIslands()
+        setTimeout(() => setMessage(null), 6000)
+      } else {
+        const err = await res.json()
+        setMessage({ type: 'error', text: err.detail || 'Failed to add nozzle' })
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'Network error' })
+    } finally {
+      setAddNozzleBusy(null)
     }
   }
 
@@ -832,10 +958,68 @@ export default function Infrastructure() {
       {/* Islands Tab */}
       {activeTab === 'islands' && (
         <div>
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-content-primary mb-2">Islands & Pump Stations</h2>
-            <p className="text-sm text-content-secondary">Configure product type and activate islands for operation</p>
+          <div className="mb-6 flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold text-content-primary mb-2">Islands & Pump Stations</h2>
+              <p className="text-sm text-content-secondary">Configure product type and activate islands for operation</p>
+            </div>
+            <button
+              onClick={() => setShowCreateIsland(v => !v)}
+              className="px-4 py-2 bg-status-success text-white rounded-md hover:bg-status-success/90 font-medium"
+            >
+              + Create Island
+            </button>
           </div>
+
+          {/* Create Island Form */}
+          {showCreateIsland && (
+            <div className="mb-6 p-4 bg-action-primary-light border border-action-primary rounded-md">
+              <h3 className="font-semibold text-content-primary mb-4">Create New Island</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Island Name</label>
+                  <input
+                    type="text"
+                    value={newIslandName}
+                    onChange={e => setNewIslandName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && createIsland()}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
+                    placeholder={`e.g. Island ${islands.length + 1}`}
+                    autoFocus
+                  />
+                  <p className="text-xs text-content-secondary mt-1">ID will be assigned as {nextIslandId()}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Number of Nozzles</label>
+                  <select
+                    value={newIslandNozzleCount}
+                    onChange={e => setNewIslandNozzleCount(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-action-primary"
+                  >
+                    {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs text-content-secondary mb-4">
+                The island will be created as inactive with Diesel defaults. Use the configuration preset on the card to set fuel type and tank, then activate it.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={createIsland}
+                  disabled={islandCreateLoading || !newIslandName.trim()}
+                  className="px-4 py-2 bg-action-primary text-white rounded-md hover:bg-action-primary-hover disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  {islandCreateLoading ? 'Creating...' : 'Create Island'}
+                </button>
+                <button
+                  onClick={() => { setShowCreateIsland(false); setNewIslandName(''); setNewIslandNozzleCount(2) }}
+                  className="px-4 py-2 border border-surface-border text-content-secondary rounded-md hover:bg-action-primary-light"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* 3-column Grid of Island Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1062,8 +1246,17 @@ export default function Infrastructure() {
                 {/* Nozzle Badges — read fuel_type_abbrev per-nozzle so mixed islands display correctly */}
                 {island.pump_station && (
                   <div>
-                    <p className="text-xs font-semibold text-content-secondary mb-1">Nozzles</p>
-                    <div className="flex gap-1.5">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-semibold text-content-secondary">Nozzles</p>
+                      <button
+                        onClick={() => addNozzle(island)}
+                        disabled={addNozzleBusy === island.island_id}
+                        className="text-[10px] text-action-primary hover:underline font-semibold disabled:opacity-50"
+                      >
+                        {addNozzleBusy === island.island_id ? 'Adding...' : '+ Add Nozzle'}
+                      </button>
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
                       {island.pump_station.nozzles.map(nozzle => (
                         <div
                           key={nozzle.nozzle_id}
@@ -1102,8 +1295,8 @@ export default function Infrastructure() {
           <div className="mt-8 bg-action-primary-light border border-action-primary rounded-lg p-4">
             <h3 className="text-sm font-semibold text-action-primary mb-2">Standardized Island Configuration</h3>
             <ul className="text-sm text-action-primary space-y-1">
-              <li>- <strong>6 Islands</strong>: Each station has 6 standard islands with 1 pump and 2 nozzles each</li>
-              <li>- <strong>Configuration</strong>: Pick a preset per island — All Diesel, All Petrol, or Mixed. The system wires nozzles to the matching tank automatically. Use <em>Advanced</em> to assign each nozzle to a specific tank when you have more than one tank of the same fuel.</li>
+              <li>- <strong>Islands</strong>: Create as many islands as your station needs. Each island gets one pump station and 1-4 nozzles.</li>
+              <li>- <strong>Configuration</strong>: After creating an island, pick a preset — All Diesel, All Petrol, or Mixed — to wire nozzles to the matching tank. Use <em>Advanced</em> to assign each nozzle to a specific tank when you have more than one tank of the same fuel.</li>
               <li>- <strong>Activation</strong>: Islands must have a product type configured before they can be activated</li>
               <li>- <strong>Active Islands</strong>: Only active islands appear in shift allocation and operations</li>
               <li>- <strong>Owner Only</strong>: All island configuration changes require owner privileges</li>
