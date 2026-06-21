@@ -46,7 +46,8 @@ def _aggregate_handovers(handovers: list) -> dict:
     credit_sales = sum(h.get("credit_sales", 0) for h in handovers)
     total_expected_cash = sum(h.get("expected_cash", 0) for h in handovers)
     total_actual_cash = sum(h.get("actual_cash", 0) for h in handovers)
-    net_variance = total_expected_cash - total_actual_cash
+    total_pos_receipts = sum(h.get("pos_receipts", 0) for h in handovers)
+    net_variance = total_expected_cash - total_actual_cash - total_pos_receipts
 
     return {
         "fuel_revenue": round(fuel_revenue, 2),
@@ -57,6 +58,7 @@ def _aggregate_handovers(handovers: list) -> dict:
         "credit_sales": round(credit_sales, 2),
         "total_expected_cash": round(total_expected_cash, 2),
         "total_actual_cash": round(total_actual_cash, 2),
+        "total_pos_receipts": round(total_pos_receipts, 2),
         "net_variance": round(net_variance, 2),
         "shift_count": len(handovers),
     }

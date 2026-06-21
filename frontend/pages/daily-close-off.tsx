@@ -381,6 +381,7 @@ export default function DailyCloseOff() {
                   { label: 'Credit Sales', value: totals.credit_sales, color: 'text-status-warning', negative: true },
                   { label: 'Expected Cash', value: totals.total_expected_cash, color: 'text-content-primary', bold: true },
                   { label: 'Actual Cash', value: totals.total_actual_cash, color: 'text-content-primary', bold: true },
+                  { label: 'POS Receipts', value: totals.total_pos_receipts || 0, color: 'text-content-secondary' },
                   { label: 'Net Variance', value: totals.net_variance, color: totals.net_variance <= 0 ? 'text-status-success' : 'text-status-error', bold: true },
                   { label: 'Shifts', value: totals.shift_count, isCount: true, color: 'text-content-secondary' },
                 ].map((item) => (
