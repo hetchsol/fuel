@@ -12,6 +12,17 @@ import { formatDateToDisplay } from '../lib/dateUtils'
 
 const PAGE_SIZE = 20
 
+interface CreditItem {
+  account_id: string
+  account_name: string
+  fuel_type: string
+  volume: string
+  price_per_liter: number
+  amount: number
+}
+
+const fmtK = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
 const BASE = '/api/v1'
 
 function getAuthHeaders() {
@@ -144,6 +155,18 @@ export default function HandoverReview() {
   const [approveNote, setApproveNote] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
 
+  // Inline closing form (Phase 2 embedded in this page)
+  const [closingFormId, setClosingFormId] = useState<string | null>(null)
+  const [closingCash, setClosingCash] = useState('')
+  const [closingPos, setClosingPos] = useState('')
+  const [closingNotes, setClosingNotes] = useState('')
+  const [closingCreditItems, setClosingCreditItems] = useState<CreditItem[]>([])
+  const [closingSafeDeposit, setClosingSafeDeposit] = useState(0)
+  const [closingSubmitting, setClosingSubmitting] = useState(false)
+  const [closingError, setClosingError] = useState('')
+  const [creditAccounts, setCreditAccounts] = useState<any[]>([])
+  const [fuelPrices, setFuelPrices] = useState<Record<string, number>>({ Diesel: 0, Petrol: 0 })
+
   // Auth check
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -213,6 +236,38 @@ export default function HandoverReview() {
   useEffect(() => {
     fetchQueue()
   }, [fetchQueue])
+
+  // Load credit accounts once — needed for the inline closing form
+  useEffect(() => {
+    authFetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : { accounts: [], fuel_prices: {} })
+      .then(data => {
+        setCreditAccounts(data.accounts || [])
+        setFuelPrices(data.fuel_prices || { Diesel: 0, Petrol: 0 })
+      })
+      .catch(() => {})
+  }, [])
+
+  // When a closing form opens: reset fields + fetch safe deposits for pre-fill
+  useEffect(() => {
+    if (!closingFormId) return
+    const h = awaitingClosing.find(x => x.handover_id === closingFormId)
+    if (!h) return
+    setClosingCash('')
+    setClosingPos('')
+    setClosingNotes('')
+    setClosingCreditItems([])
+    setClosingSafeDeposit(0)
+    setClosingError('')
+    authFetch(`${BASE}/safe-deposits/${encodeURIComponent(h.shift_id)}`, { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : { total_amount: 0 })
+      .then(data => {
+        const total = data.total_amount || 0
+        setClosingSafeDeposit(total)
+        if (total > 0) setClosingCash(total.toFixed(2))
+      })
+      .catch(() => {})
+  }, [closingFormId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Also load approved/returned for "all" and "approved" tabs
   const [allHandovers, setAllHandovers] = useState<HandoverEntry[]>([])
@@ -406,6 +461,63 @@ export default function HandoverReview() {
       setSelectedIds(new Set())
     } else {
       setSelectedIds(new Set(selectableIds))
+    }
+  }
+
+  const handleCloseAndApprove = async (h: HandoverEntry) => {
+    setClosingSubmitting(true)
+    setClosingError('')
+    const actualCashVal = parseFloat(closingCash) || 0
+    const posVal = parseFloat(closingPos) || 0
+    const creditTotal = closingCreditItems.reduce((s, i) => s + (i.amount || 0), 0)
+    try {
+      // Step 1: submit Phase 2 financials
+      const closeRes = await authFetch(`${BASE}/handover/submit-closing`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          handover_id: h.handover_id,
+          actual_cash: actualCashVal,
+          pos_receipts: posVal,
+          credit_sales: creditTotal,
+          credit_sale_items: closingCreditItems.map(i => ({
+            account_id: i.account_id,
+            account_name: i.account_name,
+            fuel_type: i.fuel_type,
+            volume: parseFloat(i.volume) || 0,
+          })),
+          notes: closingNotes || null,
+        }),
+      })
+      if (!closeRes.ok) {
+        const err = await closeRes.json().catch(() => ({ detail: 'Closing failed' }))
+        throw new Error(err.detail)
+      }
+
+      // Step 2: approve
+      const reviewRes = await authFetch(`${BASE}/handover/review`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ handover_id: h.handover_id, action: 'approve' }),
+      })
+      if (!reviewRes.ok) {
+        const err = await reviewRes.json().catch(() => ({ detail: 'Approval failed' }))
+        // Closing saved but approval blocked (e.g. flagged — needs note). Close the
+        // inline form and refresh so the handover appears in the queue as approvable.
+        setClosingFormId(null)
+        fetchQueue()
+        setError(`Closing saved. ${err.detail}`)
+        return
+      }
+
+      setClosingFormId(null)
+      setError('')
+      setSuccessMsg(`${h.attendant_name}'s shift closed and approved.`)
+      fetchQueue()
+    } catch (err: any) {
+      setClosingError(err.message)
+    } finally {
+      setClosingSubmitting(false)
     }
   }
 
@@ -628,10 +740,10 @@ export default function HandoverReview() {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <button onClick={() => router.push(`/shift-closing?handover_id=${encodeURIComponent(h.handover_id)}`)}
+                      <button onClick={() => { setStatusTab('todo'); setClosingFormId(h.handover_id) }}
                         className="px-2 py-1 text-xs font-medium rounded text-white"
                         style={{ backgroundColor: 'var(--color-action-primary)' }}>
-                        Complete closing
+                        Close & Approve
                       </button>
                     </td>
                   </tr>
@@ -761,10 +873,10 @@ export default function HandoverReview() {
                     <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                       {isAwaiting ? (
                         <button
-                          onClick={() => router.push(`/shift-closing?handover_id=${encodeURIComponent(h.handover_id)}`)}
+                          onClick={() => setClosingFormId(closingFormId === h.handover_id ? null : h.handover_id)}
                           className="px-2 py-1 text-xs font-medium rounded text-white"
-                          style={{ backgroundColor: 'var(--color-action-primary)' }}>
-                          Complete closing
+                          style={{ backgroundColor: closingFormId === h.handover_id ? theme.textSecondary : 'var(--color-action-primary)' }}>
+                          {closingFormId === h.handover_id ? 'Cancel' : 'Close & Approve'}
                         </button>
                       ) : (
                         <div className="flex gap-1 flex-wrap">
@@ -813,6 +925,33 @@ export default function HandoverReview() {
                       <td colSpan={statusTab !== 'approved' ? 10 : 9}
                         style={{ backgroundColor: theme.background, borderTopColor: theme.border, borderTopWidth: 1 }}>
                         <ExpandedDetail h={h} theme={theme} />
+                      </td>
+                    </tr>
+                  )}
+                  {/* Inline Phase 2 closing form */}
+                  {closingFormId === h.handover_id && isAwaiting && (
+                    <tr>
+                      <td colSpan={10}
+                        style={{ backgroundColor: theme.background, borderTopColor: theme.border, borderTopWidth: 1 }}>
+                        <ClosingForm
+                          h={h}
+                          theme={theme}
+                          creditAccounts={creditAccounts}
+                          fuelPrices={fuelPrices}
+                          safeDeposit={closingSafeDeposit}
+                          cash={closingCash}
+                          onCashChange={setClosingCash}
+                          pos={closingPos}
+                          onPosChange={setClosingPos}
+                          notes={closingNotes}
+                          onNotesChange={setClosingNotes}
+                          creditItems={closingCreditItems}
+                          onCreditItemsChange={setClosingCreditItems}
+                          submitting={closingSubmitting}
+                          error={closingError}
+                          onSubmit={() => handleCloseAndApprove(h)}
+                          onCancel={() => setClosingFormId(null)}
+                        />
                       </td>
                     </tr>
                   )}
@@ -986,6 +1125,211 @@ export default function HandoverReview() {
   )
 }
 
+
+interface ClosingFormProps {
+  h: HandoverEntry
+  theme: any
+  creditAccounts: any[]
+  fuelPrices: Record<string, number>
+  safeDeposit: number
+  cash: string
+  onCashChange: (v: string) => void
+  pos: string
+  onPosChange: (v: string) => void
+  notes: string
+  onNotesChange: (v: string) => void
+  creditItems: CreditItem[]
+  onCreditItemsChange: (items: CreditItem[]) => void
+  submitting: boolean
+  error: string
+  onSubmit: () => void
+  onCancel: () => void
+}
+
+function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
+  cash, onCashChange, pos, onPosChange, notes, onNotesChange,
+  creditItems, onCreditItemsChange, submitting, error, onSubmit, onCancel,
+}: ClosingFormProps) {
+  const cashVal = parseFloat(cash) || 0
+  const posVal = parseFloat(pos) || 0
+  const creditTotal = creditItems.reduce((s, i) => s + (i.amount || 0), 0)
+  const totalAccounted = cashVal + posVal + creditTotal
+  const difference = totalAccounted - (h.total_expected || 0)
+  const inputStyle = { backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* Phase 1 summary — context for the manager */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 rounded-lg text-sm"
+        style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border }}>
+        <div>
+          <div className="text-[10px] uppercase mb-0.5" style={{ color: theme.textSecondary }}>Fuel Revenue</div>
+          <div className="font-mono font-medium" style={{ color: theme.textPrimary }}>{fmtK(h.fuel_revenue)}</div>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase mb-0.5" style={{ color: theme.textSecondary }}>Total Expected</div>
+          <div className="font-mono font-semibold" style={{ color: theme.textPrimary }}>{fmtK(h.total_expected)}</div>
+        </div>
+        {safeDeposit > 0 && (
+          <div>
+            <div className="text-[10px] uppercase mb-0.5" style={{ color: theme.textSecondary }}>Safe Deposits</div>
+            <div className="font-mono font-medium" style={{ color: theme.textPrimary }}>{fmtK(safeDeposit)}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Cash inputs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+            Cash (Safe + Hand) — ZMW *
+          </label>
+          <input type="number" min={0} step="0.01" value={cash}
+            onChange={e => onCashChange(e.target.value)}
+            className="w-full px-3 py-2 rounded border text-sm text-right font-mono"
+            style={inputStyle} />
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+            POS Receipts — ZMW
+          </label>
+          <input type="number" min={0} step="0.01" value={pos}
+            onChange={e => onPosChange(e.target.value)}
+            className="w-full px-3 py-2 rounded border text-sm text-right font-mono"
+            style={inputStyle} />
+        </div>
+      </div>
+
+      {/* Credit sales */}
+      {creditAccounts.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Credit Sales</label>
+            <button type="button"
+              onClick={() => onCreditItemsChange([...creditItems, {
+                account_id: creditAccounts[0].account_id,
+                account_name: creditAccounts[0].account_name,
+                fuel_type: 'Diesel',
+                volume: '',
+                price_per_liter: creditAccounts[0].default_price_per_liter || fuelPrices.Diesel || 0,
+                amount: 0,
+              }])}
+              className="px-2 py-1 text-xs font-medium rounded text-white"
+              style={{ backgroundColor: 'var(--color-action-primary)' }}>
+              + Add
+            </button>
+          </div>
+          {creditItems.map((item, idx) => {
+            const acct = creditAccounts.find((a: any) => a.account_id === item.account_id)
+            const resolvedPrice = acct?.default_price_per_liter || fuelPrices[item.fuel_type] || 0
+            const vol = parseFloat(item.volume) || 0
+            const amt = Math.round(vol * resolvedPrice * 100) / 100
+            return (
+              <div key={idx} className="flex gap-2 items-center mb-1 text-xs">
+                <select value={item.account_id}
+                  onChange={e => {
+                    const updated = [...creditItems]
+                    const found = creditAccounts.find((a: any) => a.account_id === e.target.value)
+                    updated[idx] = { ...item, account_id: e.target.value, account_name: found?.account_name || '' }
+                    onCreditItemsChange(updated)
+                  }}
+                  className="flex-1 px-2 py-1 rounded border" style={inputStyle}>
+                  {creditAccounts.map((a: any) => (
+                    <option key={a.account_id} value={a.account_id}>{a.account_name}</option>
+                  ))}
+                </select>
+                <select value={item.fuel_type}
+                  onChange={e => {
+                    const updated = [...creditItems]
+                    updated[idx] = { ...item, fuel_type: e.target.value }
+                    onCreditItemsChange(updated)
+                  }}
+                  className="w-20 px-2 py-1 rounded border" style={inputStyle}>
+                  <option>Diesel</option>
+                  <option>Petrol</option>
+                </select>
+                <input type="number" min={0} step="0.001" value={item.volume}
+                  placeholder="Litres"
+                  onChange={e => {
+                    const updated = [...creditItems]
+                    const v = parseFloat(e.target.value) || 0
+                    updated[idx] = { ...item, volume: e.target.value, price_per_liter: resolvedPrice, amount: Math.round(v * resolvedPrice * 100) / 100 }
+                    onCreditItemsChange(updated)
+                  }}
+                  className="w-24 px-2 py-1 rounded border text-right font-mono" style={inputStyle} />
+                <span className="w-24 text-right font-mono" style={{ color: theme.textPrimary }}>
+                  {fmtK(amt)}
+                </span>
+                <button onClick={() => onCreditItemsChange(creditItems.filter((_, i) => i !== idx))}
+                  className="px-1" style={{ color: 'var(--color-status-error)' }}>X</button>
+              </div>
+            )
+          })}
+          {creditItems.length > 0 && (
+            <div className="flex justify-between text-xs font-semibold pt-1 mt-1"
+              style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+              <span style={{ color: theme.textSecondary }}>Credit Total</span>
+              <span className="font-mono" style={{ color: theme.textPrimary }}>{fmtK(creditTotal)}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Notes */}
+      <div>
+        <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Notes (optional)</label>
+        <input type="text" value={notes} onChange={e => onNotesChange(e.target.value)}
+          placeholder="Any remarks..."
+          className="w-full px-3 py-2 rounded border text-sm" style={inputStyle} />
+      </div>
+
+      {/* Reconciliation preview */}
+      {cash !== '' && (
+        <div className="rounded-lg p-3 text-sm"
+          style={{ backgroundColor: theme.cardBg, borderWidth: 1,
+            borderColor: difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
+          <div className="flex justify-between mb-1">
+            <span style={{ color: theme.textSecondary }}>Cash + POS + Credit</span>
+            <span className="font-mono" style={{ color: theme.textPrimary }}>{fmtK(totalAccounted)}</span>
+          </div>
+          <div className="flex justify-between mb-1">
+            <span style={{ color: theme.textSecondary }}>Expected</span>
+            <span className="font-mono" style={{ color: theme.textPrimary }}>{fmtK(h.total_expected || 0)}</span>
+          </div>
+          <div className="flex justify-between font-bold">
+            <span style={{ color: difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
+              {difference >= 0 ? 'Surplus' : 'Shortage'}
+            </span>
+            <span className="font-mono"
+              style={{ color: difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
+              {difference >= 0 ? '+' : ''}{fmtK(difference)}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="text-xs p-2 rounded"
+          style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)' }}>
+          {error}
+        </div>
+      )}
+
+      <div className="flex gap-2 justify-end">
+        <button onClick={onCancel}
+          className="px-4 py-2 text-sm rounded"
+          style={{ color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
+          Cancel
+        </button>
+        <button onClick={onSubmit} disabled={submitting || cash === ''}
+          className="px-4 py-2 text-sm font-semibold rounded text-white disabled:opacity-50"
+          style={{ backgroundColor: 'var(--color-status-success)' }}>
+          {submitting ? 'Saving...' : 'Close & Approve'}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
   const [expandedStock, setExpandedStock] = useState<string | null>(null)
