@@ -69,7 +69,7 @@ def create_shift(shift: Shift, ctx: dict = Depends(get_station_context)):
     # Validate assignments if present
     if shift.assignments:
         try:
-            validate_shift_assignments([a.dict() for a in shift.assignments])
+            validate_shift_assignments([a.dict() for a in shift.assignments], storage)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -77,7 +77,7 @@ def create_shift(shift: Shift, ctx: dict = Depends(get_station_context)):
     if shift.assignments:
         for a in shift.assignments:
             if a.nozzle_ids:
-                a.island_ids = derive_island_ids_from_nozzles(a.nozzle_ids)
+                a.island_ids = derive_island_ids_from_nozzles(a.nozzle_ids, storage)
 
     # Populate metadata
     shift.created_by = current_user['user_id']
@@ -439,7 +439,7 @@ def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_co
     # Validate assignments if present
     if shift.assignments:
         try:
-            validate_shift_assignments([a.dict() for a in shift.assignments])
+            validate_shift_assignments([a.dict() for a in shift.assignments], storage)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -447,7 +447,7 @@ def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_co
     if shift.assignments:
         for a in shift.assignments:
             if a.nozzle_ids:
-                a.island_ids = derive_island_ids_from_nozzles(a.nozzle_ids)
+                a.island_ids = derive_island_ids_from_nozzles(a.nozzle_ids, storage)
 
     # Update attendants list for backward compatibility
     if shift.assignments:
