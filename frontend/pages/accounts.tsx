@@ -23,6 +23,14 @@ export default function Accounts() {
     contact_person: '', phone: '', default_price_per_liter: '',
   })
 
+  // Edit-account state
+  const [editingAccount, setEditingAccount] = useState<any | null>(null)
+  const [editForm, setEditForm] = useState({
+    account_name: '', account_type: 'Corporate', credit_limit: '',
+    contact_person: '', phone: '', default_price_per_liter: '',
+  })
+  const [saving, setSaving] = useState(false)
+
   // Credit sale form state — price starts empty; populated after settings fetch
   const [saleForm, setSaleForm] = useState({
     account_id: '',
@@ -108,6 +116,57 @@ export default function Accounts() {
       toast.error(err.message || 'Failed to create account')
     } finally {
       setCreating(false)
+    }
+  }
+
+  const openEdit = (account: any) => {
+    setEditingAccount(account)
+    setEditForm({
+      account_name: account.account_name || '',
+      account_type: account.account_type || 'Corporate',
+      credit_limit: account.credit_limit != null ? String(account.credit_limit) : '',
+      contact_person: account.contact_person || '',
+      phone: account.phone || '',
+      default_price_per_liter: account.default_price_per_liter != null
+        ? String(account.default_price_per_liter) : '',
+    })
+  }
+
+  const handleUpdateAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingAccount) return
+    setSaving(true)
+    try {
+      const payload = {
+        account_id: editingAccount.account_id,
+        account_name: editForm.account_name.trim(),
+        account_type: editForm.account_type,
+        credit_limit: parseFloat(editForm.credit_limit) || 0,
+        current_balance: editingAccount.current_balance,
+        contact_person: editForm.contact_person.trim() || null,
+        phone: editForm.phone.trim() || null,
+        default_price_per_liter: editForm.default_price_per_liter
+          ? parseFloat(editForm.default_price_per_liter) : null,
+      }
+      const res = await authFetch(`${BASE}/accounts/${editingAccount.account_id}`, {
+        method: 'PUT',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        const detail = Array.isArray(data.detail)
+          ? data.detail.map((d: any) => d.msg || d).join(', ')
+          : (typeof data.detail === 'string' ? data.detail : 'Failed to update account')
+        throw new Error(detail)
+      }
+      toast.success('Account updated')
+      setEditingAccount(null)
+      fetchAccounts()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update account')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -441,9 +500,19 @@ export default function Accounts() {
                       <h3 className="font-bold text-content-primary text-lg">{account.account_name}</h3>
                       <p className="text-xs text-content-secondary mt-1">ID: {account.account_id}</p>
                     </div>
-                    <span className={`px-2 py-1 text-xs font-semibold rounded border ${getAccountTypeColor(account.account_type)}`}>
-                      {account.account_type}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 text-xs font-semibold rounded border ${getAccountTypeColor(account.account_type)}`}>
+                        {account.account_type}
+                      </span>
+                      {canManage && (
+                        <button
+                          onClick={() => openEdit(account)}
+                          className="px-2 py-1 text-xs rounded border border-surface-border text-content-secondary hover:bg-action-primary-light hover:text-action-primary hover:border-action-primary"
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Current Balance */}
@@ -524,6 +593,79 @@ export default function Accounts() {
           <li>• <strong>Payment Recording</strong> reduces account balance when customers pay</li>
         </ul>
       </div>
+
+      {/* Edit Account Modal */}
+      {editingAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg shadow-lg p-6 bg-surface-card border border-surface-border">
+            <h3 className="text-lg font-bold text-content-primary mb-4">Edit Account — {editingAccount.account_name}</h3>
+            <form onSubmit={handleUpdateAccount} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Account Name *</label>
+                <input type="text" value={editForm.account_name}
+                  onChange={(e) => setEditForm({ ...editForm, account_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  required />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Account Type</label>
+                  <select value={editForm.account_type}
+                    onChange={(e) => setEditForm({ ...editForm, account_type: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary">
+                    {['Corporate', 'Institution', 'Individual', 'POS'].map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Credit Limit (ZMW)</label>
+                  <input type="number" step="0.01" min="0" value={editForm.credit_limit}
+                    onChange={(e) => setEditForm({ ...editForm, credit_limit: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    placeholder="0.00" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Contact Person</label>
+                  <input type="text" value={editForm.contact_person}
+                    onChange={(e) => setEditForm({ ...editForm, contact_person: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Phone</label>
+                  <input type="text" value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Custom Rate per Liter (optional)</label>
+                <input type="number" step="0.01" min="0" value={editForm.default_price_per_liter}
+                  onChange={(e) => setEditForm({ ...editForm, default_price_per_liter: e.target.value })}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  placeholder={fuelPrices.Diesel ? `Global: ${fuelPrices.Diesel.toFixed(2)} — leave blank to use global` : 'Leave blank to use global fuel price'} />
+                {editForm.default_price_per_liter && fuelPrices.Diesel > 0 && (
+                  <p className="text-xs text-content-secondary mt-1">
+                    {parseFloat(editForm.default_price_per_liter) < fuelPrices.Diesel
+                      ? `${(fuelPrices.Diesel - parseFloat(editForm.default_price_per_liter)).toFixed(2)} below global rate`
+                      : parseFloat(editForm.default_price_per_liter) > fuelPrices.Diesel
+                      ? `${(parseFloat(editForm.default_price_per_liter) - fuelPrices.Diesel).toFixed(2)} above global rate`
+                      : 'Same as global rate'}
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setEditingAccount(null)}
+                  className="px-4 py-2 text-sm rounded-md border border-surface-border text-content-secondary">Cancel</button>
+                <button type="submit" disabled={saving}
+                  className="px-4 py-2 text-sm font-semibold rounded-md bg-action-primary text-white disabled:opacity-50">
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Create Account Modal (manager/owner) */}
       {showCreate && (

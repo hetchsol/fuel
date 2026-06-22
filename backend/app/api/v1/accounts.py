@@ -74,18 +74,35 @@ async def create_account(account: AccountHolder, ctx: dict = Depends(get_station
     return AccountHolder(**item_dict)
 
 
-@router.put("/{account_id}")
+@router.put("/{account_id}", dependencies=[Depends(require_manager_or_owner)])
 async def update_account(account_id: str, account: AccountHolder, ctx: dict = Depends(get_station_context)):
-    """
-    Update account details
-    """
+    """Update account details. Manager/owner only. Preserves current_balance."""
     storage = ctx["storage"]
     accounts_data = storage.get('accounts', {})
     if account_id not in accounts_data:
         raise HTTPException(status_code=404, detail="Account not found")
+    if not (account.account_name or "").strip():
+        raise HTTPException(status_code=400, detail="Account name is required.")
 
-    accounts_data[account_id] = account.dict()
-    return account
+    updated = account.dict()
+    updated['account_id'] = account_id
+    # Balance is managed by payment/sale endpoints — never overwrite it here.
+    updated['current_balance'] = accounts_data[account_id].get('current_balance', 0.0)
+
+    accounts_data[account_id] = updated
+    save_station_storage(ctx["station_id"])
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="account_update",
+        performed_by=ctx["username"],
+        entity_type="account",
+        entity_id=account_id,
+        details={"account_name": updated.get("account_name"),
+                 "credit_limit": updated.get("credit_limit"),
+                 "default_price_per_liter": updated.get("default_price_per_liter")},
+    )
+    return AccountHolder(**updated)
 
 
 @router.post("/sales", response_model=CreditSale)
