@@ -20,16 +20,20 @@ export default function Accounts() {
   const [creating, setCreating] = useState(false)
   const [createForm, setCreateForm] = useState({
     account_name: '', account_type: 'Corporate', credit_limit: '',
-    contact_person: '', phone: '', default_price_per_liter: '',
+    default_price_per_liter: '',
   })
 
   // Edit-account state
   const [editingAccount, setEditingAccount] = useState<any | null>(null)
   const [editForm, setEditForm] = useState({
     account_name: '', account_type: 'Corporate', credit_limit: '',
-    contact_person: '', phone: '', default_price_per_liter: '',
+    default_price_per_liter: '',
   })
+  const [editContacts, setEditContacts] = useState<{ name: string; phone: string }[]>([{ name: '', phone: '' }])
   const [saving, setSaving] = useState(false)
+
+  // Create-account contacts state
+  const [createContacts, setCreateContacts] = useState<{ name: string; phone: string }[]>([{ name: '', phone: '' }])
 
   // Credit sale form state — price starts empty; populated after settings fetch
   const [saleForm, setSaleForm] = useState({
@@ -85,14 +89,18 @@ export default function Accounts() {
     if (!createForm.account_name.trim()) { toast.error('Account name is required'); return }
     setCreating(true)
     try {
+      const filledContacts = createContacts
+        .filter(c => c.name.trim())
+        .map(c => ({ name: c.name.trim(), phone: c.phone.trim() || null }))
       const payload = {
         account_id: '',
         account_name: createForm.account_name.trim(),
         account_type: createForm.account_type,
         credit_limit: parseFloat(createForm.credit_limit) || 0,
         current_balance: 0,
-        contact_person: createForm.contact_person.trim() || null,
-        phone: createForm.phone.trim() || null,
+        contacts: filledContacts,
+        contact_person: null,
+        phone: null,
         default_price_per_liter: createForm.default_price_per_liter
           ? parseFloat(createForm.default_price_per_liter) : null,
       }
@@ -110,7 +118,8 @@ export default function Accounts() {
       }
       toast.success('Credit account created')
       setShowCreate(false)
-      setCreateForm({ account_name: '', account_type: 'Corporate', credit_limit: '', contact_person: '', phone: '', default_price_per_liter: '' })
+      setCreateForm({ account_name: '', account_type: 'Corporate', credit_limit: '', default_price_per_liter: '' })
+      setCreateContacts([{ name: '', phone: '' }])
       fetchAccounts()
     } catch (err: any) {
       toast.error(err.message || 'Failed to create account')
@@ -125,11 +134,17 @@ export default function Accounts() {
       account_name: account.account_name || '',
       account_type: account.account_type || 'Corporate',
       credit_limit: account.credit_limit != null ? String(account.credit_limit) : '',
-      contact_person: account.contact_person || '',
-      phone: account.phone || '',
       default_price_per_liter: account.default_price_per_liter != null
         ? String(account.default_price_per_liter) : '',
     })
+    // Seed contacts from new array; fall back to legacy single fields
+    const existing: { name: string; phone: string }[] =
+      account.contacts?.length
+        ? account.contacts.map((c: any) => ({ name: c.name || '', phone: c.phone || '' }))
+        : account.contact_person
+          ? [{ name: account.contact_person, phone: account.phone || '' }]
+          : [{ name: '', phone: '' }]
+    setEditContacts(existing)
   }
 
   const handleUpdateAccount = async (e: React.FormEvent) => {
@@ -137,14 +152,18 @@ export default function Accounts() {
     if (!editingAccount) return
     setSaving(true)
     try {
+      const filledContacts = editContacts
+        .filter(c => c.name.trim())
+        .map(c => ({ name: c.name.trim(), phone: c.phone.trim() || null }))
       const payload = {
         account_id: editingAccount.account_id,
         account_name: editForm.account_name.trim(),
         account_type: editForm.account_type,
         credit_limit: parseFloat(editForm.credit_limit) || 0,
         current_balance: editingAccount.current_balance,
-        contact_person: editForm.contact_person.trim() || null,
-        phone: editForm.phone.trim() || null,
+        contacts: filledContacts,
+        contact_person: null,  // clear legacy field
+        phone: null,
         default_price_per_liter: editForm.default_price_per_liter
           ? parseFloat(editForm.default_price_per_liter) : null,
       }
@@ -162,6 +181,7 @@ export default function Accounts() {
       }
       toast.success('Account updated')
       setEditingAccount(null)
+      setEditContacts([{ name: '', phone: '' }])
       fetchAccounts()
     } catch (err: any) {
       toast.error(err.message || 'Failed to update account')
@@ -562,18 +582,25 @@ export default function Accounts() {
                       </p>
                     </div>
                   )}
-                  {account.contact_person && (
-                    <div className="mt-3 pt-3 border-t border-surface-border">
-                      <p className="text-xs text-content-secondary">
-                        Contact: {account.contact_person}
-                      </p>
-                      {account.phone && (
-                        <p className="text-xs text-content-secondary">
-                          Phone: {account.phone}
+                  {(() => {
+                    const contacts = account.contacts?.length
+                      ? account.contacts
+                      : account.contact_person
+                        ? [{ name: account.contact_person, phone: account.phone }]
+                        : []
+                    return contacts.length > 0 ? (
+                      <div className="mt-3 pt-3 border-t border-surface-border space-y-1">
+                        <p className="text-xs font-medium text-content-secondary">
+                          {contacts.length === 1 ? 'Contact' : 'Contacts'}
                         </p>
-                      )}
-                    </div>
-                  )}
+                        {contacts.map((c: any, i: number) => (
+                          <p key={i} className="text-xs text-content-secondary">
+                            {c.name}{c.phone ? ` — ${c.phone}` : ''}
+                          </p>
+                        ))}
+                      </div>
+                    ) : null
+                  })()}
                 </div>
               )
             })}
@@ -624,18 +651,31 @@ export default function Accounts() {
                     placeholder="0.00" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Contact Person</label>
-                  <input type="text" value={editForm.contact_person}
-                    onChange={(e) => setEditForm({ ...editForm, contact_person: e.target.value })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary" />
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-content-secondary">Contacts (up to 3)</label>
+                  {editContacts.length < 3 && (
+                    <button type="button"
+                      onClick={() => setEditContacts([...editContacts, { name: '', phone: '' }])}
+                      className="text-xs text-action-primary hover:underline">+ Add contact</button>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Phone</label>
-                  <input type="text" value={editForm.phone}
-                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary" />
+                <div className="space-y-2">
+                  {editContacts.map((c, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <input type="text" value={c.name} placeholder="Name"
+                        onChange={(e) => { const updated = [...editContacts]; updated[i] = { ...c, name: e.target.value }; setEditContacts(updated) }}
+                        className="flex-1 px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary text-sm focus:outline-none focus:ring-action-primary focus:border-action-primary" />
+                      <input type="text" value={c.phone} placeholder="Phone"
+                        onChange={(e) => { const updated = [...editContacts]; updated[i] = { ...c, phone: e.target.value }; setEditContacts(updated) }}
+                        className="flex-1 px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary text-sm focus:outline-none focus:ring-action-primary focus:border-action-primary" />
+                      {editContacts.length > 1 && (
+                        <button type="button"
+                          onClick={() => setEditContacts(editContacts.filter((_, j) => j !== i))}
+                          className="text-xs text-status-error hover:underline px-1">Remove</button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
               <div>
@@ -697,18 +737,31 @@ export default function Accounts() {
                     placeholder="0.00" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Contact Person</label>
-                  <input type="text" value={createForm.contact_person}
-                    onChange={(e) => setCreateForm({ ...createForm, contact_person: e.target.value })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary" />
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-content-secondary">Contacts (up to 3)</label>
+                  {createContacts.length < 3 && (
+                    <button type="button"
+                      onClick={() => setCreateContacts([...createContacts, { name: '', phone: '' }])}
+                      className="text-xs text-action-primary hover:underline">+ Add contact</button>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Phone</label>
-                  <input type="text" value={createForm.phone}
-                    onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary" />
+                <div className="space-y-2">
+                  {createContacts.map((c, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <input type="text" value={c.name} placeholder="Name"
+                        onChange={(e) => { const updated = [...createContacts]; updated[i] = { ...c, name: e.target.value }; setCreateContacts(updated) }}
+                        className="flex-1 px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary text-sm focus:outline-none focus:ring-action-primary focus:border-action-primary" />
+                      <input type="text" value={c.phone} placeholder="Phone"
+                        onChange={(e) => { const updated = [...createContacts]; updated[i] = { ...c, phone: e.target.value }; setCreateContacts(updated) }}
+                        className="flex-1 px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary text-sm focus:outline-none focus:ring-action-primary focus:border-action-primary" />
+                      {createContacts.length > 1 && (
+                        <button type="button"
+                          onClick={() => setCreateContacts(createContacts.filter((_, j) => j !== i))}
+                          className="text-xs text-status-error hover:underline px-1">Remove</button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
               <div>

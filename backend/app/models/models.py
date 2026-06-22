@@ -314,14 +314,19 @@ class TankReconciliation(BaseModel):
     mechanical_vs_tank_discrepancy: float
 
 # Account Holders / Credit Sales
+class AccountContact(BaseModel):
+    name: str
+    phone: Optional[str] = None
+
 class AccountHolder(BaseModel):
     account_id: str
     account_name: str
     account_type: str  # POS, Institution, Corporate, Individual
     credit_limit: float
     current_balance: float
-    contact_person: Optional[str] = None
-    phone: Optional[str] = None
+    contact_person: Optional[str] = None  # legacy — superseded by contacts[]
+    phone: Optional[str] = None           # legacy — superseded by contacts[]
+    contacts: Optional[List[AccountContact]] = []
     default_price_per_liter: Optional[float] = None  # Custom rate; None = use global fuel price
 
 # Customer Allocation Models (Diesel Customer Types)
