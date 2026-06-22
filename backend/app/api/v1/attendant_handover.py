@@ -17,7 +17,7 @@ from ...models.models import (
 from ...config import resolve_fuel_price, resolve_fuel_price_for_shift, apply_due_price_changes
 from ...database.storage import get_nozzle, save_station_storage
 from ...services.inventory import process_credit_sale
-from .auth import get_current_user, require_supervisor_or_owner, get_station_context
+from .auth import get_current_user, require_supervisor_or_owner, require_manager_or_owner, get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
 from ...services.shift_status import assert_shift_editable, advance_shift_on_approval
@@ -1193,6 +1193,217 @@ async def verify_opening(data: VerifyOpeningInput, ctx: dict = Depends(get_stati
         },
     )
     return {"status": "success", "opening_verification": record}
+
+
+class ManagerRetroNozzleInput(BaseModel):
+    nozzle_id: str
+    electronic_reading: float = 0.0
+    mechanical_reading: float = 0.0
+
+
+class ManagerRetroEntryInput(BaseModel):
+    shift_id: str
+    attendant_id: str
+    opening_readings: List[ManagerRetroNozzleInput]
+    closing_readings: List[ManagerRetroNozzleInput]
+    actual_cash: float = 0.0
+    pos_receipts: float = 0.0
+    credit_sales: float = 0.0
+    notes: Optional[str] = None
+
+
+@router.post("/manager-retro-entry", dependencies=[Depends(require_manager_or_owner)])
+async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(get_station_context)):
+    """
+    Manager/owner-only: submit opening + closing readings and financials for a
+    retrospective shift on behalf of an attendant in a single operation.
+    Only available when the shift has is_retrospective=True.
+    """
+    storage = ctx["storage"]
+    station_id = ctx["station_id"]
+    manager_id = ctx["user_id"]
+    manager_name = ctx["full_name"]
+
+    shifts_data = storage.get("shifts", {})
+    shift = shifts_data.get(data.shift_id)
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    if shift.get("status") != "active":
+        raise HTTPException(status_code=400, detail="Shift is not active")
+    if not shift.get("is_retrospective", False):
+        raise HTTPException(status_code=400, detail="Manager entry is only available for retrospective shifts")
+
+    # Find attendant assignment
+    attendant_assignment = None
+    attendant_name = None
+    for assignment in shift.get("assignments", []):
+        if assignment.get("attendant_id") == data.attendant_id:
+            attendant_assignment = assignment
+            attendant_name = assignment.get("attendant_name", data.attendant_id)
+            break
+    if not attendant_assignment:
+        raise HTTPException(status_code=404, detail="Attendant not assigned to this shift")
+
+    # Block duplicate entry
+    handovers = _load_handovers(station_id)
+    for ho in handovers.values():
+        if ho.get("shift_id") == data.shift_id and ho.get("attendant_id") == data.attendant_id:
+            if ho.get("phase") in ("readings_verified", "completed"):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Readings already submitted for {attendant_name}. Use handover review to correct.",
+                )
+
+    allowed_nozzle_ids = set(attendant_assignment.get("nozzle_ids", []))
+    opening_map = {nr.nozzle_id: nr for nr in data.opening_readings}
+
+    # Build HandoverNozzleReadingInput objects for _process_nozzle_readings
+    nozzle_inputs: List[HandoverNozzleReadingInput] = []
+    for closing_nr in data.closing_readings:
+        nid = closing_nr.nozzle_id
+        if nid not in allowed_nozzle_ids:
+            continue
+        opening_nr = opening_map.get(nid)
+        nozzle_inputs.append(HandoverNozzleReadingInput(
+            nozzle_id=nid,
+            opening_reading=opening_nr.electronic_reading if opening_nr else 0.0,
+            closing_reading=closing_nr.electronic_reading,
+            mechanical_opening=opening_nr.mechanical_reading if opening_nr else 0.0,
+            mechanical_closing=closing_nr.mechanical_reading,
+        ))
+
+    if not nozzle_inputs:
+        raise HTTPException(status_code=400, detail="No valid nozzle readings provided for this attendant's assignment")
+
+    now_iso = datetime.now().isoformat()
+
+    # Write opening record to attendant_readings.json
+    ar_db = load_station_json(station_id, "attendant_readings.json", default={})
+    opening_key = f"AR-{data.shift_id}-{data.attendant_id}-O"
+    ar_db[opening_key] = {
+        "shift_id": data.shift_id,
+        "user_id": data.attendant_id,
+        "user_name": attendant_name,
+        "phase": "opening",
+        "submitted_at": now_iso,
+        "submitted_by_manager": manager_id,
+        "nozzle_readings": [
+            {"nozzle_id": nr.nozzle_id, "electronic_reading": nr.electronic_reading, "mechanical_reading": nr.mechanical_reading}
+            for nr in data.opening_readings
+        ],
+    }
+    save_station_json(station_id, "attendant_readings.json", ar_db)
+
+    # Write opening verification so normal review queue sees this as started
+    verifications = _load_opening_verifications(station_id)
+    verifications[f"{data.shift_id}-{data.attendant_id}"] = {
+        "shift_id": data.shift_id,
+        "attendant_id": data.attendant_id,
+        "attendant_name": attendant_name,
+        "verified_at": now_iso,
+        "manager_entered": True,
+        "manager_id": manager_id,
+        "manager_name": manager_name,
+        "retrospective": True,
+    }
+    _save_opening_verifications(verifications, station_id)
+
+    nozzle_summaries, fuel_revenue = _process_nozzle_readings(
+        nozzle_inputs, storage, station_id, data.shift_id, data.attendant_id, allowed_nozzle_ids,
+        shift_date=shift.get("date"), shift_type=shift.get("shift_type"),
+    )
+
+    total_expected = round(fuel_revenue, 2)
+    expected_cash = round(total_expected - data.credit_sales, 2)
+    total_accounted = round(data.actual_cash + data.pos_receipts + data.credit_sales, 2)
+    difference = round(total_accounted - total_expected, 2)
+
+    auto_flag_reasons, review_status = _compute_auto_flags(difference, nozzle_summaries, [], storage)
+
+    handover_id = f"HO-{data.shift_id}-{data.attendant_id}-MRE-{datetime.now().strftime('%H%M%S')}"
+
+    handover_out = HandoverOutput(
+        handover_id=handover_id,
+        shift_id=data.shift_id,
+        attendant_id=data.attendant_id,
+        attendant_name=attendant_name,
+        date=shift.get("date", ""),
+        shift_type=shift.get("shift_type", ""),
+        nozzle_summaries=nozzle_summaries,
+        fuel_revenue=fuel_revenue,
+        lpg_sales=0.0,
+        lubricant_sales=0.0,
+        accessory_sales=0.0,
+        total_expected=total_expected,
+        credit_sales=data.credit_sales,
+        expected_cash=expected_cash,
+        actual_cash=data.actual_cash,
+        pos_receipts=data.pos_receipts,
+        total_accounted=total_accounted,
+        difference=difference,
+        status="submitted",
+        phase="completed",
+        phase_1_completed_at=now_iso,
+        phase_2_completed_at=now_iso,
+        review_status=review_status,
+        auto_flag_reasons=auto_flag_reasons or None,
+        notes=data.notes,
+        created_at=now_iso,
+    )
+
+    handovers[handover_id] = handover_out.dict()
+    _save_handovers(handovers, station_id)
+
+    # Mirror to attendant_readings.json (O and C keys used by the chain logic)
+    ar_db = load_station_json(station_id, "attendant_readings.json", default={})
+    closing_key = f"AR-{data.shift_id}-{data.attendant_id}-C"
+    ar_db[opening_key] = {
+        "shift_id": data.shift_id, "user_id": data.attendant_id, "user_name": attendant_name,
+        "reading_type": "Opening",
+        "nozzle_readings": [{"nozzle_id": ns.nozzle_id, "electronic_reading": ns.opening_reading, "mechanical_reading": ns.mechanical_opening or 0} for ns in nozzle_summaries],
+        "submitted_at": now_iso, "review_status": "submitted", "source": "manager_retro_entry",
+    }
+    ar_db[closing_key] = {
+        "shift_id": data.shift_id, "user_id": data.attendant_id, "user_name": attendant_name,
+        "reading_type": "Closing",
+        "nozzle_readings": [{"nozzle_id": ns.nozzle_id, "electronic_reading": ns.closing_reading, "mechanical_reading": ns.mechanical_closing or 0} for ns in nozzle_summaries],
+        "submitted_at": now_iso, "review_status": "submitted", "source": "manager_retro_entry",
+    }
+    save_station_json(station_id, "attendant_readings.json", ar_db)
+
+    _update_nozzle_state(
+        nozzle_inputs, storage,
+        shift_date=shift.get("date"), shift_type=shift.get("shift_type"),
+        attendant_name=attendant_name,
+    )
+    save_station_storage(station_id)
+
+    _create_reconciliation(
+        nozzle_summaries, 0.0, 0.0, 0.0, data.credit_sales, expected_cash,
+        data.actual_cash, difference, shift, data.attendant_id, attendant_name,
+        station_id, storage, data.notes,
+    )
+
+    log_audit_event(
+        station_id=station_id, action="manager_retro_entry",
+        performed_by=ctx["username"], entity_type="handover", entity_id=handover_id,
+        details={
+            "shift_id": data.shift_id, "attendant_id": data.attendant_id,
+            "attendant_name": attendant_name, "fuel_revenue": fuel_revenue,
+            "actual_cash": data.actual_cash, "difference": difference,
+            "manager_override": True,
+        },
+    )
+
+    return {
+        "status": "success",
+        "handover_id": handover_id,
+        "attendant_name": attendant_name,
+        "fuel_revenue": fuel_revenue,
+        "total_expected": total_expected,
+        "difference": difference,
+        "review_status": review_status,
+    }
 
 
 @router.get("/opening-verifications")

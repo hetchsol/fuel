@@ -529,6 +529,91 @@ export default function Shifts() {
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [validationMessages, setValidationMessages] = useState<string[]>([])
 
+  // Retrospective entry mode (manager/owner only)
+  const [retroEntryMode, setRetroEntryMode] = useState(false)
+  const [retroModal, setRetroModal] = useState<{
+    shift: any
+    assignment: any
+    nozzleList: { nozzle_id: string; label: string; fuel_type: string }[]
+  } | null>(null)
+  const [retroOpenings, setRetroOpenings] = useState<Record<string, { electronic: string; mechanical: string }>>({})
+  const [retroClosings, setRetroClosings] = useState<Record<string, { electronic: string; mechanical: string }>>({})
+  const [retroFinancials, setRetroFinancials] = useState({ actual_cash: '', pos_receipts: '', credit_sales: '', notes: '' })
+  const [retroSubmitting, setRetroSubmitting] = useState(false)
+
+  const openRetroModal = (shift: any, assignment: any) => {
+    const nozzleList = (assignment.nozzle_ids || []).map((nid: string) => {
+      const nozzle = nozzles.find(n => n.nozzle_id === nid)
+      return {
+        nozzle_id: nid,
+        label: nozzle ? getNozzleDisplayName(nozzle) : nid,
+        fuel_type: nozzle?.fuel_type || 'Diesel',
+      }
+    })
+    const initRow = () => ({ electronic: '', mechanical: '' })
+    const initReadings: Record<string, { electronic: string; mechanical: string }> = {}
+    nozzleList.forEach((n: any) => { initReadings[n.nozzle_id] = initRow() })
+    setRetroOpenings({ ...initReadings })
+    setRetroClosings({ ...initReadings })
+    setRetroFinancials({ actual_cash: '', pos_receipts: '', credit_sales: '', notes: '' })
+    setRetroModal({ shift, assignment, nozzleList })
+  }
+
+  const handleRetroSubmit = async () => {
+    if (!retroModal) return
+    const { shift, assignment } = retroModal
+
+    for (const nid of Object.keys(retroClosings)) {
+      if (!retroClosings[nid].electronic) {
+        toast.error('Fill in all closing electronic readings before submitting.')
+        return
+      }
+    }
+
+    setRetroSubmitting(true)
+    try {
+      const payload = {
+        shift_id: shift.shift_id,
+        attendant_id: assignment.attendant_id,
+        opening_readings: Object.entries(retroOpenings).map(([nozzle_id, v]) => ({
+          nozzle_id,
+          electronic_reading: parseFloat(v.electronic) || 0,
+          mechanical_reading: parseFloat(v.mechanical) || 0,
+        })),
+        closing_readings: Object.entries(retroClosings).map(([nozzle_id, v]) => ({
+          nozzle_id,
+          electronic_reading: parseFloat(v.electronic) || 0,
+          mechanical_reading: parseFloat(v.mechanical) || 0,
+        })),
+        actual_cash: parseFloat(retroFinancials.actual_cash) || 0,
+        pos_receipts: parseFloat(retroFinancials.pos_receipts) || 0,
+        credit_sales: parseFloat(retroFinancials.credit_sales) || 0,
+        notes: retroFinancials.notes || null,
+      }
+
+      const res = await authFetch(`${BASE}/handover/manager-retro-entry`, {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        toast.error(err.detail || 'Failed to submit readings')
+        return
+      }
+
+      const result = await res.json()
+      toast.success(`Readings submitted for ${result.attendant_name} — K${result.total_expected?.toLocaleString(undefined, { minimumFractionDigits: 2 })} expected`)
+      setRetroModal(null)
+      fetchAllShifts()
+    } catch (err: any) {
+      toast.error(`Failed: ${err.message}`)
+    } finally {
+      setRetroSubmitting(false)
+    }
+  }
+
   const handleValidateAndConfirm = (e: React.FormEvent) => {
     e.preventDefault()
     const messages = validateShift()
@@ -1158,13 +1243,32 @@ export default function Shifts() {
         <div className="mt-6 bg-surface-card rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-content-primary">Shift History</h2>
-            <button
-              onClick={() => { setShowHistory(!showHistory); if (!showHistory) { fetchAllShifts(); setHistoryPage(1) } }}
-              className="px-3 py-1 text-sm bg-surface-bg hover:bg-surface-border text-content-secondary rounded-md border"
-            >
-              {showHistory ? 'Hide' : 'Show'} History
-            </button>
+            <div className="flex items-center gap-2">
+              {(currentUser?.role === 'manager' || currentUser?.role === 'owner') && (
+                <button
+                  onClick={() => setRetroEntryMode(v => !v)}
+                  className={`px-3 py-1 text-sm rounded-md border font-medium ${
+                    retroEntryMode
+                      ? 'bg-status-warning text-white border-status-warning'
+                      : 'bg-surface-bg hover:bg-surface-border text-content-secondary border-surface-border'
+                  }`}
+                >
+                  {retroEntryMode ? 'Retro Entry: ON' : 'Retro Entry: OFF'}
+                </button>
+              )}
+              <button
+                onClick={() => { setShowHistory(!showHistory); if (!showHistory) { fetchAllShifts(); setHistoryPage(1) } }}
+                className="px-3 py-1 text-sm bg-surface-bg hover:bg-surface-border text-content-secondary rounded-md border"
+              >
+                {showHistory ? 'Hide' : 'Show'} History
+              </button>
+            </div>
           </div>
+          {retroEntryMode && (
+            <div className="mb-4 p-3 bg-status-warning/10 border border-status-warning rounded-lg text-sm text-status-warning">
+              Retrospective entry mode is active. Use "Enter Readings" on past retrospective shifts to submit readings on behalf of an attendant. Turn this off when done.
+            </div>
+          )}
 
           {showHistory && (
             <div className="space-y-3">
@@ -1225,11 +1329,28 @@ export default function Shifts() {
                         )}
                       </div>
                     </div>
-                    {/* Attendant names */}
+                    {/* Attendant names / retro entry buttons */}
                     {shift.assignments && shift.assignments.length > 0 ? (
-                      <p className="mt-2 text-sm text-content-secondary">
-                        Attendants: {shift.assignments.map((a: any) => a.attendant_name).join(', ')}
-                      </p>
+                      retroEntryMode && shift.is_retrospective && shift.status === 'active' ? (
+                        <div className="mt-2 space-y-1">
+                          {shift.assignments.map((a: any) => (
+                            <div key={a.attendant_id} className="flex items-center justify-between">
+                              <span className="text-sm text-content-secondary">{a.attendant_name}</span>
+                              <button
+                                onClick={() => openRetroModal(shift, a)}
+                                className="px-2 py-1 text-xs bg-action-primary hover:bg-action-primary-hover text-white rounded font-medium"
+                              >
+                                Enter Readings
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-sm text-content-secondary">
+                          Attendants: {shift.assignments.map((a: any) => a.attendant_name).join(', ')}
+                          {shift.is_retrospective && <span className="ml-2 text-xs text-status-warning">(retrospective)</span>}
+                        </p>
+                      )
                     ) : shift.attendants && shift.attendants.length > 0 ? (
                       <p className="mt-2 text-sm text-content-secondary">
                         Attendants: {shift.attendants.join(', ')}
@@ -1346,6 +1467,144 @@ export default function Shifts() {
           <li>• Tank dip readings help reconcile physical inventory with meter readings</li>
         </ul>
       </div>
+
+      {/* Retrospective Entry Modal */}
+      {retroModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-card rounded-lg p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-content-primary">Enter Readings — {retroModal.assignment.attendant_name}</h2>
+                <p className="text-sm text-content-secondary mt-0.5">
+                  {formatDateToDisplay(retroModal.shift.date)} — {retroModal.shift.shift_type} Shift
+                </p>
+              </div>
+              <button onClick={() => setRetroModal(null)} className="text-content-secondary hover:text-content-primary text-2xl">&times;</button>
+            </div>
+
+            <div className="mb-2 px-3 py-2 bg-status-warning/10 border border-status-warning rounded text-xs text-status-warning">
+              Manager override: readings are recorded on behalf of the attendant and flagged in the audit trail.
+            </div>
+
+            {/* Readings table */}
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-surface-bg">
+                    <th className="text-left px-3 py-2 font-medium text-content-secondary border border-surface-border">Nozzle</th>
+                    <th className="text-center px-3 py-2 font-medium text-content-secondary border border-surface-border" colSpan={2}>Opening</th>
+                    <th className="text-center px-3 py-2 font-medium text-content-secondary border border-surface-border" colSpan={2}>Closing</th>
+                  </tr>
+                  <tr className="bg-surface-bg text-xs text-content-secondary">
+                    <th className="border border-surface-border px-3 py-1"></th>
+                    <th className="border border-surface-border px-3 py-1">Electronic</th>
+                    <th className="border border-surface-border px-3 py-1">Mechanical</th>
+                    <th className="border border-surface-border px-3 py-1">Electronic</th>
+                    <th className="border border-surface-border px-3 py-1">Mechanical</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {retroModal.nozzleList.map((nozzle: any) => (
+                    <tr key={nozzle.nozzle_id} className="hover:bg-surface-bg/50">
+                      <td className="border border-surface-border px-3 py-2 font-medium text-content-primary whitespace-nowrap">
+                        <span className={`inline-block w-2 h-2 rounded-full mr-2 ${nozzle.fuel_type === 'Petrol' ? 'bg-action-primary' : 'bg-category-c'}`} />
+                        {nozzle.label}
+                      </td>
+                      {(['opening', 'closing'] as const).map(phase => {
+                        const state = phase === 'opening' ? retroOpenings : retroClosings
+                        const setState = phase === 'opening' ? setRetroOpenings : setRetroClosings
+                        return (['electronic', 'mechanical'] as const).map(col => (
+                          <td key={`${phase}-${col}`} className="border border-surface-border px-2 py-1">
+                            <input
+                              type="number"
+                              step="0.001"
+                              min="0"
+                              value={state[nozzle.nozzle_id]?.[col] ?? ''}
+                              onChange={e => setState(prev => ({
+                                ...prev,
+                                [nozzle.nozzle_id]: { ...prev[nozzle.nozzle_id], [col]: e.target.value }
+                              }))}
+                              className={`w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-action-primary ${
+                                phase === 'closing' && col === 'electronic' && !state[nozzle.nozzle_id]?.electronic
+                                  ? 'border-status-warning bg-status-warning/5'
+                                  : 'border-surface-border'
+                              }`}
+                              placeholder="0.000"
+                            />
+                          </td>
+                        ))
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Financial section */}
+            <div className="mt-5">
+              <h3 className="text-sm font-semibold text-content-primary mb-3">Financial Handover</h3>
+              <div className="grid grid-cols-3 gap-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-content-secondary mb-1">Actual Cash (ZMW)</label>
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={retroFinancials.actual_cash}
+                    onChange={e => setRetroFinancials(f => ({ ...f, actual_cash: e.target.value }))}
+                    className="w-full px-2 py-1.5 text-sm border border-surface-border rounded focus:outline-none focus:ring-1 focus:ring-action-primary"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-content-secondary mb-1">POS / Card (ZMW)</label>
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={retroFinancials.pos_receipts}
+                    onChange={e => setRetroFinancials(f => ({ ...f, pos_receipts: e.target.value }))}
+                    className="w-full px-2 py-1.5 text-sm border border-surface-border rounded focus:outline-none focus:ring-1 focus:ring-action-primary"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-content-secondary mb-1">Credit Sales (ZMW)</label>
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={retroFinancials.credit_sales}
+                    onChange={e => setRetroFinancials(f => ({ ...f, credit_sales: e.target.value }))}
+                    className="w-full px-2 py-1.5 text-sm border border-surface-border rounded focus:outline-none focus:ring-1 focus:ring-action-primary"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Notes</label>
+                <textarea
+                  value={retroFinancials.notes}
+                  onChange={e => setRetroFinancials(f => ({ ...f, notes: e.target.value }))}
+                  rows={2}
+                  className="w-full px-2 py-1.5 text-sm border border-surface-border rounded focus:outline-none focus:ring-1 focus:ring-action-primary resize-none"
+                  placeholder="Optional notes (source documents, reason for manual entry, etc.)"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setRetroModal(null)}
+                className="px-4 py-2 text-sm border border-surface-border rounded-md text-content-secondary hover:bg-surface-bg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRetroSubmit}
+                disabled={retroSubmitting}
+                className="px-5 py-2 text-sm bg-action-primary hover:bg-action-primary-hover text-white rounded-md font-medium disabled:opacity-60"
+              >
+                {retroSubmitting ? 'Submitting...' : 'Submit Readings'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Shift Management Modal */}
       {showManagementModal && (
