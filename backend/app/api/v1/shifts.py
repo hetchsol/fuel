@@ -83,6 +83,11 @@ def create_shift(shift: Shift, ctx: dict = Depends(get_station_context)):
     shift.created_by = current_user['user_id']
     shift.created_at = datetime.now().isoformat()
 
+    # Auto-flag retrospective shifts (date is in the past)
+    today = datetime.now().strftime("%Y-%m-%d")
+    if shift.date < today:
+        shift.is_retrospective = True
+
     # Populate backward-compatible attendants list
     if shift.assignments:
         shift.attendants = [a.attendant_name for a in shift.assignments]
@@ -106,7 +111,8 @@ def create_shift(shift: Shift, ctx: dict = Depends(get_station_context)):
         "end_time": shift.end_time,
         "status": shift.status,
         "created_by": shift.created_by,
-        "created_at": shift.created_at
+        "created_at": shift.created_at,
+        "is_retrospective": shift.is_retrospective or False,
     }
 
     shifts_data[shift.shift_id] = shift_dict

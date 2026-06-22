@@ -862,6 +862,7 @@ async def get_my_active_shifts(ctx: dict = Depends(get_station_context)):
                     "shift_id": shift.get("shift_id", shift_id),
                     "date": shift.get("date"),
                     "shift_type": shift.get("shift_type"),
+                    "is_retrospective": shift.get("is_retrospective", False),
                 })
                 break
 
@@ -1105,6 +1106,7 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
             "date": my_shift.get("date"),
             "shift_type": my_shift.get("shift_type"),
             "status": my_shift.get("status"),
+            "is_retrospective": my_shift.get("is_retrospective", False),
         },
         "assignment": {
             "attendant_id": my_assignment.get("attendant_id"),
@@ -1125,30 +1127,56 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
 class VerifyOpeningInput(BaseModel):
     shift_id: str
     discrepancy_note: Optional[str] = None
+    # Retrospective shifts only: attendant manually enters opening readings
+    # when there is no previous shift to auto-derive them from, or to correct
+    # an auto-derived value. Each item: {nozzle_id, electronic_reading, mechanical_reading}
+    manual_nozzle_readings: Optional[List[dict]] = None
 
 
 @router.post("/verify-opening")
 async def verify_opening(data: VerifyOpeningInput, ctx: dict = Depends(get_station_context)):
     """
     Record an attendant's start-of-shift verification of the carried-forward
-    opening readings and stock. Additive: it does not create or modify any
-    handover, nozzle reading, or stock record — it only stores an acknowledgment
-    (with an optional discrepancy note) so the UI can move from the start-of-shift
-    step to the closing step, and so the verification is auditable.
+    opening readings and stock. For retrospective shifts, also accepts
+    manual_nozzle_readings which are persisted as the opening record so the
+    closing submission uses them as the opening baseline.
     """
     storage = ctx["storage"]
     station_id = ctx["station_id"]
-    # Reuse the standard assignment guard (active shift, caller assigned).
+    user_id = ctx["user_id"]
     _validate_shift_and_assignment(data.shift_id, ctx, storage)
 
+    # For retrospective shifts: write the manually confirmed opening readings so
+    # the 3-tier priority chain uses them as the authoritative opening baseline.
+    if data.manual_nozzle_readings:
+        ar_db = load_station_json(station_id, 'attendant_readings.json', default={})
+        opening_key = f"AR-{data.shift_id}-{user_id}-O"
+        ar_db[opening_key] = {
+            "shift_id": data.shift_id,
+            "user_id": user_id,
+            "phase": "opening",
+            "submitted_at": datetime.now().isoformat(),
+            "nozzle_readings": [
+                {
+                    "nozzle_id": nr["nozzle_id"],
+                    "electronic_reading": float(nr.get("electronic_reading", 0)),
+                    "mechanical_reading": float(nr.get("mechanical_reading", 0)),
+                }
+                for nr in data.manual_nozzle_readings
+                if nr.get("nozzle_id")
+            ],
+        }
+        save_station_json(station_id, 'attendant_readings.json', ar_db)
+
     verifications = _load_opening_verifications(station_id)
-    key = f"{data.shift_id}-{ctx['user_id']}"
+    key = f"{data.shift_id}-{user_id}"
     record = {
         "shift_id": data.shift_id,
-        "attendant_id": ctx["user_id"],
+        "attendant_id": user_id,
         "attendant_name": ctx["full_name"],
         "verified_at": datetime.now().isoformat(),
         "discrepancy_note": (data.discrepancy_note or "").strip() or None,
+        "retrospective": bool(data.manual_nozzle_readings),
     }
     verifications[key] = record
     _save_opening_verifications(verifications, station_id)
@@ -1159,7 +1187,10 @@ async def verify_opening(data: VerifyOpeningInput, ctx: dict = Depends(get_stati
         performed_by=ctx["username"],
         entity_type="shift",
         entity_id=data.shift_id,
-        details={"discrepancy_note": record["discrepancy_note"]},
+        details={
+            "discrepancy_note": record["discrepancy_note"],
+            "retrospective": record["retrospective"],
+        },
     )
     return {"status": "success", "opening_verification": record}
 

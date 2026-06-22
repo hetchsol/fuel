@@ -216,6 +216,13 @@ export default function MyShift() {
   // Review confirmation modal
   const [showReviewModal, setShowReviewModal] = useState(false)
 
+  // Retrospective shift: editable opening readings (electronic + mechanical per nozzle)
+  const [isRetrospective, setIsRetrospective] = useState(false)
+  const [retroOpenings, setRetroOpenings] = useState<Record<string, { electronic: string; mechanical: string }>>({})
+
+  // Date filter for shift picker
+  const [shiftDateFilter, setShiftDateFilter] = useState('')
+
   // Fetch available active shifts and any pending price-change prompts
   useEffect(() => {
     authFetch(`${BASE}/handover/pending-price-prompts`, { headers: getAuthHeaders() })
@@ -271,6 +278,8 @@ export default function MyShift() {
         setShiftInfo(shiftData.shift)
         setAssignmentInfo(shiftData.assignment)
         setPriceChangeDetected(shiftData.price_change_detected || false)
+        const retro = !!shiftData.shift?.is_retrospective
+        setIsRetrospective(retro)
         setNozzleRows(
           (shiftData.nozzles || []).map((n: NozzleInfo) => ({
             nozzle_id: n.nozzle_id,
@@ -288,6 +297,17 @@ export default function MyShift() {
             mech_closing_verified: false,
           }))
         )
+        // Retrospective: seed editable opening fields from auto-derived values
+        if (retro) {
+          const rv: Record<string, { electronic: string; mechanical: string }> = {}
+          for (const n of (shiftData.nozzles || [])) {
+            rv[n.nozzle_id] = {
+              electronic: n.opening_reading != null ? String(n.opening_reading) : '',
+              mechanical: n.mechanical_opening_reading != null ? String(n.mechanical_opening_reading) : '',
+            }
+          }
+          setRetroOpenings(rv)
+        }
         setMeterThreshold(shiftData.meter_discrepancy_threshold ?? 0.5)
         setNozzleLossThreshold(shiftData.nozzle_allowable_loss_liters ?? 0.8)
         setReadingsVerifiedHandover(shiftData.readings_verified_handover || null)
@@ -780,20 +800,37 @@ export default function MyShift() {
     setVerifyingOpening(true)
     setError('')
     try {
+      const body: any = {
+        shift_id: shiftInfo.shift_id,
+        discrepancy_note: openingDiscrepancyNote.trim() || null,
+      }
+      if (isRetrospective) {
+        // Send manually confirmed opening readings so the backend writes them
+        // as the authoritative opening baseline for this shift.
+        body.manual_nozzle_readings = Object.entries(retroOpenings).map(([nozzle_id, vals]) => ({
+          nozzle_id,
+          electronic_reading: parseFloat(vals.electronic) || 0,
+          mechanical_reading: parseFloat(vals.mechanical) || 0,
+        }))
+      }
       const res = await authFetch(`${BASE}/handover/verify-opening`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({
-          shift_id: shiftInfo.shift_id,
-          discrepancy_note: openingDiscrepancyNote.trim() || null,
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
         const e = await res.json().catch(() => ({ detail: 'Failed to verify opening' }))
         throw new Error(e.detail || 'Failed to verify opening')
       }
       setOpeningVerified(true)
-      // Move from Start Shift into the closing (End Shift) view.
+      // Update nozzle rows to use the confirmed opening values
+      if (isRetrospective) {
+        setNozzleRows(prev => prev.map(row => ({
+          ...row,
+          opening_reading: parseFloat(retroOpenings[row.nozzle_id]?.electronic) || row.opening_reading,
+          mechanical_opening: parseFloat(retroOpenings[row.nozzle_id]?.mechanical) || row.mechanical_opening,
+        })))
+      }
       router.replace('/my-shift?mode=end')
     } catch (err: any) {
       setError(err.message || 'Failed to verify opening')
@@ -940,20 +977,43 @@ export default function MyShift() {
             </p>
           </div>
           {availableShifts.length > 1 && (
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Active Shift</label>
-              <select
-                value={selectedShiftId}
-                onChange={e => setSelectedShiftId(e.target.value)}
-                className="px-3 py-2 rounded-lg border text-sm font-medium"
-                style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}>
-                <option value="">-- Select Shift --</option>
-                {availableShifts.map((s: any) => (
-                  <option key={s.shift_id} value={s.shift_id}>
-                    {formatDateToDisplay(s.date)} — {s.shift_type} Shift
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-2">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Filter by date</label>
+                <input
+                  type="date"
+                  value={shiftDateFilter}
+                  onChange={e => setShiftDateFilter(e.target.value)}
+                  className="px-3 py-2 rounded-lg border text-sm"
+                  style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}
+                />
+                {shiftDateFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setShiftDateFilter('')}
+                    className="ml-2 text-xs underline"
+                    style={{ color: theme.textSecondary }}>
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Select Shift</label>
+                <select
+                  value={selectedShiftId}
+                  onChange={e => setSelectedShiftId(e.target.value)}
+                  className="px-3 py-2 rounded-lg border text-sm font-medium"
+                  style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}>
+                  <option value="">-- Select Shift --</option>
+                  {availableShifts
+                    .filter(s => !shiftDateFilter || s.date === shiftDateFilter)
+                    .map((s: any) => (
+                      <option key={s.shift_id} value={s.shift_id}>
+                        {formatDateToDisplay(s.date)} — {s.shift_type} Shift{s.is_retrospective ? ' (Past)' : ''}
+                      </option>
+                    ))}
+                </select>
+              </div>
             </div>
           )}
         </div>
@@ -1222,10 +1282,17 @@ export default function MyShift() {
           </button>
         {showStartShift && <div className="space-y-6 p-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
 
-          {/* Opening readings (read-only) */}
+          {/* Opening readings — editable for retrospective (first shift: manual entry;
+              subsequent shifts: auto-fetched from previous closing, still editable to correct) */}
           <div className="rounded-lg shadow overflow-hidden" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-            <div className="p-4 font-semibold text-sm" style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
+            <div className="p-4 font-semibold text-sm flex items-center gap-2" style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
               Opening meter readings
+              {isRetrospective && !openingVerified && (
+                <span className="text-xs font-normal px-2 py-0.5 rounded"
+                  style={{ backgroundColor: 'var(--color-status-pending-light)', color: 'var(--color-status-warning)' }}>
+                  Past shift — verify or correct opening readings
+                </span>
+              )}
             </div>
             <table className="min-w-full text-sm">
               <thead>
@@ -1240,8 +1307,41 @@ export default function MyShift() {
                   <tr key={row.nozzle_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                     <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{row.display_label || row.nozzle_id}</td>
                     <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{row.fuel_type}</td>
-                    <td className="px-3 py-2 font-mono" style={{ color: theme.textPrimary }}>{Number(row.opening_reading || 0).toLocaleString(undefined, { minimumFractionDigits: 3 })}</td>
-                    <td className="px-3 py-2 font-mono" style={{ color: theme.textPrimary }}>{Number(row.mechanical_opening || 0).toLocaleString(undefined, { minimumFractionDigits: 3 })}</td>
+                    {isRetrospective && !openingVerified ? (
+                      <>
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="number" step="0.001" min="0"
+                            value={retroOpenings[row.nozzle_id]?.electronic ?? ''}
+                            onChange={e => setRetroOpenings(prev => ({
+                              ...prev,
+                              [row.nozzle_id]: { ...prev[row.nozzle_id], electronic: e.target.value }
+                            }))}
+                            className="w-32 px-2 py-1 text-sm font-mono rounded border"
+                            style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.primary }}
+                            placeholder="0.000"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="number" step="0.001" min="0"
+                            value={retroOpenings[row.nozzle_id]?.mechanical ?? ''}
+                            onChange={e => setRetroOpenings(prev => ({
+                              ...prev,
+                              [row.nozzle_id]: { ...prev[row.nozzle_id], mechanical: e.target.value }
+                            }))}
+                            className="w-32 px-2 py-1 text-sm font-mono rounded border"
+                            style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.primary }}
+                            placeholder="0.000"
+                          />
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-3 py-2 font-mono" style={{ color: theme.textPrimary }}>{Number(row.opening_reading || 0).toLocaleString(undefined, { minimumFractionDigits: 3 })}</td>
+                        <td className="px-3 py-2 font-mono" style={{ color: theme.textPrimary }}>{Number(row.mechanical_opening || 0).toLocaleString(undefined, { minimumFractionDigits: 3 })}</td>
+                      </>
+                    )}
                   </tr>
                 ))}
                 {nozzleRows.length === 0 && (
@@ -1303,7 +1403,11 @@ export default function MyShift() {
                 disabled={verifyingOpening}
                 className="mt-3 w-full sm:w-auto px-6 py-3 rounded-lg text-base font-semibold text-white disabled:opacity-50"
                 style={{ backgroundColor: theme.primary }}>
-                {verifyingOpening ? 'Confirming...' : 'Confirm opening & begin shift'}
+                {verifyingOpening
+                  ? 'Saving...'
+                  : isRetrospective
+                    ? 'Save opening readings & proceed to closing'
+                    : 'Confirm opening & begin shift'}
               </button>
             </div>
           )}

@@ -515,8 +515,10 @@ export default function Shifts() {
 
     // 6. Date validation — warn if not today
     const today = new Date().toISOString().split('T')[0]
-    if (shiftForm.date !== today) {
-      warnings.push(`Date is ${shiftForm.date}, which is not today (${today}).`)
+    if (shiftForm.date < today) {
+      warnings.push(`Date ${shiftForm.date} is in the past — this will be saved as a retrospective shift.`)
+    } else if (shiftForm.date > today) {
+      warnings.push(`Date ${shiftForm.date} is in the future.`)
     }
 
     // Combine: errors are blocking, warnings are advisory

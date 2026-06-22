@@ -240,6 +240,7 @@ class Shift(BaseModel):
     auto_closed: Optional[bool] = None
     auto_close_reason: Optional[str] = None
     auto_closed_at: Optional[str] = None
+    is_retrospective: Optional[bool] = False
 
     class Config:
         # Ensure all fields are included in dict/JSON output
