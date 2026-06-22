@@ -109,6 +109,33 @@ export default function Shifts() {
     }
   }
 
+  const [reactivateTarget, setReactivateTarget] = useState<any>(null)
+  const [reactivating, setReactivating] = useState(false)
+
+  const handleReactivateShift = async () => {
+    if (!reactivateTarget) return
+    setReactivating(true)
+    try {
+      const res = await authFetch(`${BASE}/shifts/${reactivateTarget.shift_id}/reactivate`, {
+        method: 'PUT',
+        headers: getHeaders(),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        toast.error(`Error reactivating shift: ${error.detail || JSON.stringify(error)}`)
+        return
+      }
+      toast.success('Shift reactivated — attendants can now submit or correct readings.')
+      setReactivateTarget(null)
+      fetchActiveShift()
+      fetchAllShifts()
+    } catch (err: any) {
+      toast.error(`Failed to reactivate shift: ${err.message}`)
+    } finally {
+      setReactivating(false)
+    }
+  }
+
   const handleDeactivateShift = async (shiftId: string) => {
     if (!confirm('Deactivate this shift? Attendants will no longer see it as their active shift.')) return
     try {
@@ -1318,6 +1345,16 @@ export default function Shifts() {
                             Deactivate
                           </button>
                         )}
+                        {/* Reactivate: manager/owner, inactive or auto-closed shifts only */}
+                        {(currentUser?.role === 'manager' || currentUser?.role === 'owner') &&
+                          (shift.status === 'inactive' || shift.status === 'auto-closed') && (
+                          <button
+                            onClick={() => setReactivateTarget(shift)}
+                            className="px-2 py-1 text-xs bg-status-warning hover:bg-status-warning/90 text-white rounded"
+                          >
+                            Reactivate
+                          </button>
+                        )}
                         {/* Delete: owner only, inactive shifts only */}
                         {currentUser?.role === 'owner' && shift.status === 'inactive' && (
                           <button
@@ -1467,6 +1504,65 @@ export default function Shifts() {
           <li>• Tank dip readings help reconcile physical inventory with meter readings</li>
         </ul>
       </div>
+
+      {/* Reactivate Shift Confirmation Modal */}
+      {reactivateTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-card rounded-lg p-6 max-w-md w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-content-primary">Reactivate Shift</h2>
+              <button onClick={() => setReactivateTarget(null)} className="text-content-secondary hover:text-content-primary text-2xl">&times;</button>
+            </div>
+
+            <div className="mb-4 p-3 bg-status-warning/10 border border-status-warning rounded-lg">
+              <p className="text-sm font-semibold text-status-warning mb-1">
+                {formatDateToDisplay(reactivateTarget.date)} — {reactivateTarget.shift_type} Shift
+              </p>
+              <p className="text-xs text-status-warning">
+                Status: {reactivateTarget.status.toUpperCase()}
+              </p>
+            </div>
+
+            <div className="mb-5">
+              <p className="text-sm font-medium text-content-primary mb-2">Before reactivating, note the following:</p>
+              <ul className="space-y-2 text-sm text-content-secondary">
+                <li className="flex gap-2">
+                  <span className="text-status-warning mt-0.5">&#x25B2;</span>
+                  <span>Assigned attendants will see this shift in their My Shift dropdown again and will be able to submit or overwrite readings.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-status-warning mt-0.5">&#x25B2;</span>
+                  <span>Any handovers or readings already submitted for this shift are preserved — they will not be deleted.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-status-warning mt-0.5">&#x25B2;</span>
+                  <span>If this shift was already reconciled or included in a daily close-off, reactivating it may cause discrepancies in those reports.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-status-warning mt-0.5">&#x25B2;</span>
+                  <span>This action is logged in the audit trail.</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setReactivateTarget(null)}
+                className="px-4 py-2 text-sm border border-surface-border rounded-md text-content-secondary hover:bg-surface-bg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReactivateShift}
+                disabled={reactivating}
+                className="px-5 py-2 text-sm bg-status-warning hover:bg-status-warning/90 text-white rounded-md font-medium disabled:opacity-60"
+              >
+                {reactivating ? 'Reactivating...' : 'Reactivate Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Retrospective Entry Modal */}
       {retroModal && (

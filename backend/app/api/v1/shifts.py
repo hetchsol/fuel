@@ -10,7 +10,7 @@ from datetime import datetime
 from ...models.models import Shift, ShiftType, DualReading, NozzleShiftSummary, TankDipReading
 from ...services.relationship_validation import validate_create, validate_delete_operation
 from ...services.shift_validation import validate_shift_assignments, derive_island_ids_from_nozzles
-from .auth import get_current_user, require_supervisor_or_owner, require_owner, get_station_context
+from .auth import get_current_user, require_supervisor_or_owner, require_manager_or_owner, require_owner, get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.shift_auto_close import check_and_close_stale_shifts
 from ...services.shift_status import assert_shift_editable
@@ -388,6 +388,42 @@ def deactivate_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     )
 
     return {"status": "success", "shift_id": shift_id, "new_status": "inactive"}
+
+@router.put("/{shift_id}/reactivate", dependencies=[Depends(require_manager_or_owner)])
+def reactivate_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
+    """
+    Reactivate an inactive shift (manager/owner only).
+    Restores it to active so attendants can submit or correct readings.
+    """
+    storage = ctx["storage"]
+    shifts_data = storage.get('shifts', {})
+
+    if shift_id not in shifts_data:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    current_status = shifts_data[shift_id].get("status", "active")
+    if current_status not in ("inactive", "auto-closed"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only inactive or auto-closed shifts can be reactivated. Current status: {current_status}",
+        )
+
+    shifts_data[shift_id]["status"] = "active"
+    shifts_data[shift_id]["reactivated_at"] = datetime.now().isoformat()
+    shifts_data[shift_id]["reactivated_by"] = ctx["username"]
+    save_station_storage(ctx["station_id"])
+
+    log_audit_event(
+        station_id=ctx["station_id"],
+        action="shift_reactivated",
+        performed_by=ctx["username"],
+        entity_type="shift",
+        entity_id=shift_id,
+        details={"previous_status": current_status},
+    )
+
+    return {"status": "success", "shift_id": shift_id, "new_status": "active"}
+
 
 @router.delete("/{shift_id}", dependencies=[Depends(require_owner)])
 def delete_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
