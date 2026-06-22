@@ -94,7 +94,7 @@ export default function DailyTankReading() {
     invoice_number: '',
 
     // Financial (Columns AR, AT)
-    price_per_liter: '29.92', // Default price
+    price_per_liter: '', // Populated from fuel settings on mount
     expected_cash: '', // Auto-calculated: Total Electronic * Price per Liter
     actual_cash_banked: '', // Manually entered after adjustments
 
@@ -159,6 +159,25 @@ export default function DailyTankReading() {
   const preErPullNozzlesRef = useRef<NozzleReading[] | null>(null)
   // Guards the one-shot auto-pull so it runs once per tank/date/shift, not in a loop.
   const [autoErAttemptedKey, setAutoErAttemptedKey] = useState('')
+
+  const [fuelPrices, setFuelPrices] = useState({ Diesel: 0, Petrol: 0 })
+
+  useEffect(() => {
+    authFetch(`${BASE}/settings/fuel`, { headers: getHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) setFuelPrices({ Diesel: data.diesel_price_per_liter || 0, Petrol: data.petrol_price_per_liter || 0 })
+      })
+      .catch(() => {})
+  }, [])
+
+  // When the selected tank changes, update the price to match its fuel type —
+  // unless the price was already overridden by a loaded existing reading.
+  useEffect(() => {
+    if (!selectedTank || !fuelPrices.Diesel) return
+    const price = isDiesel ? fuelPrices.Diesel : fuelPrices.Petrol
+    if (price) setFormData(prev => ({ ...prev, price_per_liter: price.toFixed(2) }))
+  }, [selectedTank, fuelPrices.Diesel, fuelPrices.Petrol])
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -1899,7 +1918,9 @@ export default function DailyTankReading() {
                     disabled={isReadOnly}
                     className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2 transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
                     style={{ borderColor: theme.primary + '80', backgroundColor: theme.cardBg, color: theme.textPrimary }}
-                    placeholder="29.92"
+                    placeholder={isDiesel
+                      ? (fuelPrices.Diesel ? fuelPrices.Diesel.toFixed(2) : '')
+                      : (fuelPrices.Petrol ? fuelPrices.Petrol.toFixed(2) : '')}
                   />
                   <p className="text-xs mt-1 opacity-75" style={{ color: theme.primary }}>Current selling price per liter</p>
                 </div>
@@ -2728,7 +2749,7 @@ export default function DailyTankReading() {
                                   backgroundColor: theme.cardBg,
                                   color: theme.textPrimary
                                 }}
-                                placeholder="26.98"
+                                placeholder={fuelPrices.Diesel ? fuelPrices.Diesel.toFixed(2) : ''}
                               />
                             </div>
 

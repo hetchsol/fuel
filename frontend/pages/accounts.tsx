@@ -10,6 +10,9 @@ export default function Accounts() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Live fuel prices from settings
+  const [fuelPrices, setFuelPrices] = useState({ Diesel: 0, Petrol: 0 })
+
   // Role + create-account state (creating accounts is manager/owner only)
   const [userRole, setUserRole] = useState('')
   const canManage = ['manager', 'owner'].includes(userRole)
@@ -20,33 +23,57 @@ export default function Accounts() {
     contact_person: '', phone: '', default_price_per_liter: '',
   })
 
-  // Credit sale form state
+  // Credit sale form state — price starts empty; populated after settings fetch
   const [saleForm, setSaleForm] = useState({
     account_id: '',
     fuel_type: 'Diesel',
     volume: '',
-    price_per_liter: '26.98',
+    price_per_liter: '',
     pricing_tier: 'standard',
     amount: '',
     shift_id: '',
     notes: ''
   })
 
-  // Pricing tiers for Diesel
+  // Pricing tiers — prices are derived from the live global diesel price
   const dieselPricingTiers = [
-    { id: 'standard', label: 'Standard (Drive-In)', price: 26.98, discount: 0 },
-    { id: 'volcano', label: 'Volcano Mining', price: 26.85, discount: 0.13 },
-    { id: 'hammington', label: 'Hammington', price: 26.82, discount: 0.16 },
-    { id: 'custom', label: 'Custom Price', price: 26.98, discount: 0 }
+    { id: 'standard',    label: 'Standard',       discount: 0 },
+    { id: 'volcano',     label: 'Volcano Mining',  discount: 0.13 },
+    { id: 'hammington',  label: 'Hammington',      discount: 0.16 },
+    { id: 'custom',      label: 'Custom Price',    discount: null },
   ]
+  const tierPrice = (tierId: string): number => {
+    const tier = dieselPricingTiers.find(t => t.id === tierId)
+    if (!tier || tier.discount === null) return 0
+    return Math.max(0, fuelPrices.Diesel - tier.discount)
+  }
 
   useEffect(() => {
     fetchAccounts()
+    fetchFuelPrices()
     try {
       const u = localStorage.getItem('user')
       if (u) setUserRole(JSON.parse(u).role || '')
     } catch { /* ignore */ }
   }, [])
+
+  const fetchFuelPrices = async () => {
+    try {
+      const res = await authFetch(`${BASE}/settings/fuel`, { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        const prices = {
+          Diesel: data.diesel_price_per_liter || 0,
+          Petrol: data.petrol_price_per_liter || 0,
+        }
+        setFuelPrices(prices)
+        setSaleForm(prev => ({
+          ...prev,
+          price_per_liter: prev.price_per_liter || (prices.Diesel ? prices.Diesel.toFixed(2) : ''),
+        }))
+      }
+    } catch { /* ignore */ }
+  }
 
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -105,39 +132,43 @@ export default function Accounts() {
   }
 
   const handleFuelTypeChange = (fuelType: string) => {
-    const price = fuelType === 'Petrol' ? '29.92' : '26.98'
+    const price = fuelPrices[fuelType as 'Diesel' | 'Petrol']
+    const priceStr = price ? price.toFixed(2) : ''
     const pricingTier = fuelType === 'Petrol' ? 'standard' : saleForm.pricing_tier
-    setSaleForm({ ...saleForm, fuel_type: fuelType, price_per_liter: price, pricing_tier: pricingTier })
+    const amount = saleForm.volume && price
+      ? (parseFloat(saleForm.volume) * price).toFixed(2) : ''
+    setSaleForm({ ...saleForm, fuel_type: fuelType, price_per_liter: priceStr, pricing_tier: pricingTier, amount })
+  }
 
-    // Recalculate amount if volume exists
-    if (saleForm.volume) {
-      const calculatedAmount = (parseFloat(saleForm.volume) * parseFloat(price)).toFixed(2)
-      setSaleForm({ ...saleForm, fuel_type: fuelType, price_per_liter: price, pricing_tier: pricingTier, amount: calculatedAmount })
+  const handleAccountChange = (accountId: string) => {
+    const account = accounts.find((a: any) => a.account_id === accountId)
+    if (account?.default_price_per_liter) {
+      const price = (account.default_price_per_liter as number).toFixed(2)
+      const amount = saleForm.volume
+        ? (parseFloat(saleForm.volume) * account.default_price_per_liter).toFixed(2) : ''
+      setSaleForm({ ...saleForm, account_id: accountId, price_per_liter: price, pricing_tier: 'custom', amount })
+    } else {
+      setSaleForm({ ...saleForm, account_id: accountId })
     }
   }
 
   const handlePricingTierChange = (tierId: string) => {
-    const tier = dieselPricingTiers.find(t => t.id === tierId)
-    if (!tier) return
-
-    const price = tier.price.toString()
-    setSaleForm({ ...saleForm, pricing_tier: tierId, price_per_liter: price })
-
-    // Recalculate amount if volume exists
-    if (saleForm.volume) {
-      const calculatedAmount = (parseFloat(saleForm.volume) * parseFloat(price)).toFixed(2)
-      setSaleForm({ ...saleForm, pricing_tier: tierId, price_per_liter: price, amount: calculatedAmount })
+    if (tierId === 'custom') {
+      // Custom — don't overwrite price; just mark tier so user can edit freely
+      setSaleForm({ ...saleForm, pricing_tier: 'custom' })
+      return
     }
+    const price = tierPrice(tierId)
+    const priceStr = price ? price.toFixed(2) : ''
+    const amount = saleForm.volume && price
+      ? (parseFloat(saleForm.volume) * price).toFixed(2) : ''
+    setSaleForm({ ...saleForm, pricing_tier: tierId, price_per_liter: priceStr, amount })
   }
 
   const handleVolumeChange = (volume: string) => {
-    setSaleForm({ ...saleForm, volume })
-
-    // Auto-calculate amount
-    if (volume && saleForm.price_per_liter) {
-      const calculatedAmount = (parseFloat(volume) * parseFloat(saleForm.price_per_liter)).toFixed(2)
-      setSaleForm({ ...saleForm, volume, amount: calculatedAmount })
-    }
+    const price = parseFloat(saleForm.price_per_liter) || 0
+    const amount = volume && price ? (parseFloat(volume) * price).toFixed(2) : ''
+    setSaleForm({ ...saleForm, volume, amount })
   }
 
   const handleSubmitSale = async (e: React.FormEvent) => {
@@ -183,12 +214,12 @@ export default function Accounts() {
 
       toast.success('Credit sale recorded successfully!')
 
-      // Reset form
+      // Reset form — re-seed price from live settings
       setSaleForm({
         account_id: '',
         fuel_type: 'Diesel',
         volume: '',
-        price_per_liter: '26.98',
+        price_per_liter: fuelPrices.Diesel ? fuelPrices.Diesel.toFixed(2) : '',
         pricing_tier: 'standard',
         amount: '',
         shift_id: '',
@@ -248,7 +279,7 @@ export default function Accounts() {
               </label>
               <select
                 value={saleForm.account_id}
-                onChange={(e) => setSaleForm({ ...saleForm, account_id: e.target.value })}
+                onChange={(e) => handleAccountChange(e.target.value)}
                 className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 required
               >
@@ -286,12 +317,17 @@ export default function Accounts() {
                   onChange={(e) => handlePricingTierChange(e.target.value)}
                   className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
                 >
-                  {dieselPricingTiers.map(tier => (
-                    <option key={tier.id} value={tier.id}>
-                      {tier.label} - ZMW {tier.price.toFixed(2)}/L
-                      {tier.discount > 0 && ` (${tier.discount.toFixed(2)} discount)`}
-                    </option>
-                  ))}
+                  {dieselPricingTiers.map(tier => {
+                    const p = tier.discount !== null ? tierPrice(tier.id) : null
+                    return (
+                      <option key={tier.id} value={tier.id}>
+                        {tier.label}
+                        {p !== null && fuelPrices.Diesel > 0
+                          ? ` — ZMW ${p.toFixed(2)}/L${tier.discount ? ` (-${tier.discount.toFixed(2)})` : ''}`
+                          : tier.id === 'custom' ? ' — enter below' : ''}
+                      </option>
+                    )
+                  })}
                 </select>
               </div>
             )}
@@ -306,19 +342,19 @@ export default function Accounts() {
                 step="0.01"
                 value={saleForm.price_per_liter}
                 onChange={(e) => {
-                  setSaleForm({ ...saleForm, price_per_liter: e.target.value, pricing_tier: 'custom' })
-                  if (saleForm.volume) {
-                    const calculatedAmount = (parseFloat(saleForm.volume) * parseFloat(e.target.value)).toFixed(2)
-                    setSaleForm({ ...saleForm, price_per_liter: e.target.value, pricing_tier: 'custom', amount: calculatedAmount })
-                  }
+                  const price = e.target.value
+                  const amount = saleForm.volume && parseFloat(price) > 0
+                    ? (parseFloat(saleForm.volume) * parseFloat(price)).toFixed(2) : ''
+                  setSaleForm({ ...saleForm, price_per_liter: price, pricing_tier: 'custom', amount })
                 }}
                 className={`w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary font-semibold text-lg ${
                   saleForm.pricing_tier === 'custom' ? 'bg-status-pending-light' : 'bg-surface-bg'
                 }`}
-                placeholder="26.98"
+                placeholder={fuelPrices[saleForm.fuel_type as 'Diesel' | 'Petrol']
+                  ? fuelPrices[saleForm.fuel_type as 'Diesel' | 'Petrol'].toFixed(2) : ''}
               />
               {saleForm.pricing_tier === 'custom' && (
-                <p className="text-xs text-status-warning mt-1">⚠️ Custom price - differs from standard tiers</p>
+                <p className="text-xs text-status-warning mt-1">Custom price — amount computed from this rate</p>
               )}
             </div>
 
