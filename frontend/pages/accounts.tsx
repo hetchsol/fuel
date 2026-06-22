@@ -35,18 +35,15 @@ export default function Accounts() {
     notes: ''
   })
 
-  // Pricing tiers — prices are derived from the live global diesel price
-  const dieselPricingTiers = [
-    { id: 'standard',    label: 'Standard',       discount: 0 },
-    { id: 'volcano',     label: 'Volcano Mining',  discount: 0.13 },
-    { id: 'hammington',  label: 'Hammington',      discount: 0.16 },
-    { id: 'custom',      label: 'Custom Price',    discount: null },
+  // Only two tiers: standard (global price) and custom (free entry).
+  // Per-account rates are configured on the account record itself via
+  // default_price_per_liter and applied automatically on account selection.
+  const pricingTiers = [
+    { id: 'standard', label: 'Standard' },
+    { id: 'custom',   label: 'Custom Price' },
   ]
-  const tierPrice = (tierId: string): number => {
-    const tier = dieselPricingTiers.find(t => t.id === tierId)
-    if (!tier || tier.discount === null) return 0
-    return Math.max(0, fuelPrices.Diesel - tier.discount)
-  }
+  const tierPrice = (tierId: string): number =>
+    tierId === 'standard' ? fuelPrices[saleForm.fuel_type as 'Diesel' | 'Petrol'] : 0
 
   useEffect(() => {
     fetchAccounts()
@@ -154,11 +151,11 @@ export default function Accounts() {
 
   const handlePricingTierChange = (tierId: string) => {
     if (tierId === 'custom') {
-      // Custom — don't overwrite price; just mark tier so user can edit freely
       setSaleForm({ ...saleForm, pricing_tier: 'custom' })
       return
     }
-    const price = tierPrice(tierId)
+    // Standard — reset to global price for the selected fuel type
+    const price = tierPrice('standard')
     const priceStr = price ? price.toFixed(2) : ''
     const amount = saleForm.volume && price
       ? (parseFloat(saleForm.volume) * price).toFixed(2) : ''
@@ -306,31 +303,29 @@ export default function Accounts() {
               </select>
             </div>
 
-            {/* Pricing Tier for Diesel */}
-            {saleForm.fuel_type === 'Diesel' && (
-              <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1">
-                  Customer Pricing Tier
-                </label>
-                <select
-                  value={saleForm.pricing_tier}
-                  onChange={(e) => handlePricingTierChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                >
-                  {dieselPricingTiers.map(tier => {
-                    const p = tier.discount !== null ? tierPrice(tier.id) : null
-                    return (
-                      <option key={tier.id} value={tier.id}>
-                        {tier.label}
-                        {p !== null && fuelPrices.Diesel > 0
-                          ? ` — ZMW ${p.toFixed(2)}/L${tier.discount ? ` (-${tier.discount.toFixed(2)})` : ''}`
-                          : tier.id === 'custom' ? ' — enter below' : ''}
-                      </option>
-                    )
-                  })}
-                </select>
-              </div>
-            )}
+            {/* Pricing Tier */}
+            <div>
+              <label className="block text-sm font-medium text-content-secondary mb-1">
+                Pricing
+              </label>
+              <select
+                value={saleForm.pricing_tier}
+                onChange={(e) => handlePricingTierChange(e.target.value)}
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+              >
+                {pricingTiers.map(tier => {
+                  const globalPrice = fuelPrices[saleForm.fuel_type as 'Diesel' | 'Petrol']
+                  return (
+                    <option key={tier.id} value={tier.id}>
+                      {tier.label}
+                      {tier.id === 'standard' && globalPrice > 0
+                        ? ` — ZMW ${globalPrice.toFixed(2)}/L`
+                        : tier.id === 'custom' ? ' — enter below' : ''}
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
 
             {/* Price per Liter Display */}
             <div>
