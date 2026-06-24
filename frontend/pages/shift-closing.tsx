@@ -46,9 +46,13 @@ export default function ShiftClosing() {
   const [handover, setHandover] = useState<any>(null)
   const [shiftInfo, setShiftInfo] = useState<any>(null)
 
+  // POS payment types
+  const [posTypes, setPosTypes] = useState<{ type_id: string; name: string; is_active: boolean }[]>([])
+  const [posAmounts, setPosAmounts] = useState<Record<string, string>>({})
+  const [posRefs, setPosRefs] = useState<Record<string, string>>({})
+
   // Phase 2 inputs
   const [actualCash, setActualCash] = useState('')
-  const [posReceipts, setPosReceipts] = useState('')
   const [notes, setNotes] = useState('')
 
   // Credit sales
@@ -84,6 +88,18 @@ export default function ShiftClosing() {
         if (depTotal > 0) {
           setActualCash(prev => prev === '' ? depTotal.toFixed(2) : prev)
         }
+      }
+    } catch {}
+    try {
+      const posRes = await authFetch(`${BASE}/settings/pos`, { headers: getAuthHeaders() })
+      if (posRes.ok) {
+        const posData = await posRes.json()
+        const active = (posData.payment_types || []).filter((t: any) => t.is_active)
+        setPosTypes(active)
+        const init: Record<string, string> = {}
+        active.forEach((t: any) => { init[t.type_id] = '' })
+        setPosAmounts(init)
+        setPosRefs({})
       }
     } catch {}
   }
@@ -209,11 +225,11 @@ export default function ShiftClosing() {
 
   // Computed values
   const actualCashVal = parseFloat(actualCash) || 0
-  const posReceiptsVal = parseFloat(posReceipts) || 0
+  const posTotal = Object.values(posAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0)
   const creditItemsTotal = creditItems.reduce((sum, i) => sum + (i.amount || 0), 0)
   const creditVal = creditItemsTotal || 0
   const totalExpected = handover?.total_expected || 0
-  const totalAccounted = actualCashVal + posReceiptsVal + creditVal
+  const totalAccounted = actualCashVal + posTotal + creditVal
   const difference = totalAccounted - totalExpected
 
   const canSubmit = actualCash !== '' && !submitting
@@ -223,6 +239,10 @@ export default function ShiftClosing() {
     setSubmitting(true)
     setError('')
 
+    const posItems = posTypes
+      .map(t => ({ type_id: t.type_id, type_name: t.name, amount: parseFloat(posAmounts[t.type_id] || '0') || 0, reference: posRefs[t.type_id] || undefined }))
+      .filter(i => i.amount > 0)
+
     try {
       const res = await authFetch(`${BASE}/handover/submit-closing`, {
         method: 'POST',
@@ -230,7 +250,8 @@ export default function ShiftClosing() {
         body: JSON.stringify({
           handover_id: handover.handover_id,
           actual_cash: actualCashVal,
-          pos_receipts: posReceiptsVal,
+          pos_receipts: posTotal,
+          pos_items: posItems,
           credit_sales: creditVal,
           credit_sale_items: creditItems.map(i => ({
             account_id: i.account_id,
@@ -479,16 +500,32 @@ export default function ShiftClosing() {
                   style={inputStyle} />
               </div>
 
-              {/* POS Receipts */}
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-                  POS Receipts Total — ZMW
-                </label>
-                <input type="number" min={0} step="0.01" value={posReceipts}
-                  onChange={e => setPosReceipts(e.target.value)} placeholder="0.00"
-                  className="w-full px-3 py-2 rounded border text-sm text-right font-mono"
-                  style={inputStyle} />
-              </div>
+              {/* POS Receipts — per payment type */}
+              {posTypes.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>POS Receipts — ZMW</label>
+                    {posTotal > 0 && (
+                      <span className="text-xs font-mono font-semibold" style={{ color: theme.textPrimary }}>{fmtZMW(posTotal)}</span>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {posTypes.map(t => (
+                      <div key={t.type_id} className="flex items-center gap-2">
+                        <span className="text-xs w-28 shrink-0" style={{ color: theme.textSecondary }}>{t.name}</span>
+                        <input type="number" min={0} step="0.01" value={posAmounts[t.type_id] ?? ''} placeholder="0.00"
+                          onChange={e => setPosAmounts(prev => ({ ...prev, [t.type_id]: e.target.value }))}
+                          className="w-28 px-2 py-1.5 rounded border text-sm text-right font-mono"
+                          style={inputStyle} />
+                        <input type="text" value={posRefs[t.type_id] ?? ''} placeholder="Ref (optional)"
+                          onChange={e => setPosRefs(prev => ({ ...prev, [t.type_id]: e.target.value }))}
+                          className="flex-1 px-2 py-1.5 rounded border text-xs"
+                          style={inputStyle} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Credit Sales */}
               {creditAccounts.length > 0 && (
@@ -607,7 +644,7 @@ export default function ShiftClosing() {
                 </div>
                 <div className="flex justify-between">
                   <span style={{ color: theme.textSecondary }}>+ POS Receipts</span>
-                  <span className="font-mono" style={{ color: theme.textPrimary }}>{fmtZMW(posReceiptsVal)}</span>
+                  <span className="font-mono" style={{ color: theme.textPrimary }}>{fmtZMW(posTotal)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span style={{ color: theme.textSecondary }}>+ Credit Sales</span>

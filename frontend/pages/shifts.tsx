@@ -52,6 +52,16 @@ export default function Shifts() {
       .then(res => res.ok ? res.json() : null)
       .then(data => { if (data) setFuelPrices({ Petrol: data.petrol_price_per_liter || 0, Diesel: data.diesel_price_per_liter || 0 }) })
       .catch(() => {})
+    authFetch(`/api/v1/settings/pos`, { headers: getHeaders() })
+      .then(res => res.ok ? res.json() : { payment_types: [] })
+      .then(data => {
+        const active = (data.payment_types || []).filter((t: any) => t.is_active)
+        setPosTypes(active)
+        const init: Record<string, string> = {}
+        active.forEach((t: any) => { init[t.type_id] = '' })
+        setRetroPosAmounts(init)
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -565,7 +575,10 @@ export default function Shifts() {
   } | null>(null)
   const [retroOpenings, setRetroOpenings] = useState<Record<string, { electronic: string; mechanical: string }>>({})
   const [retroClosings, setRetroClosings] = useState<Record<string, { electronic: string; mechanical: string }>>({})
-  const [retroFinancials, setRetroFinancials] = useState({ actual_cash: '', pos_receipts: '', credit_sales: '', notes: '' })
+  const [retroFinancials, setRetroFinancials] = useState({ actual_cash: '', credit_sales: '', notes: '' })
+  const [retroPosAmounts, setRetroPosAmounts] = useState<Record<string, string>>({})
+  const [retroPosRefs, setRetroPosRefs] = useState<Record<string, string>>({})
+  const [posTypes, setPosTypes] = useState<{ type_id: string; name: string; is_active: boolean }[]>([])
   const [retroSubmitting, setRetroSubmitting] = useState(false)
 
   const openRetroModal = (shift: any, assignment: any) => {
@@ -582,7 +595,11 @@ export default function Shifts() {
     nozzleList.forEach((n: any) => { initReadings[n.nozzle_id] = initRow() })
     setRetroOpenings({ ...initReadings })
     setRetroClosings({ ...initReadings })
-    setRetroFinancials({ actual_cash: '', pos_receipts: '', credit_sales: '', notes: '' })
+    setRetroFinancials({ actual_cash: '', credit_sales: '', notes: '' })
+    const initPosAmounts: Record<string, string> = {}
+    posTypes.forEach(t => { initPosAmounts[t.type_id] = '' })
+    setRetroPosAmounts(initPosAmounts)
+    setRetroPosRefs({})
     setRetroModal({ shift, assignment, nozzleList })
   }
 
@@ -613,7 +630,10 @@ export default function Shifts() {
           mechanical_reading: parseFloat(v.mechanical) || 0,
         })),
         actual_cash: parseFloat(retroFinancials.actual_cash) || 0,
-        pos_receipts: parseFloat(retroFinancials.pos_receipts) || 0,
+        pos_items: posTypes
+          .map(t => ({ type_id: t.type_id, type_name: t.name, amount: parseFloat(retroPosAmounts[t.type_id] || '0') || 0, reference: retroPosRefs[t.type_id] || undefined }))
+          .filter(i => i.amount > 0),
+        pos_receipts: posTypes.reduce((s, t) => s + (parseFloat(retroPosAmounts[t.type_id] || '0') || 0), 0),
         credit_sales: parseFloat(retroFinancials.credit_sales) || 0,
         notes: retroFinancials.notes || null,
       }
@@ -1639,23 +1659,13 @@ export default function Shifts() {
             {/* Financial section */}
             <div className="mt-5">
               <h3 className="text-sm font-semibold text-content-primary mb-3">Financial Handover</h3>
-              <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 <div>
                   <label className="block text-xs font-medium text-content-secondary mb-1">Actual Cash (ZMW)</label>
                   <input
                     type="number" step="0.01" min="0"
                     value={retroFinancials.actual_cash}
                     onChange={e => setRetroFinancials(f => ({ ...f, actual_cash: e.target.value }))}
-                    className="w-full px-2 py-1.5 text-sm border border-surface-border rounded focus:outline-none focus:ring-1 focus:ring-action-primary"
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-content-secondary mb-1">POS / Card (ZMW)</label>
-                  <input
-                    type="number" step="0.01" min="0"
-                    value={retroFinancials.pos_receipts}
-                    onChange={e => setRetroFinancials(f => ({ ...f, pos_receipts: e.target.value }))}
                     className="w-full px-2 py-1.5 text-sm border border-surface-border rounded focus:outline-none focus:ring-1 focus:ring-action-primary"
                     placeholder="0.00"
                   />
@@ -1671,6 +1681,30 @@ export default function Shifts() {
                   />
                 </div>
               </div>
+              {posTypes.length > 0 && (
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-medium text-content-secondary uppercase">POS / Card (ZMW)</label>
+                    {(() => {
+                      const t = posTypes.reduce((s, pt) => s + (parseFloat(retroPosAmounts[pt.type_id] || '0') || 0), 0)
+                      return t > 0 ? <span className="text-xs font-mono font-semibold text-content-primary">K{t.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> : null
+                    })()}
+                  </div>
+                  <div className="space-y-1.5">
+                    {posTypes.map(t => (
+                      <div key={t.type_id} className="flex items-center gap-2">
+                        <span className="text-xs w-28 shrink-0 text-content-secondary">{t.name}</span>
+                        <input type="number" min={0} step="0.01" value={retroPosAmounts[t.type_id] ?? ''} placeholder="0.00"
+                          onChange={e => setRetroPosAmounts(prev => ({ ...prev, [t.type_id]: e.target.value }))}
+                          className="w-28 px-2 py-1.5 text-sm border border-surface-border rounded focus:outline-none focus:ring-1 focus:ring-action-primary text-right font-mono" />
+                        <input type="text" value={retroPosRefs[t.type_id] ?? ''} placeholder="Ref (optional)"
+                          onChange={e => setRetroPosRefs(prev => ({ ...prev, [t.type_id]: e.target.value }))}
+                          className="flex-1 px-2 py-1.5 text-xs border border-surface-border rounded focus:outline-none focus:ring-1 focus:ring-action-primary" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-content-secondary mb-1">Notes</label>
                 <textarea

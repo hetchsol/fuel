@@ -1208,6 +1208,7 @@ class ManagerRetroEntryInput(BaseModel):
     closing_readings: List[ManagerRetroNozzleInput]
     actual_cash: float = 0.0
     pos_receipts: float = 0.0
+    pos_items: List = []   # List[POSReceiptItem] — typed at runtime via models import
     credit_sales: float = 0.0
     notes: Optional[str] = None
 
@@ -1313,9 +1314,17 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
         shift_date=shift.get("date"), shift_type=shift.get("shift_type"),
     )
 
+    # POS: if breakdown items provided, derive sum from them
+    retro_pos_breakdown = None
+    if data.pos_items:
+        retro_pos_breakdown = [item if isinstance(item, dict) else item.model_dump() for item in data.pos_items]
+        retro_pos_total = round(sum((item.get("amount", 0) if isinstance(item, dict) else item.amount) for item in data.pos_items), 2)
+    else:
+        retro_pos_total = data.pos_receipts
+
     total_expected = round(fuel_revenue, 2)
     expected_cash = round(total_expected - data.credit_sales, 2)
-    total_accounted = round(data.actual_cash + data.pos_receipts + data.credit_sales, 2)
+    total_accounted = round(data.actual_cash + retro_pos_total + data.credit_sales, 2)
     difference = round(total_accounted - total_expected, 2)
 
     auto_flag_reasons, review_status = _compute_auto_flags(difference, nozzle_summaries, [], storage)
@@ -1338,7 +1347,8 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
         credit_sales=data.credit_sales,
         expected_cash=expected_cash,
         actual_cash=data.actual_cash,
-        pos_receipts=data.pos_receipts,
+        pos_receipts=retro_pos_total,
+        pos_breakdown=retro_pos_breakdown,
         total_accounted=total_accounted,
         difference=difference,
         status="submitted",
@@ -1735,9 +1745,17 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
         credit_sales, credit_sale_details, new_items_to_create = \
             _process_credit_sales(data.credit_sale_items, storage, shift_id)
 
+    # POS: if breakdown items provided, derive sum from them
+    pos_breakdown = None
+    if data.pos_items:
+        pos_breakdown = [item.model_dump() for item in data.pos_items]
+        pos_total = round(sum(item.amount for item in data.pos_items), 2)
+    else:
+        pos_total = data.pos_receipts
+
     # Compute financials
     total_expected = handover.get("total_expected", 0)
-    total_accounted = round(data.actual_cash + data.pos_receipts + credit_sales, 2)
+    total_accounted = round(data.actual_cash + pos_total + credit_sales, 2)
     difference = round(total_accounted - total_expected, 2)
     expected_cash = round(total_expected - credit_sales, 2)
 
@@ -1754,7 +1772,8 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     handover["phase"] = "completed"
     handover["phase_2_completed_at"] = now_iso
     handover["actual_cash"] = data.actual_cash
-    handover["pos_receipts"] = data.pos_receipts
+    handover["pos_receipts"] = pos_total
+    handover["pos_breakdown"] = pos_breakdown
     handover["credit_sales"] = credit_sales
     handover["credit_sale_details"] = credit_sale_details
     handover["expected_cash"] = expected_cash
@@ -1793,7 +1812,7 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
         performed_by=ctx["username"], entity_type="handover", entity_id=data.handover_id,
         details={"shift_id": shift_id, "fuel_revenue": handover.get("fuel_revenue", 0),
                  "total_expected": total_expected, "actual_cash": data.actual_cash,
-                 "pos_receipts": data.pos_receipts, "difference": difference},
+                 "pos_receipts": pos_total, "difference": difference},
     )
 
     create_notification(

@@ -10,7 +10,7 @@ from datetime import datetime
 from ...models.models import (
     FuelSettings, SystemSettings, ValidationThresholds, EmailSettings,
     TaxLevySettings, StockAlertSettings, ReconciliationToleranceSettings,
-    ScheduledPriceChange,
+    ScheduledPriceChange, POSPaymentType,
 )
 from .auth import get_station_context, require_manager_or_owner, require_owner
 from ...services.audit_service import log_audit_event
@@ -487,3 +487,57 @@ def update_reconciliation_tolerance_settings(settings: ReconciliationToleranceSe
         "message": "Reconciliation tolerance settings updated successfully",
         "settings": storage['reconciliation_tolerance_settings'],
     }
+
+
+# ── POS Payment Types ────────────────────────────────────────
+
+DEFAULT_POS_TYPES = [
+    {"type_id": "visa",         "name": "Visa",          "is_active": True},
+    {"type_id": "mastercard",   "name": "Mastercard",    "is_active": True},
+    {"type_id": "momo_mtn",     "name": "MoMo (MTN)",    "is_active": True},
+    {"type_id": "airtel_money", "name": "Airtel Money",  "is_active": True},
+    {"type_id": "zamtel",       "name": "Zamtel Kwacha", "is_active": True},
+    {"type_id": "izwe",         "name": "IZWE",          "is_active": True},
+    {"type_id": "kazang",       "name": "Kazang",        "is_active": True},
+]
+
+
+def _load_pos_settings(station_id: str) -> dict:
+    data = load_station_json(station_id, "pos_settings.json", default=None)
+    if data is None:
+        data = {"payment_types": DEFAULT_POS_TYPES}
+        save_station_json(station_id, "pos_settings.json", data)
+    return data
+
+
+@router.get("/pos")
+def get_pos_settings(ctx: dict = Depends(get_station_context)):
+    return _load_pos_settings(ctx["station_id"])
+
+
+@router.put("/pos", dependencies=[Depends(require_manager_or_owner)])
+def update_pos_settings(payment_types: list[POSPaymentType], ctx: dict = Depends(get_station_context)):
+    station_id = ctx["station_id"]
+    if not payment_types:
+        raise HTTPException(status_code=422, detail="At least one payment type is required")
+
+    ids_seen: set = set()
+    for pt in payment_types:
+        if not pt.type_id.strip():
+            raise HTTPException(status_code=422, detail="type_id must not be blank")
+        if not pt.name.strip():
+            raise HTTPException(status_code=422, detail="name must not be blank")
+        if pt.type_id in ids_seen:
+            raise HTTPException(status_code=422, detail=f"Duplicate type_id: {pt.type_id}")
+        ids_seen.add(pt.type_id)
+
+    data = {"payment_types": [pt.model_dump() for pt in payment_types]}
+    save_station_json(station_id, "pos_settings.json", data)
+
+    log_audit_event(
+        station_id=station_id, action="pos_settings_update",
+        performed_by=ctx["username"], entity_type="pos_settings",
+        details={"payment_types": data["payment_types"]},
+    )
+
+    return {"status": "success", "message": "POS payment types updated", "payment_types": data["payment_types"]}

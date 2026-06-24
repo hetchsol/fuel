@@ -158,7 +158,8 @@ export default function HandoverReview() {
   // Inline closing form (Phase 2 embedded in this page)
   const [closingFormId, setClosingFormId] = useState<string | null>(null)
   const [closingCash, setClosingCash] = useState('')
-  const [closingPos, setClosingPos] = useState('')
+  const [closingPosAmounts, setClosingPosAmounts] = useState<Record<string, string>>({})
+  const [closingPosRefs, setClosingPosRefs] = useState<Record<string, string>>({})
   const [closingNotes, setClosingNotes] = useState('')
   const [closingCreditItems, setClosingCreditItems] = useState<CreditItem[]>([])
   const [closingSafeDeposit, setClosingSafeDeposit] = useState(0)
@@ -166,6 +167,7 @@ export default function HandoverReview() {
   const [closingError, setClosingError] = useState('')
   const [creditAccounts, setCreditAccounts] = useState<any[]>([])
   const [fuelPrices, setFuelPrices] = useState<Record<string, number>>({ Diesel: 0, Petrol: 0 })
+  const [posTypes, setPosTypes] = useState<{ type_id: string; name: string; is_active: boolean }[]>([])
 
   // Auth check
   useEffect(() => {
@@ -237,13 +239,22 @@ export default function HandoverReview() {
     fetchQueue()
   }, [fetchQueue])
 
-  // Load credit accounts once — needed for the inline closing form
+  // Load credit accounts and POS types once — needed for the inline closing form
   useEffect(() => {
     authFetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
       .then(r => r.ok ? r.json() : { accounts: [], fuel_prices: {} })
       .then(data => {
         setCreditAccounts(data.accounts || [])
         setFuelPrices(data.fuel_prices || { Diesel: 0, Petrol: 0 })
+      })
+    authFetch(`${BASE}/settings/pos`, { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : { payment_types: [] })
+      .then(data => {
+        const active = (data.payment_types || []).filter((t: any) => t.is_active)
+        setPosTypes(active)
+        const init: Record<string, string> = {}
+        active.forEach((t: any) => { init[t.type_id] = '' })
+        setClosingPosAmounts(init)
       })
       .catch(() => {})
   }, [])
@@ -254,7 +265,10 @@ export default function HandoverReview() {
     const h = awaitingClosing.find(x => x.handover_id === closingFormId)
     if (!h) return
     setClosingCash('')
-    setClosingPos('')
+    const resetAmounts: Record<string, string> = {}
+    posTypes.forEach(t => { resetAmounts[t.type_id] = '' })
+    setClosingPosAmounts(resetAmounts)
+    setClosingPosRefs({})
     setClosingNotes('')
     setClosingCreditItems([])
     setClosingSafeDeposit(0)
@@ -468,7 +482,10 @@ export default function HandoverReview() {
     setClosingSubmitting(true)
     setClosingError('')
     const actualCashVal = parseFloat(closingCash) || 0
-    const posVal = parseFloat(closingPos) || 0
+    const posItems = posTypes
+      .map(t => ({ type_id: t.type_id, type_name: t.name, amount: parseFloat(closingPosAmounts[t.type_id] || '0') || 0, reference: closingPosRefs[t.type_id] || undefined }))
+      .filter(i => i.amount > 0)
+    const posTotal = posItems.reduce((s, i) => s + i.amount, 0)
     const creditTotal = closingCreditItems.reduce((s, i) => s + (i.amount || 0), 0)
     try {
       // Step 1: submit Phase 2 financials
@@ -478,7 +495,8 @@ export default function HandoverReview() {
         body: JSON.stringify({
           handover_id: h.handover_id,
           actual_cash: actualCashVal,
-          pos_receipts: posVal,
+          pos_receipts: posTotal,
+          pos_items: posItems,
           credit_sales: creditTotal,
           credit_sale_items: closingCreditItems.map(i => ({
             account_id: i.account_id,
@@ -941,8 +959,11 @@ export default function HandoverReview() {
                           safeDeposit={closingSafeDeposit}
                           cash={closingCash}
                           onCashChange={setClosingCash}
-                          pos={closingPos}
-                          onPosChange={setClosingPos}
+                          posTypes={posTypes}
+                          posAmounts={closingPosAmounts}
+                          onPosAmountsChange={setClosingPosAmounts}
+                          posRefs={closingPosRefs}
+                          onPosRefsChange={setClosingPosRefs}
                           notes={closingNotes}
                           onNotesChange={setClosingNotes}
                           creditItems={closingCreditItems}
@@ -1134,8 +1155,11 @@ interface ClosingFormProps {
   safeDeposit: number
   cash: string
   onCashChange: (v: string) => void
-  pos: string
-  onPosChange: (v: string) => void
+  posTypes: { type_id: string; name: string; is_active: boolean }[]
+  posAmounts: Record<string, string>
+  onPosAmountsChange: (v: Record<string, string>) => void
+  posRefs: Record<string, string>
+  onPosRefsChange: (v: Record<string, string>) => void
   notes: string
   onNotesChange: (v: string) => void
   creditItems: CreditItem[]
@@ -1147,11 +1171,12 @@ interface ClosingFormProps {
 }
 
 function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
-  cash, onCashChange, pos, onPosChange, notes, onNotesChange,
+  cash, onCashChange, posTypes, posAmounts, onPosAmountsChange, posRefs, onPosRefsChange,
+  notes, onNotesChange,
   creditItems, onCreditItemsChange, submitting, error, onSubmit, onCancel,
 }: ClosingFormProps) {
   const cashVal = parseFloat(cash) || 0
-  const posVal = parseFloat(pos) || 0
+  const posVal = posTypes.reduce((s, t) => s + (parseFloat(posAmounts[t.type_id] || '0') || 0), 0)
   const creditTotal = creditItems.reduce((s, i) => s + (i.amount || 0), 0)
   const totalAccounted = cashVal + posVal + creditTotal
   const difference = totalAccounted - (h.total_expected || 0)
@@ -1189,16 +1214,36 @@ function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
             className="w-full px-3 py-2 rounded border text-sm text-right font-mono"
             style={inputStyle} />
         </div>
-        <div>
-          <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-            POS Receipts — ZMW
-          </label>
-          <input type="number" min={0} step="0.01" value={pos}
-            onChange={e => onPosChange(e.target.value)}
-            className="w-full px-3 py-2 rounded border text-sm text-right font-mono"
-            style={inputStyle} />
-        </div>
       </div>
+
+      {/* POS Receipts — per payment type */}
+      {posTypes.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>POS Receipts — ZMW</label>
+            {posVal > 0 && (
+              <span className="text-xs font-mono font-semibold" style={{ color: theme.textPrimary }}>
+                K{posVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            )}
+          </div>
+          <div className="space-y-2">
+            {posTypes.map(t => (
+              <div key={t.type_id} className="flex items-center gap-2">
+                <span className="text-xs w-28 shrink-0" style={{ color: theme.textSecondary }}>{t.name}</span>
+                <input type="number" min={0} step="0.01" value={posAmounts[t.type_id] ?? ''} placeholder="0.00"
+                  onChange={e => onPosAmountsChange({ ...posAmounts, [t.type_id]: e.target.value })}
+                  className="w-28 px-2 py-1.5 rounded border text-sm text-right font-mono"
+                  style={inputStyle} />
+                <input type="text" value={posRefs[t.type_id] ?? ''} placeholder="Ref (optional)"
+                  onChange={e => onPosRefsChange({ ...posRefs, [t.type_id]: e.target.value })}
+                  className="flex-1 px-2 py-1.5 rounded border text-xs"
+                  style={inputStyle} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Credit sales */}
       {creditAccounts.length > 0 && (

@@ -922,11 +922,23 @@ class ReadingsVerificationInput(BaseModel):
     stock_snapshot: Optional[ShiftStockSnapshot] = None
     notes: Optional[str] = None
 
+class POSPaymentType(BaseModel):
+    type_id: str
+    name: str
+    is_active: bool = True
+
+class POSReceiptItem(BaseModel):
+    type_id: str
+    type_name: str       # denormalized — preserved if type is later renamed
+    amount: float = Field(default=0, ge=0)
+    reference: Optional[str] = None  # terminal batch/slip number
+
 class ShiftClosingInput(BaseModel):
     """Phase 2: Financial reconciliation submitted in the office with manager"""
     handover_id: str
     actual_cash: float = Field(..., ge=0)          # Safe cash + cash in hand combined
-    pos_receipts: float = Field(default=0, ge=0)   # POS terminal total
+    pos_receipts: float = Field(default=0, ge=0)   # POS terminal total (sum; kept for backward compat)
+    pos_items: List[POSReceiptItem] = []            # per-type breakdown; if provided, sum overrides pos_receipts
     credit_sales: float = Field(default=0, ge=0)
     credit_sale_items: List['HandoverCreditSaleItem'] = []
     notes: Optional[str] = None
@@ -969,8 +981,9 @@ class HandoverOutput(BaseModel):
     expected_cash: float        # total_expected - credit_sales
     actual_cash: float
     difference: float           # actual - expected (+surplus / -shortage)
-    pos_receipts: float = 0     # POS terminal total
-    total_accounted: float = 0  # cash + POS + credit
+    pos_receipts: float = 0                    # POS terminal total
+    pos_breakdown: Optional[List[dict]] = None # per-type breakdown; None on old records
+    total_accounted: float = 0                 # cash + POS + credit
     status: str                 # "submitted" or "reopened"
     phase: str = "completed"    # "readings_verified" | "completed" | "readings_superseded"
     phase_1_completed_at: Optional[str] = None

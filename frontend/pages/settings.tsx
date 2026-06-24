@@ -4,7 +4,7 @@ import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
-type SettingsTab = 'system' | 'fuel' | 'tax-levy' | 'validation' | 'stock-alerts' | 'recon-tolerances' | 'email' | 'tank-calibration'
+type SettingsTab = 'system' | 'fuel' | 'tax-levy' | 'validation' | 'stock-alerts' | 'recon-tolerances' | 'email' | 'tank-calibration' | 'pos'
 
 export default function Settings() {
   const router = useRouter()
@@ -82,6 +82,12 @@ export default function Settings() {
   const [reconMessage, setReconMessage] = useState('')
   const [reconError, setReconError] = useState('')
 
+  const [posPaymentTypes, setPosPaymentTypes] = useState<{ type_id: string; name: string; is_active: boolean }[]>([])
+  const [posLoading, setPosLoading] = useState(false)
+  const [posMessage, setPosMessage] = useState('')
+  const [posError, setPosError] = useState('')
+  const [newPosName, setNewPosName] = useState('')
+
   const [activeTab, setActiveTab] = useState<SettingsTab>('system')
   const [currentUserRole, setCurrentUserRole] = useState<string>('')
   const [currentUsername, setCurrentUsername] = useState<string>('')
@@ -113,6 +119,7 @@ export default function Settings() {
     loadTaxLevy()
     loadStockAlerts()
     loadReconTolerances()
+    loadPosSettings()
   }, [])
 
   // ── Loaders ──────────────────────────────────────────────
@@ -227,6 +234,41 @@ export default function Settings() {
       if (res.ok) setReconTolerances(await res.json())
     } catch (err) {
       console.error('Failed to load reconciliation tolerances:', err)
+    }
+  }
+
+  const loadPosSettings = async () => {
+    try {
+      const res = await authFetch(`${BASE}/settings/pos`, { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setPosPaymentTypes(data.payment_types || [])
+      }
+    } catch {}
+  }
+
+  const handleSavePos = async () => {
+    setPosLoading(true)
+    setPosMessage('')
+    setPosError('')
+    try {
+      const res = await authFetch(`${BASE}/settings/pos`, {
+        method: 'PUT',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(posPaymentTypes),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        setPosError(err.detail || 'Failed to save POS settings')
+        return
+      }
+      const data = await res.json()
+      setPosPaymentTypes(data.payment_types || [])
+      setPosMessage('POS payment types saved successfully')
+    } catch (err: any) {
+      setPosError(err.message || 'Failed to save')
+    } finally {
+      setPosLoading(false)
     }
   }
 
@@ -514,6 +556,7 @@ export default function Settings() {
     { id: 'validation', label: 'Validation Thresholds' },
     { id: 'stock-alerts', label: 'Stock Alerts' },
     { id: 'recon-tolerances', label: 'Reconciliation' },
+    { id: 'pos', label: 'POS Payment Types' },
     { id: 'email', label: 'Email Notifications' },
     { id: 'tank-calibration', label: 'Tank Calibration' },
   ]
@@ -1536,6 +1579,85 @@ export default function Settings() {
               </ul>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── POS Payment Types Tab ── */}
+      {activeTab === 'pos' && (
+        <div className="bg-surface-card rounded-lg shadow p-6">
+          <h2 className="text-xl font-semibold text-content-primary mb-1">POS Payment Types</h2>
+          <p className="text-sm text-content-secondary mb-6">Configure which payment methods are accepted at the POS terminal. Inactive types are hidden from new entries but preserved in historical records.</p>
+
+          <div className="space-y-2 mb-4">
+            {posPaymentTypes.map((pt, idx) => (
+              <div key={pt.type_id} className="flex items-center gap-3 p-2 border border-surface-border rounded-md">
+                <input
+                  type="text"
+                  value={pt.name}
+                  onChange={e => setPosPaymentTypes(prev => prev.map((t, i) => i === idx ? { ...t, name: e.target.value } : t))}
+                  className="flex-1 px-2 py-1 text-sm border border-surface-border rounded focus:outline-none focus:ring-1 focus:ring-action-primary"
+                  placeholder="Payment type name"
+                />
+                <label className="flex items-center gap-1.5 text-sm text-content-secondary cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pt.is_active}
+                    onChange={e => setPosPaymentTypes(prev => prev.map((t, i) => i === idx ? { ...t, is_active: e.target.checked } : t))}
+                    className="rounded"
+                  />
+                  Active
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setPosPaymentTypes(prev => prev.filter((_, i) => i !== idx))}
+                  className="px-2 py-1 text-xs text-status-error border border-status-error/30 rounded hover:bg-status-error/10"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 mb-6">
+            <input
+              type="text"
+              value={newPosName}
+              onChange={e => setNewPosName(e.target.value)}
+              placeholder="New payment type name"
+              className="flex-1 px-3 py-2 border border-surface-border rounded-md text-sm focus:outline-none focus:ring-action-primary focus:border-action-primary"
+              onKeyDown={e => {
+                if (e.key === 'Enter' && newPosName.trim()) {
+                  const id = newPosName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_')
+                  setPosPaymentTypes(prev => [...prev, { type_id: `${id}_${Date.now()}`, name: newPosName.trim(), is_active: true }])
+                  setNewPosName('')
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={!newPosName.trim()}
+              onClick={() => {
+                const id = newPosName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_')
+                setPosPaymentTypes(prev => [...prev, { type_id: `${id}_${Date.now()}`, name: newPosName.trim(), is_active: true }])
+                setNewPosName('')
+              }}
+              className="px-4 py-2 bg-action-primary text-white text-sm font-medium rounded-md hover:bg-action-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Add Type
+            </button>
+          </div>
+
+          {posMessage && <p className="mb-3 text-sm text-status-success">{posMessage}</p>}
+          {posError && <p className="mb-3 text-sm text-status-error">{posError}</p>}
+
+          <button
+            type="button"
+            disabled={posLoading}
+            onClick={handleSavePos}
+            className="px-6 py-2 bg-action-primary text-white text-sm font-medium rounded-md hover:bg-action-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {posLoading ? 'Saving...' : 'Save POS Settings'}
+          </button>
         </div>
       )}
 

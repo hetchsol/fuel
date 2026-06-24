@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -143,6 +143,20 @@ export default function DailyCloseOff() {
 
   const isClosed = summary?.already_closed
   const totals = summary?.totals || {}
+
+  // Aggregate POS breakdown across all approved handovers
+  const posByType = useMemo(() => {
+    const map: Record<string, { name: string; amount: number }> = {}
+    for (const h of (summary?.approved_handovers || [])) {
+      if (h.pos_breakdown && Array.isArray(h.pos_breakdown)) {
+        for (const item of h.pos_breakdown) {
+          if (!map[item.type_id]) map[item.type_id] = { name: item.type_name, amount: 0 }
+          map[item.type_id].amount += item.amount || 0
+        }
+      }
+    }
+    return Object.values(map).filter(v => v.amount > 0)
+  }, [summary])
 
   const getExportConfig = useCallback((): ExportConfig | null => {
     if (!summary?.approved_handovers?.length) return null
@@ -393,6 +407,21 @@ export default function DailyCloseOff() {
                   </div>
                 ))}
               </div>
+
+              {/* POS breakdown by payment type */}
+              {posByType.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                  <p className="text-xs font-semibold text-content-secondary uppercase tracking-wide mb-3">POS by Payment Type</p>
+                  <div className="flex flex-wrap gap-2">
+                    {posByType.map(item => (
+                      <div key={item.name} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/[0.06]">
+                        <span className="text-xs text-content-secondary">{item.name}</span>
+                        <span className="text-xs font-mono font-semibold text-content-primary">{fmt(item.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
