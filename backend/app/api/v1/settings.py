@@ -12,6 +12,10 @@ from ...models.models import (
     TaxLevySettings, StockAlertSettings, ReconciliationToleranceSettings,
     ScheduledPriceChange, POSPaymentType,
 )
+from pydantic import BaseModel as _BaseModel
+class POSSettingsInput(_BaseModel):
+    payment_types: list[POSPaymentType]
+    variance_threshold: float = 5.0
 from .auth import get_station_context, require_manager_or_owner, require_owner
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
@@ -500,13 +504,17 @@ DEFAULT_POS_TYPES = [
     {"type_id": "izwe",         "name": "IZWE",          "is_active": True},
     {"type_id": "kazang",       "name": "Kazang",        "is_active": True},
 ]
+DEFAULT_POS_VARIANCE_THRESHOLD = 5.0
 
 
 def _load_pos_settings(station_id: str) -> dict:
     data = load_station_json(station_id, "pos_settings.json", default=None)
     if data is None:
-        data = {"payment_types": DEFAULT_POS_TYPES}
+        data = {"payment_types": DEFAULT_POS_TYPES, "variance_threshold": DEFAULT_POS_VARIANCE_THRESHOLD}
         save_station_json(station_id, "pos_settings.json", data)
+    # Back-fill missing threshold on old records
+    if "variance_threshold" not in data:
+        data["variance_threshold"] = DEFAULT_POS_VARIANCE_THRESHOLD
     return data
 
 
@@ -516,13 +524,15 @@ def get_pos_settings(ctx: dict = Depends(get_station_context)):
 
 
 @router.put("/pos", dependencies=[Depends(require_manager_or_owner)])
-def update_pos_settings(payment_types: list[POSPaymentType], ctx: dict = Depends(get_station_context)):
+def update_pos_settings(body: POSSettingsInput, ctx: dict = Depends(get_station_context)):
     station_id = ctx["station_id"]
-    if not payment_types:
+    if not body.payment_types:
         raise HTTPException(status_code=422, detail="At least one payment type is required")
+    if body.variance_threshold < 0:
+        raise HTTPException(status_code=422, detail="variance_threshold must be >= 0")
 
     ids_seen: set = set()
-    for pt in payment_types:
+    for pt in body.payment_types:
         if not pt.type_id.strip():
             raise HTTPException(status_code=422, detail="type_id must not be blank")
         if not pt.name.strip():
@@ -531,13 +541,16 @@ def update_pos_settings(payment_types: list[POSPaymentType], ctx: dict = Depends
             raise HTTPException(status_code=422, detail=f"Duplicate type_id: {pt.type_id}")
         ids_seen.add(pt.type_id)
 
-    data = {"payment_types": [pt.model_dump() for pt in payment_types]}
+    data = {
+        "payment_types": [pt.model_dump() for pt in body.payment_types],
+        "variance_threshold": body.variance_threshold,
+    }
     save_station_json(station_id, "pos_settings.json", data)
 
     log_audit_event(
         station_id=station_id, action="pos_settings_update",
         performed_by=ctx["username"], entity_type="pos_settings",
-        details={"payment_types": data["payment_types"]},
+        details=data,
     )
 
-    return {"status": "success", "message": "POS payment types updated", "payment_types": data["payment_types"]}
+    return {"status": "success", "message": "POS settings updated", **data}

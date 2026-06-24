@@ -1209,6 +1209,7 @@ class ManagerRetroEntryInput(BaseModel):
     actual_cash: float = 0.0
     pos_receipts: float = 0.0
     pos_items: List = []   # List[POSReceiptItem] — typed at runtime via models import
+    pos_terminal_batch_total: Optional[float] = None
     credit_sales: float = 0.0
     notes: Optional[str] = None
 
@@ -1322,12 +1323,23 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
     else:
         retro_pos_total = data.pos_receipts
 
+    retro_pos_terminal_batch_total = data.pos_terminal_batch_total
+    retro_pos_terminal_variance = None
+    if retro_pos_terminal_batch_total is not None:
+        retro_pos_terminal_variance = round(retro_pos_total - retro_pos_terminal_batch_total, 2)
+
     total_expected = round(fuel_revenue, 2)
     expected_cash = round(total_expected - data.credit_sales, 2)
     total_accounted = round(data.actual_cash + retro_pos_total + data.credit_sales, 2)
     difference = round(total_accounted - total_expected, 2)
 
     auto_flag_reasons, review_status = _compute_auto_flags(difference, nozzle_summaries, [], storage)
+
+    pos_settings = load_station_json(station_id, "pos_settings.json", default={})
+    pos_variance_threshold = pos_settings.get("variance_threshold", 5.0)
+    if retro_pos_terminal_variance is not None and abs(retro_pos_terminal_variance) > pos_variance_threshold:
+        auto_flag_reasons = (auto_flag_reasons or []) + ["pos_terminal_variance"]
+        review_status = "flagged"
 
     handover_id = f"HO-{data.shift_id}-{data.attendant_id}-MRE-{datetime.now().strftime('%H%M%S')}"
 
@@ -1349,6 +1361,8 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
         actual_cash=data.actual_cash,
         pos_receipts=retro_pos_total,
         pos_breakdown=retro_pos_breakdown,
+        pos_terminal_batch_total=retro_pos_terminal_batch_total,
+        pos_terminal_variance=retro_pos_terminal_variance,
         total_accounted=total_accounted,
         difference=difference,
         status="submitted",
@@ -1753,17 +1767,27 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     else:
         pos_total = data.pos_receipts
 
+    # Terminal batch reconciliation
+    pos_terminal_batch_total = data.pos_terminal_batch_total
+    pos_terminal_variance = None
+    if pos_terminal_batch_total is not None:
+        pos_terminal_variance = round(pos_total - pos_terminal_batch_total, 2)
+
     # Compute financials
     total_expected = handover.get("total_expected", 0)
     total_accounted = round(data.actual_cash + pos_total + credit_sales, 2)
     difference = round(total_accounted - total_expected, 2)
     expected_cash = round(total_expected - credit_sales, 2)
 
-    # Merge Phase 1 flags with Phase 2 cash flag
+    # Merge Phase 1 flags with Phase 2 cash + POS variance flags
+    pos_settings = load_station_json(station_id, "pos_settings.json", default={})
+    pos_variance_threshold = pos_settings.get("variance_threshold", 5.0)
     phase1_flags = handover.get("auto_flag_reasons") or []
     all_flags = list(phase1_flags)
     if abs(difference) > _cash_shortage_threshold(storage):
         all_flags.append("cash_shortage")
+    if pos_terminal_variance is not None and abs(pos_terminal_variance) > pos_variance_threshold:
+        all_flags.append("pos_terminal_variance")
     review_status = "flagged" if all_flags else "submitted"
 
     now_iso = datetime.now().isoformat()
@@ -1774,6 +1798,8 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     handover["actual_cash"] = data.actual_cash
     handover["pos_receipts"] = pos_total
     handover["pos_breakdown"] = pos_breakdown
+    handover["pos_terminal_batch_total"] = pos_terminal_batch_total
+    handover["pos_terminal_variance"] = pos_terminal_variance
     handover["credit_sales"] = credit_sales
     handover["credit_sale_details"] = credit_sale_details
     handover["expected_cash"] = expected_cash

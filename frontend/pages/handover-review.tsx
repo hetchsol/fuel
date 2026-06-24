@@ -78,6 +78,9 @@ interface HandoverEntry {
   expected_cash: number
   actual_cash: number
   pos_receipts?: number
+  pos_breakdown?: { type_id: string; type_name: string; amount: number; reference?: string }[] | null
+  pos_terminal_batch_total?: number | null
+  pos_terminal_variance?: number | null
   total_accounted?: number
   difference: number
   status: string
@@ -111,6 +114,7 @@ const REVIEW_STATUS_STYLES: Record<string, { bg: string; color: string; label: s
 const FLAG_LABELS: Record<string, string> = {
   cash_shortage: 'Cash Shortage',
   meter_deviation: 'Meter Deviation',
+  pos_terminal_variance: 'POS Terminal Variance',
 }
 
 export default function HandoverReview() {
@@ -160,6 +164,7 @@ export default function HandoverReview() {
   const [closingCash, setClosingCash] = useState('')
   const [closingPosAmounts, setClosingPosAmounts] = useState<Record<string, string>>({})
   const [closingPosRefs, setClosingPosRefs] = useState<Record<string, string>>({})
+  const [closingPosTerminalBatch, setClosingPosTerminalBatch] = useState('')
   const [closingNotes, setClosingNotes] = useState('')
   const [closingCreditItems, setClosingCreditItems] = useState<CreditItem[]>([])
   const [closingSafeDeposit, setClosingSafeDeposit] = useState(0)
@@ -269,6 +274,7 @@ export default function HandoverReview() {
     posTypes.forEach(t => { resetAmounts[t.type_id] = '' })
     setClosingPosAmounts(resetAmounts)
     setClosingPosRefs({})
+    setClosingPosTerminalBatch('')
     setClosingNotes('')
     setClosingCreditItems([])
     setClosingSafeDeposit(0)
@@ -497,6 +503,7 @@ export default function HandoverReview() {
           actual_cash: actualCashVal,
           pos_receipts: posTotal,
           pos_items: posItems,
+          pos_terminal_batch_total: closingPosTerminalBatch !== '' ? parseFloat(closingPosTerminalBatch) || 0 : null,
           credit_sales: creditTotal,
           credit_sale_items: closingCreditItems.map(i => ({
             account_id: i.account_id,
@@ -964,6 +971,8 @@ export default function HandoverReview() {
                           onPosAmountsChange={setClosingPosAmounts}
                           posRefs={closingPosRefs}
                           onPosRefsChange={setClosingPosRefs}
+                          posTerminalBatch={closingPosTerminalBatch}
+                          onPosTerminalBatchChange={setClosingPosTerminalBatch}
                           notes={closingNotes}
                           onNotesChange={setClosingNotes}
                           creditItems={closingCreditItems}
@@ -1160,6 +1169,8 @@ interface ClosingFormProps {
   onPosAmountsChange: (v: Record<string, string>) => void
   posRefs: Record<string, string>
   onPosRefsChange: (v: Record<string, string>) => void
+  posTerminalBatch: string
+  onPosTerminalBatchChange: (v: string) => void
   notes: string
   onNotesChange: (v: string) => void
   creditItems: CreditItem[]
@@ -1172,6 +1183,7 @@ interface ClosingFormProps {
 
 function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
   cash, onCashChange, posTypes, posAmounts, onPosAmountsChange, posRefs, onPosRefsChange,
+  posTerminalBatch, onPosTerminalBatchChange,
   notes, onNotesChange,
   creditItems, onCreditItemsChange, submitting, error, onSubmit, onCancel,
 }: ClosingFormProps) {
@@ -1216,7 +1228,7 @@ function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
         </div>
       </div>
 
-      {/* POS Receipts — per payment type */}
+      {/* POS Receipts — per payment type + terminal batch cross-check */}
       {posTypes.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -1227,7 +1239,7 @@ function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
               </span>
             )}
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 mb-3">
             {posTypes.map(t => (
               <div key={t.type_id} className="flex items-center gap-2">
                 <span className="text-xs w-28 shrink-0" style={{ color: theme.textSecondary }}>{t.name}</span>
@@ -1241,6 +1253,30 @@ function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
                   style={inputStyle} />
               </div>
             ))}
+          </div>
+          <div className="pt-2" style={{ borderTopWidth: 1, borderTopColor: theme.border }}>
+            <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+              Terminal Batch Total — from settlement slip
+            </label>
+            <input type="number" min={0} step="0.01" value={posTerminalBatch} placeholder="0.00"
+              onChange={e => onPosTerminalBatchChange(e.target.value)}
+              className="w-40 px-2 py-1.5 rounded border text-sm text-right font-mono"
+              style={inputStyle} />
+            {posTerminalBatch !== '' && (() => {
+              const batch = parseFloat(posTerminalBatch) || 0
+              const variance = posVal - batch
+              const ok = Math.abs(variance) < 0.01
+              const fmt = (v: number) => `K${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              return (
+                <div className="mt-1.5 text-xs font-mono flex gap-3">
+                  <span style={{ color: theme.textSecondary }}>Declared: K{posVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ color: theme.textSecondary }}>Terminal: {fmt(batch)}</span>
+                  <span style={{ color: ok ? 'var(--color-status-success)' : 'var(--color-status-error)', fontWeight: 600 }}>
+                    {ok ? 'Match' : `Variance: ${variance >= 0 ? '+' : '-'}${fmt(variance)}`}
+                  </span>
+                </div>
+              )
+            })()}
           </div>
         </div>
       )}
@@ -1512,7 +1548,50 @@ function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
             {h.difference >= 0 ? '+' : ''}K{h.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
         </div>
+        {(h.pos_receipts ?? 0) > 0 && (
+          <div>
+            <div className="text-[10px] uppercase" style={{ color: theme.textSecondary }}>POS Declared</div>
+            <div className="text-sm font-mono font-medium" style={{ color: theme.textPrimary }}>
+              K{(h.pos_receipts ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+        )}
+        {h.pos_terminal_batch_total != null && (
+          <div>
+            <div className="text-[10px] uppercase" style={{ color: theme.textSecondary }}>Terminal Batch</div>
+            <div className="text-sm font-mono font-medium" style={{ color: theme.textPrimary }}>
+              K{h.pos_terminal_batch_total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+        )}
+        {h.pos_terminal_variance != null && (
+          <div>
+            <div className="text-[10px] uppercase" style={{ color: theme.textSecondary }}>POS Variance</div>
+            <div className="text-sm font-mono font-bold"
+              style={{ color: Math.abs(h.pos_terminal_variance) < 0.01 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
+              {Math.abs(h.pos_terminal_variance) < 0.01 ? 'Match' : `${h.pos_terminal_variance >= 0 ? '+' : ''}K${h.pos_terminal_variance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            </div>
+          </div>
+        )}
       </div>}
+      {/* POS breakdown by type */}
+      {h.pos_breakdown && h.pos_breakdown.length > 0 && (
+        <div>
+          <div className="text-xs font-medium uppercase mb-2" style={{ color: theme.textSecondary }}>POS Breakdown</div>
+          <div className="flex flex-wrap gap-2">
+            {h.pos_breakdown.map((item, i) => (
+              <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
+                style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border }}>
+                <span style={{ color: theme.textSecondary }}>{item.type_name}</span>
+                <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>
+                  K{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+                {item.reference && <span style={{ color: theme.textSecondary }}>· {item.reference}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Stock drill-down panels */}
       {expandedStock === 'lpg' && h.stock_snapshot?.lpg_cylinders && (

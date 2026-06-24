@@ -83,6 +83,7 @@ export default function Settings() {
   const [reconError, setReconError] = useState('')
 
   const [posPaymentTypes, setPosPaymentTypes] = useState<{ type_id: string; name: string; is_active: boolean }[]>([])
+  const [posVarianceThreshold, setPosVarianceThreshold] = useState('5.00')
   const [posLoading, setPosLoading] = useState(false)
   const [posMessage, setPosMessage] = useState('')
   const [posError, setPosError] = useState('')
@@ -243,6 +244,7 @@ export default function Settings() {
       if (res.ok) {
         const data = await res.json()
         setPosPaymentTypes(data.payment_types || [])
+        setPosVarianceThreshold(String(data.variance_threshold ?? 5))
       }
     } catch {}
   }
@@ -255,7 +257,7 @@ export default function Settings() {
       const res = await authFetch(`${BASE}/settings/pos`, {
         method: 'PUT',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(posPaymentTypes),
+        body: JSON.stringify({ payment_types: posPaymentTypes, variance_threshold: parseFloat(posVarianceThreshold) || 5 }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -1645,6 +1647,24 @@ export default function Settings() {
             >
               Add Type
             </button>
+          </div>
+
+          <div className="mb-6 pt-4 border-t border-surface-border">
+            <h3 className="text-sm font-semibold text-content-primary mb-1">Terminal Batch Variance Tolerance</h3>
+            <p className="text-xs text-content-secondary mb-3">
+              If the declared POS total differs from the terminal settlement slip by more than this amount, the handover is flagged for review.
+            </p>
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={posVarianceThreshold}
+                onChange={e => setPosVarianceThreshold(e.target.value)}
+                className="w-32 px-3 py-2 border border-surface-border rounded-md text-sm text-right font-mono focus:outline-none focus:ring-action-primary focus:border-action-primary"
+              />
+              <span className="text-sm text-content-secondary">ZMW</span>
+            </div>
           </div>
 
           {posMessage && <p className="mb-3 text-sm text-status-success">{posMessage}</p>}

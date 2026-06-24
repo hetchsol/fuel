@@ -50,6 +50,7 @@ export default function ShiftClosing() {
   const [posTypes, setPosTypes] = useState<{ type_id: string; name: string; is_active: boolean }[]>([])
   const [posAmounts, setPosAmounts] = useState<Record<string, string>>({})
   const [posRefs, setPosRefs] = useState<Record<string, string>>({})
+  const [posTerminalBatch, setPosTerminalBatch] = useState('')
 
   // Phase 2 inputs
   const [actualCash, setActualCash] = useState('')
@@ -252,6 +253,7 @@ export default function ShiftClosing() {
           actual_cash: actualCashVal,
           pos_receipts: posTotal,
           pos_items: posItems,
+          pos_terminal_batch_total: posTerminalBatch !== '' ? parseFloat(posTerminalBatch) || 0 : null,
           credit_sales: creditVal,
           credit_sale_items: creditItems.map(i => ({
             account_id: i.account_id,
@@ -500,7 +502,7 @@ export default function ShiftClosing() {
                   style={inputStyle} />
               </div>
 
-              {/* POS Receipts — per payment type */}
+              {/* POS Receipts — per payment type + terminal batch cross-check */}
               {posTypes.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -509,7 +511,7 @@ export default function ShiftClosing() {
                       <span className="text-xs font-mono font-semibold" style={{ color: theme.textPrimary }}>{fmtZMW(posTotal)}</span>
                     )}
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 mb-3">
                     {posTypes.map(t => (
                       <div key={t.type_id} className="flex items-center gap-2">
                         <span className="text-xs w-28 shrink-0" style={{ color: theme.textSecondary }}>{t.name}</span>
@@ -523,6 +525,30 @@ export default function ShiftClosing() {
                           style={inputStyle} />
                       </div>
                     ))}
+                  </div>
+                  {/* Terminal batch cross-check */}
+                  <div className="pt-2" style={{ borderTopWidth: 1, borderTopColor: theme.border }}>
+                    <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+                      Terminal Batch Total — from settlement slip
+                    </label>
+                    <input type="number" min={0} step="0.01" value={posTerminalBatch} placeholder="0.00"
+                      onChange={e => setPosTerminalBatch(e.target.value)}
+                      className="w-40 px-2 py-1.5 rounded border text-sm text-right font-mono"
+                      style={inputStyle} />
+                    {posTerminalBatch !== '' && (() => {
+                      const batch = parseFloat(posTerminalBatch) || 0
+                      const variance = posTotal - batch
+                      const ok = Math.abs(variance) < 0.01
+                      return (
+                        <div className="mt-1.5 text-xs font-mono flex gap-3">
+                          <span style={{ color: theme.textSecondary }}>Declared: {fmtZMW(posTotal)}</span>
+                          <span style={{ color: theme.textSecondary }}>Terminal: {fmtZMW(batch)}</span>
+                          <span style={{ color: ok ? 'var(--color-status-success)' : 'var(--color-status-error)', fontWeight: 600 }}>
+                            {ok ? 'Match' : `Variance: ${variance >= 0 ? '+' : ''}${fmtZMW(variance)}`}
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               )}

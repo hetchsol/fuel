@@ -578,6 +578,7 @@ export default function Shifts() {
   const [retroFinancials, setRetroFinancials] = useState({ actual_cash: '', credit_sales: '', notes: '' })
   const [retroPosAmounts, setRetroPosAmounts] = useState<Record<string, string>>({})
   const [retroPosRefs, setRetroPosRefs] = useState<Record<string, string>>({})
+  const [retroPosTerminalBatch, setRetroPosTerminalBatch] = useState('')
   const [posTypes, setPosTypes] = useState<{ type_id: string; name: string; is_active: boolean }[]>([])
   const [retroSubmitting, setRetroSubmitting] = useState(false)
 
@@ -600,6 +601,7 @@ export default function Shifts() {
     posTypes.forEach(t => { initPosAmounts[t.type_id] = '' })
     setRetroPosAmounts(initPosAmounts)
     setRetroPosRefs({})
+    setRetroPosTerminalBatch('')
     setRetroModal({ shift, assignment, nozzleList })
   }
 
@@ -634,6 +636,7 @@ export default function Shifts() {
           .map(t => ({ type_id: t.type_id, type_name: t.name, amount: parseFloat(retroPosAmounts[t.type_id] || '0') || 0, reference: retroPosRefs[t.type_id] || undefined }))
           .filter(i => i.amount > 0),
         pos_receipts: posTypes.reduce((s, t) => s + (parseFloat(retroPosAmounts[t.type_id] || '0') || 0), 0),
+        pos_terminal_batch_total: retroPosTerminalBatch !== '' ? parseFloat(retroPosTerminalBatch) || 0 : null,
         credit_sales: parseFloat(retroFinancials.credit_sales) || 0,
         notes: retroFinancials.notes || null,
       }
@@ -1690,7 +1693,7 @@ export default function Shifts() {
                       return t > 0 ? <span className="text-xs font-mono font-semibold text-content-primary">K{t.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> : null
                     })()}
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 mb-3">
                     {posTypes.map(t => (
                       <div key={t.type_id} className="flex items-center gap-2">
                         <span className="text-xs w-28 shrink-0 text-content-secondary">{t.name}</span>
@@ -1702,6 +1705,28 @@ export default function Shifts() {
                           className="flex-1 px-2 py-1.5 text-xs border border-surface-border rounded focus:outline-none focus:ring-1 focus:ring-action-primary" />
                       </div>
                     ))}
+                  </div>
+                  <div className="pt-2 border-t border-surface-border">
+                    <label className="block text-xs font-medium text-content-secondary mb-1">Terminal Batch Total — from settlement slip</label>
+                    <input type="number" min={0} step="0.01" value={retroPosTerminalBatch} placeholder="0.00"
+                      onChange={e => setRetroPosTerminalBatch(e.target.value)}
+                      className="w-40 px-2 py-1.5 text-sm border border-surface-border rounded focus:outline-none focus:ring-1 focus:ring-action-primary text-right font-mono" />
+                    {retroPosTerminalBatch !== '' && (() => {
+                      const batch = parseFloat(retroPosTerminalBatch) || 0
+                      const declared = posTypes.reduce((s, t) => s + (parseFloat(retroPosAmounts[t.type_id] || '0') || 0), 0)
+                      const variance = declared - batch
+                      const ok = Math.abs(variance) < 0.01
+                      const fmtV = (v: number) => `K${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      return (
+                        <div className="mt-1.5 text-xs font-mono flex gap-3">
+                          <span className="text-content-secondary">Declared: {fmtV(declared)}</span>
+                          <span className="text-content-secondary">Terminal: {fmtV(batch)}</span>
+                          <span style={{ color: ok ? 'var(--color-status-success)' : 'var(--color-status-error)', fontWeight: 600 }}>
+                            {ok ? 'Match' : `Variance: ${variance >= 0 ? '+' : '-'}${fmtV(variance)}`}
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               )}
