@@ -3,12 +3,13 @@ Sales Reports API
 Provides sales analytics and reporting from handover data (source of truth)
 """
 
-from fastapi import APIRouter, HTTPException, Depends
-from typing import List, Dict
+from fastapi import APIRouter, HTTPException, Depends, Query
+from typing import List, Dict, Optional
 from collections import defaultdict
 
 from .auth import get_station_context
 from ...database.station_files import load_station_json
+from ...services.handover_sales import iter_completed_handovers
 
 router = APIRouter()
 
@@ -129,3 +130,89 @@ def get_sales_summary(ctx: dict = Depends(get_station_context)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating summary: {str(e)}")
+
+
+@router.get("/pos")
+def get_pos_report(
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    type_id: Optional[str] = Query(None),
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    POS receipts report. Groups pos_breakdown items by payment type.
+    Supports optional date range and single type_id filter.
+    Old handovers without pos_breakdown are included as a legacy lump sum.
+    """
+    try:
+        transactions: list = []
+        by_type: dict = {}
+
+        for ho in iter_completed_handovers(ctx["station_id"]):
+            date = ho.get("date", "")
+            if start_date and date < start_date:
+                continue
+            if end_date and date > end_date:
+                continue
+
+            pos_breakdown = ho.get("pos_breakdown")
+            pos_receipts = ho.get("pos_receipts") or 0
+
+            if pos_breakdown and isinstance(pos_breakdown, list):
+                for item in pos_breakdown:
+                    tid = item.get("type_id", "")
+                    tname = item.get("type_name", tid)
+                    amount = item.get("amount") or 0
+                    if type_id and tid != type_id:
+                        continue
+                    if not amount:
+                        continue
+                    transactions.append({
+                        "date": date,
+                        "shift_type": ho.get("shift_type", ""),
+                        "attendant_name": ho.get("attendant_name", ""),
+                        "handover_id": ho.get("handover_id", ""),
+                        "type_id": tid,
+                        "type_name": tname,
+                        "amount": amount,
+                        "reference": item.get("reference"),
+                    })
+                    if tid not in by_type:
+                        by_type[tid] = {"type_id": tid, "type_name": tname, "total": 0, "shift_count": 0}
+                    by_type[tid]["total"] = round(by_type[tid]["total"] + amount, 2)
+                    by_type[tid]["shift_count"] += 1
+
+            elif pos_receipts > 0 and not type_id:
+                # Pre-breakdown record — include as a legacy lump sum
+                transactions.append({
+                    "date": date,
+                    "shift_type": ho.get("shift_type", ""),
+                    "attendant_name": ho.get("attendant_name", ""),
+                    "handover_id": ho.get("handover_id", ""),
+                    "type_id": "_legacy",
+                    "type_name": "POS (legacy)",
+                    "amount": pos_receipts,
+                    "reference": None,
+                })
+                if "_legacy" not in by_type:
+                    by_type["_legacy"] = {"type_id": "_legacy", "type_name": "POS (legacy)", "total": 0, "shift_count": 0}
+                by_type["_legacy"]["total"] = round(by_type["_legacy"]["total"] + pos_receipts, 2)
+                by_type["_legacy"]["shift_count"] += 1
+
+        transactions.sort(key=lambda x: (x["date"], x.get("shift_type", "")), reverse=True)
+        by_type_list = sorted(by_type.values(), key=lambda x: x["total"], reverse=True)
+        total_pos = round(sum(t["amount"] for t in transactions), 2)
+
+        return {
+            "summary": {
+                "total_pos_receipts": total_pos,
+                "transaction_count": len(transactions),
+            },
+            "by_type": by_type_list,
+            "transactions": transactions,
+            "period": {"start_date": start_date or "All", "end_date": end_date or "All"},
+            "type_filter": type_id,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating POS report: {str(e)}")

@@ -578,9 +578,7 @@ export default function HandoverReview() {
       ],
       data: displayedHandovers.map(h => ({
         ...h,
-        _flags: (h.auto_flag_reasons || []).map(f =>
-          f === 'cash_shortage' ? 'Cash Shortage' : f === 'meter_deviation' ? 'Meter Deviation' : f
-        ).join(', ') || '-',
+        _flags: (h.auto_flag_reasons || []).map(f => FLAG_LABELS[f] || f).join(', ') || '-',
       })),
     }
   }

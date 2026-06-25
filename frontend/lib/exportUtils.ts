@@ -42,6 +42,49 @@ function rawValue(value: any, format?: string): any {
   return String(value)
 }
 
+// ─── CSV Export ─────────────────────────────────────────
+export function exportToCSV(config: ExportConfig) {
+  const esc = (v: string) => {
+    const s = String(v)
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? '"' + s.replace(/"/g, '""') + '"'
+      : s
+  }
+
+  const rows: string[] = []
+
+  if (config.businessInfo?.business_name) {
+    rows.push(esc(config.businessInfo.business_name.toUpperCase()))
+    if (config.businessInfo.station_location) rows.push(esc(config.businessInfo.station_location.toUpperCase()))
+    rows.push('')
+  }
+
+  rows.push(esc(config.title))
+  if (config.subtitle) rows.push(esc(config.subtitle))
+  rows.push('')
+
+  if (config.summaryCards?.length) {
+    config.summaryCards.forEach(c => rows.push(`${esc(c.label)},${esc(String(c.value))}`))
+    rows.push('')
+  }
+
+  rows.push(config.columns.map(c => esc(c.header)).join(','))
+  config.data.forEach(row =>
+    rows.push(config.columns.map(col => esc(formatValue(row[col.key], col.format))).join(','))
+  )
+
+  rows.push('')
+  rows.push(`Generated,${esc(new Date().toLocaleString())}`)
+
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${config.filename}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 // ─── Excel Export ────────────────────────────────────────
 export function exportToExcel(config: ExportConfig) {
   const wb = XLSX.utils.book_new()

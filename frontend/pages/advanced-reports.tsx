@@ -45,8 +45,12 @@ export default function AdvancedReports() {
     { value: 'product', label: 'Product Sales' },
     { value: 'custom', label: 'Custom Multi-Filter' },
     { value: 'daily', label: 'Daily Summary' },
-    { value: 'monthly', label: 'Monthly Summary' }
+    { value: 'monthly', label: 'Monthly Summary' },
+    { value: 'pos', label: 'POS Receipts' },
   ]
+
+  const [posTypeList, setPosTypeList] = useState<{ type_id: string; name: string }[]>([])
+  const [posTypeFilter, setPosTypeFilter] = useState('')
 
   // Fetch dropdown lists when report type changes
   useEffect(() => {
@@ -97,6 +101,14 @@ export default function AdvancedReports() {
     if (['staff', 'nozzle', 'island', 'product', 'custom'].includes(reportType)) {
       fetchLists()
     }
+  }, [reportType])
+
+  useEffect(() => {
+    if (reportType !== 'pos' || posTypeList.length > 0) return
+    authFetch(`${BASE}/settings/pos`, { headers: getHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.payment_types) setPosTypeList(data.payment_types.filter((t: any) => t.is_active)) })
+      .catch(() => {})
   }, [reportType])
 
   const generateReport = async () => {
@@ -184,6 +196,15 @@ export default function AdvancedReports() {
           const [year, month] = filters.start_date.split('-')
           url = `${BASE}/reports/monthly?year=${year}&month=${parseInt(month)}`
           break
+
+        case 'pos': {
+          const params: string[] = []
+          if (filters.start_date) params.push(`start_date=${filters.start_date}`)
+          if (filters.end_date) params.push(`end_date=${filters.end_date}`)
+          if (posTypeFilter) params.push(`type_id=${encodeURIComponent(posTypeFilter)}`)
+          url = `${BASE}/sales-reports/pos${params.length ? '?' + params.join('&') : ''}`
+          break
+        }
       }
 
       const response = await authFetch(url, {
@@ -212,6 +233,33 @@ export default function AdvancedReports() {
 
     const reportLabel = reportTypes.find(r => r.value === reportType)?.label || 'Report'
     const periodStr = `${reportData.period?.start_date || 'All'} to ${reportData.period?.end_date || 'All'}`
+
+    // POS receipts report
+    if (reportData.transactions !== undefined && reportData.by_type !== undefined) {
+      const typeLabel = posTypeFilter
+        ? (posTypeList.find(t => t.type_id === posTypeFilter)?.name || posTypeFilter)
+        : 'All Types'
+      const period = `${reportData.period?.start_date || 'All'} to ${reportData.period?.end_date || 'All'}`
+      return {
+        title: `POS Receipts Report — ${typeLabel}`,
+        subtitle: period,
+        filename: `pos_report_${new Date().toISOString().slice(0, 10)}`,
+        summaryCards: [
+          { label: 'Total POS Receipts', value: formatCurrency(reportData.summary?.total_pos_receipts || 0) },
+          { label: 'Line Items', value: String(reportData.summary?.transaction_count || 0) },
+          ...reportData.by_type.map((t: any) => ({ label: t.type_name, value: formatCurrency(t.total) })),
+        ],
+        columns: [
+          { header: 'Date', key: 'date' },
+          { header: 'Shift', key: 'shift_type' },
+          { header: 'Attendant', key: 'attendant_name' },
+          { header: 'Payment Type', key: 'type_name' },
+          { header: 'Amount (ZMW)', key: 'amount', format: 'currency' as const },
+          { header: 'Slip / Batch Ref', key: 'reference' },
+        ],
+        data: reportData.transactions,
+      }
+    }
 
     // Staff report — export all sales records (not just product breakdown)
     if (reportData.staff_name && reportData.sales) {
@@ -389,7 +437,7 @@ export default function AdvancedReports() {
       {/* Report Type Selection */}
       <div className="bg-surface-card rounded-lg shadow p-6 mb-6">
         <h2 className="text-lg font-semibold text-content-primary mb-4">Select Report Type</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
           {reportTypes.map((type) => (
             <button
               key={type.value}
@@ -399,6 +447,7 @@ export default function AdvancedReports() {
                 setError('')
                 setSpecificId('')
                 setProductSearch('')
+                setPosTypeFilter('')
               }}
               className={`p-4 rounded-lg border-2 transition-all ${
                 reportType === type.value
@@ -520,6 +569,23 @@ export default function AdvancedReports() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* POS type filter */}
+          {reportType === 'pos' && (
+            <div>
+              <label className="block text-sm font-medium text-content-secondary mb-2">Payment Type</label>
+              <select
+                value={posTypeFilter}
+                onChange={(e) => setPosTypeFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+              >
+                <option value="">All Types</option>
+                {posTypeList.map(t => (
+                  <option key={t.type_id} value={t.type_id}>{t.name}</option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -676,6 +742,7 @@ export default function AdvancedReports() {
               })
               setSpecificId('')
               setProductSearch('')
+              setPosTypeFilter('')
               setReportData(null)
               setError('')
             }}
@@ -817,6 +884,67 @@ export default function AdvancedReports() {
             </div>
           )}
 
+          {/* POS receipts — by-type summary + transactions */}
+          {reportData.by_type !== undefined && (
+            <div className="mb-6">
+              <h3 className="text-md font-semibold text-content-primary mb-3">By Payment Type</h3>
+              <div className="overflow-x-auto mb-6">
+                <table className="min-w-full divide-y divide-surface-border">
+                  <thead className="bg-surface-bg">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-content-secondary uppercase">Payment Type</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-content-secondary uppercase">Total (ZMW)</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-content-secondary uppercase">Shifts</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-surface-card divide-y divide-surface-border">
+                    {reportData.by_type.length === 0 ? (
+                      <tr><td colSpan={3} className="px-4 py-6 text-center text-sm text-content-secondary">No POS receipts in this period</td></tr>
+                    ) : reportData.by_type.map((row: any) => (
+                      <tr key={row.type_id} className="hover:bg-surface-bg">
+                        <td className="px-4 py-3 text-sm font-medium text-content-primary">{row.type_name}</td>
+                        <td className="px-4 py-3 text-sm text-right font-mono font-semibold text-content-primary">{formatCurrency(row.total)}</td>
+                        <td className="px-4 py-3 text-sm text-right text-content-secondary">{row.shift_count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {reportData.transactions?.length > 0 && (
+                <>
+                  <h3 className="text-md font-semibold text-content-primary mb-3">Transactions</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-surface-border text-sm">
+                      <thead className="bg-surface-bg">
+                        <tr>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-content-secondary uppercase">Date</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-content-secondary uppercase">Shift</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-content-secondary uppercase">Attendant</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-content-secondary uppercase">Type</th>
+                          <th className="px-3 py-3 text-right text-xs font-medium text-content-secondary uppercase">Amount (ZMW)</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-content-secondary uppercase">Slip / Batch Ref</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-surface-card divide-y divide-surface-border">
+                        {reportData.transactions.map((tx: any, i: number) => (
+                          <tr key={i} className="hover:bg-surface-bg">
+                            <td className="px-3 py-2 text-content-primary whitespace-nowrap">{formatDateToDisplay(tx.date)}</td>
+                            <td className="px-3 py-2 text-content-secondary">{tx.shift_type}</td>
+                            <td className="px-3 py-2 text-content-secondary">{tx.attendant_name}</td>
+                            <td className="px-3 py-2 text-content-primary font-medium">{tx.type_name}</td>
+                            <td className="px-3 py-2 text-right font-mono font-semibold text-content-primary">{formatCurrency(tx.amount)}</td>
+                            <td className="px-3 py-2 text-content-secondary font-mono text-xs">{tx.reference || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Nozzle shift breakdown — readings + deviations */}
           {reportData.shift_breakdown && (
             <div className="mb-6">
@@ -900,6 +1028,7 @@ export default function AdvancedReports() {
           <li><strong>Custom Multi-Filter:</strong> Combine multiple filters for detailed analysis</li>
           <li><strong>Daily Summary:</strong> Complete operations summary for a specific date</li>
           <li><strong>Monthly Summary:</strong> Aggregate data for an entire month</li>
+          <li><strong>POS Receipts:</strong> POS totals by payment type (Visa, MoMo, Kazang, etc.) with per-shift line items and slip references</li>
         </ul>
       </div>
     </div>

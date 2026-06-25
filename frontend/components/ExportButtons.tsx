@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { exportToExcel, exportToPDF, ExportConfig, BusinessInfo } from '../lib/exportUtils'
+import { exportToCSV, exportToExcel, exportToPDF, ExportConfig, BusinessInfo } from '../lib/exportUtils'
 import { getHeaders, authFetch } from '../lib/api'
 
 interface Props {
@@ -34,20 +34,20 @@ function fetchBusinessInfo(): Promise<BusinessInfo | null> {
 }
 
 export default function ExportButtons({ getConfig, className = '' }: Props) {
-  const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null)
+  const [exporting, setExporting] = useState<'csv' | 'xlsx' | 'pdf' | null>(null)
 
   // Pre-fetch on mount
   useEffect(() => { fetchBusinessInfo() }, [])
 
-  const handleExport = async (format: 'xlsx' | 'pdf') => {
+  const handleExport = async (format: 'csv' | 'xlsx' | 'pdf') => {
     const config = getConfig()
     if (!config) return
     setExporting(format)
     try {
-      // Ensure business info is loaded before exporting
       const biz = await fetchBusinessInfo()
       config.businessInfo = biz || undefined
-      if (format === 'xlsx') exportToExcel(config)
+      if (format === 'csv') exportToCSV(config)
+      else if (format === 'xlsx') exportToExcel(config)
       else exportToPDF(config)
     } catch (err) {
       console.error('Export failed:', err)
@@ -58,6 +58,20 @@ export default function ExportButtons({ getConfig, className = '' }: Props) {
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
+      <button
+        onClick={() => handleExport('csv')}
+        disabled={!!exporting}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600/15 text-blue-400 border border-blue-600/30 rounded-lg hover:bg-blue-600/25 transition-colors disabled:opacity-50"
+      >
+        {exporting === 'csv' ? (
+          <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        )}
+        CSV
+      </button>
       <button
         onClick={() => handleExport('xlsx')}
         disabled={!!exporting}

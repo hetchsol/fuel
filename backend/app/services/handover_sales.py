@@ -10,6 +10,14 @@ own record shape on top, so their outputs are unchanged.
 from ..database.station_files import load_station_json
 
 
+def iter_completed_handovers(station_id: str):
+    """Yield each completed handover dict (phase=='completed')."""
+    handovers = load_station_json(station_id, 'attendant_handovers.json', default={})
+    for ho in handovers.values():
+        if ho.get('phase', 'completed') == 'completed':
+            yield ho
+
+
 def iter_completed_handover_nozzles(station_id: str):
     """Yield (handover, nozzle_summary) for every nozzle summary on every
     completed handover (phase=='completed'). The single place that loads
