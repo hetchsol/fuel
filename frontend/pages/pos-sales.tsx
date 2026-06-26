@@ -41,6 +41,7 @@ export default function POSSales() {
   const [handoversLoading, setHandoversLoading] = useState(true)
   const [posTypes, setPosTypes] = useState<POSType[]>([])
 
+  const [selectedShiftId, setSelectedShiftId] = useState('')
   const [selectedHandoverId, setSelectedHandoverId] = useState('')
   const [selectedTypeId, setSelectedTypeId] = useState('')
   const [amount, setAmount] = useState('')
@@ -55,23 +56,21 @@ export default function POSSales() {
     const user = JSON.parse(userData)
     if (!['manager', 'owner'].includes(user.role)) { router.push('/'); return }
     setAuthorized(true)
-  }, [])
 
-  useEffect(() => {
-    if (!authorized) return
     authFetch(`${BASE}/settings/pos`, { headers: getHeaders() })
-      .then(r => r.ok ? r.json() : { payment_types: [] })
+      .then(r => r.ok ? r.json() : Promise.reject('Failed to load POS types'))
       .then(data => {
         const active = (data.payment_types || []).filter((t: POSType) => t.is_active)
         setPosTypes(active)
         if (active.length > 0) setSelectedTypeId(active[0].type_id)
       })
-      .catch(() => {})
-  }, [authorized])
+      .catch(() => toast.error('Could not load POS payment types'))
+  }, [])
 
   useEffect(() => {
     if (!authorized) return
     setHandoversLoading(true)
+    setSelectedShiftId('')
     setSelectedHandoverId('')
     setItems([])
     authFetch(`${BASE}/handover/entries?date=${date}`, { headers: getHeaders() })
@@ -81,7 +80,6 @@ export default function POSSales() {
           h => h.phase !== 'readings_superseded' && h.review_status !== 'approved'
         )
         setHandovers(eligible)
-        if (eligible.length === 1) setSelectedHandoverId(eligible[0].handover_id)
       })
       .catch(() => setHandovers([]))
       .finally(() => setHandoversLoading(false))
@@ -131,18 +129,30 @@ export default function POSSales() {
 
   const total = items.reduce((s, i) => s + i.amount, 0)
 
+  // Unique shifts from loaded handovers
+  const uniqueShifts = handovers.reduce<{ shift_id: string; shift_type: string }[]>((acc, h) => {
+    if (!acc.find(s => s.shift_id === h.shift_id)) {
+      acc.push({ shift_id: h.shift_id, shift_type: h.shift_type })
+    }
+    return acc
+  }, [])
+
+  // Attendants within the selected shift
+  const attendantsForShift = handovers.filter(h => h.shift_id === selectedShiftId)
+
   if (!authorized) return null
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-content-primary">POS Sales</h1>
-        <p className="text-sm text-content-secondary mt-1">Record POS receipts against a handover</p>
+        <p className="text-sm text-content-secondary mt-1">Record POS receipts for an attendant</p>
       </div>
 
-      {/* Date + handover selector */}
+      {/* Selectors */}
       <div className="glass-card-static rounded-card p-5 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
+          {/* Date */}
           <div>
             <label className="block text-xs font-medium text-content-secondary mb-1">Date</label>
             <input
@@ -152,26 +162,46 @@ export default function POSSales() {
               className="w-full px-3 py-2 rounded-btn border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
             />
           </div>
+
+          {/* Shift */}
           <div>
-            <label className="block text-xs font-medium text-content-secondary mb-1">Handover</label>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Shift</label>
             {handoversLoading ? (
-              <div className="flex items-center h-9 gap-2">
-                <LoadingSpinner />
-                <span className="text-sm text-content-secondary">Loading...</span>
-              </div>
-            ) : handovers.length === 0 ? (
-              <p className="text-sm text-content-secondary py-2">No handovers for this date</p>
+              <div className="flex items-center h-9 gap-2"><LoadingSpinner /></div>
+            ) : uniqueShifts.length === 0 ? (
+              <p className="text-sm text-content-secondary py-2">No shifts</p>
+            ) : (
+              <select
+                value={selectedShiftId}
+                onChange={e => {
+                  setSelectedShiftId(e.target.value)
+                  setSelectedHandoverId('')
+                  setItems([])
+                }}
+                className="w-full px-3 py-2 rounded-btn border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
+              >
+                <option value="">Select shift</option>
+                {uniqueShifts.map(s => (
+                  <option key={s.shift_id} value={s.shift_id}>{s.shift_type} Shift</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Attendant */}
+          <div>
+            <label className="block text-xs font-medium text-content-secondary mb-1">Attendant</label>
+            {!selectedShiftId ? (
+              <p className="text-sm text-content-secondary py-2">Select a shift first</p>
             ) : (
               <select
                 value={selectedHandoverId}
                 onChange={e => { setSelectedHandoverId(e.target.value); setItems([]) }}
                 className="w-full px-3 py-2 rounded-btn border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
               >
-                <option value="">Select handover</option>
-                {handovers.map(h => (
-                  <option key={h.handover_id} value={h.handover_id}>
-                    {h.attendant_name} - {h.shift_type} Shift
-                  </option>
+                <option value="">Select attendant</option>
+                {attendantsForShift.map(h => (
+                  <option key={h.handover_id} value={h.handover_id}>{h.attendant_name}</option>
                 ))}
               </select>
             )}
