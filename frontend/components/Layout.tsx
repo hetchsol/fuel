@@ -77,6 +77,11 @@ const icons: Record<string, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
     </svg>
   ),
+  Sales: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    </svg>
+  ),
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -367,7 +372,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/stores', label: 'Stores / Stock', roles: ['manager', 'owner'] },
         { path: '/stock-takes', label: 'Stock Takes', roles: ['manager', 'owner'] },
         { path: '/sales', label: 'Sales', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/accounts', label: 'Credit Accounts', roles: ['supervisor', 'manager', 'owner'] },
+      ]
+    },
+    {
+      label: 'Sales',
+      roles: ['manager', 'owner'],
+      children: [
+        { path: '/accounts', label: 'Credit Accounts', roles: ['manager', 'owner'] },
+        { path: '/pos-sales', label: 'POS', roles: ['manager', 'owner'] },
       ]
     },
     // Consolidated analytical clusters (each is a single tabbed page).
@@ -413,7 +425,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/stock-takes', label: 'Stock Takes', roles: ['manager'] },
         { path: '/inventory', label: 'Tank Levels', roles: ['manager'] },
         { path: '/sales', label: 'Sales', roles: ['manager'] },
+      ],
+    },
+    {
+      label: 'Sales',
+      roles: ['manager'],
+      children: [
         { path: '/accounts', label: 'Credit Accounts', roles: ['manager'] },
+        { path: '/pos-sales', label: 'POS', roles: ['manager'] },
       ],
     },
     // Same consolidated clusters as every other role.

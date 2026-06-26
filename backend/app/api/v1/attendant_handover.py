@@ -13,6 +13,7 @@ from ...models.models import (
     ReadingsVerificationInput, ShiftClosingInput,
     HandoverNozzleReadingInput, HandoverNozzleReadingSummary,
     HandoverCreditSaleItem, ShiftStockSnapshot, UserRole,
+    POSReceiptItem,
 )
 from ...config import resolve_fuel_price, resolve_fuel_price_for_shift, apply_due_price_changes
 from ...database.storage import get_nozzle, save_station_storage
@@ -2151,6 +2152,51 @@ async def reopen_handover(
     _save_handovers(handovers, station_id)
 
     return {"status": "success", "message": f"Handover {handover_id} reopened for correction"}
+
+
+class POSReceiptsInput(BaseModel):
+    pos_items: List[POSReceiptItem]
+
+
+@router.patch("/{handover_id}/pos-receipts", dependencies=[Depends(require_manager_or_owner)])
+async def patch_pos_receipts(
+    handover_id: str,
+    data: POSReceiptsInput,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Save POS receipt breakdown against an existing handover (manager/owner only).
+    Can be called before or independently of Phase 2 shift closing.
+    """
+    station_id = ctx["station_id"]
+    handovers = _load_handovers(station_id)
+
+    if handover_id not in handovers:
+        raise HTTPException(status_code=404, detail="Handover not found")
+
+    handover = handovers[handover_id]
+
+    if handover.get("review_status") == "approved":
+        raise HTTPException(status_code=400, detail="Cannot modify an approved handover")
+
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
+    if handover.get("date", "") in close_offs:
+        raise HTTPException(status_code=400, detail=f"Cannot modify handover. Day {handover['date']} has been closed off.")
+
+    pos_breakdown = [item.model_dump() for item in data.pos_items]
+    pos_total = round(sum(item.amount for item in data.pos_items), 2)
+
+    handover["pos_breakdown"] = pos_breakdown
+    handover["pos_receipts"] = pos_total
+    _save_handovers(handovers, station_id)
+
+    log_audit_event(
+        station_id=station_id, action="pos_receipts_updated",
+        performed_by=ctx["username"], entity_type="handover", entity_id=handover_id,
+        details={"pos_total": pos_total, "item_count": len(pos_breakdown)},
+    )
+
+    return {"handover_id": handover_id, "pos_breakdown": pos_breakdown, "pos_receipts": pos_total}
 
 
 @router.get("/review-queue")
