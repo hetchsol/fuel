@@ -28,7 +28,6 @@ SUPERVISOR_NOTIFY_INTERVAL_MINUTES = 120  # Supervisor re-notification interval
 class DepositInput(BaseModel):
     shift_id: str
     amount: float = Field(..., gt=0)
-    time: str  # HH:MM format — attendant enters the time of deposit
     note: Optional[str] = ""
 
 
@@ -59,19 +58,15 @@ def record_deposit(deposit: DepositInput, ctx: dict = Depends(get_station_contex
     if deposit.shift_id not in deposits_db:
         deposits_db[deposit.shift_id] = {"shift_id": deposit.shift_id, "deposits": []}
 
-    # Build full timestamp from shift date + attendant-entered time
-    shift = shifts_data[deposit.shift_id]
-    shift_date = shift.get("date", datetime.now().strftime("%Y-%m-%d"))
-    deposit_timestamp = f"{shift_date}T{deposit.time}:00"
-
+    now_dt = datetime.now()
     deposit_record = {
         "deposit_id": f"DEP-{uuid.uuid4().hex[:8]}",
         "attendant_id": ctx["user_id"],
         "attendant_name": ctx["full_name"],
         "amount": deposit.amount,
-        "time": deposit.time,
-        "timestamp": deposit_timestamp,
-        "recorded_at": datetime.now().isoformat(),
+        "time": now_dt.strftime("%H:%M"),
+        "timestamp": now_dt.isoformat(),
+        "recorded_at": now_dt.isoformat(),
         "note": deposit.note or "",
     }
 

@@ -154,10 +154,6 @@ export default function MyShift() {
 
   // Safe deposit state
   const [depositAmount, setDepositAmount] = useState('')
-  const [depositTime, setDepositTime] = useState(() => {
-    const now = new Date()
-    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  })
   const [depositNote, setDepositNote] = useState('')
   const [depositSaving, setDepositSaving] = useState(false)
   const [myDeposits, setMyDeposits] = useState<any[]>([])
@@ -722,7 +718,7 @@ export default function MyShift() {
       const res = await authFetch(`${BASE}/safe-deposits/`, {
         method: 'POST',
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shift_id: shiftInfo.shift_id, amount: amt, time: depositTime, note: depositNote }),
+        body: JSON.stringify({ shift_id: shiftInfo.shift_id, amount: amt, note: depositNote }),
       })
       if (res.ok) {
         setDepositAmount('')
@@ -1210,12 +1206,6 @@ export default function MyShift() {
             <div className="p-3 space-y-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
               {/* Deposit form */}
               <div className="flex flex-col sm:flex-row gap-2 sm:items-end flex-wrap">
-                <div className="w-full sm:w-28">
-                  <label className="block text-xs text-content-secondary mb-1">Time</label>
-                  <input type="time" value={depositTime}
-                    onChange={e => setDepositTime(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded border" style={inputStyle} />
-                </div>
                 <div className="flex-1 min-w-0">
                   <label className="block text-xs text-content-secondary mb-1">Amount (ZMW)</label>
                   <input type="number" min={0} step={1} value={depositAmount}
@@ -1230,7 +1220,7 @@ export default function MyShift() {
                     placeholder="e.g. Fleet fill-up"
                     className="w-full px-3 py-2 text-sm rounded border" style={inputStyle} />
                 </div>
-                <button onClick={handleRecordDeposit} disabled={depositSaving || !depositAmount || !depositTime}
+                <button onClick={handleRecordDeposit} disabled={depositSaving || !depositAmount}
                   className="w-full sm:w-auto px-4 py-2 rounded text-sm font-medium text-white disabled:opacity-50"
                   style={{ backgroundColor: theme.primary }}>
                   {depositSaving ? '...' : 'Deposit'}
