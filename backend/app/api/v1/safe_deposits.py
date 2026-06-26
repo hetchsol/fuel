@@ -156,11 +156,11 @@ def get_shift_deposits(shift_id: str, ctx: dict = Depends(get_station_context)):
 
         # Calculate overdue for each attendant
         for aid, info in by_attendant.items():
-            sorted_deps = sorted(info["deposits"], key=lambda d: d.get("timestamp", ""))
+            sorted_deps = sorted(info["deposits"], key=lambda d: d.get("recorded_at", ""))
             if sorted_deps:
                 # Has deposits — overdue if last deposit > 60 min ago
                 try:
-                    last_dt = datetime.fromisoformat(sorted_deps[-1]["timestamp"])
+                    last_dt = datetime.fromisoformat(sorted_deps[-1]["recorded_at"])
                     gap = (now - last_dt).total_seconds() / 60
                     info["overdue"] = gap > DEPOSIT_INTERVAL_MINUTES
                     info["minutes_since_last_deposit"] = round(gap, 1)
@@ -260,11 +260,11 @@ def get_my_deposits(shift_id: str, ctx: dict = Depends(get_station_context)):
     shift = storage.get('shifts', {}).get(shift_id, {})
     shift_start = shift.get("created_at")
 
-    sorted_deps = sorted(my_deposits, key=lambda d: d.get("timestamp", ""))
+    sorted_deps = sorted(my_deposits, key=lambda d: d.get("recorded_at", ""))
     if sorted_deps:
-        # Has deposits — check time since last deposit
+        # Has deposits — check time since last deposit (server recorded time)
         try:
-            last_dt = datetime.fromisoformat(sorted_deps[-1]["timestamp"])
+            last_dt = datetime.fromisoformat(sorted_deps[-1]["recorded_at"])
             minutes_since_last = (now - last_dt).total_seconds() / 60
             overdue = minutes_since_last > DEPOSIT_INTERVAL_MINUTES
         except (ValueError, KeyError):
