@@ -212,11 +212,11 @@ export default function POSSales() {
       {/* Entry form */}
       {selectedHandoverId && (
         <>
-          <div className="glass-card-static rounded-card p-5 space-y-4">
-            <h2 className="text-sm font-semibold text-content-primary">Add POS Receipt</h2>
+          <div className="glass-card-static rounded-card p-5 space-y-4 border-l-[3px] border-l-action-primary">
+            <h2 className="text-sm font-bold text-content-primary">Add POS Receipt</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Payment Type</label>
+                <label className="block text-xs font-bold uppercase text-content-secondary mb-1">Payment Type</label>
                 <select
                   value={selectedTypeId}
                   onChange={e => setSelectedTypeId(e.target.value)}
@@ -228,7 +228,7 @@ export default function POSSales() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-content-secondary mb-1">Amount (ZMW)</label>
+                <label className="block text-xs font-bold uppercase text-content-secondary mb-1">Amount (ZMW)</label>
                 <input
                   type="number"
                   min="0"
@@ -243,8 +243,8 @@ export default function POSSales() {
             </div>
             <div className="flex gap-3 items-end">
               <div className="flex-1">
-                <label className="block text-xs font-medium text-content-secondary mb-1">
-                  Reference <span className="font-normal text-content-secondary/70">(optional)</span>
+                <label className="block text-xs font-bold uppercase text-content-secondary mb-1">
+                  Reference <span className="font-normal normal-case">(optional)</span>
                 </label>
                 <input
                   type="text"
@@ -257,7 +257,7 @@ export default function POSSales() {
               </div>
               <button
                 onClick={addItem}
-                className="px-5 py-2 bg-action-primary text-white text-sm font-medium rounded-btn hover:opacity-90 transition-opacity whitespace-nowrap"
+                className="px-5 py-2 bg-action-primary text-white text-sm font-bold rounded-btn hover:opacity-90 transition-opacity whitespace-nowrap"
               >
                 + Add
               </button>
@@ -273,9 +273,9 @@ export default function POSSales() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-border bg-surface-bg">
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-content-secondary">Payment Type</th>
-                    <th className="px-5 py-2.5 text-right text-xs font-medium text-content-secondary">Amount</th>
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-content-secondary">Reference</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-bold uppercase text-content-secondary">Payment Type</th>
+                    <th className="px-5 py-2.5 text-right text-xs font-bold uppercase text-content-secondary">Amount</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-bold uppercase text-content-secondary">Reference</th>
                     <th className="px-3 py-2.5" />
                   </tr>
                 </thead>
