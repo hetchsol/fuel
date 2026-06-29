@@ -73,12 +73,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     res.status(response.status)
 
+    // Forward headers the client needs
     const retryAfter = response.headers.get('retry-after')
     if (retryAfter) res.setHeader('Retry-After', retryAfter)
+    const disposition = response.headers.get('content-disposition')
+    if (disposition) res.setHeader('Content-Disposition', disposition)
+    if (contentType) res.setHeader('Content-Type', contentType)
 
     if (contentType.includes('application/json')) {
       const data = await response.json()
       res.json(data)
+    } else if (
+      contentType.includes('application/gzip') ||
+      contentType.includes('application/octet-stream') ||
+      contentType.includes('application/zip') ||
+      contentType.includes('application/vnd')
+    ) {
+      // Binary response — pipe raw bytes without corrupting them
+      const buf = Buffer.from(await response.arrayBuffer())
+      res.send(buf)
     } else {
       const text = await response.text()
       res.send(text)
