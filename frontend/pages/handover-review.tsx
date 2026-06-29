@@ -1891,19 +1891,30 @@ function POSPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: a
   const fmtK = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
-    <div className="mt-3 rounded-lg p-3 space-y-3" style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border }}>
-      <div className="flex flex-wrap gap-2">
-        <select value={selectedTypeId} onChange={e => setSelectedTypeId(e.target.value)}
-          className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
-          {posTypes.map(t => <option key={t.type_id} value={t.type_id}>{t.name}</option>)}
-        </select>
-        <input type="number" min="0" step="0.01" placeholder="Amount" value={amount}
-          onChange={e => setAmount(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()}
-          className="w-28 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
-        <input type="text" placeholder="Reference (optional)" value={reference}
-          onChange={e => setReference(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()}
-          className="w-40 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
-        <button onClick={addItem} className="px-3 py-1.5 text-xs font-medium rounded text-white" style={{ backgroundColor: 'var(--color-action-primary)' }}>
+    <div className="mt-3 rounded-lg p-3 space-y-3"
+      style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border, borderLeftWidth: 3, borderLeftColor: 'var(--color-action-primary)' }}>
+      <div className="flex flex-wrap gap-3 items-end">
+        <div>
+          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Payment Type</div>
+          <select value={selectedTypeId} onChange={e => setSelectedTypeId(e.target.value)}
+            className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+            {posTypes.map(t => <option key={t.type_id} value={t.type_id}>{t.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Amount (ZMW)</div>
+          <input type="number" min="0" step="0.01" placeholder="0.00" value={amount}
+            onChange={e => setAmount(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()}
+            className="w-28 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
+        </div>
+        <div>
+          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Reference <span className="font-normal normal-case">(optional)</span></div>
+          <input type="text" placeholder="Slip or batch no." value={reference}
+            onChange={e => setReference(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()}
+            className="w-36 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
+        </div>
+        <button onClick={addItem} className="px-3 py-1.5 text-xs font-bold rounded text-white self-end"
+          style={{ backgroundColor: 'var(--color-action-primary)' }}>
           + Add
         </button>
       </div>
@@ -1921,9 +1932,9 @@ function POSPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: a
             </div>
           ))}
           <div className="flex items-center justify-between pt-1">
-            <span className="text-xs font-semibold" style={{ color: theme.textSecondary }}>Total: {fmtK(total)}</span>
+            <span className="text-xs font-bold" style={{ color: theme.textPrimary }}>Total: {fmtK(total)}</span>
             <button onClick={saveAll} disabled={saving}
-              className="px-3 py-1.5 text-xs font-medium rounded text-white disabled:opacity-50"
+              className="px-3 py-1.5 text-xs font-bold rounded text-white disabled:opacity-50"
               style={{ backgroundColor: 'var(--color-status-success)' }}>
               {saving ? 'Saving...' : 'Save POS'}
             </button>
@@ -1996,17 +2007,18 @@ function CreditPanel({ handoverId, theme, onSaved }: { handoverId: string; theme
   const fmtK = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
-    <div className="mt-3 rounded-lg p-3 space-y-3" style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border }}>
-      <div className="flex flex-wrap gap-2 items-end">
+    <div className="mt-3 rounded-lg p-3 space-y-3"
+      style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border, borderLeftWidth: 3, borderLeftColor: 'var(--color-action-primary)' }}>
+      <div className="flex flex-wrap gap-3 items-end">
         <div>
-          <div className="text-[10px] uppercase mb-1" style={{ color: theme.textSecondary }}>Account</div>
+          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Account</div>
           <select value={selectedAccountId} onChange={e => setSelectedAccountId(e.target.value)}
             className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
             {accounts.map(a => <option key={a.account_id} value={a.account_id}>{a.account_name}</option>)}
           </select>
         </div>
         <div>
-          <div className="text-[10px] uppercase mb-1" style={{ color: theme.textSecondary }}>Fuel</div>
+          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Fuel</div>
           <select value={fuelType} onChange={e => setFuelType(e.target.value)}
             className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
             <option>Diesel</option>
@@ -2014,17 +2026,17 @@ function CreditPanel({ handoverId, theme, onSaved }: { handoverId: string; theme
           </select>
         </div>
         <div>
-          <div className="text-[10px] uppercase mb-1" style={{ color: theme.textSecondary }}>Volume (L)</div>
+          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Volume (L)</div>
           <input type="number" min="0" step="0.01" placeholder="0.00" value={volume}
             onChange={e => setVolume(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()}
             className="w-24 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
         </div>
         {vol > 0 && pricePerLiter > 0 && (
-          <span className="text-xs self-end pb-2" style={{ color: theme.textSecondary }}>
+          <span className="text-xs self-end pb-2 font-semibold" style={{ color: 'var(--color-action-primary)' }}>
             K{pricePerLiter.toFixed(2)}/L = {fmtK(lineAmount)}
           </span>
         )}
-        <button onClick={addItem} className="px-3 py-1.5 text-xs font-medium rounded text-white self-end"
+        <button onClick={addItem} className="px-3 py-1.5 text-xs font-bold rounded text-white self-end"
           style={{ backgroundColor: 'var(--color-action-primary)' }}>
           + Add
         </button>
@@ -2045,9 +2057,9 @@ function CreditPanel({ handoverId, theme, onSaved }: { handoverId: string; theme
             </div>
           ))}
           <div className="flex items-center justify-between pt-1">
-            <span className="text-xs font-semibold" style={{ color: theme.textSecondary }}>Total: {fmtK(total)}</span>
+            <span className="text-xs font-bold" style={{ color: theme.textPrimary }}>Total: {fmtK(total)}</span>
             <button onClick={saveAll} disabled={saving}
-              className="px-3 py-1.5 text-xs font-medium rounded text-white disabled:opacity-50"
+              className="px-3 py-1.5 text-xs font-bold rounded text-white disabled:opacity-50"
               style={{ backgroundColor: 'var(--color-status-success)' }}>
               {saving ? 'Saving...' : 'Save Credit'}
             </button>
