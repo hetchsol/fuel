@@ -723,8 +723,6 @@ export default function MyShift() {
       if (res.ok) {
         setDepositAmount('')
         setDepositNote('')
-        const now = new Date()
-        setDepositTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`)
         fetchMyDeposits()
       }
     } catch {}

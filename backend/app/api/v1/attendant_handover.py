@@ -2199,6 +2199,82 @@ async def patch_pos_receipts(
     return {"handover_id": handover_id, "pos_breakdown": pos_breakdown, "pos_receipts": pos_total}
 
 
+class CreditSalesInput(BaseModel):
+    credit_items: List[HandoverCreditSaleItem]
+
+
+@router.patch("/{handover_id}/credit-sales", dependencies=[Depends(require_manager_or_owner)])
+async def patch_credit_sales(
+    handover_id: str,
+    data: CreditSalesInput,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Append credit sales to an existing handover (manager/owner only).
+    Uses the same processing as Phase 2 — deduplication, price resolution,
+    account balance updates, and CreditSale record creation.
+    """
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+    handovers = _load_handovers(station_id)
+
+    if handover_id not in handovers:
+        raise HTTPException(status_code=404, detail="Handover not found")
+
+    handover = handovers[handover_id]
+
+    if handover.get("review_status") == "approved":
+        raise HTTPException(status_code=400, detail="Cannot modify an approved handover")
+
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
+    if handover.get("date", "") in close_offs:
+        raise HTTPException(status_code=400, detail=f"Cannot modify handover. Day {handover['date']} has been closed off.")
+
+    shift_id = handover.get("shift_id", "")
+    shift = storage.get("shifts", {}).get(shift_id, {})
+
+    credit_total, credit_sale_details, new_items_to_create = \
+        _process_credit_sales(data.credit_items, storage, shift_id)
+
+    # Create account records and update balances for new items
+    accounts_data = storage.get('accounts', {})
+    credit_sales_data = storage.get('credit_sales', [])
+    shift_date = shift.get("date", "")
+    for idx, item in enumerate(new_items_to_create):
+        sale_id = f"CS-HO-{handover_id}-P{idx}"
+        sale_data = {
+            "sale_id": sale_id, "account_id": item["account_id"],
+            "shift_id": shift_id, "date": shift_date,
+            "fuel_type": item["fuel_type"], "volume": item["volume"],
+            "amount": item["amount"], "invoice_number": f"Handover {handover_id}",
+        }
+        try:
+            process_credit_sale(
+                accounts=accounts_data, sales_log=credit_sales_data,
+                account_id=item["account_id"], amount=item["amount"], sale_data=sale_data,
+            )
+        except HTTPException:
+            item["over_limit"] = True
+
+    handover["credit_sale_details"] = credit_sale_details
+    handover["credit_sales"] = credit_total
+    _save_handovers(handovers, station_id)
+    save_station_storage(station_id)
+
+    log_audit_event(
+        station_id=station_id, action="credit_sales_updated",
+        performed_by=ctx["username"], entity_type="handover", entity_id=handover_id,
+        details={"credit_total": credit_total, "new_items": len(new_items_to_create)},
+    )
+
+    return {
+        "handover_id": handover_id,
+        "credit_sales": credit_total,
+        "credit_sale_details": credit_sale_details,
+        "new_items_created": len(new_items_to_create),
+    }
+
+
 @router.get("/review-queue")
 async def get_review_queue(
     shift_id: str = None,

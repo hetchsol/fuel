@@ -9,6 +9,7 @@ import ExportButtons from '../components/ExportButtons'
 import Pagination from '../components/Pagination'
 import { ExportConfig } from '../lib/exportUtils'
 import { formatDateToDisplay } from '../lib/dateUtils'
+import toast from 'react-hot-toast'
 
 const PAGE_SIZE = 20
 
@@ -947,7 +948,7 @@ export default function HandoverReview() {
                     <tr>
                       <td colSpan={statusTab !== 'approved' ? 10 : 9}
                         style={{ backgroundColor: theme.background, borderTopColor: theme.border, borderTopWidth: 1 }}>
-                        <ExpandedDetail h={h} theme={theme} />
+                        <ExpandedDetail h={h} theme={theme} onRefresh={fetchQueue} />
                       </td>
                     </tr>
                   )}
@@ -1410,8 +1411,11 @@ function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
   )
 }
 
-function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
+function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any; onRefresh: () => void }) {
   const [expandedStock, setExpandedStock] = useState<string | null>(null)
+  const [showPOS, setShowPOS] = useState(false)
+  const [showCredit, setShowCredit] = useState(false)
+  const canEdit = h.review_status !== 'approved'
   return (
     <div className="p-4 space-y-4">
       {/* Previous supervisor review */}
@@ -1756,6 +1760,32 @@ function ExpandedDetail({ h, theme }: { h: HandoverEntry; theme: any }) {
         </div>
       )}
 
+      {/* Inline POS entry */}
+      {canEdit && (
+        <div style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 12 }}>
+          <button
+            onClick={() => setShowPOS(p => !p)}
+            className="text-xs font-semibold px-3 py-1.5 rounded"
+            style={{ backgroundColor: showPOS ? theme.border : 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
+            {showPOS ? 'Hide POS Entry' : '+ Add POS Receipts'}
+          </button>
+          {showPOS && <POSPanel handoverId={h.handover_id} theme={theme} onSaved={() => { setShowPOS(false); onRefresh() }} />}
+        </div>
+      )}
+
+      {/* Inline Credit Sales entry */}
+      {canEdit && (
+        <div style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 12 }}>
+          <button
+            onClick={() => setShowCredit(p => !p)}
+            className="text-xs font-semibold px-3 py-1.5 rounded"
+            style={{ backgroundColor: showCredit ? theme.border : 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
+            {showCredit ? 'Hide Credit Entry' : '+ Add Credit Sales'}
+          </button>
+          {showCredit && <CreditPanel handoverId={h.handover_id} theme={theme} onSaved={() => { setShowCredit(false); onRefresh() }} />}
+        </div>
+      )}
+
       {/* Safe Deposits */}
       <SafeDepositSummary shiftId={h.shift_id} attendantId={h.attendant_id} theme={theme} />
     </div>
@@ -1796,13 +1826,235 @@ function SafeDepositSummary({ shiftId, attendantId, theme }: { shiftId: string; 
           <div key={d.deposit_id} className="flex justify-between text-xs p-1.5 rounded"
             style={{ backgroundColor: theme.background }}>
             <span style={{ color: theme.textSecondary }}>
-              {d.time || new Date(d.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})} {d.note && `— ${d.note}`}
+              {d.time}{d.note && ` — ${d.note}`}
             </span>
             <span className="font-semibold" style={{ color: theme.textPrimary }}>K{d.amount.toLocaleString()}</span>
           </div>
         ))}
       </div>
       )}
+    </div>
+  )
+}
+
+function POSPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: any; onSaved: () => void }) {
+  const [posTypes, setPosTypes] = useState<any[]>([])
+  const [selectedTypeId, setSelectedTypeId] = useState('')
+  const [amount, setAmount] = useState('')
+  const [reference, setReference] = useState('')
+  const [items, setItems] = useState<any[]>([])
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    authFetch(`${BASE}/settings/pos`, { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : { payment_types: [] })
+      .then(data => {
+        const active = (data.payment_types || []).filter((t: any) => t.is_active)
+        setPosTypes(active)
+        if (active.length > 0) setSelectedTypeId(active[0].type_id)
+      })
+      .catch(() => {})
+  }, [])
+
+  const addItem = () => {
+    const amt = parseFloat(amount)
+    if (!selectedTypeId || !amt || amt <= 0) return
+    const type = posTypes.find(t => t.type_id === selectedTypeId)
+    if (!type) return
+    setItems(prev => [...prev, { type_id: type.type_id, type_name: type.name, amount: amt, reference: reference.trim() }])
+    setAmount('')
+    setReference('')
+  }
+
+  const saveAll = async () => {
+    if (items.length === 0) return
+    setSaving(true)
+    setErr('')
+    try {
+      const res = await authFetch(`${BASE}/handover/${handoverId}/pos-receipts`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ pos_items: items }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Save failed')
+      toast.success('POS receipts saved')
+      onSaved()
+    } catch (e: any) {
+      setErr(e.message || 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const total = items.reduce((s, i) => s + i.amount, 0)
+  const fmtK = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  return (
+    <div className="mt-3 rounded-lg p-3 space-y-3" style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border }}>
+      <div className="flex flex-wrap gap-2">
+        <select value={selectedTypeId} onChange={e => setSelectedTypeId(e.target.value)}
+          className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+          {posTypes.map(t => <option key={t.type_id} value={t.type_id}>{t.name}</option>)}
+        </select>
+        <input type="number" min="0" step="0.01" placeholder="Amount" value={amount}
+          onChange={e => setAmount(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()}
+          className="w-28 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
+        <input type="text" placeholder="Reference (optional)" value={reference}
+          onChange={e => setReference(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()}
+          className="w-40 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
+        <button onClick={addItem} className="px-3 py-1.5 text-xs font-medium rounded text-white" style={{ backgroundColor: 'var(--color-action-primary)' }}>
+          + Add
+        </button>
+      </div>
+      {items.length > 0 && (
+        <div className="space-y-1">
+          {items.map((item, idx) => (
+            <div key={idx} className="flex items-center justify-between text-xs px-2 py-1.5 rounded"
+              style={{ backgroundColor: theme.background }}>
+              <span style={{ color: theme.textSecondary }}>{item.type_name}{item.reference && ` · ${item.reference}`}</span>
+              <div className="flex items-center gap-3">
+                <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>{fmtK(item.amount)}</span>
+                <button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))}
+                  className="text-[10px]" style={{ color: 'var(--color-status-error)' }}>Remove</button>
+              </div>
+            </div>
+          ))}
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-xs font-semibold" style={{ color: theme.textSecondary }}>Total: {fmtK(total)}</span>
+            <button onClick={saveAll} disabled={saving}
+              className="px-3 py-1.5 text-xs font-medium rounded text-white disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-status-success)' }}>
+              {saving ? 'Saving...' : 'Save POS'}
+            </button>
+          </div>
+        </div>
+      )}
+      {err && <p className="text-xs" style={{ color: 'var(--color-status-error)' }}>{err}</p>}
+    </div>
+  )
+}
+
+function CreditPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: any; onSaved: () => void }) {
+  const [accounts, setAccounts] = useState<any[]>([])
+  const [fuelPrices, setFuelPrices] = useState<Record<string, number>>({ Diesel: 0, Petrol: 0 })
+  const [selectedAccountId, setSelectedAccountId] = useState('')
+  const [fuelType, setFuelType] = useState('Diesel')
+  const [volume, setVolume] = useState('')
+  const [items, setItems] = useState<any[]>([])
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    authFetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : { accounts: [], fuel_prices: {} })
+      .then(data => {
+        setAccounts(data.accounts || [])
+        setFuelPrices(data.fuel_prices || { Diesel: 0, Petrol: 0 })
+        if (data.accounts?.length > 0) setSelectedAccountId(data.accounts[0].account_id)
+      })
+      .catch(() => {})
+  }, [])
+
+  const selectedAccount = accounts.find(a => a.account_id === selectedAccountId)
+  const pricePerLiter = selectedAccount?.default_price_per_liter || fuelPrices[fuelType] || 0
+  const vol = parseFloat(volume) || 0
+  const lineAmount = Math.round(vol * pricePerLiter * 100) / 100
+
+  const addItem = () => {
+    if (!selectedAccountId || vol <= 0) return
+    const acct = accounts.find(a => a.account_id === selectedAccountId)
+    if (!acct) return
+    setItems(prev => [...prev, {
+      account_id: acct.account_id, account_name: acct.account_name,
+      fuel_type: fuelType, volume: vol, price_per_liter: pricePerLiter, amount: lineAmount,
+    }])
+    setVolume('')
+  }
+
+  const saveAll = async () => {
+    if (items.length === 0) return
+    setSaving(true)
+    setErr('')
+    try {
+      const res = await authFetch(`${BASE}/handover/${handoverId}/credit-sales`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ credit_items: items }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Save failed')
+      toast.success('Credit sales saved')
+      onSaved()
+    } catch (e: any) {
+      setErr(e.message || 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const total = items.reduce((s, i) => s + i.amount, 0)
+  const fmtK = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  return (
+    <div className="mt-3 rounded-lg p-3 space-y-3" style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border }}>
+      <div className="flex flex-wrap gap-2 items-end">
+        <div>
+          <div className="text-[10px] uppercase mb-1" style={{ color: theme.textSecondary }}>Account</div>
+          <select value={selectedAccountId} onChange={e => setSelectedAccountId(e.target.value)}
+            className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+            {accounts.map(a => <option key={a.account_id} value={a.account_id}>{a.account_name}</option>)}
+          </select>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase mb-1" style={{ color: theme.textSecondary }}>Fuel</div>
+          <select value={fuelType} onChange={e => setFuelType(e.target.value)}
+            className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+            <option>Diesel</option>
+            <option>Petrol</option>
+          </select>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase mb-1" style={{ color: theme.textSecondary }}>Volume (L)</div>
+          <input type="number" min="0" step="0.01" placeholder="0.00" value={volume}
+            onChange={e => setVolume(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()}
+            className="w-24 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
+        </div>
+        {vol > 0 && pricePerLiter > 0 && (
+          <span className="text-xs self-end pb-2" style={{ color: theme.textSecondary }}>
+            K{pricePerLiter.toFixed(2)}/L = {fmtK(lineAmount)}
+          </span>
+        )}
+        <button onClick={addItem} className="px-3 py-1.5 text-xs font-medium rounded text-white self-end"
+          style={{ backgroundColor: 'var(--color-action-primary)' }}>
+          + Add
+        </button>
+      </div>
+      {items.length > 0 && (
+        <div className="space-y-1">
+          {items.map((item, idx) => (
+            <div key={idx} className="flex items-center justify-between text-xs px-2 py-1.5 rounded"
+              style={{ backgroundColor: theme.background }}>
+              <span style={{ color: theme.textSecondary }}>
+                {item.account_name} · {item.fuel_type} · {item.volume.toLocaleString()}L @ K{item.price_per_liter.toFixed(2)}
+              </span>
+              <div className="flex items-center gap-3">
+                <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>{fmtK(item.amount)}</span>
+                <button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))}
+                  className="text-[10px]" style={{ color: 'var(--color-status-error)' }}>Remove</button>
+              </div>
+            </div>
+          ))}
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-xs font-semibold" style={{ color: theme.textSecondary }}>Total: {fmtK(total)}</span>
+            <button onClick={saveAll} disabled={saving}
+              className="px-3 py-1.5 text-xs font-medium rounded text-white disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-status-success)' }}>
+              {saving ? 'Saving...' : 'Save Credit'}
+            </button>
+          </div>
+        </div>
+      )}
+      {err && <p className="text-xs" style={{ color: 'var(--color-status-error)' }}>{err}</p>}
     </div>
   )
 }
