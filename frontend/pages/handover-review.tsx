@@ -1891,8 +1891,8 @@ function POSPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: a
   const fmtK = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
-    <div className="mt-3 rounded-lg p-3 space-y-3"
-      style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border, borderLeftWidth: 3, borderLeftColor: 'var(--color-action-primary)' }}>
+    <div className="mt-3" style={{ borderRadius: 8, padding: '0 0 0 3px', background: 'var(--color-action-primary)' }}>
+    <div className="p-3 space-y-3" style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 6 }}>
       <div className="flex flex-wrap gap-3 items-end">
         <div>
           <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Payment Type</div>
@@ -1942,6 +1942,7 @@ function POSPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: a
         </div>
       )}
       {err && <p className="text-xs" style={{ color: 'var(--color-status-error)' }}>{err}</p>}
+    </div>
     </div>
   )
 }
@@ -2007,8 +2008,8 @@ function CreditPanel({ handoverId, theme, onSaved }: { handoverId: string; theme
   const fmtK = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
-    <div className="mt-3 rounded-lg p-3 space-y-3"
-      style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border, borderLeftWidth: 3, borderLeftColor: 'var(--color-action-primary)' }}>
+    <div className="mt-3" style={{ borderRadius: 8, padding: '0 0 0 3px', background: 'var(--color-action-primary)' }}>
+    <div className="p-3 space-y-3" style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 6 }}>
       <div className="flex flex-wrap gap-3 items-end">
         <div>
           <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Account</div>
@@ -2067,6 +2068,7 @@ function CreditPanel({ handoverId, theme, onSaved }: { handoverId: string; theme
         </div>
       )}
       {err && <p className="text-xs" style={{ color: 'var(--color-status-error)' }}>{err}</p>}
+    </div>
     </div>
   )
 }
