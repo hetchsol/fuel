@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
  */
 
 // Routes that require owner role only
-const OWNER_ROUTES = ['/stations', '/infrastructure']
+const OWNER_ROUTES = ['/stations', '/infrastructure', '/backup']
 
 // Routes that require manager or owner role
 const MANAGER_ROUTES = ['/settings', '/users', '/audit', '/daily-close-off', '/tank-dips']

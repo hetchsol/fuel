@@ -234,9 +234,13 @@ def health():
                 db_ok = True
         except Exception:
             pass
+
+    from app.api.v1.backup import get_last_backup_at
+    default_station = next(iter(stations_registry.STATIONS), "ST001")
     return {
         "status": "ok" if db_ok or not DATABASE_URL else "degraded",
         "storage": "postgresql" if db_ok else "file",
         "version": "1.0.0",
         "stations": len(stations_registry.STATIONS),
+        "last_backup_at": get_last_backup_at(default_station),
     }

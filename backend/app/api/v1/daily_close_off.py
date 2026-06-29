@@ -240,6 +240,13 @@ async def close_day(
     shift_ids = [h.get("shift_id") for h in date_handovers.values() if h.get("shift_id")]
     reconcile_shifts_for_date(shift_ids, station_id, ctx["storage"], ctx.get("username", ""))
 
+    # Auto-backup on every close
+    try:
+        from .backup import trigger_auto_backup
+        trigger_auto_backup(station_id, triggered_by=ctx.get("username", "system"))
+    except Exception:
+        pass  # Never block main operation
+
     # Audit trail
     try:
         log_audit_event(

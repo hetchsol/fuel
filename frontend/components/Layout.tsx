@@ -395,6 +395,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/stations', label: 'Stations', roles: ['owner'] },
         { path: '/infrastructure', label: 'Infrastructure', roles: ['owner'] },
         { path: '/settings', label: 'Settings', roles: ['manager', 'owner'] },
+        { path: '/backup', label: 'Backup & Restore', roles: ['owner'] },
         { path: '/users', label: 'Users', roles: ['manager', 'owner'] },
         { path: '/audit', label: 'Audit Log', roles: ['manager', 'owner'] },
       ]
