@@ -212,7 +212,7 @@ export default function POSSales() {
       {/* Entry form */}
       {selectedHandoverId && (
         <>
-          <div className="glass-card-static rounded-card p-5 space-y-4 border-l-[3px] border-l-action-primary">
+          <div className="glass-card-static rounded-card p-5 space-y-4" style={{ borderLeft: '3px solid var(--color-action-primary)' }}>
             <h2 className="text-sm font-bold text-content-primary">Add POS Receipt</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
