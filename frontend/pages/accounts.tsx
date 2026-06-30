@@ -74,6 +74,12 @@ export default function Accounts() {
   const [overdraftAmount, setOverdraftAmount] = useState('')
   const [overdraftSaving, setOverdraftSaving] = useState(false)
 
+  // Record payment modal (Post-Paid, manager/owner)
+  const [paymentAccount, setPaymentAccount] = useState<any | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentRef, setPaymentRef] = useState('')
+  const [paymentSaving, setPaymentSaving] = useState(false)
+
   // Credit sale form state — price starts empty; populated after settings fetch
   const [saleForm, setSaleForm] = useState({
     account_id: '',
@@ -503,6 +509,26 @@ export default function Accounts() {
     finally { setOverdraftSaving(false) }
   }
 
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!paymentAccount) return
+    const amt = parseFloat(paymentAmount)
+    if (!amt || amt <= 0) { toast.error('Enter a valid amount'); return }
+    setPaymentSaving(true)
+    try {
+      const params = new URLSearchParams({ amount: amt.toFixed(2) })
+      if (paymentRef.trim()) params.set('reference', paymentRef.trim())
+      const res = await authFetch(`${BASE}/accounts/${paymentAccount.account_id}/payment?${params}`, {
+        method: 'POST', headers: getHeaders(),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Payment failed') }
+      toast.success(`ZMW ${amt.toFixed(2)} payment recorded for ${paymentAccount.account_name}`)
+      setPaymentAccount(null); setPaymentAmount(''); setPaymentRef('')
+      fetchAccounts()
+    } catch (err: any) { toast.error(err.message) }
+    finally { setPaymentSaving(false) }
+  }
+
   return (
     <div>
       <div className="mb-8">
@@ -910,22 +936,29 @@ export default function Accounts() {
                 {/* Actions */}
                 {(canManage || isOwner) && (
                   <div className="pt-3 border-t border-surface-border space-y-2">
-                    {isOwner && (
-                      <div className="flex gap-2 flex-wrap">
-                        {t === 'Pre-Paid' && (
-                          <button
-                            onClick={() => { setTopUpAccount(account); setTopUpAmount(''); setTopUpRef('') }}
-                            className="px-3 py-1.5 text-xs rounded border border-action-primary text-action-primary hover:bg-action-primary hover:text-white transition-colors font-medium">
-                            Top Up
-                          </button>
-                        )}
+                    <div className="flex gap-2 flex-wrap">
+                      {canManage && t === 'Post-Paid' && (
+                        <button
+                          onClick={() => { setPaymentAccount(account); setPaymentAmount(''); setPaymentRef('') }}
+                          className="px-3 py-1.5 text-xs rounded border border-status-success text-status-success hover:bg-status-success hover:text-white transition-colors font-medium">
+                          Record Payment
+                        </button>
+                      )}
+                      {isOwner && t === 'Pre-Paid' && (
+                        <button
+                          onClick={() => { setTopUpAccount(account); setTopUpAmount(''); setTopUpRef('') }}
+                          className="px-3 py-1.5 text-xs rounded border border-action-primary text-action-primary hover:bg-action-primary hover:text-white transition-colors font-medium">
+                          Top Up
+                        </button>
+                      )}
+                      {isOwner && (
                         <button
                           onClick={() => { setOverdraftAccount(account); setOverdraftAmount(overdraft > 0 ? String(overdraft) : '') }}
                           className="px-3 py-1.5 text-xs rounded border border-status-warning text-status-warning hover:bg-status-warning hover:text-white transition-colors font-medium">
                           {overdraft > 0 ? 'Adjust Overdraft' : 'Approve Overdraft'}
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       {canManage && (
                         <button onClick={() => openEdit(account)}
@@ -1237,6 +1270,49 @@ export default function Accounts() {
                 <button type="submit" disabled={overdraftSaving}
                   className="px-4 py-2 text-sm font-semibold rounded-md bg-status-warning text-white disabled:opacity-50">
                   {overdraftSaving ? 'Saving...' : 'Approve'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Record Payment Modal (Post-Paid, manager/owner) */}
+      {paymentAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-lg shadow-lg p-6 bg-surface-card border border-surface-border">
+            <h3 className="text-lg font-bold text-content-primary mb-1">Record Payment — {paymentAccount.account_name}</h3>
+            <p className="text-sm text-content-secondary mb-4">
+              Balance owed: <span className="font-semibold text-content-primary">{formatCurrency(paymentAccount.current_balance ?? 0)}</span>
+            </p>
+            <form onSubmit={handleRecordPayment} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Amount Received (ZMW)</label>
+                <input type="number" step="0.01" min="0.01" value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  placeholder="0.00" required autoFocus />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Reference (optional)</label>
+                <input type="text" value={paymentRef}
+                  onChange={(e) => setPaymentRef(e.target.value)}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  placeholder="e.g. Bank transfer ref, cheque no." />
+              </div>
+              {paymentAmount && parseFloat(paymentAmount) > 0 && (
+                <p className="text-sm text-content-secondary">
+                  Remaining balance: <span className="font-semibold text-content-primary">
+                    {formatCurrency(Math.max(0, (paymentAccount.current_balance ?? 0) - parseFloat(paymentAmount)))}
+                  </span>
+                </p>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={() => setPaymentAccount(null)}
+                  className="px-4 py-2 text-sm rounded-md border border-surface-border text-content-secondary">Cancel</button>
+                <button type="submit" disabled={paymentSaving}
+                  className="px-4 py-2 text-sm font-semibold rounded-md bg-status-success text-white disabled:opacity-50">
+                  {paymentSaving ? 'Saving...' : 'Record Payment'}
                 </button>
               </div>
             </form>
