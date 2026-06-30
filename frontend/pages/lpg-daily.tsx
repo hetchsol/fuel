@@ -18,6 +18,7 @@ interface CylinderRow {
   damaged: number
   damage_note: string
   balance: number
+  closing_count: number
   closing_empty: number
   closing_empty_override: boolean
   value_refill: number
@@ -57,8 +58,8 @@ export default function LPGDaily() {
     LPG_SIZES.map(s => ({
       size_kg: s, opening_balance: 0, opening_empty: 0, receipts: 0,
       traded_in: 0, traded_out: 0, sold_refill: 0, sold_with_cylinder: 0,
-      damaged: 0, damage_note: '', balance: 0, closing_empty: 0,
-      closing_empty_override: false,
+      damaged: 0, damage_note: '', balance: 0, closing_count: 0,
+      closing_empty: 0, closing_empty_override: false,
       value_refill: 0, value_with_cylinder: 0, total_value: 0,
     }))
   )
@@ -309,17 +310,21 @@ export default function LPGDaily() {
                 <p className="text-xl font-bold text-content-primary">{bookPopulation}</p>
                 <p className="text-xs text-content-secondary">book</p>
               </div>
-              <div className="flex items-center gap-2">
-                <input type="number" min={0} value={actualPopulation}
-                  onChange={e => setActualPopulation(e.target.value)}
-                  placeholder="Actual"
-                  className="w-24 px-2 py-1 rounded border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:border-action-primary" />
-                {popDiff !== null && (
-                  <span className={`text-sm font-bold ${popDiff !== 0 ? 'text-status-error' : 'text-status-success'}`}>
-                    {popDiff > 0 ? `+${popDiff}` : popDiff}
-                  </span>
-                )}
-              </div>
+              {canManage ? (
+                <div className="flex items-center gap-2">
+                  <input type="number" min={0} value={actualPopulation}
+                    onChange={e => setActualPopulation(e.target.value)}
+                    placeholder="Actual"
+                    className="w-24 px-2 py-1 rounded border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:border-action-primary" />
+                  {popDiff !== null && (
+                    <span className={`text-sm font-bold ${popDiff !== 0 ? 'text-status-error' : 'text-status-success'}`}>
+                      {popDiff > 0 ? `+${popDiff}` : popDiff}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-content-secondary">Full + empty on hand</p>
+              )}
             </div>
           </div>
 
@@ -388,14 +393,16 @@ export default function LPGDaily() {
                       <label className="block text-xs text-content-secondary mb-0.5">Sold (New)</label>
                       {numInput(row.sold_with_cylinder, v => updateCylinder(row.size_kg, 'sold_with_cylinder', v))}
                     </div>
-                    <div>
-                      <label className="block text-xs text-content-secondary mb-0.5">Damaged</label>
-                      <input type="number" min={0} value={row.damaged || 0}
-                        onChange={e => updateCylinder(row.size_kg, 'damaged', parseInt(e.target.value) || 0)}
-                        className={`w-full px-2 py-1.5 rounded border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary ${
-                          row.damaged > 0 ? 'border-status-warning' : 'border-surface-border'
-                        }`} />
-                    </div>
+                    {canManage && (
+                      <div>
+                        <label className="block text-xs text-content-secondary mb-0.5">Damaged</label>
+                        <input type="number" min={0} value={row.damaged || 0}
+                          onChange={e => updateCylinder(row.size_kg, 'damaged', parseInt(e.target.value) || 0)}
+                          className={`w-full px-2 py-1.5 rounded border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary ${
+                            row.damaged > 0 ? 'border-status-warning' : 'border-surface-border'
+                          }`} />
+                      </div>
+                    )}
                     {/* Trade impact — read-only, derived from trades list */}
                     {(tIn > 0 || tOut > 0) && (
                       <div className="flex flex-col justify-end gap-0.5 pb-1">
@@ -405,7 +412,7 @@ export default function LPGDaily() {
                     )}
                   </div>
 
-                  {row.damaged > 0 && (
+                  {canManage && row.damaged > 0 && (
                     <input type="text" value={row.damage_note || ''}
                       onChange={e => updateCylinderStr(row.size_kg, 'damage_note', e.target.value)}
                       placeholder="Damage reason (required)"
@@ -414,17 +421,36 @@ export default function LPGDaily() {
                       }`} />
                   )}
 
-                  {/* Closing full — calculated */}
-                  <div className={`flex items-center justify-between px-3 py-2 rounded mb-4 ${
+                  {/* Closing full — calculated, plus attendant physical count */}
+                  <div className={`px-3 py-2 rounded mb-2 ${
                     row.balance < 0
                       ? 'bg-status-error/10 border border-status-error'
                       : 'bg-surface-bg border border-surface-border'
                   }`}>
-                    <span className="text-xs font-medium text-content-secondary">Closing (Full)</span>
-                    <span className={`text-xl font-bold ${row.balance < 0 ? 'text-status-error' : 'text-content-primary'}`}>
-                      {row.balance}
-                      {row.balance < 0 && <span className="text-xs font-normal ml-1">oversell</span>}
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-content-secondary">Expected Closing (Full)</span>
+                      <span className={`text-xl font-bold ${row.balance < 0 ? 'text-status-error' : 'text-content-primary'}`}>
+                        {row.balance}
+                        {row.balance < 0 && <span className="text-xs font-normal ml-1">oversell</span>}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Attendant closing count + diff */}
+                  <div className="mb-4">
+                    <label className="block text-xs text-content-secondary mb-0.5">Your Closing Count (Full)</label>
+                    {numInput(row.closing_count, v => updateCylinder(row.size_kg, 'closing_count', v))}
+                    {(() => {
+                      const diff = row.closing_count - row.balance
+                      if (diff === 0) return (
+                        <p className="text-xs text-status-success mt-1">Matches expected</p>
+                      )
+                      return (
+                        <p className="text-xs text-status-error mt-1">
+                          {diff > 0 ? `${diff} more` : `${Math.abs(diff)} fewer`} than expected — verify count
+                        </p>
+                      )
+                    })()}
                   </div>
 
                   {/* Empty cylinders section */}
