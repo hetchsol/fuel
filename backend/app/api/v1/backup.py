@@ -1,25 +1,33 @@
 """
 Backup & Restore API
-On-demand download, restore from upload, auto-backup on day close-off, and pg_dump.
+
+Backups are stored in PostgreSQL (persistent on Render) so they survive
+server restarts and redeploys. Each snapshot is individually downloadable.
+
+Storage layout (via station_files / PostgreSQL):
+  backup_index.json          — list of snapshot metadata
+  backup_YYYY-MM-DD.json.gz  — compressed snapshot data (base64-encoded in DB)
 """
+import base64
 import gzip
 import io
 import json
 import logging
-import os
 import subprocess
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from ...database.station_files import STORAGE_ROOT, load_station_json, save_station_json
+from ...database.station_files import load_station_json, save_station_json
 from ...database.storage import STATIONS_STORAGE, _storage_locks, get_station_storage, save_station_storage
 from ...services.audit_service import log_audit_event
 from .auth import get_station_context, require_owner
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_MAX_SNAPSHOTS = 30
 
 # Station JSON files that live outside the main STORAGE dict
 _BACKUP_JSON_FILES = [
@@ -44,12 +52,11 @@ _BACKUP_JSON_FILES = [
     "audit_log.json",
 ]
 
-# In-memory record of last successful backup per station
-_last_backup: dict[str, str] = {}
 
+# ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _build_payload(station_id: str) -> dict:
-    """Collect all data for a station into a single serialisable dict."""
+    """Collect all station data into a single serialisable dict."""
     storage = get_station_storage(station_id)
 
     station_files: dict = {}
@@ -77,79 +84,129 @@ def _build_payload(station_id: str) -> dict:
     }
 
 
-def _backup_dir(station_id: str) -> str:
-    path = os.path.normpath(os.path.join(STORAGE_ROOT, "..", "backups", station_id))
-    os.makedirs(path, exist_ok=True)
-    return path
+def _compress(payload: dict) -> bytes:
+    buf = io.BytesIO()
+    with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
+        gz.write(json.dumps(payload, default=str).encode("utf-8"))
+    return buf.getvalue()
 
 
-def _prune(backup_dir: str):
-    """Keep the 30 most recent daily snapshots."""
-    try:
-        files = sorted(
-            [f for f in os.listdir(backup_dir) if f.startswith("backup_") and f.endswith(".json.gz")],
-            reverse=True,
-        )
-        for old in files[30:]:
-            os.remove(os.path.join(backup_dir, old))
-    except Exception:
-        pass
+def _load_index(station_id: str) -> list:
+    return load_station_json(station_id, "backup_index.json", default=[]) or []
 
+
+def _save_index(station_id: str, index: list):
+    save_station_json(station_id, "backup_index.json", index)
+
+
+def _prune_index(station_id: str, index: list) -> list:
+    """Remove snapshots beyond _MAX_SNAPSHOTS, deleting their data files too."""
+    index_sorted = sorted(index, key=lambda e: e["date"], reverse=True)
+    to_delete = index_sorted[_MAX_SNAPSHOTS:]
+    for entry in to_delete:
+        try:
+            save_station_json(station_id, f"backup_{entry['date']}.json.gz", None)
+        except Exception:
+            pass
+    return index_sorted[:_MAX_SNAPSHOTS]
+
+
+# ── Public: auto-backup called from day close-off ─────────────────────────────
 
 def trigger_auto_backup(station_id: str, triggered_by: str = "system"):
     """
-    Write a dated snapshot to backups/<station_id>/backup_YYYY-MM-DD.json.gz.
-    Called automatically on day close-off. Never raises — failures are logged only.
+    Save a dated snapshot to PostgreSQL via station_files.
+    Called automatically on every day close-off. Never raises.
     """
     try:
         payload = _build_payload(station_id)
         date_str = datetime.now().strftime("%Y-%m-%d")
-        filepath = os.path.join(_backup_dir(station_id), f"backup_{date_str}.json.gz")
-        with gzip.open(filepath, "wt", encoding="utf-8") as f:
-            json.dump(payload, f, default=str)
-        _last_backup[station_id] = datetime.now().isoformat()
-        logger.info(f"[backup] Snapshot written: {filepath} (by={triggered_by})")
-        _prune(_backup_dir(station_id))
+        compressed = _compress(payload)
+
+        # Store compressed bytes as base64 so they fit in JSON/JSONB
+        save_station_json(
+            station_id,
+            f"backup_{date_str}.json.gz",
+            base64.b64encode(compressed).decode("ascii"),
+        )
+
+        # Update index
+        index = _load_index(station_id)
+        # Replace existing entry for this date if present
+        index = [e for e in index if e["date"] != date_str]
+        index.append({
+            "date": date_str,
+            "created_at": payload["created_at"],
+            "triggered_by": triggered_by,
+            "size_bytes": len(compressed),
+        })
+        index = _prune_index(station_id, index)
+        _save_index(station_id, index)
+
+        logger.info(f"[backup] Snapshot saved to DB: {date_str} ({len(compressed):,} bytes, by={triggered_by})")
+
     except Exception as e:
         logger.error(f"[backup] Auto-backup failed for {station_id}: {e}")
 
 
 def get_last_backup_at(station_id: str) -> str | None:
-    return _last_backup.get(station_id)
+    index = _load_index(station_id)
+    if not index:
+        return None
+    latest = max(index, key=lambda e: e["date"])
+    return latest.get("created_at")
 
 
 # ── GET /backup/status ────────────────────────────────────────────────────────
 
 @router.get("/status", dependencies=[Depends(require_owner)])
 async def backup_status(ctx: dict = Depends(get_station_context)):
-    """Return last backup time and list of available snapshots. Owner only."""
+    """List all saved snapshots with metadata. Owner only."""
     station_id = ctx["station_id"]
-    bdir = _backup_dir(station_id)
-    files = sorted(
-        [f for f in os.listdir(bdir) if f.startswith("backup_") and f.endswith(".json.gz")],
-        reverse=True,
-    )
+    index = _load_index(station_id)
+    index_sorted = sorted(index, key=lambda e: e["date"], reverse=True)
     return {
         "last_backup_at": get_last_backup_at(station_id),
-        "snapshots": files[:30],
-        "snapshot_count": len(files),
+        "snapshots": index_sorted,
+        "snapshot_count": len(index_sorted),
     }
+
+
+# ── GET /backup/snapshots/{date} ──────────────────────────────────────────────
+
+@router.get("/snapshots/{date}", dependencies=[Depends(require_owner)])
+async def download_snapshot(date: str, ctx: dict = Depends(get_station_context)):
+    """Download a specific saved auto-backup snapshot by date (YYYY-MM-DD). Owner only."""
+    station_id = ctx["station_id"]
+
+    b64_data = load_station_json(station_id, f"backup_{date}.json.gz", default=None)
+    if not b64_data:
+        raise HTTPException(status_code=404, detail=f"No snapshot found for {date}.")
+
+    try:
+        compressed = base64.b64decode(b64_data)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Snapshot data is corrupted.")
+
+    fname = f"fuel_backup_{station_id}_{date}.json.gz"
+    return StreamingResponse(
+        io.BytesIO(compressed),
+        media_type="application/gzip",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
+    )
 
 
 # ── GET /backup/download ──────────────────────────────────────────────────────
 
 @router.get("/download", dependencies=[Depends(require_owner)])
 async def download_backup(ctx: dict = Depends(get_station_context)):
-    """Export all station data as a gzipped JSON file. Owner only."""
+    """Export a live snapshot of all current station data. Owner only."""
     station_id = ctx["station_id"]
     payload = _build_payload(station_id)
     date_str = datetime.now().strftime("%Y-%m-%d_%H-%M")
     fname = f"fuel_backup_{station_id}_{date_str}.json.gz"
 
-    buf = io.BytesIO()
-    with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
-        gz.write(json.dumps(payload, default=str).encode("utf-8"))
-    buf.seek(0)
+    compressed = _compress(payload)
 
     try:
         log_audit_event(
@@ -158,13 +215,13 @@ async def download_backup(ctx: dict = Depends(get_station_context)):
             performed_by=ctx.get("username", ""),
             entity_type="backup",
             entity_id=date_str,
-            details={"filename": fname},
+            details={"filename": fname, "size_bytes": len(compressed)},
         )
     except Exception:
         pass
 
     return StreamingResponse(
-        buf,
+        io.BytesIO(compressed),
         media_type="application/gzip",
         headers={"Content-Disposition": f"attachment; filename={fname}"},
     )
@@ -179,7 +236,7 @@ async def restore_backup(
 ):
     """
     Restore station data from a .json.gz backup file. Owner only.
-    Overwrites current in-memory state and persists immediately.
+    Accepts files downloaded from this system or from USB media.
     """
     station_id = ctx["station_id"]
 
@@ -195,13 +252,11 @@ async def restore_backup(
     if payload.get("backup_version") != "1":
         raise HTTPException(status_code=400, detail="Unrecognised backup format.")
 
-    # Restore in-memory storage dict
     if payload.get("storage"):
         with _storage_locks[station_id]:
             STATIONS_STORAGE[station_id] = payload["storage"]
         save_station_storage(station_id)
 
-    # Restore station JSON files
     for filename, data in (payload.get("station_files") or {}).items():
         save_station_json(station_id, filename, data)
 
@@ -232,8 +287,8 @@ async def restore_backup(
 @router.get("/pg-dump", dependencies=[Depends(require_owner)])
 async def pg_dump_backup(ctx: dict = Depends(get_station_context)):
     """
-    Trigger a full PostgreSQL dump (.sql.gz). Owner only.
-    Requires DATABASE_URL to be configured and pg_dump to be available on the server.
+    Full PostgreSQL dump (.sql.gz). Owner only.
+    Requires DATABASE_URL and pg_dump on the server.
     """
     from ...database.db import DATABASE_URL, is_db_active
 
