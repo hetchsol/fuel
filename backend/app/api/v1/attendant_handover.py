@@ -581,6 +581,11 @@ def _process_credit_sales(credit_sale_items, storage, shift_id):
     enriched_items = []
     for item in credit_sale_items:
         account = accounts_data.get(item.account_id)
+        if account and account.get("is_suspended"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Account '{item.account_name}' is suspended and cannot receive credit sales.",
+            )
         if account and account.get("default_price_per_liter"):
             price = account["default_price_per_liter"]
         else:

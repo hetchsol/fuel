@@ -2036,7 +2036,8 @@ function CreditPanel({ handoverId, existingDetails, theme, onSaved }: {
       .then(data => {
         setAccounts(data.accounts || [])
         setFuelPrices(data.fuel_prices || { Diesel: 0, Petrol: 0 })
-        if (data.accounts?.length > 0) setSelectedAccountId(data.accounts[0].account_id)
+        const first = (data.accounts || []).find((a: any) => !a.is_suspended)
+        if (first) setSelectedAccountId(first.account_id)
       })
       .catch(() => {})
   }, [])
@@ -2159,7 +2160,11 @@ function CreditPanel({ handoverId, existingDetails, theme, onSaved }: {
               <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Account</div>
               <select value={selectedAccountId} onChange={e => { setSelectedAccountId(e.target.value); setDupWarning('') }}
                 className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
-                {accounts.map(a => <option key={a.account_id} value={a.account_id}>{a.account_name}</option>)}
+                {accounts.map(a => (
+                  <option key={a.account_id} value={a.account_id} disabled={a.is_suspended}>
+                    {a.account_name}{a.is_suspended ? ' (Suspended)' : ''}
+                  </option>
+                ))}
               </select>
             </div>
             <div>

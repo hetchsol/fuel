@@ -212,6 +212,12 @@ async def record_credit_sale(sale: CreditSale, ctx: dict = Depends(get_station_c
     accounts_data = storage.get('accounts', {})
     credit_sales_data = storage.get('credit_sales', [])
 
+    account = accounts_data.get(sale.account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if account.get("is_suspended"):
+        raise HTTPException(status_code=400, detail=f"Account '{account.get('account_name')}' is suspended and cannot receive credit sales.")
+
     # Validate foreign keys (account_id, shift_id)
     validate_create('credit_sales', sale.dict())
 
