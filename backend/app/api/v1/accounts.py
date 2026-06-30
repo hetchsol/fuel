@@ -11,7 +11,7 @@ from ...services.inventory import process_credit_sale
 from ...services.relationship_validation import validate_create
 from ...services.audit_service import log_audit_event
 from ...database.storage import save_station_storage
-from .auth import get_station_context, require_manager_or_owner
+from .auth import get_station_context, require_manager_or_owner, require_owner
 
 router = APIRouter()
 
@@ -144,6 +144,62 @@ async def update_account(account_id: str, account: AccountHolder, ctx: dict = De
                  "default_price_per_liter": updated.get("default_price_per_liter")},
     )
     return AccountHolder(**updated)
+
+
+@router.post("/{account_id}/suspend", dependencies=[Depends(require_manager_or_owner)])
+async def suspend_account(account_id: str, ctx: dict = Depends(get_station_context)):
+    """Suspend a credit account. Manager/owner only. Suspended accounts cannot receive new credit sales."""
+    storage = ctx["storage"]
+    accounts_data = storage.get('accounts', {})
+    if account_id not in accounts_data:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if accounts_data[account_id].get('is_suspended'):
+        raise HTTPException(status_code=400, detail="Account is already suspended")
+    accounts_data[account_id]['is_suspended'] = True
+    save_station_storage(ctx["station_id"])
+    log_audit_event(
+        station_id=ctx["station_id"], action="account_suspend",
+        performed_by=ctx["username"], entity_type="account", entity_id=account_id,
+        details={"account_name": accounts_data[account_id].get("account_name")},
+    )
+    return AccountHolder(**accounts_data[account_id])
+
+
+@router.post("/{account_id}/unsuspend", dependencies=[Depends(require_manager_or_owner)])
+async def unsuspend_account(account_id: str, ctx: dict = Depends(get_station_context)):
+    """Reinstate a suspended credit account. Manager/owner only."""
+    storage = ctx["storage"]
+    accounts_data = storage.get('accounts', {})
+    if account_id not in accounts_data:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if not accounts_data[account_id].get('is_suspended'):
+        raise HTTPException(status_code=400, detail="Account is not suspended")
+    accounts_data[account_id]['is_suspended'] = False
+    save_station_storage(ctx["station_id"])
+    log_audit_event(
+        station_id=ctx["station_id"], action="account_unsuspend",
+        performed_by=ctx["username"], entity_type="account", entity_id=account_id,
+        details={"account_name": accounts_data[account_id].get("account_name")},
+    )
+    return AccountHolder(**accounts_data[account_id])
+
+
+@router.delete("/{account_id}", dependencies=[Depends(require_owner)])
+async def delete_account(account_id: str, ctx: dict = Depends(get_station_context)):
+    """Permanently delete a credit account. Owner only."""
+    storage = ctx["storage"]
+    accounts_data = storage.get('accounts', {})
+    if account_id not in accounts_data:
+        raise HTTPException(status_code=404, detail="Account not found")
+    account_name = accounts_data[account_id].get("account_name", account_id)
+    del accounts_data[account_id]
+    save_station_storage(ctx["station_id"])
+    log_audit_event(
+        station_id=ctx["station_id"], action="account_delete",
+        performed_by=ctx["username"], entity_type="account", entity_id=account_id,
+        details={"account_name": account_name},
+    )
+    return {"deleted": account_id}
 
 
 @router.post("/sales", response_model=CreditSale)

@@ -330,6 +330,7 @@ class AccountHolder(BaseModel):
     phone: Optional[str] = None           # legacy — superseded by contacts[]
     contacts: Optional[List[AccountContact]] = []
     default_price_per_liter: Optional[float] = None  # Custom rate; None = use global fuel price
+    is_suspended: bool = False
 
 # Customer Allocation Models (Diesel Customer Types)
 class Customer(BaseModel):

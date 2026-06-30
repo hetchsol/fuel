@@ -38,6 +38,7 @@ export default function Accounts() {
   // Role + create-account state (creating accounts is manager/owner only)
   const [userRole, setUserRole] = useState('')
   const canManage = ['manager', 'owner'].includes(userRole)
+  const isOwner = userRole === 'owner'
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createForm, setCreateForm] = useState({
@@ -209,6 +210,34 @@ export default function Accounts() {
       toast.error(err.message || 'Failed to update account')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSuspend = async (account: any) => {
+    const action = account.is_suspended ? 'unsuspend' : 'suspend'
+    try {
+      const res = await authFetch(`${BASE}/accounts/${account.account_id}/${action}`, {
+        method: 'POST', headers: getHeaders(),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || `Failed to ${action}`) }
+      toast.success(account.is_suspended ? 'Account reinstated' : 'Account suspended')
+      fetchAccounts()
+    } catch (err: any) {
+      toast.error(err.message || `Failed to ${action} account`)
+    }
+  }
+
+  const handleDelete = async (account: any) => {
+    if (!window.confirm(`Permanently delete "${account.account_name}"? This cannot be undone.`)) return
+    try {
+      const res = await authFetch(`${BASE}/accounts/${account.account_id}`, {
+        method: 'DELETE', headers: getHeaders(),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed to delete') }
+      toast.success('Account deleted')
+      fetchAccounts()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete account')
     }
   }
 
@@ -535,11 +564,20 @@ export default function Accounts() {
               return (
                 <div
                   key={account.account_id}
-                  className="bg-surface-card rounded-lg shadow-lg p-5 border-2 border-surface-border hover:border-action-primary hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
+                  className={`bg-surface-card rounded-lg shadow-lg p-5 border-2 transition-all duration-200 ${
+                    account.is_suspended
+                      ? 'border-status-error opacity-60'
+                      : 'border-surface-border hover:border-action-primary hover:shadow-xl hover:-translate-y-0.5'
+                  }`}
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
-                      <h3 className="font-bold text-content-primary text-lg">{account.account_name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-content-primary text-lg">{account.account_name}</h3>
+                        {account.is_suspended && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-error text-white">Suspended</span>
+                        )}
+                      </div>
                       <p className="text-xs text-content-secondary mt-1">
                         {account.client_code && <span className="font-mono font-bold text-action-primary mr-2">{account.client_code}</span>}
                         {account.account_id}
@@ -626,6 +664,31 @@ export default function Accounts() {
                       </div>
                     ) : null
                   })()}
+
+                  {(canManage || isOwner) && (
+                    <div className="mt-3 pt-3 border-t border-surface-border flex items-center gap-2">
+                      {canManage && (
+                        <button
+                          onClick={() => handleSuspend(account)}
+                          className={`px-2 py-1 text-xs rounded border font-medium ${
+                            account.is_suspended
+                              ? 'border-status-success text-status-success hover:bg-status-success hover:text-white'
+                              : 'border-status-warning text-status-warning hover:bg-status-warning hover:text-white'
+                          } transition-colors`}
+                        >
+                          {account.is_suspended ? 'Reinstate' : 'Suspend'}
+                        </button>
+                      )}
+                      {isOwner && (
+                        <button
+                          onClick={() => handleDelete(account)}
+                          className="px-2 py-1 text-xs rounded border border-status-error text-status-error hover:bg-status-error hover:text-white transition-colors ml-auto"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })}
