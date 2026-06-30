@@ -1281,17 +1281,34 @@ def get_previous_shift_closing(
         previous_reading = matching_readings[0]
 
     # Extract the closing values to become opening values
+    # Recompute volume from the closing dip using the current calibration so that
+    # any calibration corrections take effect immediately rather than carrying
+    # forward a stale stored volume.
+    from ...services.dip_conversion import dip_to_volume as _dip_to_volume
+    _closing_dip = previous_reading.get('closing_dip_cm')
+    if _closing_dip is not None:
+        ensure_calibration_loaded(tank_id, ctx["station_id"])
+        try:
+            _opening_volume = _dip_to_volume(tank_id, float(_closing_dip))
+        except (ValueError, Exception):
+            _opening_volume = (
+                previous_reading.get('closing_volume')
+                or previous_reading.get('closing_volume_liters', 0)
+            )
+    else:
+        _opening_volume = (
+            previous_reading.get('closing_volume')
+            or previous_reading.get('closing_volume_liters', 0)
+        )
+
     previous_closing = {
         "found": True,
         "source_date": previous_reading['date'],
         "source_shift": previous_reading.get('shift_type', 'Unknown'),
         "source_reading_id": previous_reading.get('reading_id', ''),
 
-        # Tank dip and volume - these become the new opening values.
-        # Accept both field name conventions: tank_readings.json uses 'closing_volume';
-        # shift dip records use 'closing_volume_liters'. Normalise to opening_volume.
-        "opening_dip_cm": previous_reading.get('closing_dip_cm', 0),
-        "opening_volume": previous_reading.get('closing_volume') or previous_reading.get('closing_volume_liters', 0),
+        "opening_dip_cm": _closing_dip if _closing_dip is not None else 0,
+        "opening_volume": _opening_volume,
 
         # Nozzle readings - closing values become opening values
         "nozzle_readings": []
