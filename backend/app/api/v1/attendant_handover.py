@@ -2165,8 +2165,11 @@ async def patch_pos_receipts(
     ctx: dict = Depends(get_station_context),
 ):
     """
-    Save POS receipt breakdown against an existing handover (manager/owner only).
-    Can be called before or independently of Phase 2 shift closing.
+    Append POS receipts to an existing handover (manager/owner only).
+    Each incoming item is checked against the current breakdown:
+      - If a reference is provided, any existing item with the same reference is a duplicate.
+      - If no reference, same type_id + amount (rounded to 2dp) is a duplicate.
+    Duplicates are rejected with detail listing the conflicts; non-duplicates are appended.
     """
     station_id = ctx["station_id"]
     handovers = _load_handovers(station_id)
@@ -2183,20 +2186,67 @@ async def patch_pos_receipts(
     if handover.get("date", "") in close_offs:
         raise HTTPException(status_code=400, detail=f"Cannot modify handover. Day {handover['date']} has been closed off.")
 
-    pos_breakdown = [item.model_dump() for item in data.pos_items]
-    pos_total = round(sum(item.amount for item in data.pos_items), 2)
+    existing: list = handover.get("pos_breakdown") or []
 
-    handover["pos_breakdown"] = pos_breakdown
+    # Build lookup sets from existing entries
+    existing_refs = {
+        e["reference"].strip().lower()
+        for e in existing
+        if e.get("reference") and e["reference"].strip()
+    }
+    existing_type_amounts = {
+        (e["type_id"], round(e["amount"], 2))
+        for e in existing
+        if not (e.get("reference") and e["reference"].strip())
+    }
+
+    accepted = []
+    duplicates = []
+    for item in data.pos_items:
+        ref = (item.reference or "").strip()
+        if ref:
+            if ref.lower() in existing_refs:
+                duplicates.append({"type_name": item.type_name, "amount": item.amount, "reference": ref,
+                                   "reason": f"Reference '{ref}' already recorded"})
+            else:
+                accepted.append(item)
+                existing_refs.add(ref.lower())  # guard within the same submission too
+        else:
+            key = (item.type_id, round(item.amount, 2))
+            if key in existing_type_amounts:
+                duplicates.append({"type_name": item.type_name, "amount": item.amount, "reference": None,
+                                   "reason": f"{item.type_name} K{item.amount:.2f} already recorded"})
+            else:
+                accepted.append(item)
+                existing_type_amounts.add(key)
+
+    if duplicates and not accepted:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "All submitted items are duplicates.", "duplicates": duplicates},
+        )
+
+    new_items = [item.model_dump() for item in accepted]
+    merged = existing + new_items
+    pos_total = round(sum(e["amount"] for e in merged), 2)
+
+    handover["pos_breakdown"] = merged
     handover["pos_receipts"] = pos_total
     _save_handovers(handovers, station_id)
 
     log_audit_event(
         station_id=station_id, action="pos_receipts_updated",
         performed_by=ctx["username"], entity_type="handover", entity_id=handover_id,
-        details={"pos_total": pos_total, "item_count": len(pos_breakdown)},
+        details={"pos_total": pos_total, "added": len(new_items), "duplicates_rejected": len(duplicates)},
     )
 
-    return {"handover_id": handover_id, "pos_breakdown": pos_breakdown, "pos_receipts": pos_total}
+    return {
+        "handover_id": handover_id,
+        "pos_breakdown": merged,
+        "pos_receipts": pos_total,
+        "added": len(new_items),
+        "duplicates": duplicates,
+    }
 
 
 class CreditSalesInput(BaseModel):

@@ -24,6 +24,7 @@ interface Handover {
   phase: string
   review_status: string
   shift_id: string
+  pos_breakdown?: { type_id: string; type_name: string; amount: number; reference?: string }[]
 }
 
 interface POSType {
@@ -49,6 +50,27 @@ export default function POSSales() {
 
   const [items, setItems] = useState<POSItem[]>([])
   const [saving, setSaving] = useState(false)
+  const [dupWarning, setDupWarning] = useState('')
+
+  const selectedHandover = handovers.find(h => h.handover_id === selectedHandoverId)
+  const existingBreakdown = selectedHandover?.pos_breakdown ?? []
+
+  const isDuplicate = (typeId: string, amt: number, ref: string): string | null => {
+    const allExisting = [...existingBreakdown, ...items]
+    const normRef = ref.trim().toLowerCase()
+    if (normRef) {
+      const match = allExisting.find(e => (e.reference || '').trim().toLowerCase() === normRef)
+      if (match) return `Reference "${ref.trim()}" already recorded (${match.type_name} K${match.amount.toFixed(2)})`
+    } else {
+      const match = allExisting.find(e =>
+        e.type_id === typeId &&
+        Math.round(e.amount * 100) === Math.round(amt * 100) &&
+        !(e.reference || '').trim()
+      )
+      if (match) return `${match.type_name} K${match.amount.toFixed(2)} without a reference is already recorded`
+    }
+    return null
+  }
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -91,6 +113,9 @@ export default function POSSales() {
     if (!amt || amt <= 0) { toast.error('Enter a valid amount'); return }
     const type = posTypes.find(t => t.type_id === selectedTypeId)
     if (!type) return
+    const dupMsg = isDuplicate(type.type_id, amt, reference)
+    if (dupMsg) { setDupWarning(dupMsg); return }
+    setDupWarning('')
     setItems(prev => [...prev, {
       type_id: type.type_id,
       type_name: type.name,
@@ -114,12 +139,25 @@ export default function POSSales() {
         headers: { 'Content-Type': 'application/json', ...getHeaders() },
         body: JSON.stringify({ pos_items: items }),
       })
+      const body = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.detail || 'Save failed')
+        if (res.status === 409 && body.detail?.duplicates) {
+          body.detail.duplicates.forEach((d: any) => toast.error(`Duplicate: ${d.reason}`))
+        } else {
+          toast.error(body.detail || 'Save failed')
+        }
+        return
       }
-      toast.success('POS receipts saved')
+      const added = body.added ?? items.length
+      const dups: any[] = body.duplicates ?? []
+      if (dups.length > 0) {
+        dups.forEach(d => toast.error(`Skipped duplicate: ${d.reason}`))
+        toast.success(`${added} receipt(s) saved`)
+      } else {
+        toast.success(`${added} POS receipt(s) saved`)
+      }
       setItems([])
+      setDupWarning('')
     } catch (e: any) {
       toast.error(e.message || 'Failed to save')
     } finally {
@@ -225,7 +263,7 @@ export default function POSSales() {
                 ) : (
                   <select
                     value={selectedTypeId}
-                    onChange={e => setSelectedTypeId(e.target.value)}
+                    onChange={e => { setSelectedTypeId(e.target.value); setDupWarning('') }}
                     className="w-full px-3 py-2 rounded-btn border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
                   >
                     {posTypes.map(t => (
@@ -242,7 +280,7 @@ export default function POSSales() {
                   step="0.01"
                   placeholder="0.00"
                   value={amount}
-                  onChange={e => setAmount(e.target.value)}
+                  onChange={e => { setAmount(e.target.value); setDupWarning('') }}
                   onKeyDown={e => e.key === 'Enter' && addItem()}
                   className="w-full px-3 py-2 rounded-btn border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
                 />
@@ -251,13 +289,13 @@ export default function POSSales() {
             <div className="flex gap-3 items-end">
               <div className="flex-1">
                 <label className="block text-xs font-bold uppercase text-content-secondary mb-1">
-                  Reference <span className="font-normal normal-case">(optional)</span>
+                  Transaction Ref. <span className="font-normal normal-case">(optional)</span>
                 </label>
                 <input
                   type="text"
                   placeholder="Slip or batch number"
                   value={reference}
-                  onChange={e => setReference(e.target.value)}
+                  onChange={e => { setReference(e.target.value); setDupWarning('') }}
                   onKeyDown={e => e.key === 'Enter' && addItem()}
                   className="w-full px-3 py-2 rounded-btn border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
                 />
@@ -271,6 +309,12 @@ export default function POSSales() {
             </div>
           </div>
           </div>
+
+          {dupWarning && (
+            <div className="px-4 py-2.5 rounded-btn bg-status-warning-light border border-status-warning/30 text-sm text-status-warning font-medium">
+              Duplicate: {dupWarning}
+            </div>
+          )}
 
           {/* Item list */}
           {items.length > 0 ? (

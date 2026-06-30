@@ -1769,7 +1769,7 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
             style={{ backgroundColor: showPOS ? theme.border : 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
             {showPOS ? 'Hide POS Entry' : '+ Add POS Receipts'}
           </button>
-          {showPOS && <POSPanel handoverId={h.handover_id} theme={theme} onSaved={() => { setShowPOS(false); onRefresh() }} />}
+          {showPOS && <POSPanel handoverId={h.handover_id} existingBreakdown={h.pos_breakdown ?? []} theme={theme} onSaved={() => { setShowPOS(false); onRefresh() }} />}
         </div>
       )}
 
@@ -1837,14 +1837,21 @@ function SafeDepositSummary({ shiftId, attendantId, theme }: { shiftId: string; 
   )
 }
 
-function POSPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: any; onSaved: () => void }) {
+function POSPanel({ handoverId, existingBreakdown, theme, onSaved }: {
+  handoverId: string
+  existingBreakdown: any[]
+  theme: any
+  onSaved: () => void
+}) {
   const [posTypes, setPosTypes] = useState<any[]>([])
   const [selectedTypeId, setSelectedTypeId] = useState('')
   const [amount, setAmount] = useState('')
   const [reference, setReference] = useState('')
   const [items, setItems] = useState<any[]>([])
+  const [dupWarning, setDupWarning] = useState('')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const [savedDuplicates, setSavedDuplicates] = useState<any[]>([])
 
   useEffect(() => {
     authFetch(`${BASE}/settings/pos`, { headers: getAuthHeaders() })
@@ -1857,11 +1864,32 @@ function POSPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: a
       .catch(() => {})
   }, [])
 
+  // Dedup check against both saved breakdown and the current session list
+  const isDuplicate = (typeId: string, amt: number, ref: string): string | null => {
+    const allExisting = [...existingBreakdown, ...items]
+    const normRef = ref.trim().toLowerCase()
+    if (normRef) {
+      const match = allExisting.find(e => (e.reference || '').trim().toLowerCase() === normRef)
+      if (match) return `Reference "${ref.trim()}" is already recorded (${match.type_name} K${match.amount.toFixed(2)})`
+    } else {
+      const match = allExisting.find(e =>
+        e.type_id === typeId &&
+        Math.round(e.amount * 100) === Math.round(amt * 100) &&
+        !(e.reference || '').trim()
+      )
+      if (match) return `${match.type_name} K${match.amount.toFixed(2)} without a reference is already in the list`
+    }
+    return null
+  }
+
   const addItem = () => {
     const amt = parseFloat(amount)
     if (!selectedTypeId || !amt || amt <= 0) return
     const type = posTypes.find(t => t.type_id === selectedTypeId)
     if (!type) return
+    const dupMsg = isDuplicate(type.type_id, amt, reference)
+    if (dupMsg) { setDupWarning(dupMsg); return }
+    setDupWarning('')
     setItems(prev => [...prev, { type_id: type.type_id, type_name: type.name, amount: amt, reference: reference.trim() }])
     setAmount('')
     setReference('')
@@ -1871,14 +1899,31 @@ function POSPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: a
     if (items.length === 0) return
     setSaving(true)
     setErr('')
+    setSavedDuplicates([])
     try {
       const res = await authFetch(`${BASE}/handover/${handoverId}/pos-receipts`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
         body: JSON.stringify({ pos_items: items }),
       })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Save failed')
-      toast.success('POS receipts saved')
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        if (res.status === 409 && body.detail?.duplicates) {
+          setSavedDuplicates(body.detail.duplicates)
+          setErr(body.detail.message || 'Duplicate entries detected')
+        } else {
+          setErr(body.detail || 'Save failed')
+        }
+        return
+      }
+      const added = body.added ?? items.length
+      const dups = body.duplicates ?? []
+      if (dups.length > 0) {
+        setSavedDuplicates(dups)
+        toast.success(`${added} receipt(s) saved. ${dups.length} duplicate(s) skipped.`)
+      } else {
+        toast.success(`${added} POS receipt(s) saved`)
+      }
       onSaved()
     } catch (e: any) {
       setErr(e.message || 'Failed to save')
@@ -1901,7 +1946,7 @@ function POSPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: a
               No types configured. Go to Settings &rarr; POS.
             </p>
           ) : (
-            <select value={selectedTypeId} onChange={e => setSelectedTypeId(e.target.value)}
+            <select value={selectedTypeId} onChange={e => { setSelectedTypeId(e.target.value); setDupWarning('') }}
               className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
               {posTypes.map(t => <option key={t.type_id} value={t.type_id}>{t.name}</option>)}
             </select>
@@ -1910,13 +1955,13 @@ function POSPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: a
         <div>
           <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Amount (ZMW)</div>
           <input type="number" min="0" step="0.01" placeholder="0.00" value={amount}
-            onChange={e => setAmount(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()}
+            onChange={e => { setAmount(e.target.value); setDupWarning('') }} onKeyDown={e => e.key === 'Enter' && addItem()}
             className="w-28 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
         </div>
         <div>
-          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Reference <span className="font-normal normal-case">(optional)</span></div>
-          <input type="text" placeholder="Slip or batch no." value={reference}
-            onChange={e => setReference(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()}
+          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Transaction Ref.</div>
+          <input type="text" placeholder="Slip / batch no." value={reference}
+            onChange={e => { setReference(e.target.value); setDupWarning('') }} onKeyDown={e => e.key === 'Enter' && addItem()}
             className="w-36 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
         </div>
         <button onClick={addItem} className="px-3 py-1.5 text-xs font-bold rounded text-white self-end"
@@ -1924,6 +1969,20 @@ function POSPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: a
           + Add
         </button>
       </div>
+
+      {dupWarning && (
+        <p className="text-xs font-medium px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+          Duplicate: {dupWarning}
+        </p>
+      )}
+
+      {savedDuplicates.length > 0 && (
+        <div className="text-xs px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+          <span className="font-bold">Skipped duplicates:</span>
+          {savedDuplicates.map((d, i) => <span key={i} className="block">{d.reason}</span>)}
+        </div>
+      )}
+
       {items.length > 0 && (
         <div className="space-y-1">
           {items.map((item, idx) => (
