@@ -99,8 +99,8 @@ export default function StoresDashboard() {
   useEffect(() => {
     const userData = localStorage.getItem('user')
     if (!userData) { router.push('/login'); return }
-    const user = JSON.parse(userData)
-    if (!['manager', 'owner'].includes(user.role)) router.push('/')
+    const u = JSON.parse(userData)
+    if (!['manager', 'owner'].includes(u.role)) router.push('/')
   }, [router])
 
   const fetchAll = useCallback(async () => {
@@ -201,26 +201,51 @@ export default function StoresDashboard() {
 
   if (loading) return <LoadingSpinner fullPage text="Loading stock management..." />
 
+  const reorderCount = [...lubricants, ...accessories].filter(r => r.needs_reorder).length
+  const recentMovements = allMovements.slice(0, 5)
+
   const TABS: { key: Tab; label: string }[] = [
-    { key: 'lubricants', label: 'Lubricants' },
+    { key: 'lubricants', label: `Lubricants (${lubricants.length})` },
     { key: 'cylinders', label: 'LPG Cylinders' },
-    { key: 'accessories', label: 'LPG Accessories' },
+    { key: 'accessories', label: `Accessories (${accessories.length})` },
     { key: 'movements', label: 'Movement Log' },
   ]
 
   return (
     <div className="space-y-5">
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-content-primary">Stock Management</h1>
           <p className="text-sm mt-1 text-content-secondary">
-            Manage catalog, pricing, and stock levels across stores (backroom) and forecourt.
+            Catalog, pricing, and stock levels across stores (backroom) and forecourt.
           </p>
         </div>
         <button onClick={seedCatalog} disabled={busy}
           className="px-3 py-1.5 text-xs font-medium rounded border border-surface-border text-content-secondary hover:bg-surface-bg disabled:opacity-50">
-          Sync catalog from product lists
+          Sync catalog
         </button>
+      </div>
+
+      {/* Summary strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-surface-card rounded-lg border border-surface-border p-4">
+          <p className="text-xs text-content-secondary mb-1">Lubricant Products</p>
+          <p className="text-2xl font-bold text-content-primary">{lubricants.length}</p>
+        </div>
+        <div className="bg-surface-card rounded-lg border border-surface-border p-4">
+          <p className="text-xs text-content-secondary mb-1">LPG Accessories</p>
+          <p className="text-2xl font-bold text-content-primary">{accessories.length}</p>
+        </div>
+        <div className={`rounded-lg border p-4 ${reorderCount > 0 ? 'bg-status-error/5 border-status-error' : 'bg-surface-card border-surface-border'}`}>
+          <p className={`text-xs mb-1 ${reorderCount > 0 ? 'text-status-error' : 'text-content-secondary'}`}>Need Re-order</p>
+          <p className={`text-2xl font-bold ${reorderCount > 0 ? 'text-status-error' : 'text-content-primary'}`}>{reorderCount}</p>
+        </div>
+        <div className="bg-surface-card rounded-lg border border-surface-border p-4">
+          <p className="text-xs text-content-secondary mb-1">Recent Movements</p>
+          <p className="text-2xl font-bold text-content-primary">{allMovements.length}</p>
+          <p className="text-xs text-content-secondary mt-0.5">last 300</p>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -300,33 +325,37 @@ function LubricantsTab({ rows, onAdd, onEdit, onDelete, onStock }: {
   onStock: (r: LubRow) => void
 }) {
   const [search, setSearch] = useState('')
-  const [catFilter, setCatFilter] = useState('')
-
-  const visible = rows.filter(r => {
-    if (search && !r.description.toLowerCase().includes(search.toLowerCase()) &&
-        !r.product_code.toLowerCase().includes(search.toLowerCase())) return false
-    if (catFilter && r.sub_category !== catFilter) return false
-    return true
-  })
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
 
   const cats = Array.from(new Set(rows.map(r => r.sub_category))).sort()
   const reorderCount = rows.filter(r => r.needs_reorder).length
 
+  const q = search.toLowerCase()
+  const visible = rows.filter(r =>
+    !q ||
+    r.description.toLowerCase().includes(q) ||
+    r.product_code.toLowerCase().includes(q)
+  )
+
+  const grouped: Record<string, LubRow[]> = {}
+  for (const r of visible) {
+    if (!grouped[r.sub_category]) grouped[r.sub_category] = []
+    grouped[r.sub_category].push(r)
+  }
+
+  const toggleCat = (cat: string) =>
+    setCollapsedCats(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n })
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-2 flex-wrap">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or code..."
-            className="px-3 py-1.5 text-sm rounded border border-surface-border bg-surface-bg text-content-primary w-52" />
-          <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
-            className="px-3 py-1.5 text-sm rounded border border-surface-border bg-surface-bg text-content-primary">
-            <option value="">All categories</option>
-            {cats.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+            className="px-3 py-1.5 text-sm rounded border border-surface-border bg-surface-bg text-content-primary w-56 focus:outline-none focus:border-action-primary" />
         </div>
         <div className="flex items-center gap-3">
           {reorderCount > 0 && (
-            <span className="text-xs font-medium text-status-error">{reorderCount} need re-order</span>
+            <span className="text-xs font-semibold text-status-error bg-status-error/10 px-2 py-1 rounded">{reorderCount} need re-order</span>
           )}
           <button onClick={onAdd}
             className="px-3 py-1.5 text-sm font-medium rounded bg-action-primary text-white">
@@ -335,50 +364,79 @@ function LubricantsTab({ rows, onAdd, onEdit, onDelete, onStock }: {
         </div>
       </div>
 
-      <div className="rounded-lg shadow overflow-x-auto bg-surface-card border border-surface-border">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-surface-bg border-b border-surface-border">
-              {['Name', 'Code', 'Category', 'Size', 'Selling Price', 'Stores', 'Forecourt', 'Re-order', 'Actions'].map(h => (
-                <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {visible.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-content-secondary">
-                {rows.length === 0 ? 'No lubricant products in catalog.' : 'No results.'}
-              </td></tr>
+      {Object.keys(grouped).length === 0 && (
+        <p className="text-sm text-content-secondary text-center py-8">
+          {rows.length === 0 ? 'No lubricant products in catalog.' : 'No results.'}
+        </p>
+      )}
+
+      {cats.filter(c => grouped[c]?.length > 0).map(cat => {
+        const catRows = grouped[cat]
+        const catReorder = catRows.filter(r => r.needs_reorder).length
+        const isCollapsed = collapsedCats.has(cat)
+        return (
+          <div key={cat} className="rounded-lg border border-surface-border overflow-hidden bg-surface-card">
+            <button onClick={() => toggleCat(cat)}
+              className="w-full px-4 py-3 flex items-center justify-between bg-surface-bg hover:bg-action-primary-light transition-colors">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-content-primary">{cat}</span>
+                <span className="text-xs text-content-secondary">{catRows.length} products</span>
+                {catReorder > 0 && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-status-error text-white">{catReorder} low</span>
+                )}
+              </div>
+              <span className="text-content-secondary text-sm">{isCollapsed ? '+' : '-'}</span>
+            </button>
+            {!isCollapsed && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-surface-bg border-t border-surface-border">
+                      {['Name / Code', 'Size', 'Price', 'Stores', 'Forecourt', 'Re-order', 'Actions'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {catRows.map(r => (
+                      <tr key={r.product_code}
+                        className={`border-t border-surface-border ${r.needs_reorder ? 'bg-status-error/5' : 'hover:bg-surface-bg'}`}>
+                        <td className="px-3 py-2">
+                          <p className="text-sm font-medium text-content-primary">{r.description}</p>
+                          <p className="text-[10px] font-mono text-content-secondary">{r.product_code}</p>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-content-secondary">{r.unit_size || '—'}</td>
+                        <td className="px-3 py-2 text-right text-xs font-mono text-content-primary">{fmtZMW(r.selling_price)}</td>
+                        <td className="px-3 py-2 text-right">
+                          <span className="text-sm font-semibold text-content-primary">{r.stores}</span>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <span className="text-sm font-semibold text-content-primary">{r.forecourt}</span>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {r.needs_reorder
+                            ? <span className="text-xs font-bold text-status-error">{r.reorder_level} !</span>
+                            : <span className="text-xs text-content-secondary">{r.reorder_level || '—'}</span>}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex gap-1">
+                            <button onClick={() => onEdit(r)}
+                              className="px-2 py-1 text-xs rounded border border-surface-border text-content-secondary hover:bg-surface-bg">Edit</button>
+                            <button onClick={() => onStock(r)}
+                              className="px-2 py-1 text-xs rounded bg-action-primary/10 text-action-primary border border-action-primary/30">Stock</button>
+                            <button onClick={() => onDelete(r)}
+                              className="px-2 py-1 text-xs rounded text-status-error border border-status-error/30 hover:bg-status-error/10">Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
-            {visible.map(r => (
-              <tr key={r.product_code} className={`border-t border-surface-border ${r.needs_reorder ? 'bg-status-error-light/30' : ''}`}>
-                <td className="px-3 py-2 font-medium text-content-primary">{r.description}</td>
-                <td className="px-3 py-2 font-mono text-xs text-content-secondary">{r.product_code}</td>
-                <td className="px-3 py-2 text-content-secondary">{r.sub_category}</td>
-                <td className="px-3 py-2 text-content-secondary">{r.unit_size || '—'}</td>
-                <td className="px-3 py-2 font-mono text-content-primary text-right">{fmtZMW(r.selling_price)}</td>
-                <td className="px-3 py-2 font-mono text-content-primary text-right">{r.stores}</td>
-                <td className="px-3 py-2 font-mono text-content-primary text-right">{r.forecourt}</td>
-                <td className="px-3 py-2 text-content-secondary text-right">
-                  {r.needs_reorder
-                    ? <span className="text-xs font-semibold text-status-error">{r.reorder_level} !</span>
-                    : <span className="font-mono">{r.reorder_level || '—'}</span>}
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex gap-1">
-                    <button onClick={() => onEdit(r)}
-                      className="px-2 py-1 text-xs rounded border border-surface-border text-content-secondary hover:bg-surface-bg">Edit</button>
-                    <button onClick={() => onStock(r)}
-                      className="px-2 py-1 text-xs rounded bg-action-primary/10 text-action-primary border border-action-primary/30">Stock</button>
-                    <button onClick={() => onDelete(r)}
-                      className="px-2 py-1 text-xs rounded text-status-error border border-status-error/30 hover:bg-status-error-light">Delete</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -391,93 +449,87 @@ function CylindersTab({ rows, onEditPricing, onStock, onSeedMissing }: {
   onStock: (item_key: string, name: string, stores: number, forecourt: number) => void
   onSeedMissing: () => void
 }) {
+  const totalFull = rows.reduce((s, r) => s + r.full_stores + r.full_forecourt, 0)
+  const totalEmpty = rows.reduce((s, r) => s + r.empty_stores + r.empty_forecourt, 0)
+
   return (
-    <div className="space-y-6">
-      {/* Pricing */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-content-secondary">Cylinder Pricing</h2>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex gap-4 text-sm text-content-secondary">
+          <span>Total full: <strong className="text-content-primary">{totalFull}</strong></span>
+          <span>Total empty: <strong className="text-content-primary">{totalEmpty}</strong></span>
         </div>
-        <div className="rounded-lg shadow overflow-x-auto bg-surface-card border border-surface-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-bg border-b border-surface-border">
-                {['Size', 'Refill Price', 'Full Cylinder Price', ''].map(h => (
-                  <th key={h} className="px-4 py-2 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(r => (
-                <tr key={r.size_kg} className="border-t border-surface-border">
-                  <td className="px-4 py-2 font-semibold text-content-primary">{r.size_kg}kg</td>
-                  <td className="px-4 py-2 font-mono text-content-primary">{fmtZMW(r.price_refill)}</td>
-                  <td className="px-4 py-2 font-mono text-content-primary">{fmtZMW(r.price_full_cylinder)}</td>
-                  <td className="px-4 py-2">
-                    <button onClick={() => onEditPricing(r)}
-                      className="px-2 py-1 text-xs rounded border border-surface-border text-content-secondary hover:bg-surface-bg">
-                      Edit pricing
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <button onClick={onSeedMissing}
+          className="text-xs text-content-secondary underline hover:text-content-primary">
+          Sync missing stock items
+        </button>
       </div>
 
-      {/* Stock levels */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-content-secondary">Cylinder Stock</h2>
-          <button onClick={onSeedMissing}
-            className="text-xs text-content-secondary underline">
-            Sync missing stock items
-          </button>
-        </div>
-        <div className="rounded-lg shadow overflow-x-auto bg-surface-card border border-surface-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-bg border-b border-surface-border">
-                <th className="px-4 py-2 text-left text-xs font-medium uppercase text-content-secondary">Size</th>
-                <th className="px-4 py-2 text-right text-xs font-medium uppercase text-content-secondary" colSpan={2}>Full Cylinders</th>
-                <th className="px-4 py-2 text-right text-xs font-medium uppercase text-content-secondary" colSpan={2}>Empty Cylinders</th>
-                <th className="px-4 py-2 text-xs font-medium uppercase text-content-secondary">Actions</th>
-              </tr>
-              <tr className="bg-surface-bg border-b border-surface-border">
-                <th className="px-4 py-1"></th>
-                <th className="px-3 py-1 text-right text-xs text-content-secondary">Stores</th>
-                <th className="px-3 py-1 text-right text-xs text-content-secondary">Forecourt</th>
-                <th className="px-3 py-1 text-right text-xs text-content-secondary">Stores</th>
-                <th className="px-3 py-1 text-right text-xs text-content-secondary">Forecourt</th>
-                <th className="px-3 py-1"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(r => (
-                <tr key={r.size_kg} className="border-t border-surface-border">
-                  <td className="px-4 py-2 font-semibold text-content-primary">{r.size_kg}kg</td>
-                  <td className="px-3 py-2 font-mono text-right text-content-primary">{r.full_stores}</td>
-                  <td className="px-3 py-2 font-mono text-right text-content-primary">{r.full_forecourt}</td>
-                  <td className="px-3 py-2 font-mono text-right text-content-secondary">{r.empty_stores}</td>
-                  <td className="px-3 py-2 font-mono text-right text-content-secondary">{r.empty_forecourt}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex gap-1">
-                      <button onClick={() => onStock(`cylinder_full:${r.size_kg}kg`, `${r.size_kg}kg full`, r.full_stores, r.full_forecourt)}
-                        className="px-2 py-1 text-xs rounded bg-action-primary/10 text-action-primary border border-action-primary/30">
-                        Full
-                      </button>
-                      <button onClick={() => onStock(`cylinder_empty:${r.size_kg}kg`, `${r.size_kg}kg empty`, r.empty_stores, r.empty_forecourt)}
-                        className="px-2 py-1 text-xs rounded border border-surface-border text-content-secondary hover:bg-surface-bg">
-                        Empty
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        {rows.map(r => (
+          <div key={r.size_kg} className="bg-surface-card rounded-lg border border-surface-border p-4 space-y-4">
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <p className="text-lg font-bold text-content-primary">{r.size_kg} kg</p>
+              <button onClick={() => onEditPricing(r)}
+                className="px-2 py-1 text-xs rounded border border-surface-border text-content-secondary hover:bg-surface-bg">
+                Edit pricing
+              </button>
+            </div>
+
+            {/* Pricing */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-surface-bg rounded p-2">
+                <p className="text-content-secondary mb-0.5">Refill</p>
+                <p className="font-bold text-content-primary">{fmtZMW(r.price_refill)}</p>
+              </div>
+              <div className="bg-surface-bg rounded p-2">
+                <p className="text-content-secondary mb-0.5">New cylinder</p>
+                <p className="font-bold text-content-primary">{fmtZMW(r.price_full_cylinder)}</p>
+              </div>
+            </div>
+
+            {/* Full cylinders */}
+            <div>
+              <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-widest mb-2">Full Cylinders</p>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div className="text-center">
+                  <p className="text-xs text-content-secondary">Stores</p>
+                  <p className="text-xl font-bold text-content-primary">{r.full_stores}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-content-secondary">Forecourt</p>
+                  <p className="text-xl font-bold text-content-primary">{r.full_forecourt}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => onStock(`cylinder_full:${r.size_kg}kg`, `${r.size_kg}kg full`, r.full_stores, r.full_forecourt)}
+                className="w-full py-1 text-xs rounded bg-action-primary/10 text-action-primary border border-action-primary/30 hover:bg-action-primary hover:text-white transition-colors">
+                Adjust Full Stock
+              </button>
+            </div>
+
+            {/* Empty cylinders */}
+            <div>
+              <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-widest mb-2">Empty Cylinders</p>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div className="text-center">
+                  <p className="text-xs text-content-secondary">Stores</p>
+                  <p className="text-xl font-bold text-content-secondary">{r.empty_stores}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-content-secondary">Forecourt</p>
+                  <p className="text-xl font-bold text-content-secondary">{r.empty_forecourt}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => onStock(`cylinder_empty:${r.size_kg}kg`, `${r.size_kg}kg empty`, r.empty_stores, r.empty_forecourt)}
+                className="w-full py-1 text-xs rounded border border-surface-border text-content-secondary hover:bg-surface-bg transition-colors">
+                Adjust Empty Stock
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -492,12 +544,25 @@ function AccessoriesTab({ rows, onAdd, onEdit, onDelete, onStock }: {
   onDelete: (r: AccRow) => void
   onStock: (r: AccRow) => void
 }) {
+  const [search, setSearch] = useState('')
   const reorderCount = rows.filter(r => r.needs_reorder).length
+
+  const q = search.toLowerCase()
+  const visible = rows.filter(r =>
+    !q ||
+    r.description.toLowerCase().includes(q) ||
+    r.product_code.toLowerCase().includes(q)
+  )
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          {reorderCount > 0 && <span className="text-xs font-medium text-status-error">{reorderCount} need re-order</span>}
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..."
+            className="px-3 py-1.5 text-sm rounded border border-surface-border bg-surface-bg text-content-primary w-48 focus:outline-none focus:border-action-primary" />
+          {reorderCount > 0 && (
+            <span className="text-xs font-semibold text-status-error bg-status-error/10 px-2 py-1 rounded">{reorderCount} need re-order</span>
+          )}
         </div>
         <button onClick={onAdd}
           className="px-3 py-1.5 text-sm font-medium rounded bg-action-primary text-white">
@@ -505,32 +570,39 @@ function AccessoriesTab({ rows, onAdd, onEdit, onDelete, onStock }: {
         </button>
       </div>
 
-      <div className="rounded-lg shadow overflow-x-auto bg-surface-card border border-surface-border">
+      <div className="rounded-lg overflow-x-auto bg-surface-card border border-surface-border">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-surface-bg border-b border-surface-border">
-              {['Description', 'Code', 'Selling Price', 'Stores', 'Forecourt', 'Re-order', 'Actions'].map(h => (
+              {['Description / Code', 'Price', 'Stores', 'Forecourt', 'Re-order', 'Actions'].map(h => (
                 <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-content-secondary">
-                No accessories in catalog. Add one above.
+            {visible.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-content-secondary">
+                {rows.length === 0 ? 'No accessories in catalog. Add one above.' : 'No results.'}
               </td></tr>
             )}
-            {rows.map(r => (
-              <tr key={r.product_code} className={`border-t border-surface-border ${r.needs_reorder ? 'bg-status-error-light/30' : ''}`}>
-                <td className="px-3 py-2 font-medium text-content-primary">{r.description}</td>
-                <td className="px-3 py-2 font-mono text-xs text-content-secondary">{r.product_code}</td>
-                <td className="px-3 py-2 font-mono text-right text-content-primary">{fmtZMW(r.selling_price)}</td>
-                <td className="px-3 py-2 font-mono text-right text-content-primary">{r.stores}</td>
-                <td className="px-3 py-2 font-mono text-right text-content-primary">{r.forecourt}</td>
-                <td className="px-3 py-2 text-content-secondary text-right">
+            {visible.map(r => (
+              <tr key={r.product_code}
+                className={`border-t border-surface-border ${r.needs_reorder ? 'bg-status-error/5' : 'hover:bg-surface-bg'}`}>
+                <td className="px-3 py-2">
+                  <p className="text-sm font-medium text-content-primary">{r.description}</p>
+                  <p className="text-[10px] font-mono text-content-secondary">{r.product_code}</p>
+                </td>
+                <td className="px-3 py-2 text-right text-xs font-mono text-content-primary">{fmtZMW(r.selling_price)}</td>
+                <td className="px-3 py-2 text-right">
+                  <span className="text-sm font-semibold text-content-primary">{r.stores}</span>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <span className="text-sm font-semibold text-content-primary">{r.forecourt}</span>
+                </td>
+                <td className="px-3 py-2 text-right">
                   {r.needs_reorder
-                    ? <span className="text-xs font-semibold text-status-error">{r.reorder_level} !</span>
-                    : <span className="font-mono">{r.reorder_level || '—'}</span>}
+                    ? <span className="text-xs font-bold text-status-error">{r.reorder_level} !</span>
+                    : <span className="text-xs text-content-secondary">{r.reorder_level || '—'}</span>}
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex gap-1">
@@ -539,7 +611,7 @@ function AccessoriesTab({ rows, onAdd, onEdit, onDelete, onStock }: {
                     <button onClick={() => onStock(r)}
                       className="px-2 py-1 text-xs rounded bg-action-primary/10 text-action-primary border border-action-primary/30">Stock</button>
                     <button onClick={() => onDelete(r)}
-                      className="px-2 py-1 text-xs rounded text-status-error border border-status-error/30 hover:bg-status-error-light">Delete</button>
+                      className="px-2 py-1 text-xs rounded text-status-error border border-status-error/30 hover:bg-status-error/10">Delete</button>
                   </div>
                 </td>
               </tr>
