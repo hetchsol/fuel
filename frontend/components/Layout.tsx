@@ -340,7 +340,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       children: [
         { path: '/my-shift?mode=start', label: 'Start Shift', roles: ['user'] },
         { path: '/my-shift?mode=end', label: 'End Shift', roles: ['user'] },
-        { path: '/credit-lookup', label: 'Credit Account Lookup', roles: ['user'] },
       ]
     },
     {
@@ -373,8 +372,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/stores', label: 'Stores / Stock', roles: ['manager', 'owner'] },
         { path: '/stock-takes', label: 'Stock Takes', roles: ['manager', 'owner'] },
         { path: '/sales', label: 'Sales', roles: ['supervisor', 'manager', 'owner'] },
+      ]
+    },
+    {
+      label: 'Credit & Sales',
+      roles: ['user', 'supervisor', 'manager', 'owner'],
+      children: [
         { path: '/accounts', label: 'Credit Accounts', roles: ['manager', 'owner'] },
-        { path: '/credit-lookup', label: 'Credit Account Lookup', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/credit-lookup', label: 'Credit Lookup', roles: ['user', 'supervisor', 'manager', 'owner'] },
       ]
     },
     // Consolidated analytical clusters (each is a single tabbed page).
@@ -421,8 +426,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/stock-takes', label: 'Stock Takes', roles: ['manager'] },
         { path: '/inventory', label: 'Tank Levels', roles: ['manager'] },
         { path: '/sales', label: 'Sales', roles: ['manager'] },
+      ],
+    },
+    {
+      label: 'Credit & Sales',
+      roles: ['manager'],
+      children: [
         { path: '/accounts', label: 'Credit Accounts', roles: ['manager'] },
-        { path: '/credit-lookup', label: 'Credit Account Lookup', roles: ['manager'] },
+        { path: '/credit-lookup', label: 'Credit Lookup', roles: ['manager'] },
       ],
     },
     // Same consolidated clusters as every other role.
