@@ -38,19 +38,6 @@ interface CylinderTrade {
   trade_type: string
 }
 
-interface AccessoryRow {
-  product_code: string
-  description: string
-  selling_price: number
-  opening_stock: number
-  additions: number
-  sold: number
-  damaged: number
-  damage_note: string
-  balance: number
-  sales_value: number
-}
-
 const fmt = (v: number) =>
   `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -64,8 +51,6 @@ export default function LPGDaily() {
     }
     return ''
   })
-  const [activeTab, setActiveTab] = useState<'cylinders' | 'accessories'>('cylinders')
-
   const [pricing, setPricing] = useState<Pricing[]>([])
   const [cylinderRows, setCylinderRows] = useState<CylinderRow[]>(
     LPG_SIZES.map(s => ({
@@ -77,7 +62,6 @@ export default function LPGDaily() {
   )
   const [trades, setTrades] = useState<CylinderTrade[]>([])
   const [actualPopulation, setActualPopulation] = useState('')
-  const [accessoryRows, setAccessoryRows] = useState<AccessoryRow[]>([])
   const [loading, setLoading] = useState(false)
   const [entries, setEntries] = useState<any[]>([])
 
@@ -118,30 +102,6 @@ export default function LPGDaily() {
   }, [date, shiftType])
 
   useEffect(() => { fetchPreviousShift() }, [fetchPreviousShift])
-
-  const fetchAccessories = useCallback(() => {
-    Promise.all([
-      authFetch(`${BASE}/lpg-daily/accessories/pricing`, { headers: { ...getHeaders(), 'Content-Type': 'application/json' } }).then(r => r.ok ? r.json() : []),
-      authFetch(`${BASE}/lpg-daily/accessories/previous-day?current_date=${date}`, { headers: { ...getHeaders(), 'Content-Type': 'application/json' } }).then(r => r.ok ? r.json() : {} as any),
-    ]).then(([catalog, prevData]: [any[], any]) => {
-      const products = catalog.length > 0 ? catalog : (prevData.default_products || [])
-      const balances = prevData.product_balances || {}
-      setAccessoryRows(products.map((p: any) => ({
-        product_code: p.product_code,
-        description: p.description,
-        selling_price: p.selling_price,
-        opening_stock: balances[p.product_code]?.balance ?? 0,
-        additions: 0,
-        sold: 0,
-        damaged: 0,
-        damage_note: '',
-        balance: balances[p.product_code]?.balance ?? 0,
-        sales_value: 0,
-      })))
-    }).catch(() => {})
-  }, [date])
-
-  useEffect(() => { fetchAccessories() }, [fetchAccessories])
 
   useEffect(() => {
     authFetch(`${BASE}/lpg-daily/entries?date=${date}`, { headers: { ...getHeaders(), 'Content-Type': 'application/json' } })
@@ -186,27 +146,11 @@ export default function LPGDaily() {
     cylinderRows.map(r => `${r.opening_balance}-${r.receipts}-${r.sold_refill}-${r.sold_with_cylinder}-${r.damaged}`).join(','),
   ])
 
-  // Recalculate accessory rows
-  useEffect(() => {
-    setAccessoryRows(prev => prev.map(row => ({
-      ...row,
-      balance: row.opening_stock + row.additions - row.sold - (row.damaged || 0),
-      sales_value: row.selling_price * row.sold,
-    })))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessoryRows.map(r => `${r.opening_stock}-${r.additions}-${r.sold}-${r.damaged}`).join(',')])
-
   const updateCylinder = (sizeKg: number, field: string, value: number) =>
     setCylinderRows(prev => prev.map(r => r.size_kg === sizeKg ? { ...r, [field]: value } : r))
 
   const updateCylinderStr = (sizeKg: number, field: string, value: string) =>
     setCylinderRows(prev => prev.map(r => r.size_kg === sizeKg ? { ...r, [field]: value } : r))
-
-  const updateAccessory = (code: string, field: string, value: number) =>
-    setAccessoryRows(prev => prev.map(r => r.product_code === code ? { ...r, [field]: value } : r))
-
-  const updateAccessoryStr = (code: string, field: string, value: string) =>
-    setAccessoryRows(prev => prev.map(r => r.product_code === code ? { ...r, [field]: value } : r))
 
   const addTrade = () =>
     setTrades(prev => [...prev, { from_size_kg: 3, to_size_kg: 6, quantity: 1, price_difference: 0, trade_type: 'upgrade' }])
@@ -229,8 +173,6 @@ export default function LPGDaily() {
 
   // Summary figures
   const grandTotal = cylinderRows.reduce((s, r) => s + r.total_value, 0)
-  const accessoryTotal = accessoryRows.reduce((s, r) => s + r.sales_value, 0)
-  const totalRevenue = grandTotal + accessoryTotal
   const totalFull = cylinderRows.reduce((s, r) => s + r.balance, 0)
   const totalEmpties = cylinderRows.reduce((s, r) => s + r.closing_empty, 0)
   const bookPopulation = totalFull + totalEmpties
@@ -269,25 +211,6 @@ export default function LPGDaily() {
       })
       if (!cylRes.ok) { const e = await cylRes.json(); throw new Error(e.detail || 'Failed to submit LPG entry') }
 
-      const hasAccActivity = accessoryRows.some(r => r.additions > 0 || r.sold > 0 || (r.damaged || 0) > 0)
-      if (hasAccActivity) {
-        const accRes = await authFetch(`${BASE}/lpg-daily/accessories/entry`, {
-          method: 'POST',
-          headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            date,
-            product_rows: accessoryRows.map(r => ({
-              product_code: r.product_code, description: r.description,
-              selling_price: r.selling_price, opening_stock: r.opening_stock,
-              additions: r.additions, sold: r.sold,
-              damaged: r.damaged || 0, damage_note: r.damage_note || null,
-            })),
-            recorded_by: user?.user_id || 'unknown',
-          }),
-        })
-        if (!accRes.ok) { const e = await accRes.json(); throw new Error(e.detail || 'Failed to submit accessories') }
-      }
-
       toast.success('LPG entry submitted')
       setTrades([])
       const fresh = await authFetch(`${BASE}/lpg-daily/entries?date=${date}`, { headers: { ...getHeaders(), 'Content-Type': 'application/json' } })
@@ -324,7 +247,7 @@ export default function LPGDaily() {
       {/* Page header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-content-primary">LPG Operations</h1>
-        <p className="text-sm text-content-secondary mt-1">Shift-level cylinder sales and accessories tracking</p>
+        <p className="text-sm text-content-secondary mt-1">Shift-level cylinder sales and stock tracking</p>
       </div>
 
       {/* Date / Shift / Salesperson */}
@@ -350,31 +273,11 @@ export default function LPGDaily() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-surface-border">
-        {(['cylinders', 'accessories'] as const).map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              activeTab === tab
-                ? 'border-action-primary text-action-primary'
-                : 'border-transparent text-content-secondary hover:text-content-primary'
-            }`}>
-            {tab === 'cylinders' ? 'Cylinders' : `Accessories${accessoryRows.length ? ` (${accessoryRows.length})` : ''}`}
-          </button>
-        ))}
-      </div>
-
-      {/* ── CYLINDERS TAB ── */}
-      {activeTab === 'cylinders' && (
-        <>
-          {/* Summary strip */}
+      {/* Summary strip */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
             <div className="bg-surface-card rounded-lg border border-surface-border p-4">
               <p className="text-xs text-content-secondary mb-1">Total Revenue</p>
-              <p className="text-2xl font-bold text-action-primary">{fmt(totalRevenue)}</p>
-              {accessoryTotal > 0 && (
-                <p className="text-xs text-content-secondary mt-0.5">Cyl {fmt(grandTotal)} + Acc {fmt(accessoryTotal)}</p>
-              )}
+              <p className="text-2xl font-bold text-action-primary">{fmt(grandTotal)}</p>
             </div>
             <div className="bg-surface-card rounded-lg border border-surface-border p-4">
               <p className="text-xs text-content-secondary mb-1">Full Cylinders</p>
@@ -622,88 +525,6 @@ export default function LPGDaily() {
               </div>
             </div>
           )}
-        </>
-      )}
-
-      {/* ── ACCESSORIES TAB ── */}
-      {activeTab === 'accessories' && (
-        <div className="bg-surface-card rounded-lg border border-surface-border overflow-hidden mb-6">
-          <div className="px-4 py-3 border-b border-surface-border flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-content-primary">LPG Accessories</h3>
-            {accessoryTotal > 0 && (
-              <span className="text-sm font-bold text-action-primary">{fmt(accessoryTotal)}</span>
-            )}
-          </div>
-          {accessoryRows.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-content-secondary">No accessories configured.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="bg-surface-bg">
-                    {['Product', 'Price', 'Opening', 'Additions', 'Sold', 'Damaged', 'Closing', 'Value'].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase text-content-secondary">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {accessoryRows.map(row => (
-                    <tr key={row.product_code} className="border-t border-surface-border hover:bg-surface-bg">
-                      <td className="px-3 py-2">
-                        <p className="font-medium text-content-primary">{row.description}</p>
-                        <p className="text-xs text-content-secondary">{row.product_code}</p>
-                      </td>
-                      <td className="px-3 py-2 text-right text-content-secondary">{fmt(row.selling_price)}</td>
-                      <td className="px-3 py-2">
-                        {canManageStock
-                          ? <input type="number" min={0} value={row.opening_stock}
-                              onChange={e => updateAccessory(row.product_code, 'opening_stock', parseInt(e.target.value) || 0)}
-                              className="w-16 px-2 py-1 rounded border border-surface-border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary" />
-                          : <span className="text-sm text-content-primary">{row.opening_stock}</span>}
-                      </td>
-                      <td className="px-3 py-2">
-                        {canManageStock
-                          ? <input type="number" min={0} value={row.additions}
-                              onChange={e => updateAccessory(row.product_code, 'additions', parseInt(e.target.value) || 0)}
-                              className="w-16 px-2 py-1 rounded border border-surface-border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary" />
-                          : <span className="text-sm text-content-secondary">{row.additions}</span>}
-                      </td>
-                      <td className="px-3 py-2">
-                        <input type="number" min={0} value={row.sold}
-                          onChange={e => updateAccessory(row.product_code, 'sold', parseInt(e.target.value) || 0)}
-                          className="w-16 px-2 py-1 rounded border border-surface-border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary" />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input type="number" min={0} value={row.damaged || 0}
-                          onChange={e => updateAccessory(row.product_code, 'damaged', parseInt(e.target.value) || 0)}
-                          className={`w-16 px-2 py-1 rounded border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary ${
-                            row.damaged > 0 ? 'border-status-warning' : 'border-surface-border'
-                          }`} />
-                        {row.damaged > 0 && (
-                          <input type="text" value={row.damage_note || ''}
-                            onChange={e => updateAccessoryStr(row.product_code, 'damage_note', e.target.value)}
-                            placeholder="Reason"
-                            className={`mt-1 w-36 px-2 py-1 rounded border bg-surface-bg text-content-primary text-xs focus:outline-none ${
-                              (row.damage_note || '').trim() ? 'border-surface-border' : 'border-status-error'
-                            }`} />
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <span className={`font-medium ${row.balance < 0 ? 'text-status-error' : 'text-content-primary'}`}>
-                          {row.balance}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right font-semibold text-action-primary">
-                        {row.sales_value > 0 ? fmt(row.sales_value) : '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Submit */}
       <div className="mt-2">

@@ -362,6 +362,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/fuel-operations', label: 'Fuel Operations', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/lpg-daily', label: 'LPG Daily Operations', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/lubricants-daily', label: 'Lubricants Daily', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/accessories-daily', label: 'Accessories Daily', roles: ['supervisor', 'manager', 'owner'] },
       ]
     },
     {
