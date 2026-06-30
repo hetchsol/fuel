@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useTheme } from '../contexts/ThemeContext'
 import { useWorkingDay } from '../contexts/WorkingDayContext'
 import { getHeaders, authFetch } from '../lib/api'
-import ExportButtons from '../components/ExportButtons'
-import { ExportConfig } from '../lib/exportUtils'
+import toast from 'react-hot-toast'
 
 const BASE = '/api/v1'
 const LPG_SIZES = [3, 6, 9, 19, 45, 48]
@@ -53,72 +51,57 @@ interface AccessoryRow {
   sales_value: number
 }
 
-function getAuthHeaders() {
-  return {
-    ...getHeaders(),
-    'Content-Type': 'application/json',
-  }
-}
+const fmt = (v: number) =>
+  `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export default function LPGDaily() {
-  const { theme } = useTheme()
   const [user, setUser] = useState<any>(null)
-  const { date, setDate, shiftType, setShiftType } = useWorkingDay()  // shared working day (item 2)
+  const { date, setDate, shiftType, setShiftType } = useWorkingDay()
   const [salesperson, setSalesperson] = useState(() => {
     if (typeof window !== 'undefined') {
-      const userData = localStorage.getItem('user')
-      if (userData) return JSON.parse(userData).full_name || ''
+      const ud = localStorage.getItem('user')
+      if (ud) return JSON.parse(ud).full_name || ''
     }
     return ''
   })
+  const [activeTab, setActiveTab] = useState<'cylinders' | 'accessories'>('cylinders')
 
   const [pricing, setPricing] = useState<Pricing[]>([])
   const [cylinderRows, setCylinderRows] = useState<CylinderRow[]>(
     LPG_SIZES.map(s => ({
       size_kg: s, opening_balance: 0, opening_empty: 0, receipts: 0,
-      traded_in: 0, traded_out: 0,
-      sold_refill: 0, sold_with_cylinder: 0,
-      damaged: 0, damage_note: '',
-      balance: 0, closing_empty: 0, value_refill: 0, value_with_cylinder: 0, total_value: 0,
+      traded_in: 0, traded_out: 0, sold_refill: 0, sold_with_cylinder: 0,
+      damaged: 0, damage_note: '', balance: 0, closing_empty: 0,
+      value_refill: 0, value_with_cylinder: 0, total_value: 0,
     }))
   )
-
   const [trades, setTrades] = useState<CylinderTrade[]>([])
-
-  const [actualPopulation, setActualPopulation] = useState<string>('')
-
-  // Accessories
+  const [actualPopulation, setActualPopulation] = useState('')
   const [accessoryRows, setAccessoryRows] = useState<AccessoryRow[]>([])
-
-  const [showEmptyTracking, setShowEmptyTracking] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
   const [entries, setEntries] = useState<any[]>([])
 
-  const canManageStock = user?.role === 'supervisor' || user?.role === 'manager' || user?.role === 'owner'
-  const canManage = user?.role === 'manager' || user?.role === 'owner'
-  const lpgPricesConfigured = pricing.length > 0 && pricing.some((p: any) => p.price_refill > 0 || p.price_with_cylinder > 0)
+  const canManageStock = ['supervisor', 'manager', 'owner'].includes(user?.role)
+  const canManage = ['manager', 'owner'].includes(user?.role)
+  const lpgPricesConfigured = pricing.some(p => p.price_refill > 0 || p.price_with_cylinder > 0)
 
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (userData) setUser(JSON.parse(userData))
+    const ud = localStorage.getItem('user')
+    if (ud) setUser(JSON.parse(ud))
   }, [])
 
-  // Fetch pricing on mount
   const fetchPricing = useCallback(() => {
-    authFetch(`${BASE}/lpg-daily/pricing`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/lpg-daily/pricing`, { headers: { ...getHeaders(), 'Content-Type': 'application/json' } })
       .then(r => r.json())
-      .then(data => { setPricing(data.sizes || []) })
+      .then(data => setPricing(data.sizes || []))
       .catch(() => {})
   }, [])
 
   useEffect(() => { fetchPricing() }, [fetchPricing])
 
-  // Fetch previous shift data when date/shift changes
   const fetchPreviousShift = useCallback(() => {
     authFetch(`${BASE}/lpg-daily/previous-shift?current_date=${date}&shift_type=${shiftType}`, {
-      headers: getAuthHeaders(),
+      headers: { ...getHeaders(), 'Content-Type': 'application/json' },
     })
       .then(r => r.json())
       .then(data => {
@@ -136,11 +119,10 @@ export default function LPGDaily() {
 
   useEffect(() => { fetchPreviousShift() }, [fetchPreviousShift])
 
-  // Fetch accessories pricing + previous day balances
   const fetchAccessories = useCallback(() => {
     Promise.all([
-      authFetch(`${BASE}/lpg-daily/accessories/pricing`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : []),
-      authFetch(`${BASE}/lpg-daily/accessories/previous-day?current_date=${date}`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : {} as any),
+      authFetch(`${BASE}/lpg-daily/accessories/pricing`, { headers: { ...getHeaders(), 'Content-Type': 'application/json' } }).then(r => r.ok ? r.json() : []),
+      authFetch(`${BASE}/lpg-daily/accessories/previous-day?current_date=${date}`, { headers: { ...getHeaders(), 'Content-Type': 'application/json' } }).then(r => r.ok ? r.json() : {} as any),
     ]).then(([catalog, prevData]: [any[], any]) => {
       const products = catalog.length > 0 ? catalog : (prevData.default_products || [])
       const balances = prevData.product_balances || {}
@@ -161,24 +143,23 @@ export default function LPGDaily() {
 
   useEffect(() => { fetchAccessories() }, [fetchAccessories])
 
-  // Fetch existing entries
   useEffect(() => {
-    authFetch(`${BASE}/lpg-daily/entries?date=${date}`, { headers: getAuthHeaders() })
+    authFetch(`${BASE}/lpg-daily/entries?date=${date}`, { headers: { ...getHeaders(), 'Content-Type': 'application/json' } })
       .then(r => r.json())
       .then(data => setEntries(Array.isArray(data) ? data : []))
       .catch(() => {})
-  }, [date, success])
+  }, [date])
 
-  // Compute traded_in / traded_out from trades list
+  // Trade maps
   const tradedInMap: Record<number, number> = {}
   const tradedOutMap: Record<number, number> = {}
-  for (const size of LPG_SIZES) { tradedInMap[size] = 0; tradedOutMap[size] = 0 }
+  for (const s of LPG_SIZES) { tradedInMap[s] = 0; tradedOutMap[s] = 0 }
   for (const t of trades) {
-    tradedInMap[t.from_size_kg] = (tradedInMap[t.from_size_kg] || 0) + t.quantity    // Station receives FROM-size
-    tradedOutMap[t.to_size_kg] = (tradedOutMap[t.to_size_kg] || 0) + t.quantity      // Station gives TO-size
+    tradedInMap[t.from_size_kg] = (tradedInMap[t.from_size_kg] || 0) + t.quantity
+    tradedOutMap[t.to_size_kg] = (tradedOutMap[t.to_size_kg] || 0) + t.quantity
   }
 
-  // Recalculate balances and values in real-time
+  // Recalculate cylinder rows when inputs change
   useEffect(() => {
     if (pricing.length === 0) return
     setCylinderRows(prev => prev.map(row => {
@@ -187,61 +168,56 @@ export default function LPGDaily() {
       const t_in = tradedInMap[row.size_kg] || 0
       const t_out = tradedOutMap[row.size_kg] || 0
       const balance = row.opening_balance + row.receipts + t_in - row.sold_refill - row.sold_with_cylinder - t_out - (row.damaged || 0)
-      const value_refill = p.price_refill * row.sold_refill
-      const value_with_cylinder = p.price_with_cylinder * row.sold_with_cylinder
       return {
         ...row,
         traded_in: t_in,
         traded_out: t_out,
         balance,
-        value_refill,
-        value_with_cylinder,
-        total_value: value_refill + value_with_cylinder,
+        value_refill: p.price_refill * row.sold_refill,
+        value_with_cylinder: p.price_with_cylinder * row.sold_with_cylinder,
+        total_value: p.price_refill * row.sold_refill + p.price_with_cylinder * row.sold_with_cylinder,
       }
     }))
-  }, [pricing, trades, cylinderRows.map(r => `${r.opening_balance}-${r.receipts}-${r.sold_refill}-${r.sold_with_cylinder}-${r.damaged || 0}`).join(',')])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    pricing,
+    trades,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    cylinderRows.map(r => `${r.opening_balance}-${r.receipts}-${r.sold_refill}-${r.sold_with_cylinder}-${r.damaged}`).join(','),
+  ])
 
-  // Recalculate accessory balances
+  // Recalculate accessory rows
   useEffect(() => {
     setAccessoryRows(prev => prev.map(row => ({
       ...row,
       balance: row.opening_stock + row.additions - row.sold - (row.damaged || 0),
       sales_value: row.selling_price * row.sold,
     })))
-  }, [accessoryRows.map(r => `${r.opening_stock}-${r.additions}-${r.sold}-${r.damaged || 0}`).join(',')])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessoryRows.map(r => `${r.opening_stock}-${r.additions}-${r.sold}-${r.damaged}`).join(',')])
 
-  const updateCylinderField = (sizeKg: number, field: string, value: number) => {
-    setCylinderRows(prev => prev.map(row =>
-      row.size_kg === sizeKg ? { ...row, [field]: value } : row
-    ))
-  }
+  const updateCylinder = (sizeKg: number, field: string, value: number) =>
+    setCylinderRows(prev => prev.map(r => r.size_kg === sizeKg ? { ...r, [field]: value } : r))
 
-  const updateAccessoryField = (code: string, field: string, value: number) => {
-    setAccessoryRows(prev => prev.map(row =>
-      row.product_code === code ? { ...row, [field]: value } : row
-    ))
-  }
-  const updateCylinderFieldStr = (sizeKg: number, field: string, value: string) => {
-    setCylinderRows(prev => prev.map(row => row.size_kg === sizeKg ? { ...row, [field]: value } : row))
-  }
-  const updateAccessoryFieldStr = (code: string, field: string, value: string) => {
-    setAccessoryRows(prev => prev.map(row => row.product_code === code ? { ...row, [field]: value } : row))
-  }
+  const updateCylinderStr = (sizeKg: number, field: string, value: string) =>
+    setCylinderRows(prev => prev.map(r => r.size_kg === sizeKg ? { ...r, [field]: value } : r))
 
-  // Trade helpers
-  const addTrade = () => {
+  const updateAccessory = (code: string, field: string, value: number) =>
+    setAccessoryRows(prev => prev.map(r => r.product_code === code ? { ...r, [field]: value } : r))
+
+  const updateAccessoryStr = (code: string, field: string, value: string) =>
+    setAccessoryRows(prev => prev.map(r => r.product_code === code ? { ...r, [field]: value } : r))
+
+  const addTrade = () =>
     setTrades(prev => [...prev, { from_size_kg: 3, to_size_kg: 6, quantity: 1, price_difference: 0, trade_type: 'upgrade' }])
-  }
 
-  const removeTrade = (index: number) => {
-    setTrades(prev => prev.filter((_, i) => i !== index))
-  }
+  const removeTrade = (i: number) =>
+    setTrades(prev => prev.filter((_, idx) => idx !== i))
 
-  const updateTrade = (index: number, field: string, value: any) => {
-    setTrades(prev => prev.map((t, i) => {
-      if (i !== index) return t
+  const updateTrade = (i: number, field: string, value: any) =>
+    setTrades(prev => prev.map((t, idx) => {
+      if (idx !== i) return t
       const updated = { ...t, [field]: value }
-      // Recalculate price_difference and trade_type
       const fromP = pricing.find(p => p.size_kg === updated.from_size_kg)
       const toP = pricing.find(p => p.size_kg === updated.to_size_kg)
       if (fromP && toP) {
@@ -250,42 +226,28 @@ export default function LPGDaily() {
       }
       return updated
     }))
-  }
 
-  const totalTradeRevenue = trades.reduce((s, t) => s + (t.price_difference * t.quantity), 0)
-
+  // Summary figures
   const grandTotal = cylinderRows.reduce((s, r) => s + r.total_value, 0)
   const accessoryTotal = accessoryRows.reduce((s, r) => s + r.sales_value, 0)
-
-  // Auto-calculated book population: sum of closing filled + closing empty
-  const autoBookPopulation = cylinderRows.reduce((s, r) => s + r.balance + r.closing_empty, 0)
-
-  const popDifference = actualPopulation
-    ? autoBookPopulation - parseInt(actualPopulation)
-    : null
-
-  // Oversell warnings
+  const totalRevenue = grandTotal + accessoryTotal
+  const totalFull = cylinderRows.reduce((s, r) => s + r.balance, 0)
+  const totalEmpties = cylinderRows.reduce((s, r) => s + r.closing_empty, 0)
+  const bookPopulation = totalFull + totalEmpties
+  const popDiff = actualPopulation !== '' ? bookPopulation - parseInt(actualPopulation) : null
+  const totalTradeRevenue = trades.reduce((s, t) => s + t.price_difference * t.quantity, 0)
   const oversellRows = cylinderRows.filter(r => r.balance < 0)
 
   const handleSubmit = async () => {
-    if (!salesperson.trim()) {
-      setError('Please enter salesperson name')
-      return
-    }
+    if (!salesperson.trim()) { toast.error('Enter salesperson name'); return }
     setLoading(true)
-    setError('')
-    setSuccess('')
-
     try {
-      // Submit cylinder entry
       const validTrades = trades.filter(t => t.from_size_kg !== t.to_size_kg && t.quantity > 0)
       const cylRes = await authFetch(`${BASE}/lpg-daily/entry`, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date,
-          shift_type: shiftType,
-          salesperson,
+          date, shift_type: shiftType, salesperson,
           cylinder_rows: cylinderRows.map(r => ({
             size_kg: r.size_kg,
             opening_balance: r.opening_balance,
@@ -298,651 +260,521 @@ export default function LPGDaily() {
             closing_empty: r.closing_empty,
           })),
           trades: validTrades.length > 0 ? validTrades.map(t => ({
-            from_size_kg: t.from_size_kg,
-            to_size_kg: t.to_size_kg,
-            quantity: t.quantity,
+            from_size_kg: t.from_size_kg, to_size_kg: t.to_size_kg, quantity: t.quantity,
           })) : null,
-          book_cylinder_population: autoBookPopulation,
-          actual_cylinder_population: actualPopulation ? parseInt(actualPopulation) : null,
+          book_cylinder_population: bookPopulation,
+          actual_cylinder_population: actualPopulation !== '' ? parseInt(actualPopulation) : null,
           recorded_by: user?.user_id || 'unknown',
         }),
       })
+      if (!cylRes.ok) { const e = await cylRes.json(); throw new Error(e.detail || 'Failed to submit LPG entry') }
 
-      if (!cylRes.ok) {
-        const err = await cylRes.json()
-        throw new Error(err.detail || 'Failed to submit LPG entry')
-      }
-
-      // Submit accessories entry
-      const hasAccessoryActivity = accessoryRows.some(r => r.additions > 0 || r.sold > 0 || (r.damaged || 0) > 0)
-      if (hasAccessoryActivity) {
+      const hasAccActivity = accessoryRows.some(r => r.additions > 0 || r.sold > 0 || (r.damaged || 0) > 0)
+      if (hasAccActivity) {
         const accRes = await authFetch(`${BASE}/lpg-daily/accessories/entry`, {
           method: 'POST',
-          headers: getAuthHeaders(),
+          headers: { ...getHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify({
             date,
             product_rows: accessoryRows.map(r => ({
-              product_code: r.product_code,
-              description: r.description,
-              selling_price: r.selling_price,
-              opening_stock: r.opening_stock,
-              additions: r.additions,
-              sold: r.sold,
-              damaged: r.damaged || 0,
-              damage_note: r.damage_note || null,
+              product_code: r.product_code, description: r.description,
+              selling_price: r.selling_price, opening_stock: r.opening_stock,
+              additions: r.additions, sold: r.sold,
+              damaged: r.damaged || 0, damage_note: r.damage_note || null,
             })),
             recorded_by: user?.user_id || 'unknown',
           }),
         })
-
-        if (!accRes.ok) {
-          const err = await accRes.json()
-          throw new Error(err.detail || 'Failed to submit accessories entry')
-        }
+        if (!accRes.ok) { const e = await accRes.json(); throw new Error(e.detail || 'Failed to submit accessories') }
       }
 
-      setSuccess('LPG daily entry submitted successfully!')
+      toast.success('LPG entry submitted')
       setTrades([])
+      const fresh = await authFetch(`${BASE}/lpg-daily/entries?date=${date}`, { headers: { ...getHeaders(), 'Content-Type': 'application/json' } })
+      if (fresh.ok) setEntries(await fresh.json())
     } catch (err: any) {
-      setError(err.message || 'Submission failed')
+      toast.error(err.message || 'Submission failed')
     } finally {
       setLoading(false)
     }
   }
 
-  const accPricesConfigured = accessoryRows.length > 0 && accessoryRows.some(r => r.selling_price > 0)
-  const isFirstCylinderEntry = cylinderRows.length > 0 && cylinderRows.every(r => r.opening_balance === 0)
-  const isFirstAccessoryEntry = accessoryRows.length > 0 && accessoryRows.every(r => r.opening_stock === 0)
-
-  const inputStyle = {
-    backgroundColor: theme.cardBg,
-    color: theme.textPrimary,
-    borderColor: theme.border,
+  const authoriseDamage = async (entryId: string) => {
+    try {
+      const res = await authFetch(`${BASE}/lpg-daily/${entryId}/authorise-damage`, {
+        method: 'POST', headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+      })
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail) }
+      toast.success('Damage authorised')
+      const fresh = await authFetch(`${BASE}/lpg-daily/entries?date=${date}`, { headers: { ...getHeaders(), 'Content-Type': 'application/json' } })
+      if (fresh.ok) setEntries(await fresh.json())
+    } catch (err: any) { toast.error(err.message) }
   }
 
-  const getExportConfig = useCallback((): ExportConfig | null => {
-    if (!cylinderRows.length) return null
-    return {
-      title: 'LPG Daily Operations',
-      filename: `lpg_daily_${new Date().toISOString().slice(0,10)}`,
-      columns: [
-        { header: 'Size (kg)', key: 'size_kg', format: 'number' },
-        { header: 'Opening Balance', key: 'opening_balance', format: 'number' },
-        { header: 'Receipts', key: 'receipts', format: 'number' },
-        { header: 'Sold (Refill)', key: 'sold_refill', format: 'number' },
-        { header: 'Sold (With Cylinder)', key: 'sold_with_cylinder', format: 'number' },
-        { header: 'Closing Balance', key: 'balance', format: 'number' },
-        { header: 'Value (Refill)', key: 'value_refill', format: 'currency' },
-        { header: 'Value (With Cylinder)', key: 'value_with_cylinder', format: 'currency' },
-        { header: 'Total Value', key: 'total_value', format: 'currency' },
-      ],
-      data: cylinderRows,
-    }
-  }, [cylinderRows])
+  const numInput = (value: number, onChange: (v: number) => void, extraClass = '') => (
+    <input
+      type="number" min={0} value={value}
+      onChange={e => onChange(parseInt(e.target.value) || 0)}
+      className={`w-full px-2 py-1.5 rounded border border-surface-border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary ${extraClass}`}
+    />
+  )
 
   return (
     <div>
+      {/* Page header */}
       <div className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>LPG Daily Operations</h1>
-            <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
-              Shift-level cylinder sales and accessories tracking
-            </p>
-          </div>
-          <ExportButtons getConfig={getExportConfig} />
-        </div>
+        <h1 className="text-2xl font-bold text-content-primary">LPG Operations</h1>
+        <p className="text-sm text-content-secondary mt-1">Shift-level cylinder sales and accessories tracking</p>
       </div>
 
-      {/* Date / Shift / Salesperson selectors */}
-      <div className="rounded-lg shadow p-4 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4"
-        style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+      {/* Date / Shift / Salesperson */}
+      <div className="bg-surface-card rounded-lg border border-surface-border p-4 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: theme.textSecondary }}>Date</label>
+          <label className="block text-xs font-medium text-content-secondary mb-1">Date</label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
-            className="w-full px-3 py-2 rounded border text-sm" style={inputStyle} />
+            className="w-full px-3 py-2 rounded border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:border-action-primary" />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: theme.textSecondary }}>Shift</label>
+          <label className="block text-xs font-medium text-content-secondary mb-1">Shift</label>
           <select value={shiftType} onChange={e => setShiftType(e.target.value as 'Day' | 'Night')}
-            className="w-full px-3 py-2 rounded border text-sm" style={inputStyle}>
+            className="w-full px-3 py-2 rounded border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:border-action-primary">
             <option value="Day">Day Shift</option>
             <option value="Night">Night Shift</option>
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: theme.textSecondary }}>Salesperson</label>
+          <label className="block text-xs font-medium text-content-secondary mb-1">Salesperson</label>
           <input type="text" value={salesperson} onChange={e => setSalesperson(e.target.value)}
-            placeholder="Enter salesperson name"
-            className="w-full px-3 py-2 rounded border text-sm" style={inputStyle} />
+            placeholder="Name"
+            className="w-full px-3 py-2 rounded border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:border-action-primary" />
         </div>
       </div>
 
-      {/* First-time stock banner */}
-      {isFirstCylinderEntry && (
-        <div className="mb-4 p-3 rounded-lg text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: 'var(--color-action-primary)', border: '1px solid var(--color-action-primary)' }}>
-          First time? Enter your current physical cylinder counts as Opening Stock below. These will carry forward automatically after each shift.
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 border-b border-surface-border">
+        {(['cylinders', 'accessories'] as const).map(tab => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === tab
+                ? 'border-action-primary text-action-primary'
+                : 'border-transparent text-content-secondary hover:text-content-primary'
+            }`}>
+            {tab === 'cylinders' ? 'Cylinders' : `Accessories${accessoryRows.length ? ` (${accessoryRows.length})` : ''}`}
+          </button>
+        ))}
+      </div>
+
+      {/* ── CYLINDERS TAB ── */}
+      {activeTab === 'cylinders' && (
+        <>
+          {/* Summary strip */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <div className="bg-surface-card rounded-lg border border-surface-border p-4">
+              <p className="text-xs text-content-secondary mb-1">Total Revenue</p>
+              <p className="text-2xl font-bold text-action-primary">{fmt(totalRevenue)}</p>
+              {accessoryTotal > 0 && (
+                <p className="text-xs text-content-secondary mt-0.5">Cyl {fmt(grandTotal)} + Acc {fmt(accessoryTotal)}</p>
+              )}
+            </div>
+            <div className="bg-surface-card rounded-lg border border-surface-border p-4">
+              <p className="text-xs text-content-secondary mb-1">Full Cylinders</p>
+              <p className={`text-2xl font-bold ${totalFull < 0 ? 'text-status-error' : 'text-content-primary'}`}>{totalFull}</p>
+              <p className="text-xs text-content-secondary mt-0.5">Closing stock, all sizes</p>
+            </div>
+            <div className="bg-surface-card rounded-lg border border-surface-border p-4">
+              <p className="text-xs text-content-secondary mb-1">Empty Cylinders</p>
+              <p className="text-2xl font-bold text-content-primary">{totalEmpties}</p>
+              <p className="text-xs text-content-secondary mt-0.5">On hand at shift end</p>
+            </div>
+            <div className="bg-surface-card rounded-lg border border-surface-border p-4">
+              <p className="text-xs text-content-secondary mb-1">Population (Full + Empty)</p>
+              <div className="flex items-baseline gap-2 mb-2">
+                <p className="text-xl font-bold text-content-primary">{bookPopulation}</p>
+                <p className="text-xs text-content-secondary">book</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="number" min={0} value={actualPopulation}
+                  onChange={e => setActualPopulation(e.target.value)}
+                  placeholder="Actual"
+                  className="w-24 px-2 py-1 rounded border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:border-action-primary" />
+                {popDiff !== null && (
+                  <span className={`text-sm font-bold ${popDiff !== 0 ? 'text-status-error' : 'text-status-success'}`}>
+                    {popDiff > 0 ? `+${popDiff}` : popDiff}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {!lpgPricesConfigured && (
+            <div className="mb-4 p-3 rounded-lg text-sm text-status-error border border-status-error bg-status-error/10">
+              LPG pricing not configured. Ask a manager to set prices in Stores / Stock.
+            </div>
+          )}
+
+          {/* Cylinder cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+            {cylinderRows.map(row => {
+              const p = pricing.find(pr => pr.size_kg === row.size_kg)
+              const tIn = tradedInMap[row.size_kg] || 0
+              const tOut = tradedOutMap[row.size_kg] || 0
+              const hasActivity = row.opening_balance > 0 || row.receipts > 0
+                || row.sold_refill > 0 || row.sold_with_cylinder > 0
+                || tIn > 0 || tOut > 0
+                || row.opening_empty > 0 || row.closing_empty > 0
+
+              return (
+                <div key={row.size_kg}
+                  className={`bg-surface-card rounded-lg border-2 p-4 ${
+                    row.balance < 0
+                      ? 'border-status-error'
+                      : hasActivity
+                      ? 'border-action-primary'
+                      : 'border-surface-border'
+                  }`}>
+
+                  {/* Card header */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <p className="text-lg font-bold text-content-primary">{row.size_kg} kg</p>
+                      {p && (
+                        <p className="text-xs text-content-secondary mt-0.5">
+                          Refill {fmt(p.price_refill)}&nbsp;&nbsp;|&nbsp;&nbsp;New {fmt(p.price_with_cylinder)}
+                        </p>
+                      )}
+                    </div>
+                    {row.total_value > 0 && (
+                      <span className="text-sm font-bold text-action-primary">{fmt(row.total_value)}</span>
+                    )}
+                  </div>
+
+                  {/* Full cylinders section */}
+                  <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-widest mb-2">Full Cylinders</p>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 mb-2">
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-0.5">Opening</label>
+                      {canManageStock
+                        ? numInput(row.opening_balance, v => updateCylinder(row.size_kg, 'opening_balance', v))
+                        : <p className="text-sm font-medium text-content-primary px-2 py-1.5">{row.opening_balance}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-0.5">Received</label>
+                      {canManageStock
+                        ? numInput(row.receipts, v => updateCylinder(row.size_kg, 'receipts', v))
+                        : <p className="text-sm text-content-secondary px-2 py-1.5">{row.receipts}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-0.5">Sold (Refill)</label>
+                      {numInput(row.sold_refill, v => updateCylinder(row.size_kg, 'sold_refill', v))}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-0.5">Sold (New)</label>
+                      {numInput(row.sold_with_cylinder, v => updateCylinder(row.size_kg, 'sold_with_cylinder', v))}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-0.5">Damaged</label>
+                      <input type="number" min={0} value={row.damaged || 0}
+                        onChange={e => updateCylinder(row.size_kg, 'damaged', parseInt(e.target.value) || 0)}
+                        className={`w-full px-2 py-1.5 rounded border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary ${
+                          row.damaged > 0 ? 'border-status-warning' : 'border-surface-border'
+                        }`} />
+                    </div>
+                    {/* Trade impact — read-only, derived from trades list */}
+                    {(tIn > 0 || tOut > 0) && (
+                      <div className="flex flex-col justify-end gap-0.5 pb-1">
+                        {tIn > 0 && <span className="text-xs text-status-success font-medium">+{tIn} traded in</span>}
+                        {tOut > 0 && <span className="text-xs text-status-error font-medium">-{tOut} traded out</span>}
+                      </div>
+                    )}
+                  </div>
+
+                  {row.damaged > 0 && (
+                    <input type="text" value={row.damage_note || ''}
+                      onChange={e => updateCylinderStr(row.size_kg, 'damage_note', e.target.value)}
+                      placeholder="Damage reason (required)"
+                      className={`w-full px-2 py-1.5 rounded border bg-surface-bg text-content-primary text-xs mb-3 focus:outline-none focus:border-action-primary ${
+                        (row.damage_note || '').trim() ? 'border-surface-border' : 'border-status-error'
+                      }`} />
+                  )}
+
+                  {/* Closing full — calculated */}
+                  <div className={`flex items-center justify-between px-3 py-2 rounded mb-4 ${
+                    row.balance < 0
+                      ? 'bg-status-error/10 border border-status-error'
+                      : 'bg-surface-bg border border-surface-border'
+                  }`}>
+                    <span className="text-xs font-medium text-content-secondary">Closing (Full)</span>
+                    <span className={`text-xl font-bold ${row.balance < 0 ? 'text-status-error' : 'text-content-primary'}`}>
+                      {row.balance}
+                      {row.balance < 0 && <span className="text-xs font-normal ml-1">oversell</span>}
+                    </span>
+                  </div>
+
+                  {/* Empty cylinders section */}
+                  <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-widest mb-2">Empty Cylinders</p>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-0.5">Opening Empty</label>
+                      {canManageStock
+                        ? numInput(row.opening_empty, v => updateCylinder(row.size_kg, 'opening_empty', v))
+                        : <p className="text-sm text-content-secondary px-2 py-1.5">{row.opening_empty}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-content-secondary mb-0.5">Closing Empty</label>
+                      {numInput(row.closing_empty, v => updateCylinder(row.size_kg, 'closing_empty', v))}
+                    </div>
+                  </div>
+
+                  {/* Revenue breakdown */}
+                  {(row.value_refill > 0 || row.value_with_cylinder > 0) && (
+                    <div className="mt-3 pt-3 border-t border-surface-border space-y-0.5">
+                      {row.value_refill > 0 && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-content-secondary">Refill revenue</span>
+                          <span className="font-medium text-content-primary">{fmt(row.value_refill)}</span>
+                        </div>
+                      )}
+                      {row.value_with_cylinder > 0 && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-content-secondary">New cylinder revenue</span>
+                          <span className="font-medium text-content-primary">{fmt(row.value_with_cylinder)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Trades section (supervisor+) */}
+          {canManageStock && (
+            <div className="bg-surface-card rounded-lg border border-surface-border mb-6">
+              <div className="px-4 py-3 border-b border-surface-border flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-content-primary">Cylinder Trades</h3>
+                  <p className="text-xs text-content-secondary mt-0.5">Customer exchanges one size for another — affects both size counts</p>
+                </div>
+                {totalTradeRevenue !== 0 && (
+                  <span className={`text-sm font-semibold ${totalTradeRevenue >= 0 ? 'text-status-success' : 'text-status-error'}`}>
+                    {totalTradeRevenue > 0 ? '+' : ''}{fmt(totalTradeRevenue)}
+                  </span>
+                )}
+              </div>
+              <div className="p-4 space-y-3">
+                {trades.length === 0 && (
+                  <p className="text-sm text-content-secondary">No trades recorded.</p>
+                )}
+                {trades.map((trade, idx) => {
+                  const fromP = pricing.find(p => p.size_kg === trade.from_size_kg)
+                  const toP = pricing.find(p => p.size_kg === trade.to_size_kg)
+                  const priceDiff = ((toP?.price_refill || 0) - (fromP?.price_refill || 0)) * trade.quantity
+                  const tradeType = trade.to_size_kg > trade.from_size_kg ? 'upgrade'
+                    : trade.to_size_kg < trade.from_size_kg ? 'downgrade' : 'swap'
+                  return (
+                    <div key={idx} className="flex flex-wrap items-end gap-3 p-3 rounded-lg bg-surface-bg border border-surface-border">
+                      <div>
+                        <label className="block text-xs text-content-secondary mb-1">Customer returns</label>
+                        <select value={trade.from_size_kg}
+                          onChange={e => updateTrade(idx, 'from_size_kg', parseInt(e.target.value))}
+                          className="px-2 py-1.5 rounded border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:border-action-primary">
+                          {LPG_SIZES.map(s => <option key={s} value={s}>{s} kg</option>)}
+                        </select>
+                      </div>
+                      <p className="pb-2 text-content-secondary text-sm">→</p>
+                      <div>
+                        <label className="block text-xs text-content-secondary mb-1">Receives</label>
+                        <select value={trade.to_size_kg}
+                          onChange={e => updateTrade(idx, 'to_size_kg', parseInt(e.target.value))}
+                          className="px-2 py-1.5 rounded border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:border-action-primary">
+                          {LPG_SIZES.map(s => <option key={s} value={s}>{s} kg</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-content-secondary mb-1">Qty</label>
+                        <input type="number" min={1} value={trade.quantity}
+                          onChange={e => updateTrade(idx, 'quantity', parseInt(e.target.value) || 1)}
+                          className="w-16 px-2 py-1.5 rounded border border-surface-border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary" />
+                      </div>
+                      <div className="pb-2 flex items-center gap-2">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          tradeType === 'upgrade' ? 'bg-status-success/15 text-status-success' :
+                          tradeType === 'downgrade' ? 'bg-status-warning/15 text-status-warning' :
+                          'bg-surface-bg text-content-secondary border border-surface-border'
+                        }`}>{tradeType}</span>
+                        {priceDiff !== 0 && (
+                          <span className={`text-sm font-semibold ${priceDiff > 0 ? 'text-status-success' : 'text-status-error'}`}>
+                            {priceDiff > 0 ? '+' : ''}{fmt(priceDiff)}
+                          </span>
+                        )}
+                      </div>
+                      <button onClick={() => removeTrade(idx)}
+                        className="pb-2 px-2 py-1 text-xs rounded border border-status-error text-status-error hover:bg-status-error hover:text-white transition-colors">
+                        Remove
+                      </button>
+                    </div>
+                  )
+                })}
+                <button onClick={addTrade}
+                  className="px-3 py-1.5 text-sm rounded border border-action-primary text-action-primary hover:bg-action-primary hover:text-white transition-colors font-medium">
+                  + Add Trade
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── ACCESSORIES TAB ── */}
+      {activeTab === 'accessories' && (
+        <div className="bg-surface-card rounded-lg border border-surface-border overflow-hidden mb-6">
+          <div className="px-4 py-3 border-b border-surface-border flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-content-primary">LPG Accessories</h3>
+            {accessoryTotal > 0 && (
+              <span className="text-sm font-bold text-action-primary">{fmt(accessoryTotal)}</span>
+            )}
+          </div>
+          {accessoryRows.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-content-secondary">No accessories configured.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-surface-bg">
+                    {['Product', 'Price', 'Opening', 'Additions', 'Sold', 'Damaged', 'Closing', 'Value'].map(h => (
+                      <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase text-content-secondary">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {accessoryRows.map(row => (
+                    <tr key={row.product_code} className="border-t border-surface-border hover:bg-surface-bg">
+                      <td className="px-3 py-2">
+                        <p className="font-medium text-content-primary">{row.description}</p>
+                        <p className="text-xs text-content-secondary">{row.product_code}</p>
+                      </td>
+                      <td className="px-3 py-2 text-right text-content-secondary">{fmt(row.selling_price)}</td>
+                      <td className="px-3 py-2">
+                        {canManageStock
+                          ? <input type="number" min={0} value={row.opening_stock}
+                              onChange={e => updateAccessory(row.product_code, 'opening_stock', parseInt(e.target.value) || 0)}
+                              className="w-16 px-2 py-1 rounded border border-surface-border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary" />
+                          : <span className="text-sm text-content-primary">{row.opening_stock}</span>}
+                      </td>
+                      <td className="px-3 py-2">
+                        {canManageStock
+                          ? <input type="number" min={0} value={row.additions}
+                              onChange={e => updateAccessory(row.product_code, 'additions', parseInt(e.target.value) || 0)}
+                              className="w-16 px-2 py-1 rounded border border-surface-border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary" />
+                          : <span className="text-sm text-content-secondary">{row.additions}</span>}
+                      </td>
+                      <td className="px-3 py-2">
+                        <input type="number" min={0} value={row.sold}
+                          onChange={e => updateAccessory(row.product_code, 'sold', parseInt(e.target.value) || 0)}
+                          className="w-16 px-2 py-1 rounded border border-surface-border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary" />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input type="number" min={0} value={row.damaged || 0}
+                          onChange={e => updateAccessory(row.product_code, 'damaged', parseInt(e.target.value) || 0)}
+                          className={`w-16 px-2 py-1 rounded border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary ${
+                            row.damaged > 0 ? 'border-status-warning' : 'border-surface-border'
+                          }`} />
+                        {row.damaged > 0 && (
+                          <input type="text" value={row.damage_note || ''}
+                            onChange={e => updateAccessoryStr(row.product_code, 'damage_note', e.target.value)}
+                            placeholder="Reason"
+                            className={`mt-1 w-36 px-2 py-1 rounded border bg-surface-bg text-content-primary text-xs focus:outline-none ${
+                              (row.damage_note || '').trim() ? 'border-surface-border' : 'border-status-error'
+                            }`} />
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <span className={`font-medium ${row.balance < 0 ? 'text-status-error' : 'text-content-primary'}`}>
+                          {row.balance}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold text-action-primary">
+                        {row.sales_value > 0 ? fmt(row.sales_value) : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Cylinder Sales Table */}
-      <div className="rounded-lg shadow mb-6 overflow-x-auto"
-        style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <div className="p-4 font-semibold text-sm flex justify-between items-center" style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
-          <span>Cylinder Sales</span>
-          <details className="inline">
-            <summary className="cursor-pointer text-xs font-normal" style={{ color: theme.textSecondary }}>
-              Column Guide
-            </summary>
-            <div className="absolute right-4 mt-1 p-3 rounded-lg shadow-lg text-xs font-normal z-10 max-w-sm"
-              style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.textSecondary }}>
-              <p><strong style={{ color: theme.textPrimary }}>Opening Stock</strong>: Filled cylinders at shift start (auto-populated from previous shift)</p>
-              <p className="mt-1"><strong style={{ color: theme.textPrimary }}>Received</strong>: New filled cylinders delivered by supplier</p>
-              <p className="mt-1"><strong style={{ color: theme.textPrimary }}>Trade In/Out</strong>: Cylinder size exchanges with customers (managed in Trades section below)</p>
-              <p className="mt-1"><strong style={{ color: theme.textPrimary }}>Sold (Refill)</strong>: Customer returns empty cylinder, receives filled one — generates refill revenue</p>
-              <p className="mt-1"><strong style={{ color: theme.textPrimary }}>Sold (New Cylinder)</strong>: Customer buys a new filled cylinder (no return) — generates full cylinder revenue</p>
-              <p className="mt-1"><strong style={{ color: theme.textPrimary }}>Closing Stock</strong>: Remaining filled cylinders at shift end</p>
-            </div>
-          </details>
-        </div>
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr style={{ backgroundColor: theme.background }}>
-              {['Size (kg)', 'Opening Stock (Full)', 'Received (Deliveries)', 'Trade In (+)', 'Trade Out (-)', 'Sold (Refill Only)', 'Sold (New Cylinder)', 'Damaged', 'Closing Stock (Full)', 'Refill Revenue', 'New Cyl Revenue', 'Total Revenue'].map(h => (
-                <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
-                  style={{ color: theme.textSecondary }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {cylinderRows.map(row => {
-              const p = pricing.find(pr => pr.size_kg === row.size_kg)
-              return (
-                <tr key={row.size_kg} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                  <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>
-                    {row.size_kg} kg
-                    {p && <span className="block text-xs" style={{ color: theme.textSecondary }}>
-                      Refill: K{p.price_refill.toLocaleString()} | New: K{p.price_with_cylinder.toLocaleString()}
-                    </span>}
-                  </td>
-                  <td className="px-3 py-2">
-                    {canManageStock ? (
-                      <input type="number" min={0} value={row.opening_balance}
-                        onChange={e => updateCylinderField(row.size_kg, 'opening_balance', parseInt(e.target.value) || 0)}
-                        className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
-                    ) : (
-                      <span className="text-sm font-medium" style={{ color: theme.textPrimary }}>{row.opening_balance}</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    {canManageStock ? (
-                      <input type="number" min={0} value={row.receipts}
-                        onChange={e => updateCylinderField(row.size_kg, 'receipts', parseInt(e.target.value) || 0)}
-                        className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
-                    ) : (
-                      <span className="text-sm" style={{ color: theme.textSecondary }}>{row.receipts}</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right font-medium" style={{
-                    color: row.traded_in > 0 ? 'var(--color-status-success)' : theme.textSecondary
-                  }}>
-                    {row.traded_in > 0 ? `+${row.traded_in}` : 0}
-                  </td>
-                  <td className="px-3 py-2 text-right font-medium" style={{
-                    color: row.traded_out > 0 ? 'var(--color-status-error)' : theme.textSecondary
-                  }}>
-                    {row.traded_out > 0 ? `-${row.traded_out}` : 0}
-                  </td>
-                  <td className="px-3 py-2">
-                    <input type="number" min={0} value={row.sold_refill}
-                      onChange={e => updateCylinderField(row.size_kg, 'sold_refill', parseInt(e.target.value) || 0)}
-                      className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input type="number" min={0} value={row.sold_with_cylinder}
-                      onChange={e => updateCylinderField(row.size_kg, 'sold_with_cylinder', parseInt(e.target.value) || 0)}
-                      className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input type="number" min={0} value={row.damaged || 0}
-                      onChange={e => updateCylinderField(row.size_kg, 'damaged', parseInt(e.target.value) || 0)}
-                      className="w-20 px-2 py-1 rounded border text-sm text-right"
-                      style={{ ...inputStyle, ...(row.damaged > 0 ? { borderColor: 'var(--color-status-warning)' } : {}) }} />
-                    {row.damaged > 0 && (
-                      <input type="text" value={row.damage_note || ''}
-                        onChange={e => updateCylinderFieldStr(row.size_kg, 'damage_note', e.target.value)}
-                        placeholder="Reason (required)"
-                        className="mt-1 w-44 px-2 py-1 rounded border text-xs"
-                        style={{ ...inputStyle,
-                          borderColor: (row.damage_note || '').trim() ? theme.border : 'var(--color-status-error)' }} />
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right font-medium" style={{
-                    color: row.balance < 0 ? 'var(--color-status-error)' : theme.textPrimary
-                  }}>
-                    {row.balance}
-                    {row.balance < 0 && (
-                      <div className="text-xs font-normal" style={{ color: 'var(--color-status-error)' }}>
-                        Oversell
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right" style={{ color: theme.textSecondary }}>
-                    {row.value_refill.toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right" style={{ color: theme.textSecondary }}>
-                    {row.value_with_cylinder.toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right font-semibold" style={{ color: theme.primary }}>
-                    {row.total_value.toLocaleString()}
-                  </td>
-                </tr>
-              )
-            })}
-            {/* Grand Total Row */}
-            <tr style={{ backgroundColor: theme.background, borderTopColor: theme.border, borderTopWidth: 2 }}>
-              <td colSpan={3} className="px-3 py-2 text-right font-bold text-sm" style={{ color: theme.textPrimary }}>
-                Grand Total
-              </td>
-              <td className="px-3 py-2 text-right font-bold" style={{ color: 'var(--color-status-success)' }}>
-                {cylinderRows.reduce((s, r) => s + r.traded_in, 0) || 0}
-              </td>
-              <td className="px-3 py-2 text-right font-bold" style={{ color: 'var(--color-status-error)' }}>
-                {cylinderRows.reduce((s, r) => s + r.traded_out, 0) || 0}
-              </td>
-              <td colSpan={2} className="px-3 py-2" />
-              <td className="px-3 py-2 text-right font-bold" style={{ color: theme.textPrimary }}>
-                {cylinderRows.reduce((s, r) => s + r.balance, 0)}
-              </td>
-              <td className="px-3 py-2 text-right font-bold" style={{ color: theme.textSecondary }}>
-                {cylinderRows.reduce((s, r) => s + r.value_refill, 0).toLocaleString()}
-              </td>
-              <td className="px-3 py-2 text-right font-bold" style={{ color: theme.textSecondary }}>
-                {cylinderRows.reduce((s, r) => s + r.value_with_cylinder, 0).toLocaleString()}
-              </td>
-              <td className="px-3 py-2 text-right font-bold text-base" style={{ color: theme.primary }}>
-                ZMW{grandTotal.toLocaleString()}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      {/* Submit */}
+      <div className="mt-2">
+        {oversellRows.length > 0 && (
+          <div className="mb-3 p-3 rounded-lg text-sm text-status-warning border border-status-warning bg-status-warning/10">
+            {oversellRows.map(r => `${r.size_kg}kg: negative closing stock (${r.balance})`).join(' | ')}. Verify before submitting.
+          </div>
+        )}
+        <button onClick={handleSubmit} disabled={loading || !lpgPricesConfigured}
+          className="w-full py-3 rounded-lg font-semibold text-white text-sm bg-action-primary hover:bg-action-primary-hover disabled:opacity-50 transition-colors">
+          {loading ? 'Submitting...' : 'Submit LPG Entry'}
+        </button>
       </div>
 
-      {/* Empty Cylinder Tracking (Collapsible) */}
-      <div className="rounded-lg shadow mb-6 overflow-hidden"
-        style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <button
-          onClick={() => setShowEmptyTracking(!showEmptyTracking)}
-          className="w-full p-3 flex justify-between items-center text-sm font-medium"
-          style={{ color: theme.textPrimary }}>
-          <span>Empty Cylinder Tracking</span>
-          <span className="text-xs" style={{ color: theme.textSecondary }}>
-            {showEmptyTracking ? 'Hide' : 'Show'} {showEmptyTracking ? '-' : '+'}
-          </span>
-        </button>
-        {showEmptyTracking && (
-          <div className="p-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-            <p className="text-xs mb-3" style={{ color: theme.textSecondary }}>
-              Track empty cylinders on hand. Empty count increases when customers return cylinders for refill.
-            </p>
+      {/* Recent entries */}
+      {entries.length > 0 && (
+        <div className="mt-8 bg-surface-card rounded-lg border border-surface-border overflow-hidden">
+          <div className="px-4 py-3 border-b border-surface-border">
+            <h3 className="text-sm font-semibold text-content-primary">Entries for {date}</h3>
+          </div>
+          <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr style={{ backgroundColor: theme.background }}>
-                  <th className="px-3 py-2 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Size</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Opening Empty</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Closing Empty</th>
+                <tr className="bg-surface-bg">
+                  {['ID', 'Shift', 'Salesperson', 'Revenue', 'Trade Rev.', 'Pop. Diff', 'Time', 'Damage'].map(h => (
+                    <th key={h} className="px-4 py-2 text-left text-xs font-medium uppercase text-content-secondary">{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {cylinderRows.map(row => (
-                  <tr key={row.size_kg} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                    <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{row.size_kg} kg</td>
-                    <td className="px-3 py-2">
-                      {canManageStock ? (
-                        <input type="number" min={0} value={row.opening_empty}
-                          onChange={e => updateCylinderField(row.size_kg, 'opening_empty', parseInt(e.target.value) || 0)}
-                          className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
-                      ) : (
-                        <span className="text-sm" style={{ color: theme.textPrimary }}>{row.opening_empty}</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      <input type="number" min={0} value={row.closing_empty}
-                        onChange={e => updateCylinderField(row.size_kg, 'closing_empty', parseInt(e.target.value) || 0)}
-                        className="w-20 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
-                    </td>
-                  </tr>
-                ))}
+                {entries.map((e: any) => {
+                  const dStatus = e.damage_status || 'none'
+                  return (
+                    <tr key={e.entry_id} className="border-t border-surface-border hover:bg-surface-bg">
+                      <td className="px-4 py-2 font-mono text-xs text-content-primary">{e.entry_id}</td>
+                      <td className="px-4 py-2 text-content-primary">{e.shift_type}</td>
+                      <td className="px-4 py-2 text-content-primary">{e.salesperson}</td>
+                      <td className="px-4 py-2 font-semibold text-action-primary">{fmt(e.grand_total_value || 0)}</td>
+                      <td className="px-4 py-2 text-content-secondary">
+                        {e.total_trade_revenue ? fmt(e.total_trade_revenue) : '-'}
+                      </td>
+                      <td className="px-4 py-2">
+                        {e.population_difference != null && e.population_difference !== 0
+                          ? <span className="text-status-error font-medium">{e.population_difference}</span>
+                          : <span className="text-content-secondary">-</span>}
+                      </td>
+                      <td className="px-4 py-2 text-xs text-content-secondary">
+                        {e.created_at ? new Date(e.created_at).toLocaleTimeString() : '-'}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium capitalize ${
+                          dStatus === 'pending' ? 'bg-status-warning/15 text-status-warning' :
+                          dStatus === 'approved' ? 'bg-status-success/15 text-status-success' :
+                          'bg-surface-bg text-content-secondary'
+                        }`}>{dStatus}</span>
+                        {dStatus === 'pending' && canManage && (
+                          <button onClick={() => authoriseDamage(e.entry_id)}
+                            className="ml-2 px-2 py-0.5 text-xs rounded bg-status-success text-white font-medium">
+                            Authorise
+                          </button>
+                        )}
+                        {dStatus === 'approved' && e.damage_authorised_by && (
+                          <span className="ml-1 text-xs text-content-secondary">by {e.damage_authorised_by}</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
-
-      {/* Cylinder Trades (Upgrades/Downgrades) — supervisor/owner only */}
-      {canManageStock && (
-      <div className="rounded-lg shadow mb-6 overflow-hidden"
-        style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <div className="p-4 font-semibold text-sm flex justify-between items-center"
-          style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
-          <span>Cylinder Trades (Upgrades / Downgrades)</span>
-          {totalTradeRevenue !== 0 && (
-            <span className="text-xs font-normal" style={{ color: totalTradeRevenue >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
-              Trade Revenue: ZMW{totalTradeRevenue.toLocaleString()}
-            </span>
-          )}
-        </div>
-        <div className="p-4 space-y-3">
-          <p className="text-xs mb-2" style={{ color: theme.textSecondary }}>
-            When a customer exchanges one cylinder size for another. They return their current size and receive a different size. The station charges/refunds the price difference.
-          </p>
-          {trades.length === 0 && (
-            <p className="text-sm" style={{ color: theme.textSecondary }}>
-              No trades added yet.
-            </p>
-          )}
-          {trades.map((trade, idx) => {
-            const fromP = pricing.find(p => p.size_kg === trade.from_size_kg)
-            const toP = pricing.find(p => p.size_kg === trade.to_size_kg)
-            const priceDiff = (toP?.price_refill || 0) - (fromP?.price_refill || 0)
-            const tradeType = trade.to_size_kg > trade.from_size_kg ? 'upgrade' : trade.to_size_kg < trade.from_size_kg ? 'downgrade' : '-'
-            return (
-              <div key={idx} className="flex flex-wrap items-center gap-3 p-3 rounded"
-                style={{ backgroundColor: theme.background, border: `1px solid ${theme.border}` }}>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Customer Returns</label>
-                  <select value={trade.from_size_kg}
-                    onChange={e => updateTrade(idx, 'from_size_kg', parseInt(e.target.value))}
-                    className="px-2 py-1 rounded border text-sm" style={inputStyle}>
-                    {LPG_SIZES.map(s => <option key={s} value={s}>{s} kg</option>)}
-                  </select>
-                </div>
-                <div className="flex items-end pb-1 text-lg" style={{ color: theme.textSecondary }}>
-                  &rarr;
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Customer Receives</label>
-                  <select value={trade.to_size_kg}
-                    onChange={e => updateTrade(idx, 'to_size_kg', parseInt(e.target.value))}
-                    className="px-2 py-1 rounded border text-sm" style={inputStyle}>
-                    {LPG_SIZES.map(s => <option key={s} value={s}>{s} kg</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Qty</label>
-                  <input type="number" min={1} value={trade.quantity}
-                    onChange={e => updateTrade(idx, 'quantity', parseInt(e.target.value) || 1)}
-                    className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Price Diff</label>
-                  <div className="px-2 py-1 text-sm font-semibold" style={{
-                    color: priceDiff > 0 ? 'var(--color-status-success)' : priceDiff < 0 ? 'var(--color-status-error)' : theme.textSecondary
-                  }}>
-                    {priceDiff > 0 ? '+' : ''}{(priceDiff * trade.quantity).toLocaleString()} ZMW
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Type</label>
-                  <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                    tradeType === 'upgrade' ? 'text-green-700 bg-green-100' :
-                    tradeType === 'downgrade' ? 'text-orange-700 bg-orange-100' : ''
-                  }`}>
-                    {tradeType}
-                  </span>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Stock Impact</label>
-                  <div className="text-xs" style={{ color: theme.textSecondary }}>
-                    <span style={{ color: 'var(--color-status-success)' }}>+{trade.quantity} x {trade.from_size_kg}kg</span>
-                    {' / '}
-                    <span style={{ color: 'var(--color-status-error)' }}>-{trade.quantity} x {trade.to_size_kg}kg</span>
-                  </div>
-                </div>
-                <div className="flex items-end pb-1">
-                  <button onClick={() => removeTrade(idx)}
-                    className="px-2 py-1 rounded text-xs font-medium"
-                    style={{ color: 'var(--color-status-error)', border: '1px solid var(--color-status-error)' }}>
-                    Remove
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-          <button onClick={addTrade}
-            className="px-4 py-2 rounded text-sm font-medium"
-            style={{ color: theme.primary, border: `1px solid ${theme.primary}` }}>
-            + Add Trade
-          </button>
-        </div>
-      </div>
-      )}
-
-      {/* Cylinder Population */}
-      <div className="rounded-lg shadow p-4 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4"
-        style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <div className="col-span-full text-sm font-semibold mb-1" style={{ color: theme.textPrimary }}>
-          Cylinder Population Count
-        </div>
-        <div>
-          <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Book Count (auto-calculated)</label>
-          <div className="w-full px-3 py-2 rounded text-sm font-semibold"
-            style={{ backgroundColor: theme.background, color: theme.textPrimary }}>
-            {autoBookPopulation}
-          </div>
-          <p className="text-xs mt-1" style={{ color: theme.textSecondary }}>
-            Total cylinders on hand (filled + empty) based on closing counts.
-          </p>
-        </div>
-        <div>
-          <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Actual Count</label>
-          <input type="number" min={0} value={actualPopulation}
-            onChange={e => setActualPopulation(e.target.value)}
-            className="w-full px-3 py-2 rounded border text-sm" style={inputStyle} />
-        </div>
-        <div>
-          <label className="block text-xs mb-1" style={{ color: theme.textSecondary }}>Difference (Book - Actual)</label>
-          <div className="px-3 py-2 rounded text-sm font-semibold"
-            style={{
-              backgroundColor: theme.background,
-              color: popDifference !== null && popDifference !== 0 ? 'var(--color-status-error)' : theme.textPrimary,
-            }}>
-            {popDifference !== null ? popDifference : '-'}
-          </div>
-        </div>
-      </div>
-
-      {/* First-time accessory stock banner */}
-      {isFirstAccessoryEntry && (
-        <div className="mb-4 p-3 rounded-lg text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: 'var(--color-action-primary)', border: '1px solid var(--color-action-primary)' }}>
-          First time? Enter your current accessory stock counts as Opening Stock below. These will carry forward automatically after each entry.
-        </div>
-      )}
-
-      {/* LPG Accessories */}
-      <div className="rounded-lg shadow mb-6 overflow-x-auto"
-        style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-        <div className="p-4 font-semibold text-sm flex justify-between items-center"
-          style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
-          <span>LPG Accessories</span>
-          <span className="text-xs font-normal" style={{ color: theme.textSecondary }}>
-            Daily Sales: ZMW{accessoryTotal.toLocaleString()}
-          </span>
-        </div>
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr style={{ backgroundColor: theme.background }}>
-              {['Product', 'Price', 'Opening', 'Additions', 'Sold', 'Damaged', 'Balance', 'Sales Value'].map(h => (
-                <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
-                  style={{ color: theme.textSecondary }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {accessoryRows.map(row => (
-              <tr key={row.product_code} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                <td className="px-3 py-2" style={{ color: theme.textPrimary }}>
-                  <div className="font-medium">{row.description}</div>
-                  <div className="text-xs" style={{ color: theme.textSecondary }}>{row.product_code}</div>
-                </td>
-                <td className="px-3 py-2 text-right" style={{ color: theme.textSecondary }}>
-                  {row.selling_price.toLocaleString()}
-                </td>
-                <td className="px-3 py-2">
-                  {canManageStock ? (
-                    <input type="number" min={0} value={row.opening_stock}
-                      onChange={e => updateAccessoryField(row.product_code, 'opening_stock', parseInt(e.target.value) || 0)}
-                      className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
-                  ) : (
-                    <span className="text-sm" style={{ color: theme.textPrimary }}>{row.opening_stock}</span>
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  {canManageStock ? (
-                    <input type="number" min={0} value={row.additions}
-                      onChange={e => updateAccessoryField(row.product_code, 'additions', parseInt(e.target.value) || 0)}
-                      className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
-                  ) : (
-                    <span className="text-sm" style={{ color: theme.textSecondary }}>{row.additions}</span>
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  <input type="number" min={0} value={row.sold}
-                    onChange={e => updateAccessoryField(row.product_code, 'sold', parseInt(e.target.value) || 0)}
-                    className="w-16 px-2 py-1 rounded border text-sm text-right" style={inputStyle} />
-                </td>
-                <td className="px-3 py-2">
-                  <input type="number" min={0} value={row.damaged || 0}
-                    onChange={e => updateAccessoryField(row.product_code, 'damaged', parseInt(e.target.value) || 0)}
-                    className="w-16 px-2 py-1 rounded border text-sm text-right"
-                    style={{ ...inputStyle, ...(row.damaged > 0 ? { borderColor: 'var(--color-status-warning)' } : {}) }} />
-                  {row.damaged > 0 && (
-                    <input type="text" value={row.damage_note || ''}
-                      onChange={e => updateAccessoryFieldStr(row.product_code, 'damage_note', e.target.value)}
-                      placeholder="Reason (required)"
-                      className="mt-1 w-40 px-2 py-1 rounded border text-xs"
-                      style={{ ...inputStyle,
-                        borderColor: (row.damage_note || '').trim() ? theme.border : 'var(--color-status-error)' }} />
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right font-medium" style={{
-                  color: row.balance < 0 ? 'var(--color-status-error)' : theme.textPrimary
-                }}>
-                  {row.balance}
-                </td>
-                <td className="px-3 py-2 text-right" style={{ color: theme.primary }}>
-                  {row.sales_value.toLocaleString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Submit */}
-      {oversellRows.length > 0 && (
-        <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: 'rgba(255,165,0,0.1)', color: 'var(--color-status-warning, orange)', border: '1px solid var(--color-status-warning, orange)' }}>
-          Warning: {oversellRows.map(r => `${r.size_kg}kg has negative closing stock (${r.balance})`).join('; ')}. Verify counts before submitting.
-        </div>
-      )}
-      {error && (
-        <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)', border: '1px solid var(--color-status-error)' }}>
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="mb-4 p-3 rounded text-sm" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)', border: '1px solid var(--color-status-success)' }}>
-          {success}
-        </div>
-      )}
-      {!lpgPricesConfigured && (
-        <div className="mb-4 p-4 rounded-lg text-sm font-medium" style={{ backgroundColor: 'rgba(239,83,80,0.1)', color: 'var(--color-status-error)', border: '1px solid var(--color-status-error)' }}>
-          LPG pricing not configured. Ask a manager to set prices in Stores / Stock before recording sales.
-        </div>
-      )}
-      <button
-        onClick={handleSubmit}
-        disabled={loading || !lpgPricesConfigured}
-        className="w-full py-3 rounded-lg font-semibold text-white text-sm disabled:opacity-50"
-        style={{ backgroundColor: theme.primary }}>
-        {loading ? 'Submitting...' : 'Submit LPG Daily Entry'}
-      </button>
-
-      {/* Recent Entries */}
-      {entries.length > 0 && (
-        <div className="mt-8 rounded-lg shadow overflow-x-auto"
-          style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-          <div className="p-4 font-semibold text-sm" style={{ borderBottomColor: theme.border, borderBottomWidth: 1, color: theme.textPrimary }}>
-            Entries for {date}
-          </div>
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr style={{ backgroundColor: theme.background }}>
-                {['Entry ID', 'Shift', 'Salesperson', 'Grand Total', 'Trade Rev.', 'Pop. Diff', 'Time', 'Damage', 'Action'].map(h => (
-                  <th key={h} className="px-4 py-2 text-left text-xs font-medium uppercase"
-                    style={{ color: theme.textSecondary }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e: any) => {
-                const dStatus = e.damage_status || 'none'
-                const badgeStyle = dStatus === 'pending'
-                  ? { backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }
-                  : dStatus === 'approved'
-                    ? { backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }
-                    : { backgroundColor: theme.background, color: theme.textSecondary }
-                const authorise = async () => {
-                  try {
-                    const res = await authFetch(`${BASE}/lpg-daily/${e.entry_id}/authorise-damage`,
-                      { method: 'POST', headers: getAuthHeaders() })
-                    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Failed') }
-                    setSuccess(`Damage authorised for ${e.entry_id}`)
-                  } catch (err: any) { setError(err.message) }
-                }
-                return (
-                  <tr key={e.entry_id} className="hover:bg-surface-bg" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                    <td className="px-4 py-2 font-mono text-xs" style={{ color: theme.textPrimary }}>{e.entry_id}</td>
-                    <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.shift_type}</td>
-                    <td className="px-4 py-2" style={{ color: theme.textPrimary }}>{e.salesperson}</td>
-                    <td className="px-4 py-2 font-semibold" style={{ color: theme.primary }}>
-                      ZMW{(e.grand_total_value || 0).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-2" style={{
-                      color: (e.total_trade_revenue || 0) !== 0 ? theme.primary : theme.textSecondary
-                    }}>
-                      {(e.total_trade_revenue || 0) !== 0 ? `ZMW${(e.total_trade_revenue || 0).toLocaleString()}` : '-'}
-                    </td>
-                    <td className="px-4 py-2" style={{
-                      color: e.population_difference && e.population_difference !== 0 ? 'var(--color-status-error)' : theme.textSecondary
-                    }}>
-                      {e.population_difference ?? '-'}
-                    </td>
-                    <td className="px-4 py-2 text-xs" style={{ color: theme.textSecondary }}>
-                      {e.created_at ? new Date(e.created_at).toLocaleTimeString() : '-'}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className="inline-block px-2 py-0.5 rounded text-xs font-medium capitalize" style={badgeStyle}>
-                        {dStatus}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2">
-                      {dStatus === 'pending' && canManage && (
-                        <button onClick={authorise}
-                          className="px-2 py-1 text-xs font-medium rounded text-white"
-                          style={{ backgroundColor: 'var(--color-status-success)' }}>
-                          Authorise
-                        </button>
-                      )}
-                      {dStatus === 'approved' && e.damage_authorised_by && (
-                        <span className="text-xs" style={{ color: theme.textSecondary }}>by {e.damage_authorised_by}</span>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
         </div>
       )}
     </div>
