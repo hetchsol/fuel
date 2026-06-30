@@ -7,7 +7,7 @@ from fastapi import APIRouter, Query, Depends, HTTPException
 from typing import Optional, List
 from ...services.reporting import ReportingService
 from ...services.relational_queries import RelationalQueryService
-from .auth import require_supervisor_or_owner, get_station_context
+from .auth import require_supervisor_or_owner, require_manager_or_owner, get_station_context
 from .reconciliation import _get_reconciliations
 from ...database.station_files import load_station_json
 from datetime import datetime
@@ -755,6 +755,181 @@ def get_monthly_summary(
         'product_breakdown': product_breakdown,
         'daily_breakdown': dict(daily_breakdown),
         'reconciliations_count': len(reconciliations)
+    }
+
+
+# ==================== SALES CONSOLIDATION ====================
+
+@router.get("/sales-consolidation", dependencies=[Depends(require_manager_or_owner)])
+def get_sales_consolidation(
+    start_date: str = Query(..., description="Start date YYYY-MM-DD"),
+    end_date: str = Query(..., description="End date YYYY-MM-DD"),
+    period: str = Query("day", description="shift|day|week|month"),
+    group_by: str = Query("none", description="none|attendant|nozzle|island|tank"),
+    fuel_type: str = Query("all", description="all|Diesel|Petrol"),
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Consolidated sales report with payment method breakdown.
+    Aggregates completed handovers by period and optional dimension,
+    splitting revenue into Cash / POS / Credit Pre-Paid / Credit Post-Paid.
+    """
+    from ...services.handover_sales import iter_completed_handovers, build_nozzle_island_lookup
+    from datetime import datetime, timedelta
+    from collections import defaultdict
+
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+    accounts_data = storage.get("accounts", {})
+
+    # Build nozzle dimension lookups
+    nozzle_to_island = build_nozzle_island_lookup(storage)
+
+    nozzle_to_tank: dict = {}
+    for isl_id, isl in (storage.get("islands") or {}).items():
+        ps = isl.get("pump_station") or {}
+        isl_tank = ps.get("tank_id")
+        for nz in ps.get("nozzles", []):
+            nid = nz.get("nozzle_id")
+            if nid:
+                nozzle_to_tank[nid] = nz.get("tank_id") or isl_tank or "Unknown"
+
+    def period_bucket(date_str: str, shift_id: str, shift_type: str):
+        if period == "shift":
+            return (date_str + shift_type, f"{date_str} {shift_type}", shift_id)
+        if period == "day":
+            return (date_str, date_str, "")
+        if period == "week":
+            d = datetime.strptime(date_str, "%Y-%m-%d")
+            monday = (d - timedelta(days=d.weekday())).strftime("%Y-%m-%d")
+            return (monday, f"Week of {monday}", "")
+        # month
+        ym = date_str[:7]
+        return (ym, ym, "")
+
+    rows: dict = defaultdict(lambda: {
+        "label": "", "sub_label": "",
+        "total_revenue": 0.0, "volume": 0.0,
+        "cash": 0.0, "pos": 0.0,
+        "credit_prepaid": 0.0, "credit_postpaid": 0.0,
+        "_sort": "",
+    })
+
+    for ho in iter_completed_handovers(station_id):
+        ho_date = ho.get("date", "")
+        if not ho_date or ho_date < start_date or ho_date > end_date:
+            continue
+
+        shift_id = ho.get("shift_id", "")
+        shift_type = ho.get("shift_type", "")
+        attendant = ho.get("attendant_name", "Unknown")
+
+        # Payment breakdown
+        cash = float(ho.get("actual_cash") or 0)
+        pos_items = ho.get("pos_items") or []
+        pos = float(sum(i.get("amount", 0) for i in pos_items) if pos_items else (ho.get("pos_receipts") or 0))
+
+        credit_prepaid = 0.0
+        credit_postpaid = 0.0
+        credit_details = ho.get("credit_sale_details") or []
+        for item in credit_details:
+            amt = float(item.get("amount") or 0)
+            acct = accounts_data.get(item.get("account_id", ""), {})
+            if acct.get("account_type") == "Pre-Paid":
+                credit_prepaid += amt
+            else:
+                credit_postpaid += amt
+        # Fall back to flat credit_sales if no itemised details
+        if not credit_details:
+            credit_postpaid = float(ho.get("credit_sales") or 0)
+
+        # Nozzle summaries — apply fuel_type filter
+        all_nozzles = ho.get("nozzle_summaries") or []
+        filtered = [ns for ns in all_nozzles if fuel_type == "all" or ns.get("fuel_type") == fuel_type]
+        if not filtered:
+            continue
+
+        ho_total_revenue = sum(float(ns.get("revenue") or 0) for ns in all_nozzles)
+        filt_revenue = sum(float(ns.get("revenue") or 0) for ns in filtered)
+        filt_volume = sum(float(ns.get("volume_sold") or 0) for ns in filtered)
+
+        # Pro-rate payment to filtered fuel share
+        filt_share = filt_revenue / ho_total_revenue if ho_total_revenue else 1.0
+        p_cash = cash * filt_share
+        p_pos = pos * filt_share
+        p_pre = credit_prepaid * filt_share
+        p_post = credit_postpaid * filt_share
+
+        p_sort, p_label, p_sub = period_bucket(ho_date, shift_id, shift_type)
+
+        if group_by in ("nozzle", "island", "tank"):
+            for ns in filtered:
+                nid = ns.get("nozzle_id", "")
+                ns_rev = float(ns.get("revenue") or 0)
+                ns_vol = float(ns.get("volume_sold") or 0)
+                ns_share = ns_rev / filt_revenue if filt_revenue else 0
+
+                if group_by == "nozzle":
+                    dim = nid or "Unknown"
+                elif group_by == "island":
+                    dim = nozzle_to_island.get(nid, "Unknown")
+                else:
+                    dim = nozzle_to_tank.get(nid, "Unknown")
+
+                key = (p_sort, dim)
+                r = rows[key]
+                r["label"] = p_label
+                r["sub_label"] = dim
+                r["_sort"] = f"{p_sort}|{dim}"
+                r["total_revenue"] += ns_rev
+                r["volume"] += ns_vol
+                r["cash"] += p_cash * ns_share
+                r["pos"] += p_pos * ns_share
+                r["credit_prepaid"] += p_pre * ns_share
+                r["credit_postpaid"] += p_post * ns_share
+        else:
+            dim = attendant if group_by == "attendant" else ""
+            key = (p_sort, dim)
+            r = rows[key]
+            r["label"] = p_label if group_by != "attendant" else attendant
+            r["sub_label"] = attendant if group_by != "attendant" else p_label
+            r["_sort"] = f"{p_sort}|{dim}"
+            r["total_revenue"] += filt_revenue
+            r["volume"] += filt_volume
+            r["cash"] += p_cash
+            r["pos"] += p_pos
+            r["credit_prepaid"] += p_pre
+            r["credit_postpaid"] += p_post
+
+    out_rows = []
+    for r in sorted(rows.values(), key=lambda x: x["_sort"]):
+        out_rows.append({
+            "label": r["label"],
+            "sub_label": r["sub_label"],
+            "total_revenue": round(r["total_revenue"], 2),
+            "volume": round(r["volume"], 2),
+            "cash": round(r["cash"], 2),
+            "pos": round(r["pos"], 2),
+            "credit_prepaid": round(r["credit_prepaid"], 2),
+            "credit_postpaid": round(r["credit_postpaid"], 2),
+        })
+
+    totals = {
+        "total_revenue": round(sum(r["total_revenue"] for r in out_rows), 2),
+        "volume": round(sum(r["volume"] for r in out_rows), 2),
+        "cash": round(sum(r["cash"] for r in out_rows), 2),
+        "pos": round(sum(r["pos"] for r in out_rows), 2),
+        "credit_prepaid": round(sum(r["credit_prepaid"] for r in out_rows), 2),
+        "credit_postpaid": round(sum(r["credit_postpaid"] for r in out_rows), 2),
+    }
+
+    return {
+        "rows": out_rows,
+        "totals": totals,
+        "period": {"start_date": start_date, "end_date": end_date},
+        "period_type": period,
+        "group_by": group_by,
+        "fuel_type": fuel_type,
     }
 
 

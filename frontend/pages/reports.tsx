@@ -1,5 +1,6 @@
 import { authFetch, BASE, getHeaders, downloadExport } from '../lib/api'
 import { useState, useEffect, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import DateRangePicker from '../components/DateRangePicker';
@@ -626,17 +627,233 @@ function SalesReportsView() {
     );
 }
 
-// --- Reports hub: one page, three tabs (Sales / Advanced / Tank Readings).
-const REPORT_TABS: { key: string; label: string }[] = [
+// ── Sales Consolidation ────────────────────────────────────────────────────
+
+const fmt = (v: number) =>
+  `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+interface ConsolidationRow {
+  label: string
+  sub_label: string
+  total_revenue: number
+  volume: number
+  cash: number
+  pos: number
+  credit_prepaid: number
+  credit_postpaid: number
+}
+
+interface ConsolidationResult {
+  rows: ConsolidationRow[]
+  totals: Omit<ConsolidationRow, 'label' | 'sub_label'>
+  period: { start_date: string; end_date: string }
+  period_type: string
+  group_by: string
+  fuel_type: string
+}
+
+function SalesConsolidationView() {
+  const today = new Date().toISOString().split('T')[0]
+  const [startDate, setStartDate] = useState(today)
+  const [endDate, setEndDate] = useState(today)
+  const [period, setPeriod] = useState('day')
+  const [groupBy, setGroupBy] = useState('none')
+  const [fuelType, setFuelType] = useState('all')
+  const [result, setResult] = useState<ConsolidationResult | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const run = async () => {
+    setLoading(true)
+    setResult(null)
+    try {
+      const url = `${BASE}/reports/sales-consolidation?start_date=${startDate}&end_date=${endDate}&period=${period}&group_by=${groupBy}&fuel_type=${fuelType}`
+      const res = await authFetch(url, { headers: getHeaders() })
+      if (!res.ok) throw new Error((await res.json()).detail || 'Failed')
+      setResult(await res.json())
+    } catch (err: any) {
+      toast(err.message, { icon: '✕' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const segBtn = (val: string, cur: string, set: (v: string) => void, label: string) => (
+    <button key={val} onClick={() => set(val)}
+      className={`px-3 py-1.5 text-xs font-medium rounded border transition-colors ${
+        cur === val
+          ? 'bg-action-primary text-white border-action-primary'
+          : 'border-surface-border text-content-secondary hover:border-action-primary hover:text-action-primary'
+      }`}>
+      {label}
+    </button>
+  )
+
+  const showGroupDim = groupBy !== 'none'
+
+  return (
+    <div className="p-4 sm:p-6 space-y-5 max-w-7xl mx-auto">
+      <div>
+        <h2 className="text-xl font-bold text-content-primary">Sales Consolidation</h2>
+        <p className="text-sm text-content-secondary mt-0.5">
+          Fuel revenue by period and dimension, split by payment method.
+          {(groupBy === 'nozzle' || groupBy === 'island' || groupBy === 'tank') && (
+            <span className="ml-1 text-status-warning">Payment split is pro-rated by revenue share when grouping below attendant level.</span>
+          )}
+        </p>
+      </div>
+
+      {/* Controls */}
+      <div className="bg-surface-card border border-surface-border rounded-lg p-4 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-content-secondary mb-1">From</label>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-surface-border rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-content-secondary mb-1">To</label>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-surface-border rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary" />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-4">
+          <div>
+            <p className="text-xs font-medium text-content-secondary mb-1.5">Period</p>
+            <div className="flex gap-1">
+              {[['shift','Shift'],['day','Day'],['week','Week'],['month','Month']].map(([v,l]) => segBtn(v, period, setPeriod, l))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-content-secondary mb-1.5">Group by</p>
+            <div className="flex gap-1">
+              {[['none','Totals only'],['attendant','Attendant'],['nozzle','Nozzle'],['island','Island'],['tank','Tank']].map(([v,l]) => segBtn(v, groupBy, setGroupBy, l))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-content-secondary mb-1.5">Fuel</p>
+            <div className="flex gap-1">
+              {[['all','All'],['Diesel','Diesel'],['Petrol','Petrol']].map(([v,l]) => segBtn(v, fuelType, setFuelType, l))}
+            </div>
+          </div>
+        </div>
+
+        <button onClick={run} disabled={loading || !startDate || !endDate || startDate > endDate}
+          className="px-5 py-2 text-sm font-semibold rounded-lg bg-action-primary text-white disabled:opacity-50">
+          {loading ? 'Running...' : 'Run Report'}
+        </button>
+      </div>
+
+      {/* Results */}
+      {result && (
+        <div className="space-y-4">
+          {/* Summary tiles */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[
+              { label: 'Total Revenue', val: fmt(result.totals.total_revenue), cls: 'text-action-primary' },
+              { label: 'Volume (L)', val: result.totals.volume.toLocaleString(undefined, { maximumFractionDigits: 0 }), cls: 'text-content-primary' },
+              { label: 'Cash', val: fmt(result.totals.cash), cls: 'text-content-primary' },
+              { label: 'POS', val: fmt(result.totals.pos), cls: 'text-content-primary' },
+              { label: 'Credit Pre-Paid', val: fmt(result.totals.credit_prepaid), cls: 'text-content-primary' },
+              { label: 'Credit Post-Paid', val: fmt(result.totals.credit_postpaid), cls: 'text-content-primary' },
+            ].map(t => (
+              <div key={t.label} className="bg-surface-card border border-surface-border rounded-lg p-3">
+                <p className="text-xs text-content-secondary">{t.label}</p>
+                <p className={`text-base font-bold mt-0.5 ${t.cls}`}>{t.val}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Table */}
+          <div className="bg-surface-card border border-surface-border rounded-lg overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-surface-bg border-b border-surface-border">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">
+                    {result.period_type === 'shift' ? 'Date / Shift' : result.period_type === 'day' ? 'Date' : result.period_type === 'week' ? 'Week' : 'Month'}
+                  </th>
+                  {showGroupDim && (
+                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">
+                      {result.group_by === 'attendant' ? 'Attendant' : result.group_by === 'nozzle' ? 'Nozzle' : result.group_by === 'island' ? 'Island' : 'Tank'}
+                    </th>
+                  )}
+                  <th className="px-4 py-2.5 text-right text-xs font-medium uppercase text-content-secondary whitespace-nowrap">Vol (L)</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium uppercase text-content-secondary whitespace-nowrap">Total Revenue</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium uppercase text-content-secondary whitespace-nowrap">Cash</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium uppercase text-content-secondary whitespace-nowrap">POS</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium uppercase text-content-secondary whitespace-nowrap">Credit Pre-Paid</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium uppercase text-content-secondary whitespace-nowrap">Credit Post-Paid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.rows.map((row, i) => (
+                  <tr key={i} className="border-t border-surface-border hover:bg-surface-bg">
+                    <td className="px-4 py-2.5 text-content-primary font-medium whitespace-nowrap">
+                      {row.label}
+                      {result.period_type === 'shift' && row.sub_label && !showGroupDim && (
+                        <span className="ml-1.5 text-xs text-content-secondary">{row.sub_label}</span>
+                      )}
+                    </td>
+                    {showGroupDim && (
+                      <td className="px-4 py-2.5 text-content-primary whitespace-nowrap">{row.sub_label}</td>
+                    )}
+                    <td className="px-4 py-2.5 text-right font-mono text-content-secondary">
+                      {row.volume.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-action-primary">{fmt(row.total_revenue)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-content-primary">{fmt(row.cash)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-content-primary">{fmt(row.pos)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-content-primary">{fmt(row.credit_prepaid)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-content-primary">{fmt(row.credit_postpaid)}</td>
+                  </tr>
+                ))}
+                {/* Totals row */}
+                <tr className="border-t-2 border-surface-border bg-surface-bg font-semibold">
+                  <td className="px-4 py-2.5 text-xs uppercase text-content-secondary" colSpan={showGroupDim ? 2 : 1}>Total</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-content-primary">
+                    {result.totals.volume.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-action-primary">{fmt(result.totals.total_revenue)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-content-primary">{fmt(result.totals.cash)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-content-primary">{fmt(result.totals.pos)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-content-primary">{fmt(result.totals.credit_prepaid)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-content-primary">{fmt(result.totals.credit_postpaid)}</td>
+                </tr>
+              </tbody>
+            </table>
+            {result.rows.length === 0 && (
+              <p className="text-sm text-content-secondary text-center py-8">No completed handovers found for this period.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- Reports hub: one page, tabs (Sales / Advanced / Tank Readings / Sales Consolidation).
+const REPORT_TABS: { key: string; label: string; minRole?: string }[] = [
   { key: 'sales', label: 'Sales Reports' },
   { key: 'advanced', label: 'Advanced Reports' },
   { key: 'tank-readings', label: 'Tank Readings' },
+  { key: 'consolidation', label: 'Sales Consolidation', minRole: 'manager' },
 ]
 
 export default function ReportsHub() {
   const router = useRouter()
+  const [userRole, setUserRole] = useState('')
+
+  useEffect(() => {
+    const ud = localStorage.getItem('user')
+    if (ud) setUserRole(JSON.parse(ud).role || '')
+  }, [])
+
+  const isManagerPlus = ['manager', 'owner'].includes(userRole)
+
+  const visibleTabs = REPORT_TABS.filter(t => !t.minRole || isManagerPlus)
+
   const q = router.query.tab
-  const active = (typeof q === 'string' && REPORT_TABS.some(t => t.key === q)) ? q : 'sales'
+  const active = (typeof q === 'string' && visibleTabs.some(t => t.key === q)) ? q : 'sales'
 
   const setTab = (key: string) => {
     router.replace(
@@ -650,15 +867,15 @@ export default function ReportsHub() {
     <div>
       <div className="bg-surface-card border-b border-surface-border px-4">
         <div className="max-w-7xl mx-auto flex gap-1 overflow-x-auto">
-          {REPORT_TABS.map(t => (
+          {visibleTabs.map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className="px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0"
-              style={{
-                borderColor: active === t.key ? 'var(--color-action-primary)' : 'transparent',
-                color: active === t.key ? 'var(--color-action-primary)' : 'var(--color-content-secondary)',
-              }}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
+                active === t.key
+                  ? 'border-action-primary text-action-primary'
+                  : 'border-transparent text-content-secondary hover:text-content-primary'
+              }`}
             >
               {t.label}
             </button>
@@ -668,6 +885,7 @@ export default function ReportsHub() {
       {active === 'sales' && <SalesReportsView />}
       {active === 'advanced' && <AdvancedReports />}
       {active === 'tank-readings' && <TankReadingsReport />}
+      {active === 'consolidation' && isManagerPlus && <SalesConsolidationView />}
     </div>
   )
 }
