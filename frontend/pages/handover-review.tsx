@@ -2028,6 +2028,7 @@ function CreditPanel({ handoverId, existingDetails, theme, onSaved }: {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const [savedDuplicates, setSavedDuplicates] = useState<any[]>([])
+  const [confirmedItems, setConfirmedItems] = useState<any[]>([])
 
   useEffect(() => {
     authFetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
@@ -2095,13 +2096,14 @@ function CreditPanel({ handoverId, existingDetails, theme, onSaved }: {
       }
       const added = body.added ?? items.length
       const dups: any[] = body.duplicates ?? []
-      if (dups.length > 0) {
-        setSavedDuplicates(dups)
-        toast.success(`${added} credit sale(s) saved. ${dups.length} duplicate(s) skipped.`)
-      } else {
-        toast.success(`${added} credit sale(s) saved`)
-      }
-      onSaved()
+      if (dups.length > 0) setSavedDuplicates(dups)
+      // Show newly saved items (with slip numbers) before collapsing
+      const newlySaved = (body.credit_sale_details || []).filter(
+        (d: any) => d.source === 'handover' && d.slip_number
+      )
+      setConfirmedItems(newlySaved)
+      setItems([])
+      if (added > 0) toast.success(`${added} credit sale(s) saved`)
     } catch (e: any) {
       setErr(e.message || 'Failed to save')
     } finally {
@@ -2115,78 +2117,111 @@ function CreditPanel({ handoverId, existingDetails, theme, onSaved }: {
   return (
     <div className="mt-3" style={{ borderRadius: 8, padding: '0 0 0 3px', background: 'var(--color-action-primary)' }}>
     <div className="p-3 space-y-3" style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 6 }}>
-      <div className="flex flex-wrap gap-3 items-end">
-        <div>
-          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Account</div>
-          <select value={selectedAccountId} onChange={e => { setSelectedAccountId(e.target.value); setDupWarning('') }}
-            className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
-            {accounts.map(a => <option key={a.account_id} value={a.account_id}>{a.account_name}</option>)}
-          </select>
-        </div>
-        <div>
-          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Fuel</div>
-          <select value={fuelType} onChange={e => { setFuelType(e.target.value); setDupWarning('') }}
-            className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
-            <option>Diesel</option>
-            <option>Petrol</option>
-          </select>
-        </div>
-        <div>
-          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Volume (L)</div>
-          <input type="number" min="0" step="0.01" placeholder="0.00" value={volume}
-            onChange={e => { setVolume(e.target.value); setDupWarning('') }} onKeyDown={e => e.key === 'Enter' && addItem()}
-            className="w-24 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
-        </div>
-        {vol > 0 && pricePerLiter > 0 && (
-          <span className="text-xs self-end pb-2 font-semibold" style={{ color: 'var(--color-action-primary)' }}>
-            K{pricePerLiter.toFixed(2)}/L = {fmtK(lineAmount)}
-          </span>
-        )}
-        <button onClick={addItem} className="px-3 py-1.5 text-xs font-bold rounded text-white self-end"
-          style={{ backgroundColor: 'var(--color-action-primary)' }}>
-          + Add
-        </button>
-      </div>
 
-      {dupWarning && (
-        <p className="text-xs font-medium px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
-          Duplicate: {dupWarning}
-        </p>
-      )}
-
-      {savedDuplicates.length > 0 && (
-        <div className="text-xs px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
-          <span className="font-bold">Skipped duplicates:</span>
-          {savedDuplicates.map((d, i) => <span key={i} className="block">{d.reason}</span>)}
-        </div>
-      )}
-
-      {items.length > 0 && (
-        <div className="space-y-1">
-          {items.map((item, idx) => (
+      {confirmedItems.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs font-bold uppercase" style={{ color: 'var(--color-status-success)' }}>Saved</p>
+          {confirmedItems.map((item, idx) => (
             <div key={idx} className="flex items-center justify-between text-xs px-2 py-1.5 rounded"
               style={{ backgroundColor: theme.background }}>
-              <span style={{ color: theme.textSecondary }}>
-                {item.account_name} · {item.fuel_type} · {item.volume.toLocaleString()}L @ K{item.price_per_liter.toFixed(2)}
-              </span>
-              <div className="flex items-center gap-3">
+              <div>
+                <span className="font-semibold" style={{ color: theme.textPrimary }}>{item.account_name}</span>
+                <span style={{ color: theme.textSecondary }}> · {item.fuel_type} · {item.volume?.toLocaleString()}L</span>
+              </div>
+              <div className="flex items-center gap-4">
+                {item.slip_number && (
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
+                    {item.slip_number}
+                  </span>
+                )}
                 <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>{fmtK(item.amount)}</span>
-                <button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))}
-                  className="text-[10px]" style={{ color: 'var(--color-status-error)' }}>Remove</button>
               </div>
             </div>
           ))}
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-xs font-bold" style={{ color: theme.textPrimary }}>Total: {fmtK(total)}</span>
-            <button onClick={saveAll} disabled={saving}
-              className="px-3 py-1.5 text-xs font-bold rounded text-white disabled:opacity-50"
-              style={{ backgroundColor: 'var(--color-status-success)' }}>
-              {saving ? 'Saving...' : 'Save Credit'}
+          {savedDuplicates.length > 0 && (
+            <div className="text-xs px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+              <span className="font-bold">Skipped duplicates:</span>
+              {savedDuplicates.map((d, i) => <span key={i} className="block">{d.reason}</span>)}
+            </div>
+          )}
+          <div className="flex justify-end pt-1">
+            <button onClick={onSaved} className="px-3 py-1.5 text-xs font-bold rounded text-white"
+              style={{ backgroundColor: 'var(--color-action-primary)' }}>
+              Done
             </button>
           </div>
         </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div>
+              <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Account</div>
+              <select value={selectedAccountId} onChange={e => { setSelectedAccountId(e.target.value); setDupWarning('') }}
+                className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+                {accounts.map(a => <option key={a.account_id} value={a.account_id}>{a.account_name}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Fuel</div>
+              <select value={fuelType} onChange={e => { setFuelType(e.target.value); setDupWarning('') }}
+                className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+                <option>Diesel</option>
+                <option>Petrol</option>
+              </select>
+            </div>
+            <div>
+              <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Volume (L)</div>
+              <input type="number" min="0" step="0.01" placeholder="0.00" value={volume}
+                onChange={e => { setVolume(e.target.value); setDupWarning('') }} onKeyDown={e => e.key === 'Enter' && addItem()}
+                className="w-24 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
+            </div>
+            {vol > 0 && pricePerLiter > 0 && (
+              <span className="text-xs self-end pb-2 font-semibold" style={{ color: 'var(--color-action-primary)' }}>
+                K{pricePerLiter.toFixed(2)}/L = {fmtK(lineAmount)}
+              </span>
+            )}
+            <button onClick={addItem} className="px-3 py-1.5 text-xs font-bold rounded text-white self-end"
+              style={{ backgroundColor: 'var(--color-action-primary)' }}>
+              + Add
+            </button>
+          </div>
+
+          {dupWarning && (
+            <p className="text-xs font-medium px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+              Duplicate: {dupWarning}
+            </p>
+          )}
+
+          {items.length > 0 && (
+            <div className="space-y-1">
+              {items.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between text-xs px-2 py-1.5 rounded"
+                  style={{ backgroundColor: theme.background }}>
+                  <span style={{ color: theme.textSecondary }}>
+                    {item.account_name} · {item.fuel_type} · {item.volume.toLocaleString()}L @ K{item.price_per_liter.toFixed(2)}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>{fmtK(item.amount)}</span>
+                    <button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))}
+                      className="text-[10px]" style={{ color: 'var(--color-status-error)' }}>Remove</button>
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-xs font-bold" style={{ color: theme.textPrimary }}>Total: {fmtK(total)}</span>
+                <button onClick={saveAll} disabled={saving}
+                  className="px-3 py-1.5 text-xs font-bold rounded text-white disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--color-status-success)' }}>
+                  {saving ? 'Saving...' : 'Save Credit'}
+                </button>
+              </div>
+            </div>
+          )}
+          {err && <p className="text-xs" style={{ color: 'var(--color-status-error)' }}>{err}</p>}
+        </>
       )}
-      {err && <p className="text-xs" style={{ color: 'var(--color-status-error)' }}>{err}</p>}
+
     </div>
     </div>
   )
