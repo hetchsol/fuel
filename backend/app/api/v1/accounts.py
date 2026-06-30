@@ -2,6 +2,7 @@
 Account Holders and Credit Sales API
 Tracks credit customers and their transactions
 """
+import re
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from datetime import datetime
@@ -13,6 +14,42 @@ from ...database.storage import save_station_storage
 from .auth import get_station_context, require_manager_or_owner
 
 router = APIRouter()
+
+_NOISE_WORDS = {'ltd', 'limited', 'co', 'company', 'inc', 'plc', 'pvt', 'pty', 'llc', 'and', 'the', 'of', 'group'}
+
+
+def generate_client_code(name: str, existing_codes: set) -> str:
+    """
+    Derive a unique 3-letter client code from an account name.
+    Strategy:
+      3+ meaningful words  -> first letter of each of first 3 words  (e.g. Copper Belt Mining -> CBM)
+      2 words              -> 2 initials + second letter of longer word (e.g. John Banda -> JBA)
+      1 word               -> first 3 letters                          (e.g. Mopani -> MOP)
+    Noise words (Ltd, Co, etc.) are stripped before applying the rule.
+    If the result collides with an existing code, a digit suffix is appended (CBM2, CBM3 ...).
+    """
+    words = [w for w in re.split(r'[\s\-&.,/()]+', name.strip())
+             if w and w.lower() not in _NOISE_WORDS and re.search(r'[a-zA-Z]', w)]
+    if not words:
+        words = re.findall(r'[a-zA-Z]+', name)
+
+    if len(words) >= 3:
+        base = (words[0][0] + words[1][0] + words[2][0]).upper()
+    elif len(words) == 2:
+        longer = max(words, key=len)
+        extra = longer[1] if len(longer) > 1 else 'X'
+        base = (words[0][0] + words[1][0] + extra).upper()
+    elif len(words) == 1:
+        base = (words[0][:3]).upper().ljust(3, 'X')
+    else:
+        base = 'ACC'
+
+    code = base
+    suffix = 2
+    while code in existing_codes:
+        code = base[:2] + str(suffix)
+        suffix += 1
+    return code
 
 
 @router.get("/", response_model=List[AccountHolder])
@@ -55,6 +92,10 @@ async def create_account(account: AccountHolder, ctx: dict = Depends(get_station
         raise HTTPException(status_code=400, detail="Account already exists")
     if not (item_dict.get('account_name') or "").strip():
         raise HTTPException(status_code=400, detail="Account name is required.")
+    # Auto-generate client_code if not supplied
+    if not (item_dict.get('client_code') or '').strip():
+        existing_codes = {a.get('client_code', '') for a in accounts_data.values()}
+        item_dict['client_code'] = generate_client_code(item_dict['account_name'], existing_codes)
     # New accounts always start with a zero balance.
     item_dict['current_balance'] = item_dict.get('current_balance') or 0.0
 

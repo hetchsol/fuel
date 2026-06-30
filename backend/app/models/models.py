@@ -325,6 +325,7 @@ class AccountHolder(BaseModel):
     account_type: str  # POS, Institution, Corporate, Individual
     credit_limit: float
     current_balance: float
+    client_code: Optional[str] = None   # 3-letter prefix for slip numbers, e.g. "CBM"
     contact_person: Optional[str] = None  # legacy — superseded by contacts[]
     phone: Optional[str] = None           # legacy — superseded by contacts[]
     contacts: Optional[List[AccountContact]] = []
@@ -357,6 +358,7 @@ class CreditSale(BaseModel):
     volume: float
     amount: float
     invoice_number: Optional[str] = None
+    slip_number: Optional[str] = None   # e.g. "CBM29062026-001"
 
 class HandoverCreditSaleItem(BaseModel):
     account_id: str

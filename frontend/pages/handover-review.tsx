@@ -1782,7 +1782,7 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
             style={{ backgroundColor: showCredit ? theme.border : 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
             {showCredit ? 'Hide Credit Entry' : '+ Add Credit Sales'}
           </button>
-          {showCredit && <CreditPanel handoverId={h.handover_id} theme={theme} onSaved={() => { setShowCredit(false); onRefresh() }} />}
+          {showCredit && <CreditPanel handoverId={h.handover_id} existingDetails={h.credit_sale_details ?? []} theme={theme} onSaved={() => { setShowCredit(false); onRefresh() }} />}
         </div>
       )}
 
@@ -2012,15 +2012,22 @@ function POSPanel({ handoverId, existingBreakdown, theme, onSaved }: {
   )
 }
 
-function CreditPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: any; onSaved: () => void }) {
+function CreditPanel({ handoverId, existingDetails, theme, onSaved }: {
+  handoverId: string
+  existingDetails: any[]
+  theme: any
+  onSaved: () => void
+}) {
   const [accounts, setAccounts] = useState<any[]>([])
   const [fuelPrices, setFuelPrices] = useState<Record<string, number>>({ Diesel: 0, Petrol: 0 })
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [fuelType, setFuelType] = useState('Diesel')
   const [volume, setVolume] = useState('')
   const [items, setItems] = useState<any[]>([])
+  const [dupWarning, setDupWarning] = useState('')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const [savedDuplicates, setSavedDuplicates] = useState<any[]>([])
 
   useEffect(() => {
     authFetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
@@ -2038,10 +2045,26 @@ function CreditPanel({ handoverId, theme, onSaved }: { handoverId: string; theme
   const vol = parseFloat(volume) || 0
   const lineAmount = Math.round(vol * pricePerLiter * 100) / 100
 
+  const isDuplicate = (accountId: string, fuel: string): string | null => {
+    const allExisting = [
+      ...existingDetails.filter(d => d.source !== 'skipped_duplicate'),
+      ...items,
+    ]
+    const match = allExisting.find(d => d.account_id === accountId && d.fuel_type === fuel)
+    if (match) {
+      const slip = match.slip_number ? ` (Slip: ${match.slip_number})` : ''
+      return `${match.account_name} / ${fuel} already recorded for this shift${slip}`
+    }
+    return null
+  }
+
   const addItem = () => {
     if (!selectedAccountId || vol <= 0) return
     const acct = accounts.find(a => a.account_id === selectedAccountId)
     if (!acct) return
+    const dupMsg = isDuplicate(acct.account_id, fuelType)
+    if (dupMsg) { setDupWarning(dupMsg); return }
+    setDupWarning('')
     setItems(prev => [...prev, {
       account_id: acct.account_id, account_name: acct.account_name,
       fuel_type: fuelType, volume: vol, price_per_liter: pricePerLiter, amount: lineAmount,
@@ -2053,14 +2076,31 @@ function CreditPanel({ handoverId, theme, onSaved }: { handoverId: string; theme
     if (items.length === 0) return
     setSaving(true)
     setErr('')
+    setSavedDuplicates([])
     try {
       const res = await authFetch(`${BASE}/handover/${handoverId}/credit-sales`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
         body: JSON.stringify({ credit_items: items }),
       })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Save failed')
-      toast.success('Credit sales saved')
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        if (res.status === 409 && body.detail?.duplicates) {
+          setSavedDuplicates(body.detail.duplicates)
+          setErr(body.detail.message || 'Duplicate entries detected')
+        } else {
+          setErr(body.detail || 'Save failed')
+        }
+        return
+      }
+      const added = body.added ?? items.length
+      const dups: any[] = body.duplicates ?? []
+      if (dups.length > 0) {
+        setSavedDuplicates(dups)
+        toast.success(`${added} credit sale(s) saved. ${dups.length} duplicate(s) skipped.`)
+      } else {
+        toast.success(`${added} credit sale(s) saved`)
+      }
       onSaved()
     } catch (e: any) {
       setErr(e.message || 'Failed to save')
@@ -2078,14 +2118,14 @@ function CreditPanel({ handoverId, theme, onSaved }: { handoverId: string; theme
       <div className="flex flex-wrap gap-3 items-end">
         <div>
           <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Account</div>
-          <select value={selectedAccountId} onChange={e => setSelectedAccountId(e.target.value)}
+          <select value={selectedAccountId} onChange={e => { setSelectedAccountId(e.target.value); setDupWarning('') }}
             className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
             {accounts.map(a => <option key={a.account_id} value={a.account_id}>{a.account_name}</option>)}
           </select>
         </div>
         <div>
           <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Fuel</div>
-          <select value={fuelType} onChange={e => setFuelType(e.target.value)}
+          <select value={fuelType} onChange={e => { setFuelType(e.target.value); setDupWarning('') }}
             className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
             <option>Diesel</option>
             <option>Petrol</option>
@@ -2094,7 +2134,7 @@ function CreditPanel({ handoverId, theme, onSaved }: { handoverId: string; theme
         <div>
           <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Volume (L)</div>
           <input type="number" min="0" step="0.01" placeholder="0.00" value={volume}
-            onChange={e => setVolume(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()}
+            onChange={e => { setVolume(e.target.value); setDupWarning('') }} onKeyDown={e => e.key === 'Enter' && addItem()}
             className="w-24 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
         </div>
         {vol > 0 && pricePerLiter > 0 && (
@@ -2107,6 +2147,20 @@ function CreditPanel({ handoverId, theme, onSaved }: { handoverId: string; theme
           + Add
         </button>
       </div>
+
+      {dupWarning && (
+        <p className="text-xs font-medium px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+          Duplicate: {dupWarning}
+        </p>
+      )}
+
+      {savedDuplicates.length > 0 && (
+        <div className="text-xs px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+          <span className="font-bold">Skipped duplicates:</span>
+          {savedDuplicates.map((d, i) => <span key={i} className="block">{d.reason}</span>)}
+        </div>
+      )}
+
       {items.length > 0 && (
         <div className="space-y-1">
           {items.map((item, idx) => (

@@ -518,7 +518,10 @@ export default function Accounts() {
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
                       <h3 className="font-bold text-content-primary text-lg">{account.account_name}</h3>
-                      <p className="text-xs text-content-secondary mt-1">ID: {account.account_id}</p>
+                      <p className="text-xs text-content-secondary mt-1">
+                        {account.client_code && <span className="font-mono font-bold text-action-primary mr-2">{account.client_code}</span>}
+                        {account.account_id}
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-1 text-xs font-semibold rounded border ${getAccountTypeColor(account.account_type)}`}>

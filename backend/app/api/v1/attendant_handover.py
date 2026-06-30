@@ -18,6 +18,7 @@ from ...models.models import (
 from ...config import resolve_fuel_price, resolve_fuel_price_for_shift, apply_due_price_changes
 from ...database.storage import get_nozzle, save_station_storage
 from ...services.inventory import process_credit_sale
+from .accounts import generate_client_code
 from .auth import get_current_user, require_supervisor_or_owner, require_manager_or_owner, get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
@@ -538,8 +539,42 @@ def _process_stock_snapshot(stock_snapshot, station_id, storage):
     return lpg_sales, lubricant_sales, accessory_sales, enriched_snapshot, stock_variance_flags
 
 
+def _generate_slip_number(client_code: str, shift_date: str, storage: dict) -> str:
+    """
+    Generate: {client_code}{DDMMYYYY}-{NNN}
+    Sequence resets per calendar date; counter stored in storage under _credit_slip_seq_{date}.
+    """
+    try:
+        y, m, d = shift_date.split('-')
+        date_part = f"{d}{m}{y}"
+    except Exception:
+        date_part = datetime.now().strftime("%d%m%Y")
+    seq_key = f"_credit_slip_seq_{shift_date}"
+    seq = storage.get(seq_key, 0) + 1
+    storage[seq_key] = seq
+    return f"{client_code}{date_part}-{seq:03d}"
+
+
+def _ensure_client_code(account_id: str, storage: dict) -> str:
+    """Return existing client_code or generate+persist one for legacy accounts."""
+    accounts_data = storage.get('accounts', {})
+    account = accounts_data.get(account_id, {})
+    code = account.get('client_code', '')
+    if not code:
+        existing_codes = {a.get('client_code', '') for a in accounts_data.values()}
+        code = generate_client_code(account.get('account_name', account_id), existing_codes)
+        account['client_code'] = code
+        accounts_data[account_id] = account
+    return code
+
+
 def _process_credit_sales(credit_sale_items, storage, shift_id):
-    """Process credit sale line items. Returns (credit_total, credit_sale_details, new_items_to_create)."""
+    """
+    Process credit sale line items.
+    Dedup key: (account_id, fuel_type) per shift — same account cannot buy the
+    same fuel type twice in one shift.
+    Returns (credit_total, credit_sale_details, new_items_to_create, duplicates).
+    """
     accounts_data = storage.get('accounts', {})
     credit_sales_data = storage.get('credit_sales', [])
 
@@ -569,22 +604,33 @@ def _process_credit_sales(credit_sale_items, storage, shift_id):
             "amount": s.get("amount", 0),
             "source": "pre_existing",
             "sale_id": s.get("sale_id", ""),
+            "slip_number": s.get("slip_number"),
         })
 
-    pre_existing_account_ids = {s.get("account_id") for s in pre_existing}
+    pre_existing_keys = {(s.get("account_id"), s.get("fuel_type")) for s in pre_existing}
     new_items_to_create = []
+    duplicates = []
+    seen_in_submission = set()
     for item in enriched_items:
-        if item["account_id"] in pre_existing_account_ids:
+        key = (item["account_id"], item["fuel_type"])
+        if key in pre_existing_keys or key in seen_in_submission:
             item["source"] = "skipped_duplicate"
+            duplicates.append({
+                "account_name": item["account_name"],
+                "fuel_type": item["fuel_type"],
+                "volume": item["volume"],
+                "reason": f"{item['account_name']} / {item['fuel_type']} already recorded for this shift",
+            })
         else:
             new_items_to_create.append(item)
+            seen_in_submission.add(key)
 
     new_total = sum(i["amount"] for i in new_items_to_create)
     pre_existing_total = sum(s.get("amount", 0) for s in pre_existing)
     credit_total = round(new_total + pre_existing_total, 2)
 
     credit_sale_details = enriched_items + pre_existing_details
-    return credit_total, credit_sale_details, new_items_to_create
+    return credit_total, credit_sale_details, new_items_to_create, duplicates
 
 
 def _cash_shortage_threshold(storage: dict) -> float:
@@ -787,18 +833,22 @@ def _update_nozzle_state(nozzle_readings, storage, shift_date=None, shift_type=N
 
 
 def _create_credit_sale_records(new_items_to_create, handover_id, handover_output, shift, storage, station_id):
-    """Create CreditSale records for new items via process_credit_sale()."""
+    """Create CreditSale records for new items, generating a unique slip number for each."""
     accounts_data = storage.get('accounts', {})
     credit_sales_data = storage.get('credit_sales', [])
     handovers = _load_handovers(station_id)
     shift_date = shift.get("date", "")
     for idx, item in enumerate(new_items_to_create):
         sale_id = f"CS-HO-{handover_id}-{idx}"
+        client_code = _ensure_client_code(item["account_id"], storage)
+        slip_number = _generate_slip_number(client_code, shift_date, storage)
+        item["slip_number"] = slip_number  # propagate to credit_sale_details
         sale_data = {
             "sale_id": sale_id, "account_id": item["account_id"],
             "shift_id": shift.get("shift_id", ""), "date": shift_date,
             "fuel_type": item["fuel_type"], "volume": item["volume"],
             "amount": item["amount"], "invoice_number": f"Handover {handover_id}",
+            "slip_number": slip_number,
         }
         try:
             process_credit_sale(
@@ -1757,7 +1807,7 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     assert_shift_editable(storage.get("shifts", {}).get(shift_id))
 
     if data.credit_sale_items:
-        credit_sales, credit_sale_details, new_items_to_create = \
+        credit_sales, credit_sale_details, new_items_to_create, _ = \
             _process_credit_sales(data.credit_sale_items, storage, shift_id)
 
     # POS: if breakdown items provided, derive sum from them
@@ -1945,7 +1995,7 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     credit_sale_details = None
     new_items_to_create = []
     if data.credit_sale_items:
-        data.credit_sales, credit_sale_details, new_items_to_create = \
+        data.credit_sales, credit_sale_details, new_items_to_create, _ = \
             _process_credit_sales(data.credit_sale_items, storage, data.shift_id)
 
     expected_cash = round(total_expected - data.credit_sales, 2)
@@ -2283,20 +2333,30 @@ async def patch_credit_sales(
     shift_id = handover.get("shift_id", "")
     shift = storage.get("shifts", {}).get(shift_id, {})
 
-    credit_total, credit_sale_details, new_items_to_create = \
+    credit_total, credit_sale_details, new_items_to_create, duplicates = \
         _process_credit_sales(data.credit_items, storage, shift_id)
 
-    # Create account records and update balances for new items
+    if duplicates and not new_items_to_create:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "All submitted items are duplicates.", "duplicates": duplicates},
+        )
+
+    # Create account records, generate slip numbers, update balances
     accounts_data = storage.get('accounts', {})
     credit_sales_data = storage.get('credit_sales', [])
     shift_date = shift.get("date", "")
     for idx, item in enumerate(new_items_to_create):
         sale_id = f"CS-HO-{handover_id}-P{idx}"
+        client_code = _ensure_client_code(item["account_id"], storage)
+        slip_number = _generate_slip_number(client_code, shift_date, storage)
+        item["slip_number"] = slip_number
         sale_data = {
             "sale_id": sale_id, "account_id": item["account_id"],
             "shift_id": shift_id, "date": shift_date,
             "fuel_type": item["fuel_type"], "volume": item["volume"],
             "amount": item["amount"], "invoice_number": f"Handover {handover_id}",
+            "slip_number": slip_number,
         }
         try:
             process_credit_sale(
@@ -2314,14 +2374,15 @@ async def patch_credit_sales(
     log_audit_event(
         station_id=station_id, action="credit_sales_updated",
         performed_by=ctx["username"], entity_type="handover", entity_id=handover_id,
-        details={"credit_total": credit_total, "new_items": len(new_items_to_create)},
+        details={"credit_total": credit_total, "added": len(new_items_to_create), "duplicates_rejected": len(duplicates)},
     )
 
     return {
         "handover_id": handover_id,
         "credit_sales": credit_total,
         "credit_sale_details": credit_sale_details,
-        "new_items_created": len(new_items_to_create),
+        "added": len(new_items_to_create),
+        "duplicates": duplicates,
     }
 
 
