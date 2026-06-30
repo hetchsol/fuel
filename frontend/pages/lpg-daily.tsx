@@ -19,6 +19,7 @@ interface CylinderRow {
   damage_note: string
   balance: number
   closing_empty: number
+  closing_empty_override: boolean
   value_refill: number
   value_with_cylinder: number
   total_value: number
@@ -57,6 +58,7 @@ export default function LPGDaily() {
       size_kg: s, opening_balance: 0, opening_empty: 0, receipts: 0,
       traded_in: 0, traded_out: 0, sold_refill: 0, sold_with_cylinder: 0,
       damaged: 0, damage_note: '', balance: 0, closing_empty: 0,
+      closing_empty_override: false,
       value_refill: 0, value_with_cylinder: 0, total_value: 0,
     }))
   )
@@ -127,12 +129,18 @@ export default function LPGDaily() {
       if (!p) return row
       const t_in = tradedInMap[row.size_kg] || 0
       const t_out = tradedOutMap[row.size_kg] || 0
-      const balance = row.opening_balance + row.receipts + t_in - row.sold_refill - row.sold_with_cylinder - t_out - (row.damaged || 0)
+      // traded_in cylinders are empties returned by the customer, not full stock
+      const balance = row.opening_balance + row.receipts - row.sold_refill - row.sold_with_cylinder - t_out - (row.damaged || 0)
+      // closing_empty: each refill brings back an empty shell; each trade-in also returns an empty shell
+      const closing_empty = row.closing_empty_override
+        ? row.closing_empty
+        : row.opening_empty + row.sold_refill + t_in
       return {
         ...row,
         traded_in: t_in,
         traded_out: t_out,
         balance,
+        closing_empty,
         value_refill: p.price_refill * row.sold_refill,
         value_with_cylinder: p.price_with_cylinder * row.sold_with_cylinder,
         total_value: p.price_refill * row.sold_refill + p.price_with_cylinder * row.sold_with_cylinder,
@@ -143,7 +151,7 @@ export default function LPGDaily() {
     pricing,
     trades,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    cylinderRows.map(r => `${r.opening_balance}-${r.receipts}-${r.sold_refill}-${r.sold_with_cylinder}-${r.damaged}`).join(','),
+    cylinderRows.map(r => `${r.opening_balance}-${r.opening_empty}-${r.receipts}-${r.sold_refill}-${r.sold_with_cylinder}-${r.damaged}-${r.closing_empty_override}`).join(','),
   ])
 
   const updateCylinder = (sizeKg: number, field: string, value: number) =>
@@ -151,6 +159,12 @@ export default function LPGDaily() {
 
   const updateCylinderStr = (sizeKg: number, field: string, value: string) =>
     setCylinderRows(prev => prev.map(r => r.size_kg === sizeKg ? { ...r, [field]: value } : r))
+
+  const overrideClosingEmpty = (sizeKg: number, value: number) =>
+    setCylinderRows(prev => prev.map(r => r.size_kg === sizeKg ? { ...r, closing_empty: value, closing_empty_override: true } : r))
+
+  const resetClosingEmpty = (sizeKg: number) =>
+    setCylinderRows(prev => prev.map(r => r.size_kg === sizeKg ? { ...r, closing_empty_override: false } : r))
 
   const addTrade = () =>
     setTrades(prev => [...prev, { from_size_kg: 3, to_size_kg: 6, quantity: 1, price_difference: 0, trade_type: 'upgrade' }])
@@ -356,13 +370,13 @@ export default function LPGDaily() {
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2 mb-2">
                     <div>
                       <label className="block text-xs text-content-secondary mb-0.5">Opening</label>
-                      {canManageStock
+                      {canManage
                         ? numInput(row.opening_balance, v => updateCylinder(row.size_kg, 'opening_balance', v))
                         : <p className="text-sm font-medium text-content-primary px-2 py-1.5">{row.opening_balance}</p>}
                     </div>
                     <div>
                       <label className="block text-xs text-content-secondary mb-0.5">Received</label>
-                      {canManageStock
+                      {canManage
                         ? numInput(row.receipts, v => updateCylinder(row.size_kg, 'receipts', v))
                         : <p className="text-sm text-content-secondary px-2 py-1.5">{row.receipts}</p>}
                     </div>
@@ -418,13 +432,29 @@ export default function LPGDaily() {
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                     <div>
                       <label className="block text-xs text-content-secondary mb-0.5">Opening Empty</label>
-                      {canManageStock
+                      {canManage
                         ? numInput(row.opening_empty, v => updateCylinder(row.size_kg, 'opening_empty', v))
                         : <p className="text-sm text-content-secondary px-2 py-1.5">{row.opening_empty}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs text-content-secondary mb-0.5">Closing Empty</label>
-                      {numInput(row.closing_empty, v => updateCylinder(row.size_kg, 'closing_empty', v))}
+                      <label className="block text-xs text-content-secondary mb-0.5">
+                        Closing Empty
+                        {row.closing_empty_override && (
+                          <button onClick={() => resetClosingEmpty(row.size_kg)}
+                            className="ml-1.5 text-[10px] text-action-primary underline">reset</button>
+                        )}
+                      </label>
+                      {canManage
+                        ? (
+                          <input
+                            type="number" min={0} value={row.closing_empty}
+                            onChange={e => overrideClosingEmpty(row.size_kg, parseInt(e.target.value) || 0)}
+                            className={`w-full px-2 py-1.5 rounded border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary ${
+                              row.closing_empty_override ? 'border-status-warning' : 'border-surface-border'
+                            }`}
+                          />
+                        )
+                        : <p className="text-sm text-content-secondary px-2 py-1.5">{row.closing_empty}</p>}
                     </div>
                   </div>
 
