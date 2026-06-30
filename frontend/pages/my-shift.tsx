@@ -1270,6 +1270,30 @@ export default function MyShift() {
           </button>
         {showStartShift && <div className="space-y-6 p-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
 
+          {/* Suspended credit accounts warning */}
+          {(() => {
+            const suspended = (creditAccounts as any[]).filter((a: any) => a.is_suspended)
+            if (suspended.length === 0) return null
+            return (
+              <div className="rounded-lg px-4 py-3 text-sm"
+                style={{ backgroundColor: 'var(--color-status-warning-light)', border: '1px solid var(--color-status-warning)' }}>
+                <p className="font-bold mb-2" style={{ color: 'var(--color-status-warning)' }}>
+                  Suspended accounts — do not dispense fuel on credit to:
+                </p>
+                <ul className="space-y-1">
+                  {suspended.map((a: any) => (
+                    <li key={a.account_id} className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-status-warning)' }}>
+                      {a.client_code && (
+                        <span className="font-mono font-bold">{a.client_code}</span>
+                      )}
+                      <span>{a.account_name}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          })()}
+
           {/* Opening readings — editable for retrospective (first shift: manual entry;
               subsequent shifts: auto-fetched from previous closing, still editable to correct) */}
           <div className="rounded-lg shadow overflow-hidden" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
