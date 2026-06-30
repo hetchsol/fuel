@@ -322,10 +322,12 @@ class AccountContact(BaseModel):
 class AccountHolder(BaseModel):
     account_id: str
     account_name: str
-    account_type: str  # POS, Institution, Corporate, Individual
-    credit_limit: float
-    current_balance: float
-    client_code: Optional[str] = None   # 3-letter prefix for slip numbers, e.g. "CBM"
+    account_type: str  # "Pre-Paid" or "Post-Paid"
+    credit_limit: float = 0.0            # Post-Paid: ceiling; Pre-Paid: unused
+    current_balance: float = 0.0         # Pre-Paid: remaining funds (decreases); Post-Paid: amount owed (increases)
+    opening_balance: Optional[float] = None  # Pre-Paid only: initial deposit recorded at creation
+    approved_overdraft: float = 0.0      # owner-granted extra capacity beyond limit/balance; consumed by sales
+    client_code: Optional[str] = None   # 3-letter prefix for auth references, e.g. "CBM"
     contact_person: Optional[str] = None  # legacy — superseded by contacts[]
     phone: Optional[str] = None           # legacy — superseded by contacts[]
     contacts: Optional[List[AccountContact]] = []
@@ -358,8 +360,12 @@ class CreditSale(BaseModel):
     fuel_type: str
     volume: float
     amount: float
+    driver_name: Optional[str] = None
+    vehicle_reg: Optional[str] = None
+    coupon_serial: Optional[str] = None
+    auth_reference: Optional[str] = None  # e.g. "CBM-ABZ1234ZM-30062026-C0045"
     invoice_number: Optional[str] = None
-    slip_number: Optional[str] = None   # e.g. "CBM29062026-001"
+    slip_number: Optional[str] = None  # legacy; superseded by auth_reference
 
 class HandoverCreditSaleItem(BaseModel):
     account_id: str
@@ -368,6 +374,9 @@ class HandoverCreditSaleItem(BaseModel):
     volume: float = Field(..., gt=0)
     price_per_liter: float = 0     # Server-resolved on submit
     amount: float = 0              # Server-calculated: volume × price_per_liter
+    driver_name: Optional[str] = None
+    vehicle_reg: Optional[str] = None
+    coupon_serial: Optional[str] = None
 
 # Delivery Reference for Multiple Deliveries Support
 class DeliveryReference(BaseModel):

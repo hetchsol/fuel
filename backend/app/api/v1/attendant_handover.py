@@ -18,7 +18,7 @@ from ...models.models import (
 from ...config import resolve_fuel_price, resolve_fuel_price_for_shift, apply_due_price_changes
 from ...database.storage import get_nozzle, save_station_storage
 from ...services.inventory import process_credit_sale
-from .accounts import generate_client_code
+from .accounts import generate_client_code, generate_auth_reference
 from .auth import get_current_user, require_supervisor_or_owner, require_manager_or_owner, get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
@@ -540,10 +540,7 @@ def _process_stock_snapshot(stock_snapshot, station_id, storage):
 
 
 def _generate_slip_number(client_code: str, shift_date: str, storage: dict) -> str:
-    """
-    Generate: {client_code}{DDMMYYYY}-{NNN}
-    Sequence resets per calendar date; counter stored in storage under _credit_slip_seq_{date}.
-    """
+    """Legacy sequential reference: {client_code}{DDMMYYYY}-{NNN}. Used as fallback when no coupon details."""
     try:
         y, m, d = shift_date.split('-')
         date_part = f"{d}{m}{y}"
@@ -553,6 +550,18 @@ def _generate_slip_number(client_code: str, shift_date: str, storage: dict) -> s
     seq = storage.get(seq_key, 0) + 1
     storage[seq_key] = seq
     return f"{client_code}{date_part}-{seq:03d}"
+
+
+def _build_credit_ref(client_code: str, item: dict, shift_date: str, storage: dict) -> tuple[str, str]:
+    """Return (auth_reference, slip_number) for a credit sale item.
+    Uses new format when vehicle_reg and coupon_serial are present; falls back to sequential slip."""
+    vehicle_reg = item.get("vehicle_reg") or ""
+    coupon_serial = item.get("coupon_serial") or ""
+    if vehicle_reg and coupon_serial:
+        ref = generate_auth_reference(client_code, vehicle_reg, shift_date, coupon_serial)
+        return ref, ""
+    slip = _generate_slip_number(client_code, shift_date, storage)
+    return "", slip
 
 
 def _ensure_client_code(account_id: str, storage: dict) -> str:
@@ -595,6 +604,8 @@ def _process_credit_sales(credit_sale_items, storage, shift_id):
             "account_id": item.account_id, "account_name": item.account_name,
             "fuel_type": item.fuel_type, "volume": item.volume,
             "price_per_liter": price, "amount": amount, "source": "handover",
+            "driver_name": item.driver_name, "vehicle_reg": item.vehicle_reg,
+            "coupon_serial": item.coupon_serial,
         })
 
     pre_existing = [s for s in credit_sales_data if s.get("shift_id") == shift_id]
@@ -609,22 +620,33 @@ def _process_credit_sales(credit_sale_items, storage, shift_id):
             "amount": s.get("amount", 0),
             "source": "pre_existing",
             "sale_id": s.get("sale_id", ""),
+            "driver_name": s.get("driver_name"),
+            "vehicle_reg": s.get("vehicle_reg"),
+            "coupon_serial": s.get("coupon_serial"),
+            "auth_reference": s.get("auth_reference"),
             "slip_number": s.get("slip_number"),
         })
 
-    pre_existing_keys = {(s.get("account_id"), s.get("fuel_type")) for s in pre_existing}
+    # Dedup key: coupon_serial when present (each coupon is a distinct trip), else (account_id, fuel_type)
+    def _pre_existing_key(s):
+        cs = s.get("coupon_serial")
+        return ("coupon", s.get("account_id"), cs) if cs else ("ft", s.get("account_id"), s.get("fuel_type"))
+
+    pre_existing_keys = {_pre_existing_key(s) for s in pre_existing}
     new_items_to_create = []
     duplicates = []
     seen_in_submission = set()
     for item in enriched_items:
-        key = (item["account_id"], item["fuel_type"])
+        cs = item.get("coupon_serial")
+        key = ("coupon", item["account_id"], cs) if cs else ("ft", item["account_id"], item["fuel_type"])
         if key in pre_existing_keys or key in seen_in_submission:
             item["source"] = "skipped_duplicate"
+            label = f"coupon {cs}" if cs else item["fuel_type"]
             duplicates.append({
                 "account_name": item["account_name"],
                 "fuel_type": item["fuel_type"],
                 "volume": item["volume"],
-                "reason": f"{item['account_name']} / {item['fuel_type']} already recorded for this shift",
+                "reason": f"{item['account_name']} / {label} already recorded for this shift",
             })
         else:
             new_items_to_create.append(item)
@@ -869,21 +891,26 @@ def _update_nozzle_state(nozzle_readings, storage, shift_date=None, shift_type=N
 
 
 def _create_credit_sale_records(new_items_to_create, handover_id, handover_output, shift, storage, station_id):
-    """Create CreditSale records for new items, generating a unique slip number for each."""
+    """Create CreditSale records for new items, generating auth_reference or legacy slip number."""
     accounts_data = storage.get('accounts', {})
-    credit_sales_data = storage.get('credit_sales', [])
+    credit_sales_data = storage.setdefault('credit_sales', [])
     handovers = _load_handovers(station_id)
     shift_date = shift.get("date", "")
     for idx, item in enumerate(new_items_to_create):
         sale_id = f"CS-HO-{handover_id}-{idx}"
         client_code = _ensure_client_code(item["account_id"], storage)
-        slip_number = _generate_slip_number(client_code, shift_date, storage)
-        item["slip_number"] = slip_number  # propagate to credit_sale_details
+        auth_reference, slip_number = _build_credit_ref(client_code, item, shift_date, storage)
+        item["auth_reference"] = auth_reference
+        item["slip_number"] = slip_number
         sale_data = {
             "sale_id": sale_id, "account_id": item["account_id"],
             "shift_id": shift.get("shift_id", ""), "date": shift_date,
             "fuel_type": item["fuel_type"], "volume": item["volume"],
             "amount": item["amount"], "invoice_number": f"Handover {handover_id}",
+            "driver_name": item.get("driver_name"),
+            "vehicle_reg": item.get("vehicle_reg"),
+            "coupon_serial": item.get("coupon_serial"),
+            "auth_reference": auth_reference,
             "slip_number": slip_number,
         }
         try:
@@ -2386,20 +2413,25 @@ async def patch_credit_sales(
             detail={"message": "All submitted items are duplicates.", "duplicates": duplicates},
         )
 
-    # Create account records, generate slip numbers, update balances
+    # Create account records, generate auth references, update balances
     accounts_data = storage.get('accounts', {})
-    credit_sales_data = storage.get('credit_sales', [])
+    credit_sales_data = storage.setdefault('credit_sales', [])
     shift_date = shift.get("date", "")
     for idx, item in enumerate(new_items_to_create):
         sale_id = f"CS-HO-{handover_id}-P{idx}"
         client_code = _ensure_client_code(item["account_id"], storage)
-        slip_number = _generate_slip_number(client_code, shift_date, storage)
+        auth_reference, slip_number = _build_credit_ref(client_code, item, shift_date, storage)
+        item["auth_reference"] = auth_reference
         item["slip_number"] = slip_number
         sale_data = {
             "sale_id": sale_id, "account_id": item["account_id"],
             "shift_id": shift_id, "date": shift_date,
             "fuel_type": item["fuel_type"], "volume": item["volume"],
             "amount": item["amount"], "invoice_number": f"Handover {handover_id}",
+            "driver_name": item.get("driver_name"),
+            "vehicle_reg": item.get("vehicle_reg"),
+            "coupon_serial": item.get("coupon_serial"),
+            "auth_reference": auth_reference,
             "slip_number": slip_number,
         }
         try:

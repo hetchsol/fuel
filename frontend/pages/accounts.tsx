@@ -42,14 +42,14 @@ export default function Accounts() {
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createForm, setCreateForm] = useState({
-    account_name: '', account_type: 'Corporate', credit_limit: '',
-    default_price_per_liter: '',
+    account_name: '', account_type: 'Post-Paid', credit_limit: '',
+    opening_balance: '', default_price_per_liter: '',
   })
 
   // Edit-account state
   const [editingAccount, setEditingAccount] = useState<any | null>(null)
   const [editForm, setEditForm] = useState({
-    account_name: '', account_type: 'Corporate', credit_limit: '',
+    account_name: '', account_type: 'Post-Paid', credit_limit: '',
     default_price_per_liter: '',
   })
   const [editContacts, setEditContacts] = useState<{ name: string; phone: string }[]>([{ name: '', phone: '' }])
@@ -57,6 +57,17 @@ export default function Accounts() {
 
   // Create-account contacts state
   const [createContacts, setCreateContacts] = useState<{ name: string; phone: string }[]>([{ name: '', phone: '' }])
+
+  // Top-up modal (Pre-Paid, owner only)
+  const [topUpAccount, setTopUpAccount] = useState<any | null>(null)
+  const [topUpAmount, setTopUpAmount] = useState('')
+  const [topUpRef, setTopUpRef] = useState('')
+  const [topUpSaving, setTopUpSaving] = useState(false)
+
+  // Approve overdraft modal (owner only)
+  const [overdraftAccount, setOverdraftAccount] = useState<any | null>(null)
+  const [overdraftAmount, setOverdraftAmount] = useState('')
+  const [overdraftSaving, setOverdraftSaving] = useState(false)
 
   // Credit sale form state — price starts empty; populated after settings fetch
   const [saleForm, setSaleForm] = useState({
@@ -67,8 +78,12 @@ export default function Accounts() {
     pricing_tier: 'standard',
     amount: '',
     shift_id: '',
-    notes: ''
+    notes: '',
+    coupon_serial: '',
+    driver_name: '',
+    vehicle_reg: '',
   })
+  const [lastAuthRef, setLastAuthRef] = useState('')
 
   // Only two tiers: standard (global price) and custom (free entry).
   // Per-account rates are configured on the account record itself via
@@ -79,6 +94,20 @@ export default function Accounts() {
   ]
   const tierPrice = (tierId: string): number =>
     tierId === 'standard' ? fuelPrices[saleForm.fuel_type as 'Diesel' | 'Petrol'] : 0
+
+  const buildAuthRef = (accountId: string, vehicleReg: string, couponSerial: string): string => {
+    const account = accounts.find((a: any) => a.account_id === accountId)
+    const clientCode = account?.client_code || ''
+    if (!clientCode || !vehicleReg.trim() || !couponSerial.trim()) return ''
+    const vehicleClean = vehicleReg.replace(/\s+/g, '').toUpperCase()
+    const now = new Date()
+    const d = String(now.getDate()).padStart(2, '0')
+    const m = String(now.getMonth() + 1).padStart(2, '0')
+    const y = now.getFullYear()
+    return `${clientCode}-${vehicleClean}-${d}${m}${y}-${couponSerial.trim().toUpperCase()}`
+  }
+
+  const liveAuthRef = buildAuthRef(saleForm.account_id, saleForm.vehicle_reg, saleForm.coupon_serial)
 
   useEffect(() => {
     fetchAccounts()
@@ -115,12 +144,15 @@ export default function Accounts() {
       const filledContacts = createContacts
         .filter(c => c.name.trim())
         .map(c => ({ name: c.name.trim(), phone: c.phone.trim() || null }))
+      const isPrePaid = createForm.account_type === 'Pre-Paid'
       const payload = {
         account_id: '',
         account_name: createForm.account_name.trim(),
         account_type: createForm.account_type,
-        credit_limit: parseFloat(createForm.credit_limit) || 0,
+        credit_limit: isPrePaid ? 0 : (parseFloat(createForm.credit_limit) || 0),
+        opening_balance: isPrePaid ? (parseFloat(createForm.opening_balance) || 0) : null,
         current_balance: 0,
+        approved_overdraft: 0,
         contacts: filledContacts,
         contact_person: null,
         phone: null,
@@ -141,7 +173,7 @@ export default function Accounts() {
       }
       toast.success('Credit account created')
       setShowCreate(false)
-      setCreateForm({ account_name: '', account_type: 'Corporate', credit_limit: '', default_price_per_liter: '' })
+      setCreateForm({ account_name: '', account_type: 'Post-Paid', credit_limit: '', opening_balance: '', default_price_per_liter: '' })
       setCreateContacts([{ name: '', phone: '' }])
       fetchAccounts()
     } catch (err: any) {
@@ -153,9 +185,10 @@ export default function Accounts() {
 
   const openEdit = (account: any) => {
     setEditingAccount(account)
+    const t = account.account_type === 'Pre-Paid' ? 'Pre-Paid' : 'Post-Paid'
     setEditForm({
       account_name: account.account_name || '',
-      account_type: account.account_type || 'Corporate',
+      account_type: t,
       credit_limit: account.credit_limit != null ? String(account.credit_limit) : '',
       default_price_per_liter: account.default_price_per_liter != null
         ? String(account.default_price_per_liter) : '',
@@ -316,7 +349,10 @@ export default function Accounts() {
         amount: parseFloat(saleForm.amount),
         shift_id: saleForm.shift_id || `SHIFT-${currentDate}`,
         date: currentDate,
-        invoice_number: saleForm.notes || null
+        invoice_number: saleForm.notes || null,
+        driver_name: saleForm.driver_name.trim() || null,
+        vehicle_reg: saleForm.vehicle_reg.trim() || null,
+        coupon_serial: saleForm.coupon_serial.trim() || null,
       }
 
       const res = await authFetch(`${BASE}/accounts/sales`, {
@@ -339,7 +375,10 @@ export default function Accounts() {
         throw new Error(errorData.detail || 'Failed to record credit sale')
       }
 
-      toast.success('Credit sale recorded successfully!')
+      const responseData = await res.json()
+      const authRef = responseData.auth_reference || ''
+      setLastAuthRef(authRef)
+      toast.success(authRef ? `Sale recorded. Auth ref: ${authRef}` : 'Credit sale recorded')
 
       // Reset form — re-seed price from live settings
       setSaleForm({
@@ -350,7 +389,10 @@ export default function Accounts() {
         pricing_tier: 'standard',
         amount: '',
         shift_id: '',
-        notes: ''
+        notes: '',
+        coupon_serial: '',
+        driver_name: '',
+        vehicle_reg: '',
       })
 
       // Refresh accounts to update balances
@@ -366,25 +408,87 @@ export default function Accounts() {
     return `ZMW ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
-  const getCreditUtilization = (account: any) => {
-    return account.credit_limit > 0 ? (account.current_balance / account.credit_limit) * 100 : 0
+  const effectiveType = (account: any): 'Pre-Paid' | 'Post-Paid' => {
+    const t = account?.account_type
+    return t === 'Pre-Paid' ? 'Pre-Paid' : 'Post-Paid'
   }
 
-  const getUtilizationColor = (utilization: number) => {
-    if (utilization >= 90) return 'bg-status-error-light0'
-    if (utilization >= 75) return 'bg-category-c'
-    if (utilization >= 50) return 'bg-status-warning'
+  const isBlocked = (account: any): boolean => {
+    if (account.is_suspended) return true
+    const t = effectiveType(account)
+    if (t === 'Pre-Paid') return (account.current_balance ?? 0) <= 0 && (account.approved_overdraft ?? 0) <= 0
+    return (account.credit_limit ?? 0) > 0 &&
+      (account.current_balance ?? 0) >= (account.credit_limit ?? 0) + (account.approved_overdraft ?? 0)
+  }
+
+  const getBarPercent = (account: any): number => {
+    const t = effectiveType(account)
+    if (t === 'Pre-Paid') {
+      const opening = account.opening_balance || account.current_balance || 0
+      if (opening <= 0) return 0
+      return Math.min(100, ((account.current_balance ?? 0) / opening) * 100)
+    }
+    const ceiling = (account.credit_limit ?? 0) + (account.approved_overdraft ?? 0)
+    if (ceiling <= 0) return 0
+    return Math.min(100, ((account.current_balance ?? 0) / ceiling) * 100)
+  }
+
+  const getBarColor = (account: any): string => {
+    const t = effectiveType(account)
+    const pct = getBarPercent(account)
+    if (t === 'Pre-Paid') {
+      if (pct <= 10) return 'bg-status-error'
+      if (pct <= 30) return 'bg-status-warning'
+      return 'bg-status-success'
+    }
+    if (pct >= 100) return 'bg-status-error'
+    if (pct >= 80) return 'bg-status-warning'
     return 'bg-status-success'
   }
 
   const getAccountTypeColor = (accountType: string) => {
-    const colors: any = {
-      'Corporate': 'bg-action-primary-light text-action-primary border-action-primary',
-      'Institution': 'bg-category-a-light text-category-a border-category-a-border',
-      'Individual': 'bg-category-b-light text-category-b border-category-b-border',
-      'POS': 'bg-category-c-light text-category-c border-category-c-border'
-    }
-    return colors[accountType] || 'bg-surface-bg text-content-primary border-surface-border'
+    if (accountType === 'Pre-Paid') return 'bg-category-b-light text-category-b border-category-b-border'
+    return 'bg-action-primary-light text-action-primary border-action-primary'
+  }
+
+  const handleTopUp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!topUpAccount) return
+    const amt = parseFloat(topUpAmount)
+    if (!amt || amt <= 0) { toast.error('Enter a valid amount'); return }
+    setTopUpSaving(true)
+    try {
+      const params = new URLSearchParams({ amount: amt.toFixed(2) })
+      if (topUpRef.trim()) params.set('reference', topUpRef.trim())
+      const res = await authFetch(`${BASE}/accounts/${topUpAccount.account_id}/top-up?${params}`, {
+        method: 'POST', headers: getHeaders(),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Top-up failed') }
+      toast.success(`ZMW ${amt.toFixed(2)} added to ${topUpAccount.account_name}`)
+      setTopUpAccount(null); setTopUpAmount(''); setTopUpRef('')
+      fetchAccounts()
+    } catch (err: any) { toast.error(err.message) }
+    finally { setTopUpSaving(false) }
+  }
+
+  const handleApproveOverdraft = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!overdraftAccount) return
+    const amt = parseFloat(overdraftAmount)
+    if (isNaN(amt) || amt < 0) { toast.error('Enter a valid amount (0 to clear)'); return }
+    setOverdraftSaving(true)
+    try {
+      const res = await authFetch(`${BASE}/accounts/${overdraftAccount.account_id}/approve-overdraft?amount=${amt.toFixed(2)}`, {
+        method: 'POST', headers: getHeaders(),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed') }
+      toast.success(amt > 0
+        ? `ZMW ${amt.toFixed(2)} overdraft approved for ${overdraftAccount.account_name}`
+        : `Overdraft cleared for ${overdraftAccount.account_name}`)
+      setOverdraftAccount(null); setOverdraftAmount('')
+      fetchAccounts()
+    } catch (err: any) { toast.error(err.message) }
+    finally { setOverdraftSaving(false) }
   }
 
   return (
@@ -396,71 +500,145 @@ export default function Accounts() {
 
       {/* Record Credit Sale Form */}
       <div className="mb-8 bg-surface-card rounded-lg shadow-lg p-6">
-        <h2 className="text-xl font-bold text-content-primary mb-4">📝 Record Credit Sale</h2>
+        <h2 className="text-xl font-bold text-content-primary mb-4">Record Credit Sale</h2>
 
-        <form onSubmit={handleSubmitSale} className="space-y-4">
+        {/* Last auth reference banner */}
+        {lastAuthRef && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-status-success bg-status-success/10 px-4 py-3">
+            <div>
+              <p className="text-xs font-medium text-content-secondary">Last authorization reference — write this on the coupon</p>
+              <p className="font-mono font-bold text-lg text-content-primary tracking-wide">{lastAuthRef}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { navigator.clipboard.writeText(lastAuthRef); toast.success('Copied') }}
+              className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded border border-status-success text-status-success hover:bg-status-success hover:text-white transition-colors"
+            >
+              Copy
+            </button>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmitSale} className="space-y-5">
+
+          {/* Account + Coupon */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
-                Account Holder
-              </label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Account</label>
               <select
                 value={saleForm.account_id}
                 onChange={(e) => handleAccountChange(e.target.value)}
-                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary bg-surface-bg text-content-primary"
                 required
               >
-                <option value="">Select Account</option>
-                {accounts.map(account => (
+                <option value="">Select account</option>
+                {accounts.map((account: any) => (
                   <option key={account.account_id} value={account.account_id}>
-                    {account.account_name} ({account.account_type})
+                    {account.client_code ? `[${account.client_code}] ` : ''}{account.account_name}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
-                Fuel Type
-              </label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Coupon Serial No.</label>
+              <input
+                type="text"
+                value={saleForm.coupon_serial}
+                onChange={(e) => setSaleForm({ ...saleForm, coupon_serial: e.target.value })}
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary bg-surface-bg text-content-primary font-mono"
+                placeholder="e.g. C0045"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Auth Reference live preview */}
+          <div>
+            <label className="block text-sm font-medium text-content-secondary mb-1">Authorization Reference</label>
+            <div className={`flex items-center gap-2 px-3 py-2.5 rounded-md border ${
+              liveAuthRef ? 'border-action-primary bg-action-primary-light' : 'border-surface-border bg-surface-bg'
+            }`}>
+              <span className={`flex-1 font-mono font-bold text-base tracking-wide ${
+                liveAuthRef ? 'text-action-primary' : 'text-content-tertiary'
+              }`}>
+                {liveAuthRef || 'Complete account, vehicle reg and coupon serial to generate'}
+              </span>
+              {liveAuthRef && (
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText(liveAuthRef); toast.success('Copied') }}
+                  className="shrink-0 px-2 py-1 text-xs font-semibold rounded border border-action-primary text-action-primary hover:bg-action-primary hover:text-white transition-colors"
+                >
+                  Copy
+                </button>
+              )}
+            </div>
+            {liveAuthRef && (
+              <p className="mt-1 text-xs text-content-secondary">Write this on the coupon before releasing fuel.</p>
+            )}
+          </div>
+
+          {/* Driver + Vehicle */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Driver Name</label>
+              <input
+                type="text"
+                value={saleForm.driver_name}
+                onChange={(e) => setSaleForm({ ...saleForm, driver_name: e.target.value })}
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary bg-surface-bg text-content-primary"
+                placeholder="e.g. John Mwansa"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Vehicle Reg</label>
+              <input
+                type="text"
+                value={saleForm.vehicle_reg}
+                onChange={(e) => setSaleForm({ ...saleForm, vehicle_reg: e.target.value })}
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary bg-surface-bg text-content-primary font-mono uppercase"
+                placeholder="e.g. ABZ 1234 ZM"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Fuel + Volume + Price + Amount */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Fuel Type</label>
               <select
                 value={saleForm.fuel_type}
                 onChange={(e) => handleFuelTypeChange(e.target.value)}
-                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary bg-surface-bg text-content-primary"
               >
-                <option value="Petrol">Petrol</option>
                 <option value="Diesel">Diesel</option>
+                <option value="Petrol">Petrol</option>
               </select>
             </div>
 
-            {/* Pricing Tier */}
             <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
-                Pricing
-              </label>
-              <select
-                value={saleForm.pricing_tier}
-                onChange={(e) => handlePricingTierChange(e.target.value)}
-                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-              >
-                {pricingTiers.map(tier => {
-                  const globalPrice = fuelPrices[saleForm.fuel_type as 'Diesel' | 'Petrol']
-                  return (
-                    <option key={tier.id} value={tier.id}>
-                      {tier.label}
-                      {tier.id === 'standard' && globalPrice > 0
-                        ? ` — ZMW ${globalPrice.toFixed(2)}/L`
-                        : tier.id === 'custom' ? ' — enter below' : ''}
-                    </option>
-                  )
-                })}
-              </select>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Volume (L)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={saleForm.volume}
+                onChange={(e) => handleVolumeChange(e.target.value)}
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary bg-surface-bg text-content-primary"
+                placeholder="0.00"
+                required
+              />
             </div>
 
-            {/* Price per Liter Display */}
             <div>
               <label className="block text-sm font-medium text-content-secondary mb-1">
-                Price per Liter
+                Price / L
+                {saleForm.pricing_tier === 'custom' && (
+                  <span className="ml-1 text-xs text-status-warning">(custom)</span>
+                )}
               </label>
               <input
                 type="number"
@@ -472,57 +650,35 @@ export default function Accounts() {
                     ? (parseFloat(saleForm.volume) * parseFloat(price)).toFixed(2) : ''
                   setSaleForm({ ...saleForm, price_per_liter: price, pricing_tier: 'custom', amount })
                 }}
-                className={`w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary font-semibold text-lg ${
+                className={`w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary font-semibold ${
                   saleForm.pricing_tier === 'custom' ? 'bg-status-pending-light' : 'bg-surface-bg'
-                }`}
+                } text-content-primary`}
                 placeholder={fuelPrices[saleForm.fuel_type as 'Diesel' | 'Petrol']
-                  ? fuelPrices[saleForm.fuel_type as 'Diesel' | 'Petrol'].toFixed(2) : ''}
-              />
-              {saleForm.pricing_tier === 'custom' && (
-                <p className="text-xs text-status-warning mt-1">Custom price — amount computed from this rate</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
-                Volume (Liters)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={saleForm.volume}
-                onChange={(e) => handleVolumeChange(e.target.value)}
-                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                placeholder="e.g., 500.00"
-                required
+                  ? fuelPrices[saleForm.fuel_type as 'Diesel' | 'Petrol'].toFixed(2) : '0.00'}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-content-secondary mb-1">
-                Total Amount (Auto-calculated)
-              </label>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Amount (ZMW)</label>
               <input
                 type="text"
                 value={saleForm.amount}
                 readOnly
-                className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg font-bold text-lg cursor-not-allowed"
+                className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg font-bold text-lg cursor-not-allowed text-content-primary"
                 placeholder="Auto-calculated"
               />
             </div>
+          </div>
 
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-content-secondary mb-1">
-                Notes (Optional)
-              </label>
-              <input
-                type="text"
-                value={saleForm.notes}
-                onChange={(e) => setSaleForm({ ...saleForm, notes: e.target.value })}
-                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                placeholder="e.g., Vehicle registration, driver name, etc."
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-content-secondary mb-1">Notes (optional)</label>
+            <input
+              type="text"
+              value={saleForm.notes}
+              onChange={(e) => setSaleForm({ ...saleForm, notes: e.target.value })}
+              className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary bg-surface-bg text-content-primary"
+              placeholder="Any additional notes"
+            />
           </div>
 
           {error && (
@@ -559,23 +715,46 @@ export default function Accounts() {
           <LoadingSpinner text="Loading accounts..." />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {accounts.map(account => {
-              const utilization = getCreditUtilization(account)
+            {accounts.map((account: any) => {
+              const t = effectiveType(account)
+              const blocked = isBlocked(account)
+              const barPct = getBarPercent(account)
+              const barColor = getBarColor(account)
+              const overdraft = account.approved_overdraft ?? 0
+
+              // Pre-Paid: available = current_balance; ceiling = opening_balance
+              // Post-Paid: owed = current_balance; ceiling = credit_limit
+              const availableOrOwed = account.current_balance ?? 0
+              const ceiling = t === 'Pre-Paid'
+                ? (account.opening_balance || account.current_balance || 0)
+                : (account.credit_limit ?? 0)
+              const available = t === 'Pre-Paid'
+                ? availableOrOwed
+                : Math.max(0, ceiling - availableOrOwed)
+
               return (
                 <div
                   key={account.account_id}
                   className={`bg-surface-card rounded-lg shadow-lg p-5 border-2 transition-all duration-200 ${
                     account.is_suspended
                       ? 'border-status-error opacity-60'
+                      : blocked
+                      ? 'border-status-warning'
                       : 'border-surface-border hover:border-action-primary hover:shadow-xl hover:-translate-y-0.5'
                   }`}
                 >
+                  {/* Header */}
                   <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-content-primary text-lg">{account.account_name}</h3>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-content-primary text-lg leading-tight">{account.account_name}</h3>
                         {account.is_suspended && (
                           <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-error text-white">Suspended</span>
+                        )}
+                        {!account.is_suspended && blocked && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-warning text-white">
+                            {t === 'Pre-Paid' ? 'No Balance' : 'At Limit'}
+                          </span>
                         )}
                       </div>
                       <p className="text-xs text-content-secondary mt-1">
@@ -583,60 +762,71 @@ export default function Accounts() {
                         {account.account_id}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded border ${getAccountTypeColor(account.account_type)}`}>
-                        {account.account_type}
-                      </span>
+                    <div className="flex items-center gap-2 ml-2 shrink-0">
+                      <span className={`px-2 py-1 text-xs font-semibold rounded border ${getAccountTypeColor(t)}`}>{t}</span>
                       {canManage && (
-                        <button
-                          onClick={() => openEdit(account)}
-                          className="px-2 py-1 text-xs rounded border border-surface-border text-content-secondary hover:bg-action-primary-light hover:text-action-primary hover:border-action-primary"
-                        >
+                        <button onClick={() => openEdit(account)}
+                          className="px-2 py-1 text-xs rounded border border-surface-border text-content-secondary hover:bg-action-primary-light hover:text-action-primary hover:border-action-primary">
                           Edit
                         </button>
                       )}
                     </div>
                   </div>
 
-                  {/* Current Balance */}
-                  <div className="mb-3">
-                    <p className="text-xs text-content-secondary mb-1">Current Balance</p>
-                    <p className="text-2xl font-bold text-content-primary">
-                      {formatCurrency(account.current_balance)}
+                  {/* Primary balance figure */}
+                  <div className="mb-1">
+                    <p className="text-xs text-content-secondary mb-0.5">
+                      {t === 'Pre-Paid' ? 'Available Balance' : 'Amount Owed'}
+                    </p>
+                    <p className={`text-2xl font-bold ${
+                      t === 'Pre-Paid'
+                        ? (availableOrOwed <= 0 ? 'text-status-error' : 'text-content-primary')
+                        : 'text-content-primary'
+                    }`}>
+                      {formatCurrency(availableOrOwed)}
                     </p>
                   </div>
 
-                  {/* Credit Limit */}
+                  {/* Ceiling */}
                   <div className="mb-3">
-                    <p className="text-xs text-content-secondary mb-1">Credit Limit</p>
-                    <p className="text-lg font-semibold text-content-secondary">
-                      {formatCurrency(account.credit_limit)}
+                    <p className="text-xs text-content-secondary">
+                      {t === 'Pre-Paid' ? 'Opening Deposit' : 'Credit Ceiling'}
                     </p>
+                    <p className="text-sm font-semibold text-content-secondary">{formatCurrency(ceiling)}</p>
                   </div>
 
-                  {/* Credit Utilization Bar */}
+                  {/* Progress bar */}
                   <div className="mb-3">
                     <div className="flex justify-between text-xs text-content-secondary mb-1">
-                      <span>Credit Utilization</span>
-                      <span className="font-semibold">{utilization.toFixed(1)}%</span>
+                      <span>{t === 'Pre-Paid' ? 'Balance remaining' : 'Ceiling used'}</span>
+                      <span className="font-semibold">{barPct.toFixed(1)}%</span>
                     </div>
-                    <div className="w-full bg-surface-border rounded-full h-3 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${getUtilizationColor(utilization)}`}
-                        style={{ width: `${Math.min(utilization, 100)}%` }}
-                      />
+                    <div className="w-full bg-surface-border rounded-full h-2.5 overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${barColor}`}
+                        style={{ width: `${barPct}%` }} />
                     </div>
                   </div>
 
-                  {/* Available Credit */}
+                  {/* Available credit / remaining */}
                   <div className="pt-3 border-t border-surface-border">
-                    <p className="text-xs text-content-secondary">Available Credit</p>
-                    <p className="text-lg font-bold text-status-success">
-                      {formatCurrency(account.credit_limit - account.current_balance)}
+                    <p className="text-xs text-content-secondary">
+                      {t === 'Pre-Paid' ? 'Balance' : 'Available Credit'}
+                    </p>
+                    <p className={`text-lg font-bold ${available <= 0 ? 'text-status-error' : 'text-status-success'}`}>
+                      {formatCurrency(available)}
                     </p>
                   </div>
 
-                  {/* Custom Price & Contact Info */}
+                  {/* Approved overdraft indicator */}
+                  {overdraft > 0 && (
+                    <div className="mt-2 px-2 py-1.5 rounded bg-status-warning/10 border border-status-warning/30">
+                      <p className="text-xs text-status-warning font-medium">
+                        Owner approved extra: {formatCurrency(overdraft)}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Custom rate */}
                   {account.default_price_per_liter && (
                     <div className="mt-3 pt-3 border-t border-surface-border">
                       <p className="text-xs text-content-secondary">Custom Rate</p>
@@ -645,48 +835,60 @@ export default function Accounts() {
                       </p>
                     </div>
                   )}
+
+                  {/* Contacts */}
                   {(() => {
                     const contacts = account.contacts?.length
                       ? account.contacts
-                      : account.contact_person
-                        ? [{ name: account.contact_person, phone: account.phone }]
-                        : []
+                      : account.contact_person ? [{ name: account.contact_person, phone: account.phone }] : []
                     return contacts.length > 0 ? (
                       <div className="mt-3 pt-3 border-t border-surface-border space-y-1">
-                        <p className="text-xs font-medium text-content-secondary">
-                          {contacts.length === 1 ? 'Contact' : 'Contacts'}
-                        </p>
+                        <p className="text-xs font-medium text-content-secondary">{contacts.length === 1 ? 'Contact' : 'Contacts'}</p>
                         {contacts.map((c: any, i: number) => (
-                          <p key={i} className="text-xs text-content-secondary">
-                            {c.name}{c.phone ? ` — ${c.phone}` : ''}
-                          </p>
+                          <p key={i} className="text-xs text-content-secondary">{c.name}{c.phone ? ` — ${c.phone}` : ''}</p>
                         ))}
                       </div>
                     ) : null
                   })()}
 
+                  {/* Actions */}
                   {(canManage || isOwner) && (
-                    <div className="mt-3 pt-3 border-t border-surface-border flex items-center gap-2">
-                      {canManage && (
-                        <button
-                          onClick={() => handleSuspend(account)}
-                          className={`px-2 py-1 text-xs rounded border font-medium ${
-                            account.is_suspended
-                              ? 'border-status-success text-status-success hover:bg-status-success hover:text-white'
-                              : 'border-status-warning text-status-warning hover:bg-status-warning hover:text-white'
-                          } transition-colors`}
-                        >
-                          {account.is_suspended ? 'Reinstate' : 'Suspend'}
-                        </button>
-                      )}
+                    <div className="mt-3 pt-3 border-t border-surface-border space-y-2">
+                      {/* Owner: top-up (Pre-Paid) and overdraft approval */}
                       {isOwner && (
-                        <button
-                          onClick={() => handleDelete(account)}
-                          className="px-2 py-1 text-xs rounded border border-status-error text-status-error hover:bg-status-error hover:text-white transition-colors ml-auto"
-                        >
-                          Delete
-                        </button>
+                        <div className="flex gap-2">
+                          {t === 'Pre-Paid' && (
+                            <button
+                              onClick={() => { setTopUpAccount(account); setTopUpAmount(''); setTopUpRef('') }}
+                              className="px-2 py-1 text-xs rounded border border-action-primary text-action-primary hover:bg-action-primary hover:text-white transition-colors font-medium">
+                              Top Up
+                            </button>
+                          )}
+                          <button
+                            onClick={() => { setOverdraftAccount(account); setOverdraftAmount(overdraft > 0 ? String(overdraft) : '') }}
+                            className="px-2 py-1 text-xs rounded border border-status-warning text-status-warning hover:bg-status-warning hover:text-white transition-colors font-medium">
+                            {overdraft > 0 ? 'Adjust Overdraft' : 'Approve Overdraft'}
+                          </button>
+                        </div>
                       )}
+                      <div className="flex items-center gap-2">
+                        {canManage && (
+                          <button onClick={() => handleSuspend(account)}
+                            className={`px-2 py-1 text-xs rounded border font-medium ${
+                              account.is_suspended
+                                ? 'border-status-success text-status-success hover:bg-status-success hover:text-white'
+                                : 'border-status-warning text-status-warning hover:bg-status-warning hover:text-white'
+                            } transition-colors`}>
+                            {account.is_suspended ? 'Reinstate' : 'Suspend'}
+                          </button>
+                        )}
+                        {isOwner && (
+                          <button onClick={() => handleDelete(account)}
+                            className="px-2 py-1 text-xs rounded border border-status-error text-status-error hover:bg-status-error hover:text-white transition-colors ml-auto">
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -700,12 +902,10 @@ export default function Accounts() {
       <div className="bg-action-primary-light border border-action-primary rounded-lg p-4">
         <h3 className="text-sm font-semibold text-action-primary mb-2">Credit Account Management</h3>
         <ul className="text-sm text-action-primary space-y-1">
-          <li>• <strong>Credit Accounts</strong> — Add your customers and set credit limits</li>
-          <li>• <strong>Credit Limit Enforcement</strong> - System prevents sales exceeding credit limits</li>
-          <li>• <strong>Real-time Balance Tracking</strong> - Balances update automatically with each credit sale</li>
-          <li>• <strong>Account Types</strong>: Corporate, Institution, Individual, POS</li>
-          <li>• <strong>Credit Sales</strong> are deducted from Expected Cash in shift reconciliation</li>
-          <li>• <strong>Payment Recording</strong> reduces account balance when customers pay</li>
+          <li>• <strong>Pre-Paid</strong> — Customer deposits funds upfront. Each sale reduces the balance. Owner tops up when funds run low.</li>
+          <li>• <strong>Post-Paid</strong> — Customer has a credit ceiling. Each sale increases what they owe. Owner records payment when they settle.</li>
+          <li>• <strong>Owner Overdraft Approval</strong> — Owner can approve extra capacity on either type, consumed by the next sale(s).</li>
+          <li>• <strong>Credit Sales</strong> are deducted from Expected Cash in shift reconciliation.</li>
         </ul>
       </div>
 
@@ -728,16 +928,28 @@ export default function Accounts() {
                   <select value={editForm.account_type}
                     onChange={(e) => setEditForm({ ...editForm, account_type: e.target.value })}
                     className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary">
-                    {['Corporate', 'Institution', 'Individual', 'POS'].map(t => <option key={t} value={t}>{t}</option>)}
+                    <option value="Post-Paid">Post-Paid</option>
+                    <option value="Pre-Paid">Pre-Paid</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Credit Limit (ZMW)</label>
-                  <input type="number" step="0.01" min="0" value={editForm.credit_limit}
-                    onChange={(e) => setEditForm({ ...editForm, credit_limit: e.target.value })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    placeholder="0.00" />
-                </div>
+                {editForm.account_type === 'Post-Paid' && (
+                  <div>
+                    <label className="block text-sm font-medium text-content-secondary mb-1">Credit Ceiling (ZMW)</label>
+                    <input type="number" step="0.01" min="0" value={editForm.credit_limit}
+                      onChange={(e) => setEditForm({ ...editForm, credit_limit: e.target.value })}
+                      className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                      placeholder="0.00" />
+                  </div>
+                )}
+                {editForm.account_type === 'Pre-Paid' && editingAccount && (
+                  <div>
+                    <label className="block text-sm font-medium text-content-secondary mb-1">Current Balance</label>
+                    <p className="px-3 py-2 text-sm font-semibold text-content-primary border border-surface-border rounded-md bg-surface-bg/50">
+                      {formatCurrency(editingAccount.current_balance ?? 0)}
+                      <span className="ml-1 text-xs font-normal text-content-secondary">(managed via top-up)</span>
+                    </p>
+                  </div>
+                )}
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -820,16 +1032,28 @@ export default function Accounts() {
                   <select value={createForm.account_type}
                     onChange={(e) => setCreateForm({ ...createForm, account_type: e.target.value })}
                     className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary">
-                    {['Corporate', 'Institution', 'Individual', 'POS'].map(t => <option key={t} value={t}>{t}</option>)}
+                    <option value="Post-Paid">Post-Paid</option>
+                    <option value="Pre-Paid">Pre-Paid</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-secondary mb-1">Credit Limit (ZMW)</label>
-                  <input type="number" step="0.01" min="0" value={createForm.credit_limit}
-                    onChange={(e) => setCreateForm({ ...createForm, credit_limit: e.target.value })}
-                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
-                    placeholder="0.00" />
-                </div>
+                {createForm.account_type === 'Post-Paid' ? (
+                  <div>
+                    <label className="block text-sm font-medium text-content-secondary mb-1">Credit Ceiling (ZMW)</label>
+                    <input type="number" step="0.01" min="0" value={createForm.credit_limit}
+                      onChange={(e) => setCreateForm({ ...createForm, credit_limit: e.target.value })}
+                      className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                      placeholder="0.00" />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-content-secondary mb-1">Opening Balance (ZMW)</label>
+                    <input type="number" step="0.01" min="0" value={createForm.opening_balance}
+                      onChange={(e) => setCreateForm({ ...createForm, opening_balance: e.target.value })}
+                      className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                      placeholder="0.00" required />
+                    <p className="mt-1 text-xs text-content-secondary">Initial deposit — becomes the starting balance.</p>
+                  </div>
+                )}
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -871,6 +1095,88 @@ export default function Accounts() {
                 <button type="submit" disabled={creating}
                   className="px-4 py-2 text-sm font-semibold rounded-md bg-action-primary text-white disabled:opacity-50">
                   {creating ? 'Creating...' : 'Create Account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Top Up Modal (Pre-Paid, owner only) */}
+      {topUpAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-lg shadow-lg p-6 bg-surface-card border border-surface-border">
+            <h3 className="text-lg font-bold text-content-primary mb-1">Top Up — {topUpAccount.account_name}</h3>
+            <p className="text-sm text-content-secondary mb-4">
+              Current balance: <span className="font-semibold text-content-primary">{formatCurrency(topUpAccount.current_balance ?? 0)}</span>
+            </p>
+            <form onSubmit={handleTopUp} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Amount to Add (ZMW)</label>
+                <input type="number" step="0.01" min="0.01" value={topUpAmount}
+                  onChange={(e) => setTopUpAmount(e.target.value)}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  placeholder="0.00" required autoFocus />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Reference (optional)</label>
+                <input type="text" value={topUpRef}
+                  onChange={(e) => setTopUpRef(e.target.value)}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  placeholder="e.g. Bank transfer ref, receipt no." />
+              </div>
+              {topUpAmount && parseFloat(topUpAmount) > 0 && (
+                <p className="text-sm text-content-secondary">
+                  New balance will be: <span className="font-semibold text-content-primary">
+                    {formatCurrency((topUpAccount.current_balance ?? 0) + parseFloat(topUpAmount))}
+                  </span>
+                </p>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={() => setTopUpAccount(null)}
+                  className="px-4 py-2 text-sm rounded-md border border-surface-border text-content-secondary">Cancel</button>
+                <button type="submit" disabled={topUpSaving}
+                  className="px-4 py-2 text-sm font-semibold rounded-md bg-action-primary text-white disabled:opacity-50">
+                  {topUpSaving ? 'Adding...' : 'Add Funds'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Approve Overdraft Modal (owner only) */}
+      {overdraftAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-lg shadow-lg p-6 bg-surface-card border border-surface-border">
+            <h3 className="text-lg font-bold text-content-primary mb-1">
+              Approve Overdraft — {overdraftAccount.account_name}
+            </h3>
+            <p className="text-sm text-content-secondary mb-1">
+              Type: <span className="font-semibold">{effectiveType(overdraftAccount)}</span>
+            </p>
+            <p className="text-sm text-content-secondary mb-4">
+              {effectiveType(overdraftAccount) === 'Pre-Paid'
+                ? `Current balance: ${formatCurrency(overdraftAccount.current_balance ?? 0)}. Overdraft allows draws beyond zero.`
+                : `Ceiling: ${formatCurrency(overdraftAccount.credit_limit ?? 0)}. Overdraft allows sales beyond the ceiling.`}
+            </p>
+            <form onSubmit={handleApproveOverdraft} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">
+                  Approved Extra Amount (ZMW)
+                </label>
+                <input type="number" step="0.01" min="0" value={overdraftAmount}
+                  onChange={(e) => setOverdraftAmount(e.target.value)}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                  placeholder="0.00 to clear" required autoFocus />
+                <p className="mt-1 text-xs text-content-secondary">Set to 0 to remove any existing approval.</p>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={() => setOverdraftAccount(null)}
+                  className="px-4 py-2 text-sm rounded-md border border-surface-border text-content-secondary">Cancel</button>
+                <button type="submit" disabled={overdraftSaving}
+                  className="px-4 py-2 text-sm font-semibold rounded-md bg-status-warning text-white disabled:opacity-50">
+                  {overdraftSaving ? 'Saving...' : 'Approve'}
                 </button>
               </div>
             </form>

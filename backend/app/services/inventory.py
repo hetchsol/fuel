@@ -95,64 +95,58 @@ def process_credit_sale(
     limit_field: str = 'credit_limit'
 ) -> Dict[str, Any]:
     """
-    Process a credit-based sale transaction
+    Process a credit sale, enforcing Pre-Paid or Post-Paid rules.
 
-    Generic function that handles:
-    - Account existence check
-    - Credit limit check
-    - Balance update
-    - Sale recording
+    Pre-Paid:  current_balance = remaining funds (decreases with sales).
+               Blocked when sale.amount > current_balance + approved_overdraft.
+    Post-Paid: current_balance = amount owed (increases with sales).
+               Blocked when current_balance + sale.amount > credit_limit + approved_overdraft.
 
-    Args:
-        accounts: Accounts dictionary storage
-        sales_log: List to append sale records to
-        account_id: ID of account
-        amount: Amount to charge
-        sale_data: Complete sale data to record
-        balance_field: Name of the balance field (default: 'current_balance')
-        limit_field: Name of the credit limit field (default: 'credit_limit')
-
-    Returns:
-        Sale data dictionary
-
-    Raises:
-        HTTPException: 404 if account not found, 400 if credit limit exceeded
-
-    Example:
-        >>> result = process_credit_sale(
-        ...     accounts=accounts_data,
-        ...     sales_log=credit_sales_data,
-        ...     account_id=sale.account_id,
-        ...     amount=sale.amount,
-        ...     sale_data=sale.dict()
-        ... )
+    approved_overdraft is consumed incrementally and resets to 0 when exhausted.
+    Unknown/legacy account_type values are treated as Post-Paid.
     """
-    # Check if account exists
     if account_id not in accounts:
-        raise HTTPException(
-            status_code=404,
-            detail="Account not found"
-        )
+        raise HTTPException(status_code=404, detail="Account not found")
 
     account = accounts[account_id]
+    account_type = account.get('account_type', 'Post-Paid')
+    if account_type not in ('Pre-Paid', 'Post-Paid'):
+        account_type = 'Post-Paid'
 
-    # Check credit limit
-    current_balance = account.get(balance_field, 0)
-    credit_limit = account.get(limit_field, 0)
-    new_balance = current_balance + amount
+    current_balance = account.get('current_balance', 0.0)
+    approved_overdraft = account.get('approved_overdraft', 0.0)
 
-    if new_balance > credit_limit:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Credit limit exceeded. Limit: {credit_limit}, Current: {current_balance}, Requested: {amount}"
-        )
+    if account_type == 'Pre-Paid':
+        available = round(current_balance + approved_overdraft, 2)
+        if amount > available:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient balance. Available: {available:.2f}, Requested: {amount:.2f}"
+            )
+        if amount <= current_balance:
+            account['current_balance'] = round(current_balance - amount, 2)
+        else:
+            overdraft_used = round(amount - current_balance, 2)
+            account['current_balance'] = 0.0
+            account['approved_overdraft'] = round(approved_overdraft - overdraft_used, 2)
+    else:
+        credit_limit = account.get('credit_limit', 0.0)
+        effective_ceiling = round(credit_limit + approved_overdraft, 2)
+        if round(current_balance + amount, 2) > effective_ceiling:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Credit ceiling reached. Ceiling: {credit_limit:.2f}, Owed: {current_balance:.2f}, Requested: {amount:.2f}"
+            )
+        new_balance = round(current_balance + amount, 2)
+        account['current_balance'] = new_balance
+        # Consume overdraft by the amount the new balance exceeds the credit limit
+        prev_over = max(0.0, current_balance - credit_limit)
+        new_over = max(0.0, new_balance - credit_limit)
+        overdraft_consumed = round(new_over - prev_over, 2)
+        if overdraft_consumed > 0:
+            account['approved_overdraft'] = round(approved_overdraft - overdraft_consumed, 2)
 
-    # Update balance
-    account[balance_field] = new_balance
-
-    # Record sale
     sales_log.append(sale_data)
-
     return sale_data
 
 

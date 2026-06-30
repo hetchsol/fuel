@@ -1270,25 +1270,35 @@ export default function MyShift() {
           </button>
         {showStartShift && <div className="space-y-6 p-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
 
-          {/* Suspended credit accounts warning */}
+          {/* Blocked credit accounts warning — suspended, no Pre-Paid balance, or Post-Paid at ceiling */}
           {(() => {
-            const suspended = (creditAccounts as any[]).filter((a: any) => a.is_suspended)
-            if (suspended.length === 0) return null
+            const effectiveType = (a: any) => a.account_type === 'Pre-Paid' ? 'Pre-Paid' : 'Post-Paid'
+            const blockedAccounts = (creditAccounts as any[]).filter((a: any) => {
+              if (a.is_suspended) return true
+              const t = effectiveType(a)
+              const overdraft = a.approved_overdraft ?? 0
+              if (t === 'Pre-Paid') return (a.current_balance ?? 0) <= 0 && overdraft <= 0
+              return (a.credit_limit ?? 0) > 0 && (a.current_balance ?? 0) >= (a.credit_limit ?? 0) + overdraft
+            })
+            if (blockedAccounts.length === 0) return null
             return (
               <div className="rounded-lg px-4 py-3 text-sm"
                 style={{ backgroundColor: 'var(--color-status-warning-light)', border: '1px solid var(--color-status-warning)' }}>
                 <p className="font-bold mb-2" style={{ color: 'var(--color-status-warning)' }}>
-                  Suspended accounts — do not dispense fuel on credit to:
+                  Do not dispense fuel on credit to these accounts:
                 </p>
                 <ul className="space-y-1">
-                  {suspended.map((a: any) => (
-                    <li key={a.account_id} className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-status-warning)' }}>
-                      {a.client_code && (
-                        <span className="font-mono font-bold">{a.client_code}</span>
-                      )}
-                      <span>{a.account_name}</span>
-                    </li>
-                  ))}
+                  {blockedAccounts.map((a: any) => {
+                    const t = effectiveType(a)
+                    const reason = a.is_suspended ? 'Suspended' : t === 'Pre-Paid' ? 'No balance' : 'At credit limit'
+                    return (
+                      <li key={a.account_id} className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-status-warning)' }}>
+                        {a.client_code && <span className="font-mono font-bold">{a.client_code}</span>}
+                        <span>{a.account_name}</span>
+                        <span className="ml-auto font-medium">{reason}</span>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             )

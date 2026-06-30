@@ -18,6 +18,17 @@ router = APIRouter()
 _NOISE_WORDS = {'ltd', 'limited', 'co', 'company', 'inc', 'plc', 'pvt', 'pty', 'llc', 'and', 'the', 'of', 'group'}
 
 
+def generate_auth_reference(client_code: str, vehicle_reg: str, sale_date: str, coupon_serial: str) -> str:
+    """Build auth reference: {client_code}-{vehicle_reg_clean}-{DDMMYYYY}-{coupon_serial}"""
+    vehicle_clean = re.sub(r'\s+', '', vehicle_reg.strip()).upper()
+    try:
+        y, m, d = sale_date.split('-')
+        date_part = f"{d}{m}{y}"
+    except Exception:
+        date_part = datetime.now().strftime("%d%m%Y")
+    return f"{client_code}-{vehicle_clean}-{date_part}-{coupon_serial.strip().upper()}"
+
+
 def generate_client_code(name: str, existing_codes: set) -> str:
     """
     Derive a unique 3-letter client code from an account name.
@@ -96,8 +107,20 @@ async def create_account(account: AccountHolder, ctx: dict = Depends(get_station
     if not (item_dict.get('client_code') or '').strip():
         existing_codes = {a.get('client_code', '') for a in accounts_data.values()}
         item_dict['client_code'] = generate_client_code(item_dict['account_name'], existing_codes)
-    # New accounts always start with a zero balance.
-    item_dict['current_balance'] = item_dict.get('current_balance') or 0.0
+    # Validate account type
+    if item_dict.get('account_type') not in ('Pre-Paid', 'Post-Paid'):
+        raise HTTPException(status_code=400, detail="account_type must be 'Pre-Paid' or 'Post-Paid'.")
+    # Pre-Paid: opening balance becomes the starting available balance.
+    # Post-Paid: always starts at zero owed.
+    if item_dict['account_type'] == 'Pre-Paid':
+        opening = item_dict.get('opening_balance') or 0.0
+        item_dict['opening_balance'] = opening
+        item_dict['current_balance'] = opening
+        item_dict['credit_limit'] = 0.0
+    else:
+        item_dict['current_balance'] = 0.0
+        item_dict['opening_balance'] = None
+    item_dict.setdefault('approved_overdraft', 0.0)
 
     accounts_data[account_id] = item_dict
     save_station_storage(ctx["station_id"])
@@ -127,8 +150,11 @@ async def update_account(account_id: str, account: AccountHolder, ctx: dict = De
 
     updated = account.dict()
     updated['account_id'] = account_id
-    # Balance is managed by payment/sale endpoints — never overwrite it here.
+    # Balance and overdraft are managed by dedicated endpoints — never overwrite here.
     updated['current_balance'] = accounts_data[account_id].get('current_balance', 0.0)
+    updated['approved_overdraft'] = accounts_data[account_id].get('approved_overdraft', 0.0)
+    # Preserve opening_balance from original record
+    updated['opening_balance'] = accounts_data[account_id].get('opening_balance')
 
     accounts_data[account_id] = updated
     save_station_storage(ctx["station_id"])
@@ -204,13 +230,10 @@ async def delete_account(account_id: str, ctx: dict = Depends(get_station_contex
 
 @router.post("/sales", response_model=CreditSale)
 async def record_credit_sale(sale: CreditSale, ctx: dict = Depends(get_station_context)):
-    """
-    Record a credit sale transaction
-    Updates account balance
-    """
+    """Record a credit sale transaction. Generates auth_reference from client code, vehicle reg, date and coupon serial."""
     storage = ctx["storage"]
     accounts_data = storage.get('accounts', {})
-    credit_sales_data = storage.get('credit_sales', [])
+    credit_sales_data = storage.setdefault('credit_sales', [])
 
     account = accounts_data.get(sale.account_id)
     if not account:
@@ -218,18 +241,31 @@ async def record_credit_sale(sale: CreditSale, ctx: dict = Depends(get_station_c
     if account.get("is_suspended"):
         raise HTTPException(status_code=400, detail=f"Account '{account.get('account_name')}' is suspended and cannot receive credit sales.")
 
-    # Validate foreign keys (account_id, shift_id)
-    validate_create('credit_sales', sale.dict())
+    sale_dict = sale.dict()
+
+    # Generate auth reference when coupon details are present
+    if sale.coupon_serial and sale.vehicle_reg:
+        client_code = account.get('client_code') or ''
+        if not client_code:
+            existing_codes = {a.get('client_code', '') for a in accounts_data.values()}
+            client_code = generate_client_code(account.get('account_name', ''), existing_codes)
+            account['client_code'] = client_code
+        sale_dict['auth_reference'] = generate_auth_reference(
+            client_code, sale.vehicle_reg, sale.date, sale.coupon_serial
+        )
+
+    validate_create('credit_sales', sale_dict)
 
     process_credit_sale(
         accounts=accounts_data,
         sales_log=credit_sales_data,
         account_id=sale.account_id,
         amount=sale.amount,
-        sale_data=sale.dict()
+        sale_data=sale_dict,
     )
 
-    return sale
+    save_station_storage(ctx["station_id"])
+    return CreditSale(**sale_dict)
 
 
 @router.get("/sales/shift/{shift_id}")
@@ -260,35 +296,79 @@ async def get_account_sales(account_id: str, ctx: dict = Depends(get_station_con
     return account_sales
 
 
-@router.post("/{account_id}/payment")
+@router.post("/{account_id}/payment", dependencies=[Depends(require_manager_or_owner)])
 async def record_payment(account_id: str, amount: float, reference: str = None, ctx: dict = Depends(get_station_context)):
-    """
-    Record payment received from account holder
-    Reduces account balance
-    """
+    """Record payment received from a Post-Paid account holder. Reduces the amount owed."""
     storage = ctx["storage"]
     accounts_data = storage.get('accounts', {})
-
     if account_id not in accounts_data:
         raise HTTPException(status_code=404, detail="Account not found")
-
     account = accounts_data[account_id]
-
+    account_type = account.get('account_type', 'Post-Paid')
+    if account_type not in ('Pre-Paid', 'Post-Paid'):
+        account_type = 'Post-Paid'
+    if account_type == 'Pre-Paid':
+        raise HTTPException(status_code=400, detail="Pre-Paid accounts do not accept payments. Use the top-up endpoint to add funds.")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Payment amount must be greater than zero.")
     if amount > account["current_balance"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Payment exceeds balance. Balance: {account['current_balance']}, Payment: {amount}"
-        )
+        raise HTTPException(status_code=400, detail=f"Payment exceeds balance owed. Owed: {account['current_balance']:.2f}, Payment: {amount:.2f}")
+    account["current_balance"] = round(account["current_balance"] - amount, 2)
+    save_station_storage(ctx["station_id"])
+    log_audit_event(
+        station_id=ctx["station_id"], action="account_payment",
+        performed_by=ctx["username"], entity_type="account", entity_id=account_id,
+        details={"amount": amount, "reference": reference, "new_balance": account["current_balance"]},
+    )
+    return {"status": "success", "account_id": account_id, "amount_paid": amount,
+            "new_balance": account["current_balance"], "reference": reference}
 
-    account["current_balance"] -= amount
 
-    return {
-        "status": "success",
-        "account_id": account_id,
-        "amount_paid": amount,
-        "new_balance": account["current_balance"],
-        "reference": reference
-    }
+@router.post("/{account_id}/top-up", dependencies=[Depends(require_owner)])
+async def top_up_account(account_id: str, amount: float, reference: str = None, ctx: dict = Depends(get_station_context)):
+    """Add funds to a Pre-Paid account. Owner only."""
+    storage = ctx["storage"]
+    accounts_data = storage.get('accounts', {})
+    if account_id not in accounts_data:
+        raise HTTPException(status_code=404, detail="Account not found")
+    account = accounts_data[account_id]
+    account_type = account.get('account_type', 'Post-Paid')
+    if account_type not in ('Pre-Paid', 'Post-Paid'):
+        account_type = 'Post-Paid'
+    if account_type != 'Pre-Paid':
+        raise HTTPException(status_code=400, detail="Top-up is only for Pre-Paid accounts. Use the payment endpoint for Post-Paid accounts.")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Top-up amount must be greater than zero.")
+    account["current_balance"] = round(account.get("current_balance", 0.0) + amount, 2)
+    save_station_storage(ctx["station_id"])
+    log_audit_event(
+        station_id=ctx["station_id"], action="account_top_up",
+        performed_by=ctx["username"], entity_type="account", entity_id=account_id,
+        details={"amount": amount, "reference": reference, "new_balance": account["current_balance"]},
+    )
+    return {"status": "success", "account_id": account_id, "amount_added": amount,
+            "new_balance": account["current_balance"], "reference": reference}
+
+
+@router.post("/{account_id}/approve-overdraft", dependencies=[Depends(require_owner)])
+async def approve_overdraft(account_id: str, amount: float, ctx: dict = Depends(get_station_context)):
+    """Set the approved overdraft amount for an account. Owner only. Replaces any existing overdraft approval."""
+    storage = ctx["storage"]
+    accounts_data = storage.get('accounts', {})
+    if account_id not in accounts_data:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if amount < 0:
+        raise HTTPException(status_code=400, detail="Overdraft amount cannot be negative.")
+    account = accounts_data[account_id]
+    prev = account.get("approved_overdraft", 0.0)
+    account["approved_overdraft"] = round(amount, 2)
+    save_station_storage(ctx["station_id"])
+    log_audit_event(
+        station_id=ctx["station_id"], action="account_overdraft_approved",
+        performed_by=ctx["username"], entity_type="account", entity_id=account_id,
+        details={"previous": prev, "approved_amount": amount, "account_type": account.get("account_type")},
+    )
+    return {"status": "success", "account_id": account_id, "approved_overdraft": amount}
 
 
 @router.get("/summary/totals")
@@ -299,18 +379,23 @@ async def get_accounts_summary(ctx: dict = Depends(get_station_context)):
     storage = ctx["storage"]
     accounts_data = storage.get('accounts', {})
 
-    total_receivables = sum(account["current_balance"] for account in accounts_data.values())
-    total_credit_limit = sum(account["credit_limit"] for account in accounts_data.values())
-    available_credit = total_credit_limit - total_receivables
+    def _effective_type(a):
+        t = a.get("account_type", "Post-Paid")
+        return t if t in ("Pre-Paid", "Post-Paid") else "Post-Paid"
+
+    post_paid = [a for a in accounts_data.values() if _effective_type(a) == "Post-Paid"]
+    pre_paid  = [a for a in accounts_data.values() if _effective_type(a) == "Pre-Paid"]
+
+    total_receivables  = round(sum(a.get("current_balance", 0) for a in post_paid), 2)
+    total_credit_limit = round(sum(a.get("credit_limit", 0) for a in post_paid), 2)
+    total_pre_paid_balance = round(sum(a.get("current_balance", 0) for a in pre_paid), 2)
 
     return {
         "total_accounts": len(accounts_data),
+        "post_paid_count": len(post_paid),
+        "pre_paid_count": len(pre_paid),
         "total_receivables": total_receivables,
         "total_credit_limit": total_credit_limit,
-        "available_credit": available_credit,
-        "accounts_by_type": {
-            "Corporate": len([a for a in accounts_data.values() if a["account_type"] == "Corporate"]),
-            "Institution": len([a for a in accounts_data.values() if a["account_type"] == "Institution"]),
-            "Internal": len([a for a in accounts_data.values() if a["account_type"] == "Internal"])
-        }
+        "available_post_paid_credit": round(total_credit_limit - total_receivables, 2),
+        "total_pre_paid_balance": total_pre_paid_balance,
     }
