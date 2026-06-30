@@ -638,6 +638,37 @@ def _cash_shortage_threshold(storage: dict) -> float:
     return storage.get('fuel_settings', {}).get('cash_shortage_threshold', 500)
 
 
+def _recalculate_reconciliation(handover: dict, storage: dict) -> None:
+    """
+    Recompute expected_cash, total_accounted, and difference from the current
+    values of actual_cash, pos_receipts, credit_sales, and total_expected.
+    Re-evaluates the cash_shortage flag only; all other auto_flag_reasons
+    (meter_deviation, nozzle_loss, pos_terminal_variance, etc.) are preserved.
+    Mutates the handover dict in place.
+    """
+    total_expected = handover.get("total_expected") or 0.0
+    actual_cash    = handover.get("actual_cash") or 0.0
+    pos_receipts   = handover.get("pos_receipts") or 0.0
+    credit_sales   = handover.get("credit_sales") or 0.0
+
+    expected_cash   = round(total_expected - credit_sales, 2)
+    total_accounted = round(actual_cash + pos_receipts + credit_sales, 2)
+    difference      = round(total_accounted - total_expected, 2)
+
+    handover["expected_cash"]   = expected_cash
+    handover["total_accounted"] = total_accounted
+    handover["difference"]      = difference
+
+    # Re-evaluate cash_shortage flag only; preserve everything else
+    existing_flags = [f for f in (handover.get("auto_flag_reasons") or []) if f != "cash_shortage"]
+    if abs(difference) > _cash_shortage_threshold(storage):
+        existing_flags.append("cash_shortage")
+    handover["auto_flag_reasons"] = existing_flags or None
+    handover["review_status"] = "flagged" if existing_flags else (
+        handover.get("review_status") if handover.get("review_status") == "approved" else "submitted"
+    )
+
+
 def _compute_auto_flags(difference, nozzle_summaries, stock_variance_flags, storage):
     """Compute auto-flag reasons. Returns (auto_flag_reasons, review_status)."""
     auto_flag_reasons = []
@@ -2282,12 +2313,17 @@ async def patch_pos_receipts(
 
     handover["pos_breakdown"] = merged
     handover["pos_receipts"] = pos_total
+    storage = ctx["storage"]
+    _recalculate_reconciliation(handover, storage)
     _save_handovers(handovers, station_id)
 
     log_audit_event(
         station_id=station_id, action="pos_receipts_updated",
         performed_by=ctx["username"], entity_type="handover", entity_id=handover_id,
-        details={"pos_total": pos_total, "added": len(new_items), "duplicates_rejected": len(duplicates)},
+        details={
+            "pos_total": pos_total, "added": len(new_items), "duplicates_rejected": len(duplicates),
+            "difference": handover["difference"], "expected_cash": handover["expected_cash"],
+        },
     )
 
     return {
@@ -2296,6 +2332,9 @@ async def patch_pos_receipts(
         "pos_receipts": pos_total,
         "added": len(new_items),
         "duplicates": duplicates,
+        "expected_cash": handover["expected_cash"],
+        "total_accounted": handover["total_accounted"],
+        "difference": handover["difference"],
     }
 
 
@@ -2368,13 +2407,17 @@ async def patch_credit_sales(
 
     handover["credit_sale_details"] = credit_sale_details
     handover["credit_sales"] = credit_total
+    _recalculate_reconciliation(handover, storage)
     _save_handovers(handovers, station_id)
     save_station_storage(station_id)
 
     log_audit_event(
         station_id=station_id, action="credit_sales_updated",
         performed_by=ctx["username"], entity_type="handover", entity_id=handover_id,
-        details={"credit_total": credit_total, "added": len(new_items_to_create), "duplicates_rejected": len(duplicates)},
+        details={
+            "credit_total": credit_total, "added": len(new_items_to_create), "duplicates_rejected": len(duplicates),
+            "difference": handover["difference"], "expected_cash": handover["expected_cash"],
+        },
     )
 
     return {
@@ -2383,6 +2426,9 @@ async def patch_credit_sales(
         "credit_sale_details": credit_sale_details,
         "added": len(new_items_to_create),
         "duplicates": duplicates,
+        "expected_cash": handover["expected_cash"],
+        "total_accounted": handover["total_accounted"],
+        "difference": handover["difference"],
     }
 
 
