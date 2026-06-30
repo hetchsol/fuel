@@ -38,13 +38,14 @@ export default function BackupPage() {
   const [pgDumping, setPgDumping] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [isOwner, setIsOwner] = useState(false)
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
-    if (!userData || JSON.parse(userData).role !== 'owner') {
-      router.replace('/')
-      return
-    }
+    if (!userData) { router.replace('/'); return }
+    const role = JSON.parse(userData).role
+    if (!['manager', 'owner'].includes(role)) { router.replace('/'); return }
+    setIsOwner(role === 'owner')
     loadStatus()
   }, [])
 
@@ -223,7 +224,7 @@ export default function BackupPage() {
           )}
         </div>
 
-        {/* Download + Restore side by side */}
+        {/* Download + Restore */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="glass-card p-5 space-y-3">
             <h2 className="text-sm font-semibold text-content-primary">Download Current Backup</h2>
@@ -240,34 +241,38 @@ export default function BackupPage() {
             </button>
           </div>
 
-          <div className="glass-card p-5 space-y-3">
-            <h2 className="text-sm font-semibold text-content-primary">Restore from File</h2>
-            <p className="text-xs text-content-secondary">
-              Upload a .json.gz backup file (from USB or a previous download) to restore all station data.
-              Current data will be overwritten. Use only in an emergency.
-            </p>
-            <label className={`block w-full px-4 py-2 border-2 border-dashed rounded-btn text-sm font-medium text-center cursor-pointer transition-colors ${restoring ? 'opacity-50 cursor-not-allowed border-surface-border text-content-secondary' : 'border-status-error/40 text-status-error hover:bg-status-error-light'}`}>
-              {restoring ? 'Restoring...' : 'Choose backup file to restore'}
-              <input type="file" accept=".json.gz" onChange={handleRestore} className="hidden" disabled={restoring} />
-            </label>
-          </div>
+          {isOwner && (
+            <div className="glass-card p-5 space-y-3">
+              <h2 className="text-sm font-semibold text-content-primary">Restore from File</h2>
+              <p className="text-xs text-content-secondary">
+                Upload a .json.gz backup file (from USB or a previous download) to restore all station data.
+                Current data will be overwritten. Use only in an emergency.
+              </p>
+              <label className={`block w-full px-4 py-2 border-2 border-dashed rounded-btn text-sm font-medium text-center cursor-pointer transition-colors ${restoring ? 'opacity-50 cursor-not-allowed border-surface-border text-content-secondary' : 'border-status-error/40 text-status-error hover:bg-status-error-light'}`}>
+                {restoring ? 'Restoring...' : 'Choose backup file to restore'}
+                <input type="file" accept=".json.gz" onChange={handleRestore} className="hidden" disabled={restoring} />
+              </label>
+            </div>
+          )}
         </div>
 
-        {/* Full DB dump */}
-        <div className="glass-card p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-content-primary">Full Database Dump</h2>
-          <p className="text-xs text-content-secondary">
-            Download a complete PostgreSQL dump (.sql.gz) of the entire database including user accounts and sessions.
-            Only available when the server has pg_dump installed.
-          </p>
-          <button
-            onClick={handlePgDump}
-            disabled={pgDumping}
-            className="px-4 py-2 border border-surface-border text-content-secondary rounded-btn hover:bg-surface-card/50 text-sm font-medium disabled:opacity-50"
-          >
-            {pgDumping ? 'Generating dump...' : 'Download Database Dump (.sql.gz)'}
-          </button>
-        </div>
+        {/* Full DB dump — owner only */}
+        {isOwner && (
+          <div className="glass-card p-5 space-y-3">
+            <h2 className="text-sm font-semibold text-content-primary">Full Database Dump</h2>
+            <p className="text-xs text-content-secondary">
+              Download a complete PostgreSQL dump (.sql.gz) of the entire database including user accounts and sessions.
+              Only available when the server has pg_dump installed.
+            </p>
+            <button
+              onClick={handlePgDump}
+              disabled={pgDumping}
+              className="px-4 py-2 border border-surface-border text-content-secondary rounded-btn hover:bg-surface-card/50 text-sm font-medium disabled:opacity-50"
+            >
+              {pgDumping ? 'Generating dump...' : 'Download Database Dump (.sql.gz)'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

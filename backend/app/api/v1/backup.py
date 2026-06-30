@@ -22,7 +22,7 @@ from fastapi.responses import StreamingResponse
 from ...database.station_files import load_station_json, save_station_json
 from ...database.storage import STATIONS_STORAGE, _storage_locks, get_station_storage, save_station_storage
 from ...services.audit_service import log_audit_event
-from .auth import get_station_context, require_owner
+from .auth import get_station_context, require_owner, require_manager_or_owner
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -159,9 +159,9 @@ def get_last_backup_at(station_id: str) -> str | None:
 
 # ── GET /backup/status ────────────────────────────────────────────────────────
 
-@router.get("/status", dependencies=[Depends(require_owner)])
+@router.get("/status", dependencies=[Depends(require_manager_or_owner)])
 async def backup_status(ctx: dict = Depends(get_station_context)):
-    """List all saved snapshots with metadata. Owner only."""
+    """List all saved snapshots with metadata. Manager+."""
     station_id = ctx["station_id"]
     index = _load_index(station_id)
     index_sorted = sorted(index, key=lambda e: e["date"], reverse=True)
@@ -174,9 +174,9 @@ async def backup_status(ctx: dict = Depends(get_station_context)):
 
 # ── GET /backup/snapshots/{date} ──────────────────────────────────────────────
 
-@router.get("/snapshots/{date}", dependencies=[Depends(require_owner)])
+@router.get("/snapshots/{date}", dependencies=[Depends(require_manager_or_owner)])
 async def download_snapshot(date: str, ctx: dict = Depends(get_station_context)):
-    """Download a specific saved auto-backup snapshot by date (YYYY-MM-DD). Owner only."""
+    """Download a specific saved auto-backup snapshot by date (YYYY-MM-DD). Manager+."""
     station_id = ctx["station_id"]
 
     b64_data = load_station_json(station_id, f"backup_{date}.json.gz", default=None)
@@ -198,9 +198,9 @@ async def download_snapshot(date: str, ctx: dict = Depends(get_station_context))
 
 # ── GET /backup/download ──────────────────────────────────────────────────────
 
-@router.get("/download", dependencies=[Depends(require_owner)])
+@router.get("/download", dependencies=[Depends(require_manager_or_owner)])
 async def download_backup(ctx: dict = Depends(get_station_context)):
-    """Export a live snapshot of all current station data. Owner only."""
+    """Export a live snapshot of all current station data. Manager+."""
     station_id = ctx["station_id"]
     payload = _build_payload(station_id)
     date_str = datetime.now().strftime("%Y-%m-%d_%H-%M")
