@@ -5,6 +5,28 @@ import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
+const NOISE_WORDS = new Set(['ltd', 'limited', 'co', 'company', 'inc', 'plc', 'pvt', 'pty', 'llc', 'and', 'the', 'of', 'group'])
+
+function previewClientCode(name: string): string {
+  if (!name.trim()) return ''
+  let words = name.trim().split(/[\s\-&.,/()+]+/)
+    .filter(w => w && !NOISE_WORDS.has(w.toLowerCase()) && /[a-zA-Z]/.test(w))
+  if (words.length === 0) words = name.match(/[a-zA-Z]+/g) || []
+  if (words.length === 0) return ''
+
+  let base: string
+  if (words.length >= 3) {
+    base = (words[0][0] + words[1][0] + words[2][0]).toUpperCase()
+  } else if (words.length === 2) {
+    const longer = words[0].length >= words[1].length ? words[0] : words[1]
+    const extra = longer.length > 1 ? longer[1] : 'X'
+    base = (words[0][0] + words[1][0] + extra).toUpperCase()
+  } else {
+    base = words[0].slice(0, 3).toUpperCase().padEnd(3, 'X')
+  }
+  return base
+}
+
 export default function Accounts() {
   const [accounts, setAccounts] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -722,6 +744,12 @@ export default function Accounts() {
                   onChange={(e) => setCreateForm({ ...createForm, account_name: e.target.value })}
                   className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
                   placeholder="e.g. Volcano Mining Ltd" required />
+                {previewClientCode(createForm.account_name) && (
+                  <p className="mt-1 text-xs text-content-secondary">
+                    Client code: <span className="font-mono font-bold text-action-primary">{previewClientCode(createForm.account_name)}</span>
+                    <span className="ml-1">(auto-assigned)</span>
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
