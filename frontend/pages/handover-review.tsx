@@ -1896,10 +1896,16 @@ function POSPanel({ handoverId, theme, onSaved }: { handoverId: string; theme: a
       <div className="flex flex-wrap gap-3 items-end">
         <div>
           <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Payment Type</div>
-          <select value={selectedTypeId} onChange={e => setSelectedTypeId(e.target.value)}
-            className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
-            {posTypes.map(t => <option key={t.type_id} value={t.type_id}>{t.name}</option>)}
-          </select>
+          {posTypes.length === 0 ? (
+            <p className="text-xs" style={{ color: 'var(--color-status-warning)' }}>
+              No types configured. Go to Settings &rarr; POS.
+            </p>
+          ) : (
+            <select value={selectedTypeId} onChange={e => setSelectedTypeId(e.target.value)}
+              className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+              {posTypes.map(t => <option key={t.type_id} value={t.type_id}>{t.name}</option>)}
+            </select>
+          )}
         </div>
         <div>
           <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Amount (ZMW)</div>

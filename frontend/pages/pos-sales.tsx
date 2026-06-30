@@ -218,15 +218,21 @@ export default function POSSales() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold uppercase text-content-secondary mb-1">Payment Type</label>
-                <select
-                  value={selectedTypeId}
-                  onChange={e => setSelectedTypeId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-btn border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
-                >
-                  {posTypes.map(t => (
-                    <option key={t.type_id} value={t.type_id}>{t.name}</option>
-                  ))}
-                </select>
+                {posTypes.length === 0 ? (
+                  <p className="text-xs text-status-warning py-2">
+                    No payment types configured. Go to Settings &rarr; POS to add them.
+                  </p>
+                ) : (
+                  <select
+                    value={selectedTypeId}
+                    onChange={e => setSelectedTypeId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-btn border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
+                  >
+                    {posTypes.map(t => (
+                      <option key={t.type_id} value={t.type_id}>{t.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase text-content-secondary mb-1">Amount (ZMW)</label>
