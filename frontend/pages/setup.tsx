@@ -535,8 +535,11 @@ export default function SetupWizard() {
                 title="Your Profile" subtitle="Update your name and set a secure password"
               />
               <div>
-                <label className="block text-sm font-medium text-content-secondary mb-1.5">Full Name</label>
-                <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Enter your full name" className={inputClass} autoFocus />
+                <label className="block text-sm font-medium text-content-secondary mb-1.5">
+                  Full Name
+                  <span className="ml-2 text-xs font-normal text-content-secondary/60">— owner of this business</span>
+                </label>
+                <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="e.g. John Banda" className={inputClass} autoFocus />
               </div>
               <div>
                 <label className="block text-sm font-medium text-content-secondary mb-1.5">New Password <span className="text-content-secondary/50 font-normal">(optional)</span></label>
