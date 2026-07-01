@@ -64,7 +64,7 @@ def _seed_default_users():
     import bcrypt
 
     default_users = [
-        ("O001", "owner1", "owner123", "Business Owner", "owner", None),
+        ("O001", "owner1", "owner123", "", "owner", None),
     ]
 
     for user_id, username, password, full_name, role, station_id in default_users:
@@ -75,13 +75,6 @@ def _seed_default_users():
     logger.info(f"[seed] Seeded {len(default_users)} default users")
 
 
-def _migrate_owner_name():
-    """One-time migration: rename legacy owner 'Kanyembo Ndhlovu' to 'Business Owner'."""
-    from app.database.db import db_get_all_users, db_update_user
-    for user in db_get_all_users():
-        if user["full_name"] == "Kanyembo Ndhlovu" and user["role"] == "owner":
-            db_update_user(user["username"], {"full_name": "Business Owner"})
-            logger.info(f"[migrate] Renamed owner '{user['username']}' to 'Business Owner'")
 
 
 
@@ -118,7 +111,6 @@ def startup():
     if db_ok:
         logger.info("[startup] PostgreSQL initialized successfully")
         _seed_default_users()
-        _migrate_owner_name()
         from app.database.db import db_cleanup_expired_sessions
         db_cleanup_expired_sessions()
     else:

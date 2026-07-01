@@ -82,17 +82,54 @@ def _generate_token() -> str:
 # In-memory fallback (local dev, no DATABASE_URL)
 # ──────────────────────────────────────────────────────────
 
+import json as _json
+
+_USERS_FILE = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'storage', 'users.json')
+
+
+def _load_users_file() -> dict:
+    try:
+        with open(_USERS_FILE, 'r', encoding='utf-8') as f:
+            return _json.load(f)
+    except (FileNotFoundError, _json.JSONDecodeError):
+        return {}
+
+
+def _save_users_file():
+    os.makedirs(os.path.dirname(_USERS_FILE), exist_ok=True)
+    serialisable = {}
+    for uname, u in users_db.items():
+        row = dict(u)
+        if hasattr(row.get('role'), 'value'):
+            row['role'] = row['role'].value
+        serialisable[uname] = row
+    try:
+        with open(_USERS_FILE, 'w', encoding='utf-8') as f:
+            _json.dump(serialisable, f, indent=2)
+    except Exception as e:
+        logger.warning(f"[auth] Could not save users file: {e}")
+
+
 users_db = {
     "owner1": {
         "user_id": "O001",
         "username": "owner1",
         "password": hashlib.sha256("owner123".encode()).hexdigest(),
-        "full_name": "Business Owner",
+        "full_name": "",
         "role": UserRole.OWNER,
         "station_id": None,
         "is_active": True,
     },
 }
+
+# Overlay any previously saved users (persists name changes across restarts in file mode)
+for _uname, _saved in _load_users_file().items():
+    _role_raw = _saved.get('role', 'user')
+    try:
+        _role = UserRole(_role_raw)
+    except ValueError:
+        _role = _role_raw
+    users_db[_uname] = {**_saved, 'role': _role}
 
 # In-memory session storage (fallback only)
 active_sessions = {}
@@ -519,6 +556,7 @@ def create_user(user_data: dict, current_user: dict = Depends(require_manager_or
             "station_id": station_id if role != "owner" else None,
             "is_active": True,
         }
+        _save_users_file()
 
     log_audit_event(
         station_id=current_user.get("station_id") or "ST001",
@@ -620,6 +658,7 @@ def update_user(username: str, user_data: dict, current_user: dict = Depends(req
             changed["password"] = "changed"
             user["password"] = _hash_password(user_data["password"])
         user_id = user["user_id"]
+        _save_users_file()
 
     log_audit_event(
         station_id=current_user.get("station_id") or "ST001",
@@ -684,6 +723,7 @@ def delete_user(username: str, current_user: dict = Depends(require_manager_or_o
         for t in sessions_to_remove:
             del active_sessions[t]
         del users_db[username]
+        _save_users_file()
 
     log_audit_event(
         station_id=current_user.get("station_id") or "ST001",
