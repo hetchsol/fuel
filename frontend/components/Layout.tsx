@@ -286,6 +286,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       .catch(() => {})
   }, [])
 
+  const clearAllNotifications = useCallback(() => {
+    authFetch(`${BASE}/notifications/`, { method: 'DELETE', headers: getHeaders() })
+      .then(r => {
+        if (r.ok) {
+          setNotifications([])
+          setUnreadCount(0)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   const formatRelativeTime = (timestamp: string) => {
     const diff = Date.now() - new Date(timestamp).getTime()
     const minutes = Math.floor(diff / 60000)
@@ -565,6 +576,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                                 className="text-xs text-action-primary hover:underline"
                               >
                                 Mark all read
+                              </button>
+                            )}
+                            {notifications.length > 0 && (
+                              <button
+                                onClick={clearAllNotifications}
+                                className="text-xs text-content-secondary hover:text-status-error hover:underline transition-colors"
+                              >
+                                Clear all
                               </button>
                             )}
                             <Link

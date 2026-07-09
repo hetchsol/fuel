@@ -10,6 +10,7 @@ from ...services.notification_service import (
     get_unread_count,
     mark_as_read,
     mark_all_as_read,
+    clear_all_notifications,
 )
 
 router = APIRouter()
@@ -67,4 +68,14 @@ def mark_all_notifications_read(
 ):
     """Mark all unread notifications as read."""
     count = mark_all_as_read(ctx["station_id"])
+    return {"count": count}
+
+
+@router.delete("/")
+def clear_notifications(
+    ctx: dict = Depends(get_station_context),
+    _user: dict = Depends(require_supervisor_or_owner),
+):
+    """Delete all notifications for the station."""
+    count = clear_all_notifications(ctx["station_id"])
     return {"count": count}

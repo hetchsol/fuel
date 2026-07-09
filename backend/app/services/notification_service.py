@@ -141,3 +141,11 @@ def mark_all_as_read(station_id: str) -> int:
     if count > 0:
         _save_notifications(station_id, notifications)
     return count
+
+
+def clear_all_notifications(station_id: str) -> int:
+    """Delete all notifications. Returns the count removed."""
+    notifications = _load_notifications(station_id)
+    count = len(notifications)
+    _save_notifications(station_id, [])
+    return count
