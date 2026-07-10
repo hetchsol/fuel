@@ -30,6 +30,7 @@ from ...services.payroll_calculator import (
     calculate_payslip, recompute_totals, aggregate_run_totals,
 )
 from ...database.db import _get_connection, is_db_active
+from ...database.station_files import load_station_json
 from ...services.audit_service import log_audit_event
 from .auth import get_current_user, get_station_context, require_owner
 
@@ -714,6 +715,85 @@ def bulk_upsert_attendance(
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     return {"saved": saved}
+
+
+@router.post("/attendance/sync-from-shifts")
+def sync_attendance_from_shifts(
+    month: int = Query(...),
+    year: int = Query(...),
+    ctx: dict = Depends(get_station_context),
+    current_user: dict = Depends(require_owner),
+):
+    """
+    Populate attendance records from completed shift handovers.
+    Only inserts rows that have no existing record — manual entries are never overwritten.
+    Returns counts of created vs skipped (already had a record).
+    """
+    _require_db()
+    conn = _get_connection()
+    station_id = _station_id(ctx)
+
+    # Load all handovers and filter to completed ones in the target month/year
+    handovers = load_station_json(station_id, 'attendant_handovers.json', default={})
+
+    # Group by (attendant_id, date) — count shifts per day
+    from collections import defaultdict
+    day_shifts: dict = defaultdict(list)
+    for h in handovers.values():
+        if h.get("phase") != "completed":
+            continue
+        att_id = h.get("attendant_id", "")
+        work_date = h.get("date", "")
+        if not att_id or not work_date:
+            continue
+        try:
+            dt = date.fromisoformat(work_date)
+        except ValueError:
+            continue
+        if dt.month != month or dt.year != year:
+            continue
+        day_shifts[(att_id, work_date)].append(h.get("shift_type", ""))
+
+    if not day_shifts:
+        return {"created": 0, "skipped": 0, "message": "No completed handovers found for this period"}
+
+    # Only sync employees who have a payroll profile at this station
+    profile_rows = _fetchall(conn,
+        "SELECT user_id FROM employee_profiles WHERE station_id = %s", (station_id,))
+    enrolled = {r["user_id"] for r in profile_rows}
+
+    created = 0
+    skipped = 0
+    try:
+        for (att_id, work_date), shifts in day_shifts.items():
+            if att_id not in enrolled:
+                skipped += 1
+                continue
+            existing = _fetchone(conn,
+                "SELECT record_id FROM attendance_records WHERE user_id = %s AND work_date = %s",
+                (att_id, work_date))
+            if existing:
+                skipped += 1
+                continue
+            n = len(shifts)
+            regular_hours = 8.0
+            overtime_hours = (n - 1) * 8.0 if n > 1 else 0.0
+            overtime_type = "weekday" if overtime_hours > 0 else "none"
+            conn.execute("""
+                INSERT INTO attendance_records
+                    (record_id, user_id, station_id, work_date, status,
+                     regular_hours, overtime_hours, overtime_type, recorded_by)
+                VALUES (%s, %s, %s, %s, 'present', %s, %s, %s, %s)
+            """, (_uid(), att_id, station_id, work_date,
+                  regular_hours, overtime_hours, overtime_type,
+                  current_user["user_id"]))
+            created += 1
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"created": created, "skipped": skipped}
 
 
 # ══════════════════════════════════════════════════════════

@@ -394,6 +394,8 @@ function AttendanceTab({ users, holidays }: { users: any[]; holidays: PublicHoli
   const [year, setYear] = useState(now.getFullYear())
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState<{ created: number; skipped: number; message?: string } | null>(null)
 
   const daysInMonth = new Date(year, month, 0).getDate()
   const holidayDates = new Set(holidays.filter(h => {
@@ -406,7 +408,7 @@ function AttendanceTab({ users, holidays }: { users: any[]; holidays: PublicHoli
     if (res.ok) setRecords(await res.json())
   }, [month, year])
 
-  useEffect(() => { loadAttendance() }, [loadAttendance])
+  useEffect(() => { loadAttendance(); setSyncResult(null) }, [loadAttendance])
 
   const getRecord = (uid: string, day: number): AttendanceRecord | undefined => {
     const d = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`
@@ -415,14 +417,27 @@ function AttendanceTab({ users, holidays }: { users: any[]; holidays: PublicHoli
 
   const updateDay = async (uid: string, day: number, status: AttendanceStatus) => {
     const d = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`
-    const isHoliday = holidayDates.has(day)
-    const isWeekend = new Date(year, month - 1, day).getDay() === 0
     await authFetch(`${PAYROLL.attendanceDay(uid, d)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, regular_hours: 8, overtime_hours: 0, overtime_type: 'none' }),
     })
     await loadAttendance()
+  }
+
+  const syncFromShifts = async () => {
+    setSyncing(true)
+    setSyncResult(null)
+    const res = await authFetch(`${PAYROLL.attendanceSync()}?month=${month}&year=${year}`, { method: 'POST' })
+    if (res.ok) {
+      const data = await res.json()
+      setSyncResult(data)
+      await loadAttendance()
+    } else {
+      const err = await res.json().catch(() => ({ detail: 'Sync failed' }))
+      setSyncResult({ created: 0, skipped: 0, message: err.detail || 'Sync failed' })
+    }
+    setSyncing(false)
   }
 
   const statusColor: Record<string, string> = {
@@ -435,7 +450,7 @@ function AttendanceTab({ users, holidays }: { users: any[]; holidays: PublicHoli
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <select className="px-2 py-1.5 text-sm border border-surface-border rounded bg-surface-card"
           value={month} onChange={e => setMonth(parseInt(e.target.value))}>
           {MONTH_NAMES.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
@@ -444,6 +459,16 @@ function AttendanceTab({ users, holidays }: { users: any[]; holidays: PublicHoli
           value={year} onChange={e => setYear(parseInt(e.target.value))}>
           {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
         </select>
+        <Btn small onClick={syncFromShifts} disabled={syncing}>
+          {syncing ? 'Syncing...' : 'Sync from Shifts'}
+        </Btn>
+        {syncResult && (
+          <span className={`text-xs ${syncResult.message && syncResult.created === 0 ? 'text-red-600' : 'text-content-secondary'}`}>
+            {syncResult.message
+              ? syncResult.message
+              : `${syncResult.created} record${syncResult.created !== 1 ? 's' : ''} added, ${syncResult.skipped} skipped`}
+          </span>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="text-xs border-collapse">

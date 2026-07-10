@@ -36,6 +36,7 @@ export const PAYROLL = {
   attendance:         ()          => `/api/v1/payroll/attendance`,
   attendanceDay:      (uid: string, date: string) => `/api/v1/payroll/attendance/${uid}/${date}`,
   attendanceBulk:     ()          => `/api/v1/payroll/attendance/bulk`,
+  attendanceSync:     ()          => `/api/v1/payroll/attendance/sync-from-shifts`,
 
   // Public holidays
   holidays:           ()          => `/api/v1/payroll/public-holidays`,
