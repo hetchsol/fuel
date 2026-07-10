@@ -823,6 +823,10 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
     if (res.ok) {
       const updated = await res.json()
       setRunDetail(prev => prev ? { ...prev, released: updated.released } : prev)
+      onRefresh()
+    } else {
+      const err = await res.json().catch(() => ({ detail: 'Request failed' }))
+      setError(err.detail || 'Failed to update release status')
     }
   }
 

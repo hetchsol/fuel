@@ -1410,6 +1410,7 @@ class PayrollRun(BaseModel):
     approved_by: Optional[str] = None
     created_at: Optional[str] = None
     approved_at: Optional[str] = None
+    released: bool = False
 
 class PayrollRunCreate(BaseModel):
     period_month: int
