@@ -204,6 +204,14 @@ export default function MyShift() {
   const [promptSubmitting, setPromptSubmitting] = useState(false)
   const [promptError, setPromptError] = useState('')
 
+  // Shift submission status (who has/hasn't submitted on this shift)
+  const [submissionStatus, setSubmissionStatus] = useState<{
+    submitted: {attendant_id: string, attendant_name: string}[]
+    pending: {attendant_id: string, attendant_name: string}[]
+    all_submitted: boolean
+    total: number
+  } | null>(null)
+
   // Start-of-shift opening verification (two-mode). Default true so the closing
   // flow never flashes before the shift loads; set from the backend on load.
   const [openingVerified, setOpeningVerified] = useState(true)
@@ -678,6 +686,7 @@ export default function MyShift() {
       setHandoverResult(result)
       setReadingsVerifiedHandover(result)
       setSuccess('Readings verified successfully! Proceed to the office for shift closing.')
+      setTimeout(fetchSubmissionStatus, 800)
     } catch (err: any) {
       setError(err.message || 'Submission failed')
     } finally {
@@ -699,6 +708,16 @@ export default function MyShift() {
   }
 
   useEffect(() => { fetchMyDeposits() }, [shiftInfo?.shift_id])
+
+  // Fetch shift submission status (who has/hasn't submitted closing readings)
+  const fetchSubmissionStatus = () => {
+    if (!shiftInfo?.shift_id) return
+    authFetch(`${BASE}/handover/shift-submission-status/${shiftInfo.shift_id}`, { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setSubmissionStatus(data) })
+      .catch(() => {})
+  }
+  useEffect(() => { fetchSubmissionStatus() }, [shiftInfo?.shift_id])
 
   // Fetch all attendants' deposits for "On This Shift" (supervisor/manager)
   const fetchShiftDeposits = () => {
@@ -1013,6 +1032,46 @@ export default function MyShift() {
         </div>
       </div>
 
+      {/* Shift submission status banner — visible to all users on the shift */}
+      {shiftFound && shiftInfo && submissionStatus && submissionStatus.total > 1 && (() => {
+        const myId = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}').user_id : ''
+        const iSubmitted = submissionStatus.submitted.some((a: any) => a.attendant_id === myId)
+        const pendingNames = submissionStatus.pending.filter((a: any) => a.attendant_id !== myId).map((a: any) => a.attendant_name)
+
+        if (submissionStatus.all_submitted) {
+          return (
+            <div className="rounded-lg p-3 mb-4 text-sm border border-status-success/30 bg-status-success-light text-status-success">
+              All {submissionStatus.total} attendants have submitted their closing readings for this shift.
+            </div>
+          )
+        }
+
+        if (iSubmitted && pendingNames.length > 0) {
+          return (
+            <div className="rounded-lg p-3 mb-4 text-sm border border-status-warning/30 bg-status-warning-light text-status-warning">
+              <p className="font-semibold">Waiting for other attendants to submit</p>
+              <p className="mt-1">
+                {pendingNames.join(', ')} {pendingNames.length === 1 ? 'has' : 'have'} not submitted their closing readings yet. The shift cannot be fully closed until everyone has submitted.
+              </p>
+            </div>
+          )
+        }
+
+        if (!iSubmitted && submissionStatus.submitted.length > 0) {
+          const submittedNames = submissionStatus.submitted.map((a: any) => a.attendant_name)
+          return (
+            <div className="rounded-lg p-3 mb-4 text-sm border border-action-primary/30 bg-action-primary/5 text-content-primary">
+              <p className="font-semibold" style={{ color: 'var(--color-action-primary)' }}>Other attendants have already submitted</p>
+              <p className="mt-1 text-content-secondary">
+                {submittedNames.join(', ')} {submittedNames.length === 1 ? 'has' : 'have'} submitted. Please enter your closing readings to complete the shift.
+              </p>
+            </div>
+          )
+        }
+
+        return null
+      })()}
+
       {error && (
         <div className="rounded-lg p-3 mb-4 text-sm" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)', borderColor: 'var(--color-status-error)', borderWidth: 1 }}>
           {error}
@@ -1034,7 +1093,19 @@ export default function MyShift() {
               On This Shift
             </h2>
             <span className="text-xs" style={{ color: theme.textSecondary }}>
-              {shiftInfo.assignments?.length || 0} attendant{(shiftInfo.assignments?.length || 0) !== 1 ? 's' : ''} {showOnThisShift ? '−' : '+'}
+              <span className="flex items-center gap-2">
+                {shiftInfo.assignments?.length || 0} attendant{(shiftInfo.assignments?.length || 0) !== 1 ? 's' : ''}{' '}
+                {submissionStatus && submissionStatus.total > 0 && (
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-badge ${
+                    submissionStatus.all_submitted
+                      ? 'bg-status-success/20 text-status-success'
+                      : 'bg-status-warning/20 text-status-warning'
+                  }`}>
+                    {submissionStatus.submitted.length}/{submissionStatus.total} submitted
+                  </span>
+                )}
+                {showOnThisShift ? '−' : '+'}
+              </span>
             </span>
           </button>
           {showOnThisShift && (
@@ -1044,15 +1115,25 @@ export default function MyShift() {
                 .sort((a: any, b: any) => (a.attendant_id || '').localeCompare(b.attendant_id || ''))
                 .map((assignment: any) => {
                   const attDeposits = shiftDeposits?.attendants?.find((a: any) => a.attendant_id === assignment.attendant_id)
+                  const hasSubmitted = submissionStatus?.submitted.some((s: any) => s.attendant_id === assignment.attendant_id)
                   return (
                     <div key={assignment.attendant_id} className="p-3 rounded-lg border"
                       style={{ borderColor: attDeposits?.overdue ? 'var(--color-status-warning)' : theme.border }}>
                       <div className="flex justify-between items-center">
-                        <div>
+                        <div className="flex items-center flex-wrap gap-1.5">
                           <span className="text-sm font-semibold" style={{ color: theme.textPrimary }}>{assignment.attendant_name}</span>
-                          <span className="text-xs ml-2" style={{ color: theme.textSecondary }}>{assignment.attendant_id}</span>
+                          <span className="text-xs" style={{ color: theme.textSecondary }}>{assignment.attendant_id}</span>
+                          {submissionStatus && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-badge font-semibold ${
+                              hasSubmitted
+                                ? 'bg-status-success/20 text-status-success'
+                                : 'bg-status-error/20 text-status-error'
+                            }`}>
+                              {hasSubmitted ? 'Submitted' : 'Pending'}
+                            </span>
+                          )}
                           {attDeposits?.overdue && (
-                            <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-badge bg-status-warning/20 text-status-warning font-semibold">OVERDUE</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-badge bg-status-warning/20 text-status-warning font-semibold">OVERDUE</span>
                           )}
                         </div>
                         <div className="text-right">

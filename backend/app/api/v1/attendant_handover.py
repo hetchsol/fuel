@@ -249,6 +249,75 @@ def _get_fuel_type(nozzle_id: str, storage: dict = None) -> str:
     return "Diesel"
 
 
+# ===== Shift submission status =====
+
+def _get_shift_submission_status(station_id: str, shift_id: str, storage: dict) -> dict:
+    """
+    For a shift, return which attendants have fully submitted (phase=completed)
+    and which are still pending. Only attendants in shift.assignments are tracked.
+    """
+    shift = storage.get("shifts", {}).get(shift_id, {})
+    assignments = shift.get("assignments") or []
+
+    handovers = _load_handovers(station_id)
+    submitted_ids = {
+        ho.get("attendant_id")
+        for ho in handovers.values()
+        if ho.get("shift_id") == shift_id and ho.get("phase") == "completed"
+    }
+
+    submitted, pending = [], []
+    for a in assignments:
+        att_id = a.get("attendant_id", "")
+        att_name = a.get("attendant_name", att_id)
+        bucket = submitted if att_id in submitted_ids else pending
+        bucket.append({"attendant_id": att_id, "attendant_name": att_name})
+
+    return {
+        "shift_id": shift_id,
+        "date": shift.get("date", ""),
+        "shift_type": shift.get("shift_type", ""),
+        "total": len(assignments),
+        "submitted": submitted,
+        "pending": pending,
+        "all_submitted": len(pending) == 0,
+    }
+
+
+def _notify_shift_pending(station_id: str, shift_id: str, submitter_name: str, storage: dict):
+    """Fire a notification after a submission listing who is still pending on the shift."""
+    status = _get_shift_submission_status(station_id, shift_id, storage)
+    pending_names = [a["attendant_name"] for a in status["pending"]]
+    date_label = f"{status.get('date', '')} {status.get('shift_type', '')}".strip()
+
+    if pending_names:
+        names_str = ", ".join(pending_names)
+        create_notification(
+            station_id=station_id,
+            type="SHIFT_PENDING_SUBMISSIONS",
+            severity="high",
+            title="Shift not fully closed",
+            message=(
+                f"{submitter_name} submitted for shift {date_label}. "
+                f"Still waiting on: {names_str}."
+            ),
+            entity_type="shift",
+            entity_id=shift_id,
+            created_by="system",
+        )
+    else:
+        create_notification(
+            station_id=station_id,
+            type="SHIFT_ALL_SUBMITTED",
+            severity="info",
+            title="All attendants submitted",
+            message=f"All attendants on shift {date_label} have submitted their closing readings.",
+            entity_type="shift",
+            entity_id=shift_id,
+            created_by="system",
+        )
+
+
 # ===== Extracted helpers for two-phase handover =====
 
 def _validate_shift_and_assignment(shift_id: str, ctx: dict, storage: dict):
@@ -952,6 +1021,12 @@ async def get_credit_accounts(ctx: dict = Depends(get_station_context)):
     }
 
     return {"accounts": accounts_list, "fuel_prices": fuel_prices}
+
+
+@router.get("/shift-submission-status/{shift_id}")
+async def get_shift_submission_status(shift_id: str, ctx: dict = Depends(get_station_context)):
+    """Return submitted/pending attendants for a shift. Available to all assigned users."""
+    return _get_shift_submission_status(ctx["station_id"], shift_id, ctx["storage"])
 
 
 @router.get("/my-shifts")
@@ -1982,6 +2057,8 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
                 entity_type="handover", entity_id=data.handover_id, created_by=ctx["username"],
             )
 
+    _notify_shift_pending(station_id, shift_id, attendant_name, storage)
+
     return handover_output
 
 
@@ -2195,6 +2272,8 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     save_station_storage(station_id)
 
     _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift, handover_id)
+
+    _notify_shift_pending(station_id, data.shift_id, user_name, storage)
 
     return handover_output
 
