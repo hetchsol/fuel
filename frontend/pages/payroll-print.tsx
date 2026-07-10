@@ -650,7 +650,7 @@ function PayslipSheet({ slip, biz, period, breakAfter }: {
 
 export default function PayrollPrint() {
   const router = useRouter()
-  const { run_id } = router.query
+  const { run_id, user_id } = router.query
   const [data, setData] = useState<PrintData | null>(null)
   const [error, setError] = useState('')
 
@@ -664,10 +664,18 @@ export default function PayrollPrint() {
 
   const period = data ? periodLabel(data.run.period_month, data.run.period_year) : ''
 
+  // When user_id is supplied, show only that employee's payslip
+  const filteredSlips = data
+    ? (user_id && typeof user_id === 'string'
+        ? data.payslips.filter(s => s.user_id === user_id)
+        : data.payslips)
+    : []
+  const singleMode = !!(user_id && typeof user_id === 'string')
+
   return (
     <>
       <Head>
-        <title>{data ? `Payslips — ${period}` : 'Loading payslips...'}</title>
+        <title>{data ? (singleMode && filteredSlips[0] ? `Payslip — ${filteredSlips[0].full_name} — ${period}` : `Payslips — ${period}`) : 'Loading payslips...'}</title>
         <style dangerouslySetInnerHTML={{ __html: `
           @page { size: A4; margin: 0; }
           @media print { .no-print { display: none !important; } body { background: #fff; } }
@@ -689,7 +697,9 @@ export default function PayrollPrint() {
         </button>
         {data && (
           <span style={{ color: '#94a3b8' }}>
-            {data.payslips.length} payslip{data.payslips.length !== 1 ? 's' : ''} — {period}
+            {singleMode && filteredSlips[0]
+              ? filteredSlips[0].full_name
+              : `${filteredSlips.length} payslip${filteredSlips.length !== 1 ? 's' : ''}`} — {period}
           </span>
         )}
         {/* Payslips group */}
@@ -699,35 +709,41 @@ export default function PayrollPrint() {
             onClick={() => window.print()}
             disabled={!data}
             style={{ padding: '7px 14px', borderRadius: '4px', background: 'transparent', color: '#cbd5e1', border: '1px solid #475569', cursor: data ? 'pointer' : 'not-allowed', fontSize: '13px', opacity: data ? 1 : 0.5 }}>
-            Print All
+            Print
           </button>
           <button
-            onClick={() => data && generateAllPDF(data)}
+            onClick={() => {
+              if (!data) return
+              if (singleMode && filteredSlips[0]) generateSinglePDF(data, filteredSlips[0])
+              else generateAllPDF(data)
+            }}
             disabled={!data}
             style={{ padding: '7px 16px', borderRadius: '4px', background: '#3b82f6', color: '#fff', border: 'none', cursor: data ? 'pointer' : 'not-allowed', fontSize: '13px', fontWeight: 'bold', opacity: data ? 1 : 0.5 }}>
             PDF
           </button>
         </div>
 
-        {/* Divider */}
-        <div style={{ width: '1px', height: '28px', background: '#334155' }} />
-
-        {/* Schedule group */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Schedule</span>
-          <button
-            onClick={() => data && generateSchedulePDF(data)}
-            disabled={!data}
-            style={{ padding: '7px 16px', borderRadius: '4px', background: '#dc2626', color: '#fff', border: 'none', cursor: data ? 'pointer' : 'not-allowed', fontSize: '13px', fontWeight: 'bold', opacity: data ? 1 : 0.5 }}>
-            PDF
-          </button>
-          <button
-            onClick={() => data && generateScheduleExcel(data)}
-            disabled={!data}
-            style={{ padding: '7px 16px', borderRadius: '4px', background: '#16a34a', color: '#fff', border: 'none', cursor: data ? 'pointer' : 'not-allowed', fontSize: '13px', fontWeight: 'bold', opacity: data ? 1 : 0.5 }}>
-            Excel
-          </button>
-        </div>
+        {/* Schedule group — only shown in full-run mode */}
+        {!singleMode && (
+          <>
+            <div style={{ width: '1px', height: '28px', background: '#334155' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Schedule</span>
+              <button
+                onClick={() => data && generateSchedulePDF(data)}
+                disabled={!data}
+                style={{ padding: '7px 16px', borderRadius: '4px', background: '#dc2626', color: '#fff', border: 'none', cursor: data ? 'pointer' : 'not-allowed', fontSize: '13px', fontWeight: 'bold', opacity: data ? 1 : 0.5 }}>
+                PDF
+              </button>
+              <button
+                onClick={() => data && generateScheduleExcel(data)}
+                disabled={!data}
+                style={{ padding: '7px 16px', borderRadius: '4px', background: '#16a34a', color: '#fff', border: 'none', cursor: data ? 'pointer' : 'not-allowed', fontSize: '13px', fontWeight: 'bold', opacity: data ? 1 : 0.5 }}>
+                Excel
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* States */}
@@ -747,25 +763,29 @@ export default function PayrollPrint() {
       {/* Payslip sheets */}
       {data && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0 40px' }}>
-          {data.payslips.length === 0 && (
-            <div style={{ padding: '40px', fontFamily: 'Arial', color: '#6b7280' }}>No payslips in this run.</div>
+          {filteredSlips.length === 0 && (
+            <div style={{ padding: '40px', fontFamily: 'Arial', color: '#6b7280' }}>
+              {singleMode ? 'Employee not found in this run.' : 'No payslips in this run.'}
+            </div>
           )}
-          {data.payslips.map((slip, i) => (
-            <div key={slip.payslip_id} style={{ marginBottom: i < data.payslips.length - 1 ? '20px' : 0 }}>
-              {/* Per-slip download button — hidden on print */}
-              <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
-                <button
-                  onClick={() => generateSinglePDF(data, slip)}
-                  style={{ padding: '5px 14px', borderRadius: '4px', background: '#1e40af', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '12px' }}>
-                  Download PDF — {slip.full_name}
-                </button>
-              </div>
+          {filteredSlips.map((slip, i) => (
+            <div key={slip.payslip_id} style={{ marginBottom: i < filteredSlips.length - 1 ? '20px' : 0 }}>
+              {/* Per-slip download button — hidden in single mode (toolbar handles it) and on print */}
+              {!singleMode && (
+                <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+                  <button
+                    onClick={() => generateSinglePDF(data, slip)}
+                    style={{ padding: '5px 14px', borderRadius: '4px', background: '#1e40af', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '12px' }}>
+                    Download PDF — {slip.full_name}
+                  </button>
+                </div>
+              )}
               <div style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
                 <PayslipSheet
                   slip={slip}
                   biz={data.business_info}
                   period={period}
-                  breakAfter={i < data.payslips.length - 1}
+                  breakAfter={i < filteredSlips.length - 1}
                 />
               </div>
             </div>

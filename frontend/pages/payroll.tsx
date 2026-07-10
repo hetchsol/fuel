@@ -951,6 +951,7 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
             <thead>
               <tr className="border-b border-surface-border">
                 <Th>Employee</Th><Th right>Gross</Th><Th right>NAPSA</Th><Th right>NHIMA</Th><Th right>PAYE</Th><Th right>Advances</Th><Th right>Other</Th><Th right>Net Pay</Th>
+                <Th>{''}</Th>
                 {runDetail.status === 'draft' && <Th>Override</Th>}
               </tr>
             </thead>
@@ -989,13 +990,16 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
                       </td>
                       <Td right>{customTotal > 0 ? fmt(customTotal) : '—'}</Td>
                       <Td right><span className="font-semibold">{fmt(s.net_pay)}</span></Td>
+                      <Td>
+                        <Btn small onClick={() => window.open(`/payroll-print?run_id=${runDetail.run_id}&user_id=${s.user_id}`, '_blank')}>Payslip</Btn>
+                      </Td>
                       {runDetail.status === 'draft' && (
                         <Td><Btn small onClick={() => openOverride(s)}>Override</Btn></Td>
                       )}
                     </tr>
                     {advExpanded && s.advance_deductions && s.advance_deductions.length > 0 && (
                       <tr key={`${s.payslip_id}-adv`} className="bg-surface-bg">
-                        <td colSpan={runDetail.status === 'draft' ? 9 : 8} className="px-4 py-2">
+                        <td colSpan={runDetail.status === 'draft' ? 10 : 9} className="px-4 py-2">
                           <p className="text-xs font-medium text-content-secondary mb-1">Advance deductions this payslip:</p>
                           <div className="space-y-0.5">
                             {s.advance_deductions.map((d, i) => (
