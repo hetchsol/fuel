@@ -162,6 +162,15 @@ def upsert_employee(
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+    # Seed leave balances for the current year so they appear immediately
+    try:
+        current_year = datetime.utcnow().year
+        _ensure_balances(conn, user_id, current_year)
+        conn.commit()
+    except Exception:
+        pass  # non-fatal — balances seed lazily on first view if this fails
+
     row = _fetchone(conn,
         "SELECT * FROM employee_profiles WHERE profile_id = %s", (profile_id,))
     return _str_dates(row)
