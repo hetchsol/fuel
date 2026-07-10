@@ -126,6 +126,7 @@ export default function MyShift() {
   const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null
   const userRole = userData ? JSON.parse(userData).role : ''
   const isAttendant = userRole === 'user'
+  const isManagerPlus = ['manager', 'owner'].includes(userRole)
 
   // Shift selection state
   const [availableShifts, setAvailableShifts] = useState<any[]>([])
@@ -721,7 +722,7 @@ export default function MyShift() {
 
   // Fetch all attendants' deposits for "On This Shift" (supervisor/manager)
   const fetchShiftDeposits = () => {
-    if (!shiftInfo?.shift_id || isAttendant) return
+    if (!shiftInfo?.shift_id || !isManagerPlus) return
     authFetch(`${BASE}/safe-deposits/${shiftInfo.shift_id}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => setShiftDeposits(data))
@@ -1083,8 +1084,8 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* On This Shift — supervisor/manager view of all attendants + deposits */}
-      {!isAttendant && shiftFound && shiftInfo && (
+      {/* On This Shift — manager+ view of all attendants + deposits */}
+      {isManagerPlus && shiftFound && shiftInfo && (
         <div className="rounded-lg shadow mb-6 overflow-hidden"
           style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
           <button onClick={() => setShowOnThisShift(!showOnThisShift)}
