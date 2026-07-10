@@ -852,6 +852,25 @@ def _set_advance_status(conn, advance_id: str, new_status: str, approver_id: str
     return _str_dates(updated)
 
 
+@router.get("/advances/{advance_id}/repayments")
+def get_advance_repayments(
+    advance_id: str,
+    current_user: dict = Depends(require_owner),
+):
+    _require_db()
+    conn = _get_connection()
+    rows = _fetchall(conn, """
+        SELECT ar.repayment_id, ar.amount, ar.repayment_date,
+               pr.period_month, pr.period_year, pr.status AS run_status
+        FROM advance_repayments ar
+        JOIN payslips ps ON ps.payslip_id = ar.payslip_id
+        JOIN payroll_runs pr ON pr.run_id = ps.run_id
+        WHERE ar.advance_id = %s
+        ORDER BY ar.repayment_date DESC
+    """, (advance_id,))
+    return [_str_dates(r) for r in rows]
+
+
 @router.put("/advances/{advance_id}/approve", response_model=SalaryAdvance)
 def approve_advance(
     advance_id: str,
@@ -1086,6 +1105,26 @@ def get_run(
     if not run:
         raise HTTPException(status_code=404, detail="Payroll run not found")
     slips = _fetchall(conn, "SELECT * FROM payslips WHERE run_id = %s ORDER BY user_id", (run_id,))
+
+    if slips:
+        payslip_ids = [s["payslip_id"] for s in slips]
+        placeholders = ",".join(["%s"] * len(payslip_ids))
+        adv_rows = _fetchall(conn, f"""
+            SELECT ar.payslip_id, ar.advance_id, ar.amount, sa.reason
+            FROM advance_repayments ar
+            JOIN salary_advances sa ON sa.advance_id = ar.advance_id
+            WHERE ar.payslip_id IN ({placeholders})
+        """, tuple(payslip_ids))
+        adv_by_slip: dict = {}
+        for r in adv_rows:
+            adv_by_slip.setdefault(r["payslip_id"], []).append({
+                "advance_id": r["advance_id"],
+                "amount": float(r["amount"]),
+                "reason": r.get("reason") or "",
+            })
+        for s in slips:
+            s["advance_deductions"] = adv_by_slip.get(s["payslip_id"], [])
+
     return {**_str_dates(run), "payslips": [_str_dates(s) for s in slips]}
 
 

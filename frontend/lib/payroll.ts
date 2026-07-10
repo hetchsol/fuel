@@ -46,6 +46,7 @@ export const PAYROLL = {
   advance:            (id: string) => `/api/v1/payroll/advances/${id}`,
   advanceApprove:     (id: string) => `/api/v1/payroll/advances/${id}/approve`,
   advanceReject:      (id: string) => `/api/v1/payroll/advances/${id}/reject`,
+  advanceRepayments:  (id: string) => `/api/v1/payroll/advances/${id}/repayments`,
 
   // Payroll runs
   runs:               ()          => `/api/v1/payroll/runs`,
@@ -216,6 +217,21 @@ export interface CustomDeduction {
   amount: number
 }
 
+export interface AdvanceDeduction {
+  advance_id: string
+  amount: number
+  reason?: string
+}
+
+export interface AdvanceRepayment {
+  repayment_id: string
+  amount: number
+  repayment_date: string
+  period_month: number
+  period_year: number
+  run_status: string
+}
+
 export interface Payslip {
   payslip_id: string
   run_id: string
@@ -245,6 +261,7 @@ export interface Payslip {
   attendance_days?: number
   leave_days_taken?: number
   notes?: string
+  advance_deductions?: AdvanceDeduction[]
 }
 
 export interface PayrollRun {

@@ -7,7 +7,7 @@ import {
   type AttendanceRecord, type PublicHoliday,
   type SalaryAdvance, type Payslip, type PayrollRun, type PayrollRunDetail,
   type PaymentMethod, type AttendanceStatus, type OvertimeType,
-  type CustomDeduction,
+  type CustomDeduction, type AdvanceRepayment,
 } from '../lib/payroll'
 
 // ── Helpers ───────────────────────────────────────────────
@@ -610,12 +610,26 @@ function AdvancesTab({ users, onRefresh }: { users: any[]; onRefresh: () => void
   const [form, setForm] = useState({ user_id: '', amount: '', reason: '', repayment_months: '1' })
   const [acting, setActing] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [expandedAdvance, setExpandedAdvance] = useState<string | null>(null)
+  const [repaymentHistory, setRepaymentHistory] = useState<Record<string, AdvanceRepayment[]>>({})
 
   const load = useCallback(async () => {
     const res = await authFetch(`${PAYROLL.advances()}`)
     if (res.ok) setAdvances(await res.json())
   }, [])
   useEffect(() => { load() }, [load])
+
+  const toggleHistory = async (advance_id: string) => {
+    if (expandedAdvance === advance_id) { setExpandedAdvance(null); return }
+    if (!repaymentHistory[advance_id]) {
+      const res = await authFetch(PAYROLL.advanceRepayments(advance_id))
+      if (res.ok) {
+        const data = await res.json()
+        setRepaymentHistory(h => ({ ...h, [advance_id]: data }))
+      }
+    }
+    setExpandedAdvance(advance_id)
+  }
 
   const submit = async () => {
     setError('')
@@ -674,23 +688,67 @@ function AdvancesTab({ users, onRefresh }: { users: any[]; onRefresh: () => void
           </tr></thead>
           <tbody>
             {advances.map(a => (
-              <tr key={a.advance_id} className="border-b border-surface-border last:border-0">
-                <Td>{users.find(u => u.user_id === a.user_id)?.full_name || a.user_id}</Td>
-                <Td right>{fmt(a.amount)}</Td>
-                <Td right>{fmt(a.monthly_deduction)}</Td>
-                <Td right>{fmt(a.outstanding_balance)}</Td>
-                <Td right>{a.repayment_months}</Td>
-                <Td><span className="text-content-secondary text-xs">{a.reason || '—'}</span></Td>
-                <Td><Badge status={a.status} /></Td>
-                <Td>
-                  {a.status === 'pending' && (
-                    <div className="flex gap-1">
-                      <Btn small variant="primary" disabled={acting === a.advance_id} onClick={() => act(a.advance_id, 'approve')}>Approve</Btn>
-                      <Btn small variant="danger" disabled={acting === a.advance_id} onClick={() => act(a.advance_id, 'reject')}>Reject</Btn>
+              <>
+                <tr key={a.advance_id} className="border-b border-surface-border last:border-0">
+                  <Td>{users.find(u => u.user_id === a.user_id)?.full_name || a.user_id}</Td>
+                  <Td right>{fmt(a.amount)}</Td>
+                  <Td right>{fmt(a.monthly_deduction)}</Td>
+                  <Td right>
+                    <span className={a.outstanding_balance === 0 ? 'line-through text-content-secondary' : ''}>{fmt(a.outstanding_balance)}</span>
+                  </Td>
+                  <Td right>{a.repayment_months}</Td>
+                  <Td><span className="text-content-secondary text-xs">{a.reason || '—'}</span></Td>
+                  <Td><Badge status={a.status} /></Td>
+                  <Td>
+                    <div className="flex gap-1 flex-wrap">
+                      {a.status === 'pending' && (
+                        <>
+                          <Btn small variant="primary" disabled={acting === a.advance_id} onClick={() => act(a.advance_id, 'approve')}>Approve</Btn>
+                          <Btn small variant="danger" disabled={acting === a.advance_id} onClick={() => act(a.advance_id, 'reject')}>Reject</Btn>
+                        </>
+                      )}
+                      {(a.status === 'active' || a.status === 'settled') && (
+                        <Btn small onClick={() => toggleHistory(a.advance_id)}>
+                          {expandedAdvance === a.advance_id ? 'Hide history' : 'Repayments'}
+                        </Btn>
+                      )}
                     </div>
-                  )}
-                </Td>
-              </tr>
+                  </Td>
+                </tr>
+                {expandedAdvance === a.advance_id && (
+                  <tr key={`${a.advance_id}-history`} className="bg-surface-bg">
+                    <td colSpan={8} className="px-4 py-3">
+                      {(repaymentHistory[a.advance_id] || []).length === 0 ? (
+                        <p className="text-xs text-content-secondary">No repayments recorded yet.</p>
+                      ) : (
+                        <table className="w-full text-xs">
+                          <thead><tr className="text-content-secondary border-b border-surface-border">
+                            <td className="pb-1 pr-4">Period</td>
+                            <td className="pb-1 pr-4">Run Status</td>
+                            <td className="pb-1 text-right">Amount Deducted</td>
+                          </tr></thead>
+                          <tbody>
+                            {repaymentHistory[a.advance_id].map(r => (
+                              <tr key={r.repayment_id} className="border-b border-surface-border/50 last:border-0">
+                                <td className="py-1 pr-4">{periodLabel(r.period_month, r.period_year)}</td>
+                                <td className="py-1 pr-4"><Badge status={r.run_status} /></td>
+                                <td className="py-1 text-right tabular-nums font-medium">{fmt(r.amount)}</td>
+                              </tr>
+                            ))}
+                            <tr className="font-semibold">
+                              <td className="pt-2 pr-4">Total repaid</td>
+                              <td />
+                              <td className="pt-2 text-right tabular-nums">
+                                {fmt(repaymentHistory[a.advance_id].reduce((s, r) => s + r.amount, 0))}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </>
             ))}
             {advances.length === 0 && <tr><td colSpan={8} className="text-center py-6 text-content-secondary text-sm">No salary advances</td></tr>}
           </tbody>
@@ -715,6 +773,7 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
   const [overrideForm, setOverrideForm] = useState<any>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [expandedSlipAdv, setExpandedSlipAdv] = useState<string | null>(null)
 
   const loadRun = useCallback(async (id: string) => {
     const res = await authFetch(`${PAYROLL.run(id)}`)
@@ -889,29 +948,54 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
                 const payeEff  = effective(s, 'paye')
                 const customTotal = s.custom_deductions.reduce((a, d) => a + d.amount, 0)
                 const hasOverride = s.napsa_employee_override != null || s.nhima_employee_override != null || s.paye_override != null || s.custom_deductions.length > 0
+                const advExpanded = expandedSlipAdv === s.payslip_id
                 return (
-                  <tr key={s.payslip_id} className={`border-b border-surface-border last:border-0 ${hasOverride ? 'bg-yellow-50' : ''}`}>
-                    <Td>{users.find(u => u.user_id === s.user_id)?.full_name || s.user_id}</Td>
-                    <Td right>{fmt(s.gross_salary)}</Td>
-                    <Td right>
-                      {fmt(napsaEff)}
-                      {s.napsa_employee_override != null && <span className="ml-1 text-[10px] text-orange-600" title={`Calc: ${fmt(s.napsa_employee_calc)}`}>*</span>}
-                    </Td>
-                    <Td right>
-                      {fmt(nhimaEff)}
-                      {s.nhima_employee_override != null && <span className="ml-1 text-[10px] text-orange-600">*</span>}
-                    </Td>
-                    <Td right>
-                      {fmt(payeEff)}
-                      {s.paye_override != null && <span className="ml-1 text-[10px] text-orange-600">*</span>}
-                    </Td>
-                    <Td right>{s.advances_deducted > 0 ? fmt(s.advances_deducted) : '—'}</Td>
-                    <Td right>{customTotal > 0 ? fmt(customTotal) : '—'}</Td>
-                    <Td right><span className="font-semibold">{fmt(s.net_pay)}</span></Td>
-                    {runDetail.status === 'draft' && (
-                      <Td><Btn small onClick={() => openOverride(s)}>Override</Btn></Td>
+                  <>
+                    <tr key={s.payslip_id} className={`border-b border-surface-border last:border-0 ${hasOverride ? 'bg-yellow-50' : ''}`}>
+                      <Td>{users.find(u => u.user_id === s.user_id)?.full_name || s.user_id}</Td>
+                      <Td right>{fmt(s.gross_salary)}</Td>
+                      <Td right>
+                        {fmt(napsaEff)}
+                        {s.napsa_employee_override != null && <span className="ml-1 text-[10px] text-orange-600" title={`Calc: ${fmt(s.napsa_employee_calc)}`}>*</span>}
+                      </Td>
+                      <Td right>
+                        {fmt(nhimaEff)}
+                        {s.nhima_employee_override != null && <span className="ml-1 text-[10px] text-orange-600">*</span>}
+                      </Td>
+                      <Td right>
+                        {fmt(payeEff)}
+                        {s.paye_override != null && <span className="ml-1 text-[10px] text-orange-600">*</span>}
+                      </Td>
+                      <td className="px-3 py-2 text-sm text-right tabular-nums">
+                        {s.advances_deducted > 0 ? (
+                          <button
+                            className="underline decoration-dotted text-content-primary hover:text-action-primary"
+                            onClick={() => setExpandedSlipAdv(advExpanded ? null : s.payslip_id)}
+                          >{fmt(s.advances_deducted)}</button>
+                        ) : '—'}
+                      </td>
+                      <Td right>{customTotal > 0 ? fmt(customTotal) : '—'}</Td>
+                      <Td right><span className="font-semibold">{fmt(s.net_pay)}</span></Td>
+                      {runDetail.status === 'draft' && (
+                        <Td><Btn small onClick={() => openOverride(s)}>Override</Btn></Td>
+                      )}
+                    </tr>
+                    {advExpanded && s.advance_deductions && s.advance_deductions.length > 0 && (
+                      <tr key={`${s.payslip_id}-adv`} className="bg-surface-bg">
+                        <td colSpan={runDetail.status === 'draft' ? 9 : 8} className="px-4 py-2">
+                          <p className="text-xs font-medium text-content-secondary mb-1">Advance deductions this payslip:</p>
+                          <div className="space-y-0.5">
+                            {s.advance_deductions.map((d, i) => (
+                              <div key={i} className="flex justify-between text-xs">
+                                <span className="text-content-secondary">{d.reason || 'Salary advance'}</span>
+                                <span className="tabular-nums font-medium">{fmt(d.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
                     )}
-                  </tr>
+                  </>
                 )
               })}
             </tbody>
