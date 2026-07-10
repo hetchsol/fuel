@@ -808,6 +808,16 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
     onRefresh()
   }
 
+  const deleteRun = async (id: string) => {
+    if (!confirm('Delete this draft payroll run? This will reverse any advance deductions applied when the run was created.')) return
+    const res = await authFetch(PAYROLL.runDelete(id), { method: 'DELETE' })
+    if (res.ok || res.status === 204) {
+      setRunDetail(null)
+      setViewRunId(null)
+      onRefresh()
+    }
+  }
+
   const openOverride = (slip: Payslip) => {
     setOverrideSlip(slip)
     setOverrideForm({
@@ -916,7 +926,10 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
             <div className="flex items-center gap-2">
               <Btn small onClick={() => window.open(`/payroll-print?run_id=${runDetail.run_id}`, '_blank')}>Print Payslips</Btn>
               {runDetail.status === 'draft' && userRole === 'owner' && (
-                <Btn variant="primary" onClick={() => approveRun(runDetail.run_id)}>Approve Run</Btn>
+                <>
+                  <Btn variant="danger" small onClick={() => deleteRun(runDetail.run_id)}>Delete Draft</Btn>
+                  <Btn variant="primary" onClick={() => approveRun(runDetail.run_id)}>Approve Run</Btn>
+                </>
               )}
             </div>
           }

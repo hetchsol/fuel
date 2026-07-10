@@ -3,7 +3,7 @@ Payroll API — all routes per the canonical contract in lib/payroll.ts.
 Base prefix: /api/v1/payroll  (registered in __init__.py)
 Requires DB — payroll is DB-only; returns 503 when DATABASE_URL is unset.
 """
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Response
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 import uuid
@@ -1152,6 +1152,49 @@ def approve_run(
         raise HTTPException(status_code=500, detail=str(e))
     updated = _fetchone(conn, "SELECT * FROM payroll_runs WHERE run_id = %s", (run_id,))
     return _str_dates(updated)
+
+
+@router.delete("/runs/{run_id}", status_code=204)
+def delete_run(
+    run_id: str,
+    current_user: dict = Depends(require_owner),
+):
+    _require_db()
+    conn = _get_connection()
+    run = _fetchone(conn, "SELECT * FROM payroll_runs WHERE run_id = %s", (run_id,))
+    if not run:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
+    if run["status"] != "draft":
+        raise HTTPException(status_code=400, detail="Only draft runs can be deleted")
+    try:
+        # Reverse advance repayments so outstanding balances are restored
+        repayments = _fetchall(conn, """
+            SELECT ar.advance_id, ar.amount
+            FROM advance_repayments ar
+            JOIN payslips ps ON ps.payslip_id = ar.payslip_id
+            WHERE ps.run_id = %s
+        """, (run_id,))
+        for r in repayments:
+            conn.execute("""
+                UPDATE salary_advances
+                SET outstanding_balance = outstanding_balance + %s,
+                    status = CASE WHEN status = 'settled' THEN 'active' ELSE status END,
+                    updated_at = NOW()
+                WHERE advance_id = %s
+            """, (float(r["amount"]), r["advance_id"]))
+
+        conn.execute("""
+            DELETE FROM advance_repayments
+            WHERE payslip_id IN (SELECT payslip_id FROM payslips WHERE run_id = %s)
+        """, (run_id,))
+        conn.execute("DELETE FROM payroll_payments WHERE run_id = %s", (run_id,))
+        conn.execute("DELETE FROM payslips WHERE run_id = %s", (run_id,))
+        conn.execute("DELETE FROM payroll_runs WHERE run_id = %s", (run_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    return Response(status_code=204)
 
 
 @router.get("/runs/{run_id}/payslips", response_model=List[Payslip])

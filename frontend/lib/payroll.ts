@@ -51,6 +51,7 @@ export const PAYROLL = {
   // Payroll runs
   runs:               ()          => `/api/v1/payroll/runs`,
   run:                (id: string) => `/api/v1/payroll/runs/${id}`,
+  runDelete:          (id: string) => `/api/v1/payroll/runs/${id}`,
   runApprove:         (id: string) => `/api/v1/payroll/runs/${id}/approve`,
   runPayslips:        (id: string) => `/api/v1/payroll/runs/${id}/payslips`,
   runPrintData:       (id: string) => `/api/v1/payroll/runs/${id}/print-data`,
