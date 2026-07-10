@@ -937,13 +937,39 @@ def get_my_payslips(
     station_id = _station_id(ctx)
     rows = _fetchall(conn, """
         SELECT ps.*,
-               pr.period_month, pr.period_year, pr.status AS run_status
+               pr.period_month, pr.period_year, pr.status AS run_status,
+               pr.released
         FROM payslips ps
         JOIN payroll_runs pr ON pr.run_id = ps.run_id
-        WHERE ps.user_id = %s AND ps.station_id = %s
+        WHERE ps.user_id = %s AND ps.station_id = %s AND pr.released = TRUE
         ORDER BY pr.period_year DESC, pr.period_month DESC
     """, (current_user["user_id"], station_id))
     return [_str_dates(r) for r in rows]
+
+
+@router.put("/runs/{run_id}/toggle-release", response_model=PayrollRun)
+def toggle_release(
+    run_id: str,
+    current_user: dict = Depends(require_owner),
+):
+    _require_db()
+    conn = _get_connection()
+    run = _fetchone(conn, "SELECT * FROM payroll_runs WHERE run_id = %s", (run_id,))
+    if not run:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
+    if run["status"] == "draft":
+        raise HTTPException(status_code=400, detail="Cannot release a draft run — approve it first")
+    new_released = not bool(run.get("released", False))
+    try:
+        conn.execute(
+            "UPDATE payroll_runs SET released = %s WHERE run_id = %s",
+            (new_released, run_id))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    updated = _fetchone(conn, "SELECT * FROM payroll_runs WHERE run_id = %s", (run_id,))
+    return _str_dates(updated)
 
 
 @router.post("/runs", response_model=PayrollRunDetail)

@@ -454,6 +454,7 @@ def init_db():
         for migration_sql in [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
             "ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS pending_deactivation BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS released BOOLEAN NOT NULL DEFAULT FALSE",
         ]:
             try:
                 _conn.execute(migration_sql)

@@ -163,7 +163,7 @@ function OverviewTab({ runs, pendingLeave, pendingAdvances, onTabChange }: {
             {runs.slice(0, 6).map(r => (
               <tr key={r.run_id} className="border-b border-surface-border last:border-0">
                 <Td>{periodLabel(r.period_month, r.period_year)}</Td>
-                <Td><Badge status={r.status} />{r.is_historical && <span className="ml-1 text-xs text-content-secondary">(historical)</span>}</Td>
+                <Td><Badge status={r.status} />{r.is_historical && <span className="ml-1 text-xs text-content-secondary">(historical)</span>}{r.released && <span className="ml-1 text-xs text-green-700 font-medium">Released</span>}</Td>
                 <Td right>{fmt(r.total_net)}</Td>
                 <Td right>{fmt(r.total_employer_cost)}</Td>
               </tr>
@@ -818,6 +818,14 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
     }
   }
 
+  const toggleRelease = async (id: string) => {
+    const res = await authFetch(PAYROLL.runToggleRelease(id), { method: 'PUT' })
+    if (res.ok) {
+      const updated = await res.json()
+      setRunDetail(prev => prev ? { ...prev, released: updated.released } : prev)
+    }
+  }
+
   const openOverride = (slip: Payslip) => {
     setOverrideSlip(slip)
     setOverrideForm({
@@ -921,10 +929,19 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
 
       {/* Run detail */}
       {runDetail && (
-        <Card title={`${periodLabel(runDetail.period_month, runDetail.period_year)} — ${runDetail.status.toUpperCase()}`}
+        <Card title={`${periodLabel(runDetail.period_month, runDetail.period_year)} — ${runDetail.status.toUpperCase()}${runDetail.released ? ' — Released' : ''}`}
           action={
             <div className="flex items-center gap-2">
               <Btn small onClick={() => window.open(`/payroll-print?run_id=${runDetail.run_id}`, '_blank')}>Print Payslips</Btn>
+              {runDetail.status !== 'draft' && userRole === 'owner' && (
+                <Btn
+                  small
+                  variant={runDetail.released ? 'danger' : 'primary'}
+                  onClick={() => toggleRelease(runDetail.run_id)}
+                >
+                  {runDetail.released ? 'Revoke Employee Access' : 'Release to Employees'}
+                </Btn>
+              )}
               {runDetail.status === 'draft' && userRole === 'owner' && (
                 <>
                   <Btn variant="danger" small onClick={() => deleteRun(runDetail.run_id)}>Delete Draft</Btn>

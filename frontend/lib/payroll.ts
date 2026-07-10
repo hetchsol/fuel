@@ -54,6 +54,7 @@ export const PAYROLL = {
   run:                (id: string) => `/api/v1/payroll/runs/${id}`,
   runDelete:          (id: string) => `/api/v1/payroll/runs/${id}`,
   runApprove:         (id: string) => `/api/v1/payroll/runs/${id}/approve`,
+  runToggleRelease:   (id: string) => `/api/v1/payroll/runs/${id}/toggle-release`,
   runPayslips:        (id: string) => `/api/v1/payroll/runs/${id}/payslips`,
   runPrintData:       (id: string) => `/api/v1/payroll/runs/${id}/print-data`,
   runPayments:        (id: string) => `/api/v1/payroll/runs/${id}/payments`,
@@ -292,6 +293,7 @@ export interface PayrollRun {
   approved_by?: string
   created_at?: string
   approved_at?: string
+  released: boolean
 }
 
 export interface PayrollRunDetail extends PayrollRun {
