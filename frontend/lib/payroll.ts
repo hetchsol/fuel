@@ -49,6 +49,7 @@ export const PAYROLL = {
   advanceRepayments:  (id: string) => `/api/v1/payroll/advances/${id}/repayments`,
 
   // Payroll runs
+  myPayslips:         ()          => `/api/v1/payroll/my-payslips`,
   runs:               ()          => `/api/v1/payroll/runs`,
   run:                (id: string) => `/api/v1/payroll/runs/${id}`,
   runDelete:          (id: string) => `/api/v1/payroll/runs/${id}`,

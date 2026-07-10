@@ -927,6 +927,25 @@ def list_runs(
     return [_str_dates(r) for r in rows]
 
 
+@router.get("/my-payslips")
+def get_my_payslips(
+    ctx: dict = Depends(get_station_context),
+    current_user: dict = Depends(get_current_user),
+):
+    _require_db()
+    conn = _get_connection()
+    station_id = _station_id(ctx)
+    rows = _fetchall(conn, """
+        SELECT ps.*,
+               pr.period_month, pr.period_year, pr.status AS run_status
+        FROM payslips ps
+        JOIN payroll_runs pr ON pr.run_id = ps.run_id
+        WHERE ps.user_id = %s AND ps.station_id = %s
+        ORDER BY pr.period_year DESC, pr.period_month DESC
+    """, (current_user["user_id"], station_id))
+    return [_str_dates(r) for r in rows]
+
+
 @router.post("/runs", response_model=PayrollRunDetail)
 def create_run(
     body: PayrollRunCreate,

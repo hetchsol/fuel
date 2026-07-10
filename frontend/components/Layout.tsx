@@ -351,6 +351,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       children: [
         { path: '/my-shift?mode=start', label: 'Start Shift', roles: ['user'] },
         { path: '/my-shift?mode=end', label: 'End Shift', roles: ['user'] },
+        { path: '/my-payslip', label: 'My Payslips', roles: ['user'] },
       ]
     },
     {
@@ -359,6 +360,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       children: [
         { path: '/my-shift', label: 'End My Shift', roles: ['supervisor'] },
         { path: '/shift-closing', label: 'Close Shift', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/my-payslip', label: 'My Payslips', roles: ['supervisor', 'manager', 'owner'] },
       ]
     },
     {
