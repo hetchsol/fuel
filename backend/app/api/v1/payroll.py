@@ -1493,6 +1493,41 @@ def get_statutory_report(
     }
 
 
+@router.get("/statutory/ytd-employees")
+def get_ytd_employees(
+    year: int = Query(...),
+    ctx: dict = Depends(get_station_context),
+    current_user: dict = Depends(require_owner),
+):
+    _require_db()
+    conn = _get_connection()
+    station_id = _station_id(ctx)
+    rows = _fetchall(conn, """
+        SELECT ps.user_id,
+               u.full_name,
+               ep.tpin, ep.napsa_number, ep.nhima_number,
+               COUNT(ps.payslip_id)::int                                                    AS months_paid,
+               SUM(ps.gross_salary)::float                                                  AS ytd_gross,
+               SUM(COALESCE(ps.paye_override,          ps.paye_calc))::float                AS ytd_paye,
+               SUM(COALESCE(ps.napsa_employee_override, ps.napsa_employee_calc))::float     AS ytd_napsa_employee,
+               SUM(ps.napsa_employer)::float                                                AS ytd_napsa_employer,
+               SUM(COALESCE(ps.nhima_employee_override, ps.nhima_employee_calc))::float     AS ytd_nhima_employee,
+               SUM(ps.nhima_employer)::float                                                AS ytd_nhima_employer,
+               SUM(ps.wcf_employer)::float                                                  AS ytd_wcf_employer,
+               SUM(ps.advances_deducted)::float                                             AS ytd_advances,
+               SUM(ps.net_pay)::float                                                       AS ytd_net
+        FROM payslips ps
+        JOIN payroll_runs pr ON pr.run_id = ps.run_id
+        JOIN users u         ON u.user_id  = ps.user_id
+        LEFT JOIN employee_profiles ep
+               ON ep.user_id = ps.user_id AND ep.station_id = %s
+        WHERE ps.station_id = %s AND pr.period_year = %s
+        GROUP BY ps.user_id, u.full_name, ep.tpin, ep.napsa_number, ep.nhima_number
+        ORDER BY u.full_name
+    """, (station_id, station_id, year))
+    return [_str_dates(r) for r in rows]
+
+
 @router.get("/statutory/ytd")
 def get_ytd_statutory(
     year: int = Query(...),

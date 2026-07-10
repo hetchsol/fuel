@@ -64,7 +64,8 @@ export const PAYROLL = {
   payslipOverrides:   (id: string) => `/api/v1/payroll/payslips/${id}/overrides`,
 
   // Statutory YTD
-  statutoryYtd:       ()          => `/api/v1/payroll/statutory/ytd`,
+  statutoryYtd:            ()          => `/api/v1/payroll/statutory/ytd`,
+  statutoryYtdEmployees:   ()          => `/api/v1/payroll/statutory/ytd-employees`,
 
   // Historical import
   historyImport:      ()          => `/api/v1/payroll/history/import`,

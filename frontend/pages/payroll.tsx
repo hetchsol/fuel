@@ -1109,6 +1109,14 @@ function PaymentsTab({ runs, users, onRefresh, userRole }: {
   )
 }
 
+function downloadCsv(filename: string, rows: string[][]) {
+  const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
+  URL.revokeObjectURL(url)
+}
+
 // ══════════════════════════════════════════════════════════
 // Statutory & History tab
 // ══════════════════════════════════════════════════════════
@@ -1120,6 +1128,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
   const [selRunId, setSelRunId] = useState<string | null>(null)
   const [statutory, setStatutory] = useState<any>(null)
   const [ytd, setYtd] = useState<any>(null)
+  const [ytdEmployees, setYtdEmployees] = useState<any[]>([])
   const [selYear, setSelYear] = useState(new Date().getFullYear())
   const [holidayForm, setHolidayForm] = useState({ holiday_name: '', holiday_date: '', is_recurring: false, notes: '' })
   const [importJson, setImportJson] = useState('')
@@ -1134,8 +1143,12 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
     const res = await authFetch(`${PAYROLL.statutoryYtd()}?year=${selYear}`)
     if (res.ok) setYtd(await res.json())
   }
+  const loadYtdEmployees = async () => {
+    const res = await authFetch(`${PAYROLL.statutoryYtdEmployees()}?year=${selYear}`)
+    if (res.ok) setYtdEmployees(await res.json())
+  }
   useEffect(() => { if (selRunId) loadStatutory(selRunId) }, [selRunId])
-  useEffect(() => { loadYtd() }, [selYear])
+  useEffect(() => { loadYtd(); loadYtdEmployees() }, [selYear])
 
   const deleteHoliday = async (id: string) => {
     await authFetch(`${PAYROLL.holiday(id)}`, { method: 'DELETE' })
@@ -1177,6 +1190,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
 
       {subTab === 'reports' && (
         <div className="space-y-4">
+          {/* Controls */}
           <div className="flex gap-3 items-end flex-wrap">
             <div>
               <p className="text-xs text-content-secondary mb-1">Monthly report — select run</p>
@@ -1195,55 +1209,247 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
                 {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
+            <Btn onClick={() => window.print()}>Print</Btn>
           </div>
 
-          {ytd && (
-            <Card title={`Year-to-Date Summary — ${selYear}`}>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                {[
-                  ['PAYE', fmt(ytd.ytd_paye)],
-                  ['NAPSA (employee)', fmt(ytd.ytd_napsa_employee)],
-                  ['NAPSA (employer)', fmt(ytd.ytd_napsa_employer)],
-                  ['NHIMA (employee)', fmt(ytd.ytd_nhima_employee)],
-                  ['NHIMA (employer)', fmt(ytd.ytd_nhima_employer)],
-                  ['WCF (employer)', fmt(ytd.ytd_wcf_employer)],
-                  ['Net Payroll', fmt(ytd.ytd_net)],
-                  ['Employer Cost', fmt(ytd.ytd_employer_cost)],
-                ].map(([k,v]) => (
-                  <div key={k as string}><p className="text-xs text-content-secondary">{k}</p><p className="font-semibold">{v}</p></div>
-                ))}
-              </div>
-            </Card>
-          )}
+          {/* Monthly statutory schedules */}
+          {statutory && (() => {
+            const period = `${statutory.period_year}_${String(statutory.period_month).padStart(2,'0')}`
+            const periodTitle = periodLabel(statutory.period_month, statutory.period_year)
+            return (
+              <>
+                <p className="text-xs font-semibold uppercase text-content-secondary tracking-wide">
+                  Monthly Schedules — {periodTitle}
+                </p>
 
-          {statutory && (
-            <>
-              {[
-                { title: 'PAYE Return', data: statutory.paye, cols: ['Name','TPIN','Gross','Taxable','PAYE'],
-                  row: (l: any) => [l.name, l.tpin||'—', fmt(l.gross), fmt(l.taxable), fmt(l.paye)],
-                  footer: `Total PAYE: ${fmt(statutory.paye.total)}` },
-                { title: 'NAPSA Schedule', data: statutory.napsa, cols: ['Name','NAPSA No.','Gross','Employee','Employer','Total'],
-                  row: (l: any) => [l.name, l.napsa_number||'—', fmt(l.gross), fmt(l.employee), fmt(l.employer), fmt(l.total)],
-                  footer: `Employee: ${fmt(statutory.napsa.total_employee)} | Employer: ${fmt(statutory.napsa.total_employer)} | Total: ${fmt(statutory.napsa.total)}` },
-                { title: 'NHIMA Schedule', data: statutory.nhima, cols: ['Name','NHIMA No.','Gross','Employee','Employer','Total'],
-                  row: (l: any) => [l.name, l.nhima_number||'—', fmt(l.gross), fmt(l.employee), fmt(l.employer), fmt(l.total)],
-                  footer: `Employee: ${fmt(statutory.nhima.total_employee)} | Employer: ${fmt(statutory.nhima.total_employer)} | Total: ${fmt(statutory.nhima.total)}` },
-              ].map(({ title, data, cols, row, footer }) => (
-                <Card key={title} title={title}>
+                {/* PAYE Return */}
+                <Card title="PAYE Return" action={
+                  <Btn small onClick={() => downloadCsv(`PAYE_Return_${period}.csv`, [
+                    ['Name','TPIN','Gross (ZMW)','Taxable Income (ZMW)','PAYE (ZMW)'],
+                    ...statutory.paye.lines.map((l: any) => [l.name, l.tpin||'', fmt(l.gross), fmt(l.taxable), fmt(l.paye)]),
+                    ['TOTAL','','','',fmt(statutory.paye.total)],
+                  ])}>Export CSV</Btn>
+                }>
                   <table className="w-full text-sm">
-                    <thead><tr className="border-b border-surface-border">{cols.map(c => <Th key={c}>{c}</Th>)}</tr></thead>
+                    <thead><tr className="border-b border-surface-border">
+                      <Th>Name</Th><Th>TPIN</Th><Th right>Gross</Th><Th right>Taxable</Th><Th right>PAYE</Th>
+                    </tr></thead>
                     <tbody>
-                      {data.lines.map((l: any, i: number) => (
+                      {statutory.paye.lines.map((l: any, i: number) => (
                         <tr key={i} className="border-b border-surface-border last:border-0">
-                          {row(l).map((v: string, j: number) => <Td key={j} right={j>1}>{v}</Td>)}
+                          <Td>{l.name}</Td><Td>{l.tpin||'—'}</Td>
+                          <Td right>{fmt(l.gross)}</Td><Td right>{fmt(l.taxable)}</Td><Td right>{fmt(l.paye)}</Td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  <p className="text-xs text-content-secondary mt-2 font-semibold">{footer}</p>
+                  <p className="text-xs text-content-secondary mt-2 font-semibold">Total PAYE: {fmt(statutory.paye.total)}</p>
                 </Card>
-              ))}
+
+                {/* NAPSA Schedule */}
+                <Card title="NAPSA Schedule" action={
+                  <Btn small onClick={() => downloadCsv(`NAPSA_Schedule_${period}.csv`, [
+                    ['Name','NAPSA Number','Gross (ZMW)','Employee (ZMW)','Employer (ZMW)','Total (ZMW)'],
+                    ...statutory.napsa.lines.map((l: any) => [l.name, l.napsa_number||'', fmt(l.gross), fmt(l.employee), fmt(l.employer), fmt(l.total)]),
+                    ['TOTAL','','',fmt(statutory.napsa.total_employee),fmt(statutory.napsa.total_employer),fmt(statutory.napsa.total)],
+                  ])}>Export CSV</Btn>
+                }>
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-surface-border">
+                      <Th>Name</Th><Th>NAPSA No.</Th><Th right>Gross</Th><Th right>Employee</Th><Th right>Employer</Th><Th right>Total</Th>
+                    </tr></thead>
+                    <tbody>
+                      {statutory.napsa.lines.map((l: any, i: number) => (
+                        <tr key={i} className="border-b border-surface-border last:border-0">
+                          <Td>{l.name}</Td><Td>{l.napsa_number||'—'}</Td>
+                          <Td right>{fmt(l.gross)}</Td><Td right>{fmt(l.employee)}</Td><Td right>{fmt(l.employer)}</Td><Td right>{fmt(l.total)}</Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-xs text-content-secondary mt-2 font-semibold">
+                    Employee: {fmt(statutory.napsa.total_employee)} | Employer: {fmt(statutory.napsa.total_employer)} | Total: {fmt(statutory.napsa.total)}
+                  </p>
+                </Card>
+
+                {/* NHIMA Schedule */}
+                <Card title="NHIMA Schedule" action={
+                  <Btn small onClick={() => downloadCsv(`NHIMA_Schedule_${period}.csv`, [
+                    ['Name','NHIMA Number','Gross (ZMW)','Employee (ZMW)','Employer (ZMW)','Total (ZMW)'],
+                    ...statutory.nhima.lines.map((l: any) => [l.name, l.nhima_number||'', fmt(l.gross), fmt(l.employee), fmt(l.employer), fmt(l.total)]),
+                    ['TOTAL','','',fmt(statutory.nhima.total_employee),fmt(statutory.nhima.total_employer),fmt(statutory.nhima.total)],
+                  ])}>Export CSV</Btn>
+                }>
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-surface-border">
+                      <Th>Name</Th><Th>NHIMA No.</Th><Th right>Gross</Th><Th right>Employee</Th><Th right>Employer</Th><Th right>Total</Th>
+                    </tr></thead>
+                    <tbody>
+                      {statutory.nhima.lines.map((l: any, i: number) => (
+                        <tr key={i} className="border-b border-surface-border last:border-0">
+                          <Td>{l.name}</Td><Td>{l.nhima_number||'—'}</Td>
+                          <Td right>{fmt(l.gross)}</Td><Td right>{fmt(l.employee)}</Td><Td right>{fmt(l.employer)}</Td><Td right>{fmt(l.total)}</Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-xs text-content-secondary mt-2 font-semibold">
+                    Employee: {fmt(statutory.nhima.total_employee)} | Employer: {fmt(statutory.nhima.total_employer)} | Total: {fmt(statutory.nhima.total)}
+                  </p>
+                </Card>
+
+                {/* WCF Schedule */}
+                <Card title="WCF Schedule" action={
+                  <Btn small onClick={() => downloadCsv(`WCF_Schedule_${period}.csv`, [
+                    ['Name','Gross (ZMW)','WCF Employer (ZMW)'],
+                    ...statutory.wcf.lines.map((l: any) => [l.name, fmt(l.gross), fmt(l.wcf_employer)]),
+                    ['TOTAL','',fmt(statutory.wcf.total_employer)],
+                  ])}>Export CSV</Btn>
+                }>
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-surface-border">
+                      <Th>Name</Th><Th right>Gross</Th><Th right>WCF (Employer)</Th>
+                    </tr></thead>
+                    <tbody>
+                      {statutory.wcf.lines.map((l: any, i: number) => (
+                        <tr key={i} className="border-b border-surface-border last:border-0">
+                          <Td>{l.name}</Td><Td right>{fmt(l.gross)}</Td><Td right>{fmt(l.wcf_employer)}</Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-xs text-content-secondary mt-2 font-semibold">Total WCF: {fmt(statutory.wcf.total_employer)}</p>
+                </Card>
+              </>
+            )
+          })()}
+
+          {/* Year-to-Date section */}
+          {ytd && (
+            <>
+              <p className="text-xs font-semibold uppercase text-content-secondary tracking-wide mt-2">
+                Year to Date — {selYear}
+              </p>
+
+              {/* YTD totals tiles */}
+              <Card title="YTD Totals">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  {[
+                    ['PAYE', fmt(ytd.ytd_paye)],
+                    ['NAPSA (employee)', fmt(ytd.ytd_napsa_employee)],
+                    ['NAPSA (employer)', fmt(ytd.ytd_napsa_employer)],
+                    ['NHIMA (employee)', fmt(ytd.ytd_nhima_employee)],
+                    ['NHIMA (employer)', fmt(ytd.ytd_nhima_employer)],
+                    ['WCF (employer)', fmt(ytd.ytd_wcf_employer)],
+                    ['Net Payroll', fmt(ytd.ytd_net)],
+                    ['Employer Cost', fmt(ytd.ytd_employer_cost)],
+                  ].map(([k,v]) => (
+                    <div key={k as string}><p className="text-xs text-content-secondary">{k}</p><p className="font-semibold">{v}</p></div>
+                  ))}
+                </div>
+              </Card>
+
+              {/* Month-by-month breakdown */}
+              {ytd.months && ytd.months.length > 0 && (
+                <Card title="Month-by-Month Breakdown" action={
+                  <Btn small onClick={() => downloadCsv(`YTD_Monthly_${selYear}.csv`, [
+                    ['Month','Status','PAYE','NAPSA Emp','NAPSA Emr','NHIMA Emp','NHIMA Emr','WCF','Net Pay'],
+                    ...ytd.months.map((m: any) => [
+                      MONTH_NAMES[m.period_month - 1], m.status,
+                      fmt(m.total_paye), fmt(m.total_napsa_employee), fmt(m.total_napsa_employer),
+                      fmt(m.total_nhima_employee), fmt(m.total_nhima_employer),
+                      fmt(m.total_wcf_employer), fmt(m.total_net),
+                    ]),
+                    ['TOTAL','',
+                      fmt(ytd.ytd_paye), fmt(ytd.ytd_napsa_employee), fmt(ytd.ytd_napsa_employer),
+                      fmt(ytd.ytd_nhima_employee), fmt(ytd.ytd_nhima_employer),
+                      fmt(ytd.ytd_wcf_employer), fmt(ytd.ytd_net),
+                    ],
+                  ])}>Export CSV</Btn>
+                }>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead><tr className="border-b border-surface-border">
+                        <Th>Month</Th><Th>Status</Th><Th right>PAYE</Th>
+                        <Th right>NAPSA Emp</Th><Th right>NAPSA Emr</Th>
+                        <Th right>NHIMA Emp</Th><Th right>NHIMA Emr</Th>
+                        <Th right>WCF</Th><Th right>Net Pay</Th>
+                      </tr></thead>
+                      <tbody>
+                        {ytd.months.map((m: any) => (
+                          <tr key={m.period_month} className="border-b border-surface-border last:border-0">
+                            <Td>{MONTH_NAMES[m.period_month - 1]}</Td>
+                            <Td><Badge status={m.status} /></Td>
+                            <Td right>{fmt(m.total_paye)}</Td>
+                            <Td right>{fmt(m.total_napsa_employee)}</Td>
+                            <Td right>{fmt(m.total_napsa_employer)}</Td>
+                            <Td right>{fmt(m.total_nhima_employee)}</Td>
+                            <Td right>{fmt(m.total_nhima_employer)}</Td>
+                            <Td right>{fmt(m.total_wcf_employer)}</Td>
+                            <Td right>{fmt(m.total_net)}</Td>
+                          </tr>
+                        ))}
+                        <tr className="font-semibold bg-surface-bg border-t-2 border-surface-border">
+                          <Td>Total</Td><Td>{''}</Td>
+                          <Td right>{fmt(ytd.ytd_paye)}</Td>
+                          <Td right>{fmt(ytd.ytd_napsa_employee)}</Td>
+                          <Td right>{fmt(ytd.ytd_napsa_employer)}</Td>
+                          <Td right>{fmt(ytd.ytd_nhima_employee)}</Td>
+                          <Td right>{fmt(ytd.ytd_nhima_employer)}</Td>
+                          <Td right>{fmt(ytd.ytd_wcf_employer)}</Td>
+                          <Td right>{fmt(ytd.ytd_net)}</Td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
             </>
+          )}
+
+          {/* Per-employee YTD */}
+          {ytdEmployees.length > 0 && (
+            <Card title={`Per-Employee YTD — ${selYear}`} action={
+              <Btn small onClick={() => downloadCsv(`YTD_Employees_${selYear}.csv`, [
+                ['Name','TPIN','NAPSA No.','NHIMA No.','Months Paid','Gross','PAYE','NAPSA Emp','NAPSA Emr','NHIMA Emp','NHIMA Emr','WCF','Advances','Net Pay'],
+                ...ytdEmployees.map((e: any) => [
+                  e.full_name, e.tpin||'', e.napsa_number||'', e.nhima_number||'',
+                  String(e.months_paid),
+                  fmt(e.ytd_gross), fmt(e.ytd_paye),
+                  fmt(e.ytd_napsa_employee), fmt(e.ytd_napsa_employer),
+                  fmt(e.ytd_nhima_employee), fmt(e.ytd_nhima_employer),
+                  fmt(e.ytd_wcf_employer), fmt(e.ytd_advances), fmt(e.ytd_net),
+                ]),
+              ])}>Export CSV</Btn>
+            }>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-surface-border">
+                    <Th>Name</Th><Th>TPIN</Th><Th right>Months</Th><Th right>Gross</Th>
+                    <Th right>PAYE</Th><Th right>NAPSA Emp</Th><Th right>NAPSA Emr</Th>
+                    <Th right>NHIMA Emp</Th><Th right>NHIMA Emr</Th>
+                    <Th right>Advances</Th><Th right>Net Pay</Th>
+                  </tr></thead>
+                  <tbody>
+                    {ytdEmployees.map((e: any) => (
+                      <tr key={e.user_id} className="border-b border-surface-border last:border-0">
+                        <Td>{e.full_name}</Td>
+                        <Td><span className="text-content-secondary text-xs">{e.tpin||'—'}</span></Td>
+                        <Td right>{e.months_paid}</Td>
+                        <Td right>{fmt(e.ytd_gross)}</Td>
+                        <Td right>{fmt(e.ytd_paye)}</Td>
+                        <Td right>{fmt(e.ytd_napsa_employee)}</Td>
+                        <Td right>{fmt(e.ytd_napsa_employer)}</Td>
+                        <Td right>{fmt(e.ytd_nhima_employee)}</Td>
+                        <Td right>{fmt(e.ytd_nhima_employer)}</Td>
+                        <Td right>{e.ytd_advances > 0 ? fmt(e.ytd_advances) : '—'}</Td>
+                        <Td right><span className="font-semibold">{fmt(e.ytd_net)}</span></Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           )}
         </div>
       )}
