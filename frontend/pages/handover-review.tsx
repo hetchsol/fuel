@@ -648,7 +648,7 @@ export default function HandoverReview() {
       {/* Stale readings warning */}
       {staleReadingsCount > 0 && (
         <div className="rounded-lg p-3 text-sm" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)', borderWidth: 1, borderColor: 'var(--color-status-warning)' }}>
-          <span className="font-semibold">{staleReadingsCount} attendant(s)</span> have verified readings but haven't completed shift closing (over 4 hours ago). Follow up in the office.
+          <span className="font-semibold">{staleReadingsCount} entries</span> have been verified but the shift has not been completed (over 4 hours ago). Follow up in the office.
         </div>
       )}
 
