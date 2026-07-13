@@ -54,6 +54,29 @@ def _save_handovers(data: dict, station_id: str):
     save_station_json(station_id, 'attendant_handovers.json', data)
 
 
+def _require_dips_complete(station_id: str, shift_date: str, storage: dict):
+    """Raise 400 if any active tank lacks a dip reading for shift_date."""
+    tanks_data = storage.get("tanks", {})
+    if not tanks_data:
+        return
+    tank_readings = load_station_json(station_id, 'tank_readings.json', default={})
+    tanks_with_dips = {
+        r.get("tank_id") for r in tank_readings.values()
+        if r.get("date") == shift_date
+    }
+    missing = [t for t in tanks_data if t not in tanks_with_dips]
+    if missing:
+        missing_labels = [
+            tanks_data[t].get("fuel_type") or tanks_data[t].get("name") or t
+            for t in missing
+        ]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tank dips for {shift_date} have not been recorded for all tanks "
+                   f"({', '.join(missing_labels)}). Record dips before closing this shift.",
+        )
+
+
 # Start-of-shift opening verification (additive — does not touch the handover
 # pipeline). Keyed by f"{shift_id}-{attendant_id}".
 def _load_opening_verifications(station_id: str) -> dict:
@@ -1935,6 +1958,9 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     if handover.get("attendant_id") != user_id and not is_privileged:
         raise HTTPException(status_code=403, detail="Only the assigned attendant or a supervisor/manager/owner can submit shift closing")
 
+    # Block closing if tank dips are missing for this shift's date
+    _require_dips_complete(station_id, handover.get("date", ""), storage)
+
     # Process credit sales
     credit_sale_details = None
     new_items_to_create = []
@@ -2130,6 +2156,9 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
             _process_stock_snapshot(data.stock_snapshot, station_id, storage)
 
     total_expected = round(fuel_revenue + lpg_sales + lubricant_sales + accessory_sales, 2)
+
+    # Block closing if tank dips are missing for this shift's date
+    _require_dips_complete(station_id, shift.get("date", ""), storage)
 
     # Credit sales
     credit_sale_details = None
