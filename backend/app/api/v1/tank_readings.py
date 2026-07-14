@@ -226,6 +226,33 @@ def record_tank_dips(
     }
 
 
+@router.get("/dips-for-date")
+def get_dips_for_date(
+    date: str,
+    ctx: dict = Depends(get_station_context),
+):
+    """Return the most recent dip record per tank for a given date, any shift type."""
+    tank_readings_db = load_tank_readings(ctx["station_id"])
+    by_tank: dict = {}
+    for r in tank_readings_db.values():
+        if r.get("date") != date:
+            continue
+        if r.get("opening_dip_cm") is None and r.get("closing_dip_cm") is None:
+            continue
+        tid = r.get("tank_id")
+        existing = by_tank.get(tid)
+        r_time = r.get("updated_at") or r.get("created_at") or ""
+        if existing is None or r_time > (existing.get("updated_at") or ""):
+            by_tank[tid] = {
+                "tank_id": tid,
+                "shift_type": r.get("shift_type"),
+                "opening_dip_cm": r.get("opening_dip_cm"),
+                "closing_dip_cm": r.get("closing_dip_cm"),
+                "updated_at": r_time,
+            }
+    return list(by_tank.values())
+
+
 @router.get("/dips")
 def get_tank_dips(
     date: str,

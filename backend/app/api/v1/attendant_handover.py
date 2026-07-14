@@ -274,9 +274,10 @@ def _get_fuel_type(nozzle_id: str, storage: dict = None) -> str:
 
 # ===== Shift submission status =====
 
-def _get_shift_submission_status(station_id: str, shift_id: str, storage: dict) -> dict:
+def _get_shift_submission_status(station_id: str, shift_id: str, storage: dict,
+                                  submitted_phases=("completed",)) -> dict:
     """
-    For a shift, return which attendants have fully submitted (phase=completed)
+    For a shift, return which attendants have submitted (phase in submitted_phases)
     and which are still pending. Only attendants in shift.assignments are tracked.
     """
     shift = storage.get("shifts", {}).get(shift_id, {})
@@ -286,7 +287,7 @@ def _get_shift_submission_status(station_id: str, shift_id: str, storage: dict) 
     submitted_ids = {
         ho.get("attendant_id")
         for ho in handovers.values()
-        if ho.get("shift_id") == shift_id and ho.get("phase") == "completed"
+        if ho.get("shift_id") == shift_id and ho.get("phase") in submitted_phases
     }
 
     submitted, pending = [], []
@@ -305,6 +306,29 @@ def _get_shift_submission_status(station_id: str, shift_id: str, storage: dict) 
         "pending": pending,
         "all_submitted": len(pending) == 0,
     }
+
+
+def _require_all_attendants_readings_submitted(station_id: str, shift_id: str, storage: dict,
+                                                also_submitted: str = None):
+    """
+    Raise 400 unless every attendant assigned to the shift has at least submitted
+    their readings (phase readings_verified or later). Blocks closing any single
+    attendant's handover until the whole shift's readings are in, so reconciliation
+    never runs against a partial day. `also_submitted` credits the attendant
+    currently submitting in this same call (their own handover record does not
+    exist yet when this is enforced from the legacy one-shot submit endpoint).
+    """
+    status = _get_shift_submission_status(
+        station_id, shift_id, storage, submitted_phases=("readings_verified", "completed"))
+    pending = [a for a in status["pending"] if a["attendant_id"] != also_submitted]
+    if pending:
+        pending_names = ", ".join(a["attendant_name"] for a in pending)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot close this shift yet — {pending_names} still need to submit "
+                   "readings. All attendants on this shift must submit readings before "
+                   "any of them can be closed.",
+        )
 
 
 def _notify_shift_pending(station_id: str, shift_id: str, submitter_name: str, storage: dict):
@@ -1047,9 +1071,17 @@ async def get_credit_accounts(ctx: dict = Depends(get_station_context)):
 
 
 @router.get("/shift-submission-status/{shift_id}")
-async def get_shift_submission_status(shift_id: str, ctx: dict = Depends(get_station_context)):
-    """Return submitted/pending attendants for a shift. Available to all assigned users."""
-    return _get_shift_submission_status(ctx["station_id"], shift_id, ctx["storage"])
+async def get_shift_submission_status(shift_id: str, bar: str = "completed",
+                                       ctx: dict = Depends(get_station_context)):
+    """
+    Return submitted/pending attendants for a shift. Available to all assigned users.
+    `bar=completed` (default) reports who has fully closed out (both phases).
+    `bar=readings` reports who has at least submitted readings (readings_verified
+    or later) — the same bar enforced by the shift-closing gate.
+    """
+    submitted_phases = ("readings_verified", "completed") if bar == "readings" else ("completed",)
+    return _get_shift_submission_status(ctx["station_id"], shift_id, ctx["storage"],
+                                         submitted_phases=submitted_phases)
 
 
 @router.get("/my-shifts")
@@ -1961,6 +1993,10 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     # Block closing if tank dips are missing for this shift's date
     _require_dips_complete(station_id, handover.get("date", ""), storage)
 
+    # Block closing this attendant's handover until every attendant on the
+    # shift has at least submitted their readings.
+    _require_all_attendants_readings_submitted(station_id, handover.get("shift_id", ""), storage)
+
     # Process credit sales
     credit_sale_details = None
     new_items_to_create = []
@@ -2159,6 +2195,11 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
 
     # Block closing if tank dips are missing for this shift's date
     _require_dips_complete(station_id, shift.get("date", ""), storage)
+
+    # Block closing this attendant's handover until every attendant on the
+    # shift has at least submitted their readings (this call itself counts
+    # as the current attendant's submission).
+    _require_all_attendants_readings_submitted(station_id, data.shift_id, storage, also_submitted=user_id)
 
     # Credit sales
     credit_sale_details = None

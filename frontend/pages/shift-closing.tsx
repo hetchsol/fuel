@@ -64,6 +64,13 @@ export default function ShiftClosing() {
   // Safe deposit info (display only)
   const [safeDepositTotal, setSafeDepositTotal] = useState(0)
 
+  // Tank dips
+  const [tanks, setTanks] = useState<{ tank_id: string; fuel_type: string; display_name: string }[]>([])
+  const [tankDips, setTankDips] = useState<Record<string, { closing_dip_cm: string; already_recorded: boolean }>>({})
+
+  // Co-attendants who haven't submitted readings yet (blocks closing any attendant on the shift)
+  const [pendingAttendants, setPendingAttendants] = useState<{ attendant_id: string; attendant_name: string }[]>([])
+
   // Result
   const [result, setResult] = useState<any>(null)
 
@@ -103,6 +110,34 @@ export default function ShiftClosing() {
         setPosRefs({})
       }
     } catch {}
+    try {
+      const statusRes = await authFetch(`${BASE}/handover/shift-submission-status/${shiftId}?bar=readings`, { headers: getAuthHeaders() })
+      if (statusRes.ok) {
+        const statusData = await statusRes.json()
+        setPendingAttendants(statusData.pending || [])
+      }
+    } catch {}
+  }
+
+  const loadDipsAndTanks = async (date: string) => {
+    try {
+      const [tanksRes, dipsRes] = await Promise.all([
+        authFetch(`${BASE}/tanks/`, { headers: getAuthHeaders() }),
+        authFetch(`${BASE}/tank-readings/dips-for-date?date=${date}`, { headers: getAuthHeaders() }),
+      ])
+      const tanksData = tanksRes.ok ? await tanksRes.json() : []
+      setTanks(tanksData)
+      const existingDips: any[] = dipsRes.ok ? await dipsRes.json() : []
+      const dipMap: Record<string, { closing_dip_cm: string; already_recorded: boolean }> = {}
+      for (const t of tanksData) {
+        const found = existingDips.find((d: any) => d.tank_id === t.tank_id)
+        dipMap[t.tank_id] = {
+          closing_dip_cm: found?.closing_dip_cm != null ? String(found.closing_dip_cm) : '',
+          already_recorded: found?.closing_dip_cm != null,
+        }
+      }
+      setTankDips(dipMap)
+    } catch {}
   }
 
   // Manager: load a specific awaiting-closing handover directly (no my-shift call needed)
@@ -119,7 +154,10 @@ export default function ShiftClosing() {
       status: handoverObj.status || 'active',
     })
     try {
-      await loadSupportingData(handoverObj.shift_id)
+      await Promise.all([
+        loadSupportingData(handoverObj.shift_id),
+        loadDipsAndTanks(handoverObj.date),
+      ])
     } catch (err: any) {
       setError(err.message || 'Failed to load supporting data')
     } finally {
@@ -153,7 +191,10 @@ export default function ShiftClosing() {
       }
 
       setHandover(shiftData.readings_verified_handover)
-      await loadSupportingData(shiftData.shift?.shift_id || shiftId)
+      await Promise.all([
+        loadSupportingData(shiftData.shift?.shift_id || shiftId),
+        loadDipsAndTanks(shiftData.shift?.date || ''),
+      ])
     } catch (err: any) {
       setError(err.message || 'Failed to load data')
     } finally {
@@ -233,7 +274,9 @@ export default function ShiftClosing() {
   const totalAccounted = actualCashVal + posTotal + creditVal
   const difference = totalAccounted - totalExpected
 
-  const canSubmit = actualCash !== '' && !submitting
+  const allDipsEntered = tanks.length === 0 || tanks.every(t => (tankDips[t.tank_id]?.closing_dip_cm || '') !== '')
+  const allAttendantsSubmitted = pendingAttendants.length === 0
+  const canSubmit = actualCash !== '' && allDipsEntered && allAttendantsSubmitted && !submitting
 
   const handleSubmit = async () => {
     if (!handover) return
@@ -245,6 +288,24 @@ export default function ShiftClosing() {
       .filter(i => i.amount > 0)
 
     try {
+      // Save tank dips before closing
+      const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null
+      const userId = userData ? JSON.parse(userData).user_id : ''
+      const shiftDate = shiftInfo?.date || handover.date || ''
+      const shiftType = shiftInfo?.shift_type || handover.shift_type || 'day'
+      for (const tank of tanks) {
+        const dip = tankDips[tank.tank_id]
+        if (!dip?.closing_dip_cm) continue
+        const params = new URLSearchParams({
+          tank_id: tank.tank_id,
+          date: shiftDate,
+          shift_type: shiftType,
+          recorded_by: userId,
+          closing_dip_cm: dip.closing_dip_cm,
+        })
+        await authFetch(`${BASE}/tank-readings/dips?${params}`, { method: 'POST', headers: getAuthHeaders() })
+      }
+
       const res = await authFetch(`${BASE}/handover/submit-closing`, {
         method: 'POST',
         headers: getAuthHeaders(),
@@ -475,6 +536,72 @@ export default function ShiftClosing() {
               </div>
             )}
           </div>
+
+          {/* Co-attendants pending readings */}
+          {!allAttendantsSubmitted && (
+            <div className="rounded-lg shadow p-4 mb-6" style={{ backgroundColor: theme.cardBg, borderColor: 'var(--color-status-warning)', borderWidth: 2 }}>
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: theme.textSecondary }}>Waiting on Other Attendants</h2>
+                <span className="text-xs font-medium px-2 py-0.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+                  Required before closing
+                </span>
+              </div>
+              <p className="text-sm mt-2" style={{ color: theme.textPrimary }}>
+                {pendingAttendants.map(a => a.attendant_name).join(', ')} still need to submit readings before any attendant on this shift can be closed.
+              </p>
+            </div>
+          )}
+
+          {/* Tank Dips */}
+          {tanks.length > 0 && (
+            <div className="rounded-lg shadow p-4 mb-6" style={{ backgroundColor: theme.cardBg, borderColor: allDipsEntered ? theme.border : 'var(--color-status-warning)', borderWidth: allDipsEntered ? 1 : 2 }}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: theme.textSecondary }}>Tank Dips — Closing</h2>
+                {!allDipsEntered && (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+                    Required before closing
+                  </span>
+                )}
+                {allDipsEntered && (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }}>
+                    All recorded
+                  </span>
+                )}
+              </div>
+              <div className="space-y-3">
+                {tanks.map(tank => {
+                  const dip = tankDips[tank.tank_id] || { closing_dip_cm: '', already_recorded: false }
+                  return (
+                    <div key={tank.tank_id} className="flex items-center gap-3">
+                      <div className="flex-1 text-sm font-medium" style={{ color: theme.textPrimary }}>
+                        {tank.display_name || tank.fuel_type}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {dip.already_recorded && dip.closing_dip_cm !== '' && (
+                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }}>
+                            Recorded
+                          </span>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.1"
+                            value={dip.closing_dip_cm}
+                            onChange={e => setTankDips(prev => ({ ...prev, [tank.tank_id]: { ...prev[tank.tank_id], closing_dip_cm: e.target.value, already_recorded: prev[tank.tank_id]?.already_recorded || false } }))}
+                            placeholder="cm"
+                            className="w-24 px-2 py-1.5 rounded border text-sm text-right font-mono"
+                            style={inputStyle}
+                          />
+                          <span className="text-xs" style={{ color: theme.textSecondary }}>cm</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Safe Deposit Info (display only) */}
           {safeDepositTotal > 0 && (
