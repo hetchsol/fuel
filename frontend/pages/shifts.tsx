@@ -805,7 +805,7 @@ export default function Shifts() {
                       onClick={openShiftModal}
                       className="px-3 py-1 text-sm bg-action-primary hover:bg-action-primary-hover text-white rounded-md"
                     >
-                      Manage Shift
+                      Create Shift
                     </button>
                     <button
                       onClick={() => setShowManageDropdown(!showManageDropdown)}
