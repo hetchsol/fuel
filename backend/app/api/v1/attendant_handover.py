@@ -54,26 +54,39 @@ def _save_handovers(data: dict, station_id: str):
     save_station_json(station_id, 'attendant_handovers.json', data)
 
 
-def _require_dips_complete(station_id: str, shift_date: str, storage: dict):
-    """Raise 400 if any active tank lacks a dip reading for shift_date."""
+def _missing_tank_dips(station_id: str, shift_date: str, storage: dict) -> list:
+    """Return tank_ids that lack a COMPLETE (opening + closing) dip for shift_date.
+
+    A record merely existing isn't enough — a dip-only row can have one of the
+    two fields still null (e.g. opening recorded, closing never followed up),
+    which used to slip past this check and reach shift close.
+    """
     tanks_data = storage.get("tanks", {})
     if not tanks_data:
-        return
+        return []
     tank_readings = load_station_json(station_id, 'tank_readings.json', default={})
     tanks_with_dips = {
         r.get("tank_id") for r in tank_readings.values()
         if r.get("date") == shift_date
+        and r.get("opening_dip_cm") is not None
+        and r.get("closing_dip_cm") is not None
     }
-    missing = [t for t in tanks_data if t not in tanks_with_dips]
+    return [t for t in tanks_data if t not in tanks_with_dips]
+
+
+def _require_dips_complete(station_id: str, shift_date: str, storage: dict):
+    """Raise 400 if any active tank lacks a complete dip reading for shift_date."""
+    missing = _missing_tank_dips(station_id, shift_date, storage)
     if missing:
+        tanks_data = storage.get("tanks", {})
         missing_labels = [
             tanks_data[t].get("fuel_type") or tanks_data[t].get("name") or t
             for t in missing
         ]
         raise HTTPException(
             status_code=400,
-            detail=f"Tank dips for {shift_date} have not been recorded for all tanks "
-                   f"({', '.join(missing_labels)}). Record dips before closing this shift.",
+            detail=f"Tank dips for {shift_date} have not been fully recorded (opening and "
+                   f"closing) for all tanks ({', '.join(missing_labels)}). Record dips before closing this shift.",
         )
 
 
@@ -404,9 +417,23 @@ def _validate_shift_and_assignment(shift_id: str, ctx: dict, storage: dict):
 def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, user_id, allowed_nozzle_ids,
                              shift_date=None, shift_type=None):
     """Process nozzle readings and compute summaries. Returns (nozzle_summaries, fuel_revenue)."""
+    submitted_ids = set()
     for reading in nozzle_readings:
         if reading.nozzle_id not in allowed_nozzle_ids:
             raise HTTPException(status_code=400, detail=f"Nozzle {reading.nozzle_id} is not in your assignment")
+        submitted_ids.add(reading.nozzle_id)
+
+    # The reverse direction matters just as much: a nozzle silently absent
+    # from the submission (rather than present with a bad value) would never
+    # be flagged by anything downstream — its sales for the shift just never
+    # get recorded. Require the submission to cover every assigned nozzle.
+    missing_ids = allowed_nozzle_ids - submitted_ids
+    if missing_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing readings for assigned nozzle(s): {', '.join(sorted(missing_ids))}. "
+                   "All assigned nozzles must be submitted together.",
+        )
 
     # Apply any due price changes lazily
     apply_due_price_changes(storage, station_id)
@@ -1444,7 +1471,10 @@ async def verify_opening(data: VerifyOpeningInput, ctx: dict = Depends(get_stati
 
 class ManagerRetroNozzleInput(BaseModel):
     nozzle_id: str
-    electronic_reading: float = 0.0
+    # Optional so an omitted reading is distinguishable from a genuine 0 —
+    # a defaulted 0.0 here previously meant a forgotten opening reading could
+    # silently make the full closing meter value look like that shift's sales.
+    electronic_reading: Optional[float] = None
     mechanical_reading: float = 0.0
 
 
@@ -1482,6 +1512,10 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
     if not shift.get("is_retrospective", False):
         raise HTTPException(status_code=400, detail="Manager entry is only available for retrospective shifts")
 
+    # Retrospective entry closes the shift the same as a normal close — it must
+    # not become a way to finish a shift without ever recording its tank dips.
+    _require_dips_complete(station_id, shift.get("date", ""), storage)
+
     # Find attendant assignment
     attendant_assignment = None
     attendant_name = None
@@ -1505,19 +1539,39 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
 
     allowed_nozzle_ids = set(attendant_assignment.get("nozzle_ids", []))
     opening_map = {nr.nozzle_id: nr for nr in data.opening_readings}
+    closing_map = {nr.nozzle_id: nr for nr in data.closing_readings}
+
+    # Every nozzle assigned to this attendant needs BOTH an opening and a
+    # closing electronic reading. Silently defaulting a missing opening to
+    # 0.0 (the old behavior) would make the full closing meter value look
+    # like that shift's sales; silently dropping a nozzle missing from
+    # closing_readings would lose its sales entirely. Neither is acceptable,
+    # so require the full pair up front and name exactly what's missing.
+    incomplete = []
+    for nid in sorted(allowed_nozzle_ids):
+        closing_nr = closing_map.get(nid)
+        opening_nr = opening_map.get(nid)
+        if closing_nr is None or closing_nr.electronic_reading is None:
+            incomplete.append(f"{nid} (missing closing reading)")
+        elif opening_nr is None or opening_nr.electronic_reading is None:
+            incomplete.append(f"{nid} (missing opening reading)")
+    if incomplete:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Both opening and closing readings are required for every assigned nozzle: "
+                   f"{', '.join(incomplete)}",
+        )
 
     # Build HandoverNozzleReadingInput objects for _process_nozzle_readings
     nozzle_inputs: List[HandoverNozzleReadingInput] = []
-    for closing_nr in data.closing_readings:
-        nid = closing_nr.nozzle_id
-        if nid not in allowed_nozzle_ids:
-            continue
-        opening_nr = opening_map.get(nid)
+    for nid in allowed_nozzle_ids:
+        opening_nr = opening_map[nid]
+        closing_nr = closing_map[nid]
         nozzle_inputs.append(HandoverNozzleReadingInput(
             nozzle_id=nid,
-            opening_reading=opening_nr.electronic_reading if opening_nr else 0.0,
+            opening_reading=opening_nr.electronic_reading,
             closing_reading=closing_nr.electronic_reading,
-            mechanical_opening=opening_nr.mechanical_reading if opening_nr else 0.0,
+            mechanical_opening=opening_nr.mechanical_reading,
             mechanical_closing=closing_nr.mechanical_reading,
         ))
 

@@ -109,7 +109,10 @@ def create_shift(shift: Shift, ctx: dict = Depends(get_station_context)):
         "assignments": [a.dict() for a in shift.assignments] if shift.assignments else [],
         "start_time": shift.start_time,
         "end_time": shift.end_time,
-        "status": shift.status,
+        # Always "active" on creation, regardless of what the client sent —
+        # completed/reconciled/auto-closed are only reachable through their
+        # dedicated, dip-gated endpoints, never at creation time.
+        "status": "active",
         "created_by": shift.created_by,
         "created_at": shift.created_at,
         "is_retrospective": shift.is_retrospective or False,
@@ -300,6 +303,12 @@ def complete_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     # Cannot complete a shift that is already locked (reconciled / inactive).
     assert_shift_editable(shifts_data[shift_id])
 
+    # This is a manual override of the normal close flow, but it must not
+    # become a way to finish a shift without its tank dips — same requirement
+    # as the attendant-facing close path.
+    from .attendant_handover import _require_dips_complete
+    _require_dips_complete(ctx["station_id"], shifts_data[shift_id].get("date", ""), storage)
+
     shifts_data[shift_id]["status"] = "completed"
     shifts_data[shift_id]["completed_at"] = datetime.now().isoformat()
     save_station_storage(ctx["station_id"])
@@ -341,8 +350,17 @@ def reconcile_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
             detail=f"Shift must be completed before it can be reconciled (current status: {current_status}).",
         )
 
+    # An auto-closed shift skipped the normal close flow (and its dip check)
+    # entirely — don't let it reach the locked "reconciled" state carrying
+    # that gap forward. Re-check live rather than trust the stored flag, so
+    # a manager who has since backfilled the dip isn't blocked.
+    from .attendant_handover import _require_dips_complete
+    _require_dips_complete(ctx["station_id"], shifts_data[shift_id].get("date", ""), storage)
+
     shifts_data[shift_id]["status"] = "reconciled"
     shifts_data[shift_id]["reconciled_at"] = datetime.now().isoformat()
+    shifts_data[shift_id].pop("dip_review_required", None)
+    shifts_data[shift_id].pop("dip_review_missing_tanks", None)
     save_station_storage(ctx["station_id"])
 
     log_audit_event(
