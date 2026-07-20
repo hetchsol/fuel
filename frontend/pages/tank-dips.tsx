@@ -68,8 +68,13 @@ export default function TankDips() {
   const [loading, setLoading] = useState(true)
 
   const [activeTab, setActiveTab] = useState<'enter' | 'history'>('enter')
-  const [historyDate, setHistoryDate] = useState(() => new Date().toISOString().split('T')[0])
-  const [historyShift, setHistoryShift] = useState('Day')
+  const [historyStartDate, setHistoryStartDate] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 7)
+    return d.toISOString().split('T')[0]
+  })
+  const [historyEndDate, setHistoryEndDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [historyShift, setHistoryShift] = useState('All')
   const [historyRows, setHistoryRows] = useState<HistoryRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
@@ -159,11 +164,13 @@ export default function TankDips() {
     }
   }, [date, shiftType])
 
-  const fetchHistory = useCallback(async (d: string, st: string) => {
+  const fetchHistory = useCallback(async (startDate: string, endDate: string, st: string) => {
     setHistoryLoading(true)
     try {
+      const params = new URLSearchParams({ start_date: startDate, end_date: endDate })
+      if (st !== 'All') params.set('shift_type', st)
       const res = await authFetch(
-        `${BASE}/tank-readings/dips?date=${d}&shift_type=${st}`,
+        `${BASE}/tank-readings/dips-range?${params.toString()}`,
         { headers: getHeaders() }
       )
       if (res.ok) {
@@ -194,9 +201,9 @@ export default function TankDips() {
 
   useEffect(() => {
     if (activeTab === 'history' && tanks.length) {
-      fetchHistory(historyDate, historyShift)
+      fetchHistory(historyStartDate, historyEndDate, historyShift)
     }
-  }, [activeTab, historyDate, historyShift, tanks])
+  }, [activeTab, historyStartDate, historyEndDate, historyShift, tanks])
 
   const dipDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
@@ -345,15 +352,24 @@ export default function TankDips() {
         <div>
           <div className="glass-card p-4 mb-4 flex flex-wrap gap-4 items-end">
             <div>
-              <label className="block text-xs font-medium text-content-secondary mb-1">Date</label>
-              <input type="date" value={historyDate}
-                onChange={e => setHistoryDate(e.target.value)}
+              <label className="block text-xs font-medium text-content-secondary mb-1">From</label>
+              <input type="date" value={historyStartDate}
+                max={historyEndDate}
+                onChange={e => setHistoryStartDate(e.target.value)}
+                className="px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">To</label>
+              <input type="date" value={historyEndDate}
+                min={historyStartDate}
+                onChange={e => setHistoryEndDate(e.target.value)}
                 className="px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary" />
             </div>
             <div>
               <label className="block text-xs font-medium text-content-secondary mb-1">Shift</label>
               <select value={historyShift} onChange={e => setHistoryShift(e.target.value)}
                 className="px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary">
+                <option value="All">All</option>
                 <option value="Day">Day</option>
                 <option value="Night">Night</option>
               </select>
@@ -364,14 +380,14 @@ export default function TankDips() {
             <div className="glass-card p-8 text-center text-content-secondary text-sm">Loading...</div>
           ) : historyRows.length === 0 ? (
             <div className="glass-card p-8 text-center text-content-secondary text-sm">
-              No dip readings recorded for {historyDate} {historyShift}.
+              No dip readings recorded between {historyStartDate} and {historyEndDate}{historyShift !== 'All' ? ` (${historyShift})` : ''}.
             </div>
           ) : (
             <div className="glass-card overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-border">
-                    {['Tank', 'Fuel Type', 'Opening Dip (cm)', 'Opening Vol (L)', 'Closing Dip (cm)', 'Closing Vol (L)', 'Delivery'].map(col => (
+                    {['Date', 'Shift', 'Tank', 'Fuel Type', 'Opening Dip (cm)', 'Opening Vol (L)', 'Closing Dip (cm)', 'Closing Vol (L)', 'Delivery'].map(col => (
                       <th key={col} className="px-4 py-3 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">
                         {col}
                       </th>
@@ -379,11 +395,13 @@ export default function TankDips() {
                   </tr>
                 </thead>
                 <tbody>
-                  {historyRows.map(r => {
+                  {historyRows.map((r, i) => {
                     const isDiesel = r.fuel_type === 'Diesel'
                     return (
-                      <tr key={r.tank_id} className="border-t border-surface-border">
-                        <td className="px-4 py-3 font-medium text-content-primary">
+                      <tr key={`${r.date}-${r.shift_type}-${r.tank_id}-${i}`} className="border-t border-surface-border">
+                        <td className="px-4 py-3 text-content-primary whitespace-nowrap">{r.date}</td>
+                        <td className="px-4 py-3 text-content-secondary whitespace-nowrap">{r.shift_type}</td>
+                        <td className="px-4 py-3 font-medium text-content-primary whitespace-nowrap">
                           <span className={`inline-block w-2 h-2 rounded-full mr-2 ${isDiesel ? 'bg-fuel-diesel' : 'bg-fuel-petrol'}`} />
                           {r.display_name || r.tank_id}
                         </td>

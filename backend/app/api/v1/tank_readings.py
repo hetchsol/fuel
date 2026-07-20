@@ -279,6 +279,40 @@ def get_tank_dips(
     return results
 
 
+@router.get("/dips-range")
+def get_tank_dips_range(
+    start_date: str,
+    end_date: str,
+    shift_type: Optional[str] = None,
+    ctx: dict = Depends(get_station_context),
+):
+    """Return dip records for all tanks across a date range (inclusive), optionally filtered by shift type."""
+    if end_date < start_date:
+        raise HTTPException(status_code=400, detail="end_date must not be before start_date")
+
+    tank_readings_db = load_tank_readings(ctx["station_id"])
+    results = [
+        {
+            "tank_id": r.get("tank_id"),
+            "date": r.get("date"),
+            "shift_type": r.get("shift_type"),
+            "opening_dip_cm": r.get("opening_dip_cm"),
+            "opening_volume": r.get("opening_volume"),
+            "closing_dip_cm": r.get("closing_dip_cm"),
+            "closing_volume": r.get("closing_volume"),
+            "recorded_by": r.get("recorded_by"),
+            "updated_at": r.get("updated_at") or r.get("created_at"),
+            "delivery_id": r.get("delivery_id"),
+        }
+        for r in tank_readings_db.values()
+        if start_date <= r.get("date", "") <= end_date
+        and (shift_type is None or r.get("shift_type", "").lower() == shift_type.lower())
+        and (r.get("opening_dip_cm") is not None or r.get("closing_dip_cm") is not None)
+    ]
+    results.sort(key=lambda r: (r["date"], r["shift_type"] or "", r["tank_id"] or ""))
+    return results
+
+
 # ===== DELIVERY THREE-WAY RECONCILIATION =====
 
 def compute_delivery_recon(expected_volume, flowmeter_volume, tank_dip_change):
