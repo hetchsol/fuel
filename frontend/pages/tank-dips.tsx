@@ -325,6 +325,29 @@ export default function TankDips() {
 
   const tankName = (t: Tank) => t.display_name || `${t.fuel_type} Tank (${t.tank_id})`
 
+  const historyPagination = !historyLoading && historyRows.length > HISTORY_PAGE_SIZE && (
+    <div className="flex items-center justify-between px-1">
+      <span className="text-xs text-content-secondary">
+        Showing {historyPage * HISTORY_PAGE_SIZE + 1}
+        -{Math.min((historyPage + 1) * HISTORY_PAGE_SIZE, historyRows.length)} of {historyRows.length}
+      </span>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setHistoryPage(p => Math.max(p - 1, 0))}
+          disabled={historyPage === 0}
+          className="px-3 py-1.5 text-xs font-medium rounded-btn border border-surface-border text-content-secondary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-bg">
+          Previous
+        </button>
+        <button
+          onClick={() => setHistoryPage(p => (p + 1) * HISTORY_PAGE_SIZE < historyRows.length ? p + 1 : p)}
+          disabled={(historyPage + 1) * HISTORY_PAGE_SIZE >= historyRows.length}
+          className="px-3 py-1.5 text-xs font-medium rounded-btn border border-surface-border text-content-secondary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-bg">
+          Next
+        </button>
+      </div>
+    </div>
+  )
+
   if (!userRole || !isManagerOrAbove(userRole)) return null
 
   return (
@@ -380,6 +403,8 @@ export default function TankDips() {
               </select>
             </div>
           </div>
+
+          <div className="mb-3">{historyPagination}</div>
 
           {historyLoading ? (
             <div className="glass-card p-8 text-center text-content-secondary text-sm">Loading...</div>
@@ -445,28 +470,7 @@ export default function TankDips() {
             </div>
           )}
 
-          {!historyLoading && historyRows.length > HISTORY_PAGE_SIZE && (
-            <div className="flex items-center justify-between mt-3 px-1">
-              <span className="text-xs text-content-secondary">
-                Showing {historyPage * HISTORY_PAGE_SIZE + 1}
-                -{Math.min((historyPage + 1) * HISTORY_PAGE_SIZE, historyRows.length)} of {historyRows.length}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setHistoryPage(p => Math.max(p - 1, 0))}
-                  disabled={historyPage === 0}
-                  className="px-3 py-1.5 text-xs font-medium rounded-btn border border-surface-border text-content-secondary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-bg">
-                  Previous
-                </button>
-                <button
-                  onClick={() => setHistoryPage(p => (p + 1) * HISTORY_PAGE_SIZE < historyRows.length ? p + 1 : p)}
-                  disabled={(historyPage + 1) * HISTORY_PAGE_SIZE >= historyRows.length}
-                  className="px-3 py-1.5 text-xs font-medium rounded-btn border border-surface-border text-content-secondary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-bg">
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
+          <div className="mt-3">{historyPagination}</div>
         </div>
       )}
 
