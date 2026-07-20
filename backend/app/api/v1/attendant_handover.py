@@ -16,7 +16,7 @@ from ...models.models import (
     POSReceiptItem,
 )
 from ...config import resolve_fuel_price, resolve_fuel_price_for_shift, apply_due_price_changes
-from ...database.storage import get_nozzle, save_station_storage
+from ...database.storage import get_nozzle, get_tank_id_for_nozzle, save_station_storage
 from ...services.inventory import process_credit_sale
 from .accounts import generate_client_code, generate_auth_reference
 from .auth import get_current_user, require_supervisor_or_owner, require_manager_or_owner, get_station_context
@@ -868,6 +868,118 @@ def _compute_phase1_flags(nozzle_summaries, stock_variance_flags, storage):
     return flags
 
 
+def _nozzle_summary_field(ns, field):
+    """Read a field off a nozzle summary that may be a Pydantic object or a plain dict."""
+    return ns.get(field) if isinstance(ns, dict) else getattr(ns, field, None)
+
+
+def _compute_tank_nozzle_variance(station_id: str, shift_id: str, storage: dict,
+                                   current_attendant_id: str = None, current_nozzle_summaries=None):
+    """
+    Shift-wide check: sum electronic nozzle volume sold per tank across every
+    attendant assigned to the shift, and compare it to that tank's dip-derived
+    movement (opening - closing + deliveries) for the same date/shift.
+
+    Only runs once every assigned attendant has at least submitted readings —
+    summing a partial shift would misrepresent it, not just under-report it.
+    `current_attendant_id`/`current_nozzle_summaries` let a caller include its
+    own in-flight submission before it's been persisted.
+
+    Returns (flags, details):
+      flags   - auto_flag_reasons to merge in (e.g. "tank_nozzle_variance",
+                "tank_calibration_stale", "tank_no_calibration")
+      details - {"status": ..., "tanks": {tank_id: {...}}} for manager review
+    """
+    shift = storage.get("shifts", {}).get(shift_id, {})
+    shift_date = shift.get("date", "")
+    shift_type = shift.get("shift_type", "")
+    if not shift_date or not shift_type:
+        return [], {"status": "unknown_shift"}
+
+    status = _get_shift_submission_status(
+        station_id, shift_id, storage, submitted_phases=("readings_verified", "completed"))
+    if not status["all_submitted"]:
+        return [], {"status": "incomplete"}
+
+    # Gather every attendant's nozzle summaries, keyed by attendant so the
+    # caller's own (possibly not-yet-saved) submission always wins over
+    # whatever is already on disk for that same attendant.
+    handovers = _load_handovers(station_id)
+    by_attendant: dict = {}
+    for ho in handovers.values():
+        if ho.get("shift_id") == shift_id and ho.get("phase") in ("readings_verified", "completed"):
+            by_attendant[ho.get("attendant_id")] = ho.get("nozzle_summaries") or []
+    if current_attendant_id is not None:
+        by_attendant[current_attendant_id] = current_nozzle_summaries or []
+
+    nozzle_volume_by_tank: dict = {}
+    for nozzle_summaries in by_attendant.values():
+        for ns in nozzle_summaries:
+            nid = _nozzle_summary_field(ns, "nozzle_id")
+            vol = _nozzle_summary_field(ns, "volume_sold")
+            tank_id = get_tank_id_for_nozzle(nid, storage=storage)
+            if not tank_id:
+                continue
+            nozzle_volume_by_tank[tank_id] = nozzle_volume_by_tank.get(tank_id, 0.0) + (vol or 0.0)
+
+    if not nozzle_volume_by_tank:
+        return [], {"status": "no_nozzle_data"}
+
+    from types import SimpleNamespace
+    from ...services.tank_movement import calculate_tank_volume_movement_v2, calculate_variance, determine_variance_status
+    from ...services.dip_conversion import calibration_status_for_dip
+
+    tank_readings_db = load_station_json(station_id, 'tank_readings.json', default={})
+    tank_deliveries_db = load_station_json(station_id, 'tank_deliveries.json', default={})
+
+    flags = set()
+    per_tank = {}
+    for tank_id, nozzle_total in nozzle_volume_by_tank.items():
+        dip_rec = next(
+            (r for r in tank_readings_db.values()
+             if r.get("tank_id") == tank_id and r.get("date") == shift_date
+             and r.get("shift_type", "").lower() == shift_type.lower()),
+            None
+        )
+        if not dip_rec or dip_rec.get("opening_volume") is None or dip_rec.get("closing_volume") is None:
+            per_tank[tank_id] = {"status": "no_dip", "nozzle_total": round(nozzle_total, 2)}
+            continue
+
+        cal_status = calibration_status_for_dip(
+            tank_id, dip_rec.get("opening_calibration_version"), dip_rec.get("closing_calibration_version"))
+        if cal_status == "stale":
+            flags.add("tank_calibration_stale")
+        elif cal_status == "no_calibration":
+            flags.add("tank_no_calibration")
+
+        delivered = 0.0
+        delivery_id = dip_rec.get("delivery_id")
+        if delivery_id and delivery_id in tank_deliveries_db:
+            delivered = tank_deliveries_db[delivery_id].get("actual_volume_delivered") or 0.0
+
+        tank_movement = calculate_tank_volume_movement_v2(
+            dip_rec["opening_volume"], dip_rec["closing_volume"],
+            deliveries=[SimpleNamespace(volume_delivered=delivered)] if delivered else [])
+
+        variance = calculate_variance(tank_movement, nozzle_total)
+        status_label = determine_variance_status(abs(variance["variance_percent"]))
+        per_tank[tank_id] = {
+            "status": status_label,
+            "tank_movement": round(tank_movement, 2),
+            "nozzle_total": round(nozzle_total, 2),
+            "variance": round(variance["variance"], 2),
+            "variance_percent": round(variance["variance_percent"], 2),
+            "calibration_status": cal_status,
+        }
+        # Only trust the variance as a real signal when the chart backing it
+        # is current — a stale/missing chart makes the number itself suspect,
+        # so that gets its own flag above instead of a possibly-bogus variance.
+        if status_label != "PASS" and cal_status not in ("stale", "no_calibration"):
+            flags.add("tank_nozzle_variance")
+
+    return list(flags), {"status": "computed", "tanks": per_tank}
+
+
 def _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift, handover_id):
     """Populate daily entry files from enriched stock snapshot."""
     if not enriched_snapshot:
@@ -1642,6 +1754,15 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
         auto_flag_reasons = (auto_flag_reasons or []) + ["pos_terminal_variance"]
         review_status = "flagged"
 
+    # Shift-wide tank dip vs. nozzle-sales reconciliation. This handover
+    # doesn't exist on disk yet, so this attendant's own submission has to
+    # be passed in explicitly alongside whatever siblings are already saved.
+    tank_flags, tank_details = _compute_tank_nozzle_variance(
+        station_id, data.shift_id, storage, current_attendant_id=data.attendant_id, current_nozzle_summaries=nozzle_summaries)
+    if tank_flags:
+        auto_flag_reasons = (auto_flag_reasons or []) + tank_flags
+        review_status = "flagged"
+
     handover_id = f"HO-{data.shift_id}-{data.attendant_id}-MRE-{datetime.now().strftime('%H%M%S')}"
 
     handover_out = HandoverOutput(
@@ -1677,6 +1798,7 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
     )
 
     handovers[handover_id] = handover_out.dict()
+    handovers[handover_id]["tank_nozzle_reconciliation"] = tank_details
     _save_handovers(handovers, station_id)
 
     # Mirror to attendant_readings.json (O and C keys used by the chain logic)
@@ -2096,6 +2218,14 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
         all_flags.append("cash_shortage")
     if pos_terminal_variance is not None and abs(pos_terminal_variance) > pos_variance_threshold:
         all_flags.append("pos_terminal_variance")
+
+    # Shift-wide tank dip vs. nozzle-sales reconciliation. Every attendant on
+    # the shift is already guaranteed to have submitted by this point (see
+    # the gate above), so this attendant's own on-disk data is sufficient —
+    # no need to pass it in separately.
+    tank_flags, tank_details = _compute_tank_nozzle_variance(station_id, shift_id, storage)
+    all_flags.extend(tank_flags)
+
     review_status = "flagged" if all_flags else "submitted"
 
     now_iso = datetime.now().isoformat()
@@ -2115,6 +2245,7 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     handover["difference"] = difference
     handover["auto_flag_reasons"] = all_flags or None
     handover["review_status"] = review_status
+    handover["tank_nozzle_reconciliation"] = tank_details
     if data.notes:
         existing_notes = handover.get("notes") or ""
         handover["notes"] = f"{existing_notes}\n[Closing] {data.notes}".strip() if existing_notes else data.notes
@@ -2270,6 +2401,15 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
 
     auto_flag_reasons, review_status = _compute_auto_flags(difference, nozzle_summaries, stock_variance_flags, storage)
 
+    # Shift-wide tank dip vs. nozzle-sales reconciliation. This handover
+    # doesn't exist on disk yet, so this attendant's own submission has to
+    # be passed in explicitly alongside whatever siblings are already saved.
+    tank_flags, tank_details = _compute_tank_nozzle_variance(
+        station_id, data.shift_id, storage, current_attendant_id=user_id, current_nozzle_summaries=nozzle_summaries)
+    if tank_flags:
+        auto_flag_reasons = auto_flag_reasons + tank_flags
+        review_status = "flagged"
+
     handovers = _load_handovers(station_id)
     handover_id = f"HO-{data.shift_id}-{user_id}-{datetime.now().strftime('%H%M%S')}"
     now_iso = datetime.now().isoformat()
@@ -2306,6 +2446,7 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     )
 
     handovers[handover_id] = handover_output.dict()
+    handovers[handover_id]["tank_nozzle_reconciliation"] = tank_details
     _save_handovers(handovers, station_id)
 
     if new_items_to_create:

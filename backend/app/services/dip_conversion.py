@@ -15,10 +15,14 @@ logger = logging.getLogger(__name__)
 _dynamic_calibrations: Dict[str, dict] = {}
 
 
-def register_tank_calibration(tank_id: str, chart_data: Dict[float, float], capacity: float = 50000, diameter: float = 250, length: float = 1000):
+def register_tank_calibration(tank_id: str, chart_data: Dict[float, float], capacity: float = 50000, diameter: float = 250, length: float = 1000, version: Optional[str] = None):
     """
     Register a calibration chart for a new tank at runtime.
     This is used when a new tank is created and we clone the calibration from a sibling tank.
+
+    `version` should be the chart's uploaded_at timestamp — it lets callers
+    later tell whether a dip recorded under this chart still matches the one
+    currently active, since charts can be replaced with no other trace.
     """
     _dynamic_calibrations[tank_id] = {
         "type": "cylindrical_horizontal",
@@ -26,8 +30,38 @@ def register_tank_calibration(tank_id: str, chart_data: Dict[float, float], capa
         "diameter": diameter,
         "length": length,
         "calibration_chart": dict(chart_data),
+        "version": version,
     }
     logger.info(f"Registered dynamic calibration for tank {tank_id}")
+
+
+def get_calibration_version(tank_id: str) -> Optional[str]:
+    """Return the currently active calibration chart's version stamp for a tank, if known."""
+    cal = _dynamic_calibrations.get(tank_id)
+    return cal.get("version") if cal else None
+
+
+def calibration_status_for_dip(tank_id: str, opening_version: Optional[str], closing_version: Optional[str]) -> str:
+    """
+    Classify a stored dip record's calibration freshness against the tank's
+    currently active chart.
+
+    Returns one of:
+      "current"        - every stamped side matches the active chart
+      "stale"          - at least one stamped side was computed under a
+                          chart that has since been replaced
+      "unknown"        - no version was stamped on either side (predates
+                          version tracking) — cannot be verified either way
+      "no_calibration" - the tank has no active chart right now, so nothing
+                          can be verified against it
+    """
+    current = get_calibration_version(tank_id)
+    if current is None:
+        return "no_calibration"
+    stamped = [v for v in (opening_version, closing_version) if v is not None]
+    if not stamped:
+        return "unknown"
+    return "stale" if any(v != current for v in stamped) else "current"
 
 
 def _resolve_calibration(tank_id: str) -> dict:

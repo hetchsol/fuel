@@ -88,7 +88,7 @@ def record_tank_dips(
     When closing dip exceeds opening dip a delivery is required and written to
     tank_deliveries.json in the same request — one path, one save.
     """
-    from ...services.dip_conversion import dip_to_volume
+    from ...services.dip_conversion import dip_to_volume, get_calibration_version
     from ...database.storage import save_station_storage
 
     role = ctx.get("role", "")
@@ -111,6 +111,14 @@ def record_tank_dips(
 
     opening_volume = dip_to_volume(tank_id, opening_dip_cm) if opening_dip_cm is not None else None
     closing_volume = dip_to_volume(tank_id, closing_dip_cm) if closing_dip_cm is not None else None
+    # Stamp which calibration chart produced each volume — the only way to
+    # later tell whether a stored volume still matches the chart currently in
+    # use, since charts can be replaced with no other trace on the record.
+    # Tracked per side (not one field) because opening and closing can be
+    # entered in separate calls with a chart change in between.
+    current_calibration_version = get_calibration_version(tank_id)
+    opening_calibration_version = current_calibration_version if opening_dip_cm is not None else None
+    closing_calibration_version = current_calibration_version if closing_dip_cm is not None else None
 
     if (opening_volume is not None and closing_volume is not None
             and closing_volume > opening_volume
@@ -127,9 +135,11 @@ def record_tank_dips(
         if opening_dip_cm is not None:
             rec["opening_dip_cm"] = opening_dip_cm
             rec["opening_volume"] = opening_volume
+            rec["opening_calibration_version"] = opening_calibration_version
         if closing_dip_cm is not None:
             rec["closing_dip_cm"] = closing_dip_cm
             rec["closing_volume"] = closing_volume
+            rec["closing_calibration_version"] = closing_calibration_version
         rec["recorded_by"] = recorded_by
         rec["updated_at"] = now
         reading_id = existing_id
@@ -142,8 +152,10 @@ def record_tank_dips(
             "shift_type": shift_type,
             "opening_dip_cm": opening_dip_cm,
             "opening_volume": opening_volume,
+            "opening_calibration_version": opening_calibration_version,
             "closing_dip_cm": closing_dip_cm,
             "closing_volume": closing_volume,
+            "closing_calibration_version": closing_calibration_version,
             "recorded_by": recorded_by,
             "created_at": now,
             "updated_at": now,
@@ -260,6 +272,8 @@ def get_tank_dips(
     ctx: dict = Depends(get_station_context),
 ):
     """Return dip records for all tanks for a given date/shift."""
+    from ...services.dip_conversion import calibration_status_for_dip
+
     tank_readings_db = load_tank_readings(ctx["station_id"])
     results = [
         {
@@ -271,6 +285,8 @@ def get_tank_dips(
             "recorded_by": r.get("recorded_by"),
             "updated_at": r.get("updated_at") or r.get("created_at"),
             "delivery_id": r.get("delivery_id"),
+            "calibration_status": calibration_status_for_dip(
+                r.get("tank_id"), r.get("opening_calibration_version"), r.get("closing_calibration_version")),
         }
         for r in tank_readings_db.values()
         if r.get("date") == date and r.get("shift_type", "").lower() == shift_type.lower()
@@ -290,6 +306,8 @@ def get_tank_dips_range(
     if end_date < start_date:
         raise HTTPException(status_code=400, detail="end_date must not be before start_date")
 
+    from ...services.dip_conversion import calibration_status_for_dip
+
     tank_readings_db = load_tank_readings(ctx["station_id"])
     results = [
         {
@@ -303,6 +321,8 @@ def get_tank_dips_range(
             "recorded_by": r.get("recorded_by"),
             "updated_at": r.get("updated_at") or r.get("created_at"),
             "delivery_id": r.get("delivery_id"),
+            "calibration_status": calibration_status_for_dip(
+                r.get("tank_id"), r.get("opening_calibration_version"), r.get("closing_calibration_version")),
         }
         for r in tank_readings_db.values()
         if start_date <= r.get("date", "") <= end_date

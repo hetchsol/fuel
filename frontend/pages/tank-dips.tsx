@@ -41,6 +41,7 @@ interface HistoryRow {
   closing_dip_cm: number | null
   closing_volume: number | null
   delivery_id?: string | null
+  calibration_status?: 'current' | 'stale' | 'unknown' | 'no_calibration'
 }
 
 function getPreviousShift(date: string, shiftType: string): { prevDate: string; prevShift: string } {
@@ -188,6 +189,7 @@ export default function TankDips() {
             closing_dip_cm: r.closing_dip_cm ?? null,
             closing_volume: r.closing_volume ?? null,
             delivery_id: r.delivery_id ?? null,
+            calibration_status: r.calibration_status ?? undefined,
           }
         })
         setHistoryRows(mapped)
@@ -387,7 +389,7 @@ export default function TankDips() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-border">
-                    {['Date', 'Shift', 'Tank', 'Fuel Type', 'Opening Dip (cm)', 'Opening Vol (L)', 'Closing Dip (cm)', 'Closing Vol (L)', 'Delivery'].map(col => (
+                    {['Date', 'Shift', 'Tank', 'Fuel Type', 'Opening Dip (cm)', 'Opening Vol (L)', 'Closing Dip (cm)', 'Closing Vol (L)', 'Delivery', 'Calibration'].map(col => (
                       <th key={col} className="px-4 py-3 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">
                         {col}
                       </th>
@@ -421,6 +423,14 @@ export default function TankDips() {
                         <td className="px-4 py-3">
                           {r.delivery_id
                             ? <span className="text-xs font-semibold text-status-success">Recorded</span>
+                            : <span className="text-xs text-content-secondary">-</span>
+                          }
+                        </td>
+                        <td className="px-4 py-3">
+                          {r.calibration_status === 'stale'
+                            ? <span className="text-xs font-semibold text-status-warning" title="Chart was replaced after this dip was recorded — this volume may no longer match the current calibration.">Stale</span>
+                            : r.calibration_status === 'no_calibration'
+                            ? <span className="text-xs font-semibold text-status-warning" title="This tank has no calibration chart loaded right now.">No chart</span>
                             : <span className="text-xs text-content-secondary">-</span>
                           }
                         </td>

@@ -302,6 +302,29 @@ def get_nozzle_ids_for_tank(station_id: str = None, tank_id: str = None, storage
     return nozzle_ids
 
 
+def get_tank_id_for_nozzle(nozzle_id: str, station_id: str = None, storage: Dict[str, Any] = None) -> Optional[str]:
+    """
+    Forward lookup: return the tank_id a nozzle draws from.
+
+    Mirrors get_nozzle_ids_for_tank's fallback: nozzle.tank_id if set,
+    else the containing pump_station's tank_id.
+    """
+    store = storage
+    if store is None:
+        if station_id:
+            store = get_station_storage(station_id)
+        else:
+            store = STORAGE
+    for island_id, island_data in store.get('islands', {}).items():
+        ps = island_data.get('pump_station')
+        if not ps:
+            continue
+        for nozzle in ps.get('nozzles', []):
+            if nozzle.get('nozzle_id') == nozzle_id:
+                return nozzle.get('tank_id') or ps.get('tank_id')
+    return None
+
+
 def entity_exists(entity_type: str, entity_id: str) -> bool:
     """Check if an entity exists in storage"""
     if entity_type == 'nozzles':

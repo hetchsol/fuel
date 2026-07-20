@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 CALIBRATION_FILE = 'tank_calibrations.json'
+CALIBRATION_HISTORY_FILE = 'tank_calibration_history.json'
 
 
 def _load_calibrations(station_id: str) -> dict:
@@ -31,6 +32,28 @@ def _load_calibrations(station_id: str) -> dict:
 
 def _save_calibrations(station_id: str, data: dict):
     save_station_json(station_id, CALIBRATION_FILE, data)
+
+
+def _archive_calibration(station_id: str, tank_id: str, outgoing: Optional[dict]):
+    """Preserve a chart being replaced or cleared, instead of discarding it.
+
+    Without this, any dip recorded under an old chart becomes silently
+    unverifiable once the chart changes — there's no way to tell whether a
+    stored volume reflects the current chart or a since-replaced one.
+    """
+    if not outgoing or not outgoing.get("chart"):
+        return
+    history = load_station_json(station_id, CALIBRATION_HISTORY_FILE, default={})
+    tank_history = history.get(tank_id, [])
+    tank_history.append({
+        "chart": outgoing.get("chart"),
+        "uploaded_at": outgoing.get("uploaded_at"),
+        "uploaded_by": outgoing.get("uploaded_by"),
+        "point_count": outgoing.get("point_count"),
+        "effective_until": datetime.now().isoformat(),
+    })
+    history[tank_id] = tank_history
+    save_station_json(station_id, CALIBRATION_HISTORY_FILE, history)
 
 
 @router.get("/template")
@@ -209,12 +232,14 @@ async def upload_calibration(
         tank = tanks[tank_id]
         capacity = tank.get("capacity", max(vols) if vols else 50000)
 
-        # Save
+        # Save (archiving whatever chart this replaces first)
         calibrations = _load_calibrations(station_id)
+        _archive_calibration(station_id, tank_id, calibrations.get(tank_id))
+        uploaded_at = datetime.now().isoformat()
         calibrations[tank_id] = {
             "tank_id": tank_id,
             "chart": sorted_chart,
-            "uploaded_at": datetime.now().isoformat(),
+            "uploaded_at": uploaded_at,
             "uploaded_by": ctx.get("username", "unknown"),
             "point_count": len(sorted_chart),
         }
@@ -222,7 +247,7 @@ async def upload_calibration(
 
         # Register for immediate use
         float_chart = {float(k): v for k, v in sorted_chart.items()}
-        register_tank_calibration(tank_id, float_chart, capacity=capacity)
+        register_tank_calibration(tank_id, float_chart, capacity=capacity, version=uploaded_at)
 
         log_audit_event(
             station_id=station_id,
@@ -309,6 +334,7 @@ def clear_calibration(tank_id: str, ctx: dict = Depends(require_owner)):
     if tank_id not in calibrations:
         raise HTTPException(status_code=404, detail=f"No custom calibration found for {tank_id}")
 
+    _archive_calibration(station_id, tank_id, calibrations.get(tank_id))
     del calibrations[tank_id]
     _save_calibrations(station_id, calibrations)
 
@@ -336,7 +362,7 @@ def load_saved_calibrations(station_id: str):
         for tank_id, cal_data in calibrations.items():
             float_chart = {float(k): v for k, v in cal_data.get("chart", {}).items()}
             if float_chart:
-                register_tank_calibration(tank_id, float_chart)
+                register_tank_calibration(tank_id, float_chart, version=cal_data.get("uploaded_at"))
                 logger.info(f"[calibration] Loaded {len(float_chart)} points for {tank_id}")
             else:
                 logger.warning(f"[calibration] Empty chart for {tank_id} at station {station_id}")
@@ -351,9 +377,10 @@ def ensure_calibration_loaded(tank_id: str, station_id: str) -> bool:
         return True
     try:
         calibrations = _load_calibrations(station_id)
-        float_chart = {float(k): v for k, v in calibrations.get(tank_id, {}).get("chart", {}).items()}
+        cal_data = calibrations.get(tank_id, {})
+        float_chart = {float(k): v for k, v in cal_data.get("chart", {}).items()}
         if float_chart:
-            register_tank_calibration(tank_id, float_chart)
+            register_tank_calibration(tank_id, float_chart, version=cal_data.get("uploaded_at"))
             logger.info(f"[calibration] Lazy-loaded {len(float_chart)} points for {tank_id}")
             return True
     except Exception as e:
