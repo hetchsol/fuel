@@ -78,6 +78,8 @@ export default function TankDips() {
   const [historyShift, setHistoryShift] = useState('All')
   const [historyRows, setHistoryRows] = useState<HistoryRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyPage, setHistoryPage] = useState(0)
+  const HISTORY_PAGE_SIZE = 20
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -196,6 +198,7 @@ export default function TankDips() {
       } else {
         setHistoryRows([])
       }
+      setHistoryPage(0)
     } finally {
       setHistoryLoading(false)
     }
@@ -397,7 +400,7 @@ export default function TankDips() {
                   </tr>
                 </thead>
                 <tbody>
-                  {historyRows.map((r, i) => {
+                  {historyRows.slice(historyPage * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE + HISTORY_PAGE_SIZE).map((r, i) => {
                     const isDiesel = r.fuel_type === 'Diesel'
                     return (
                       <tr key={`${r.date}-${r.shift_type}-${r.tank_id}-${i}`} className="border-t border-surface-border">
@@ -439,6 +442,29 @@ export default function TankDips() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {!historyLoading && historyRows.length > HISTORY_PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-3 px-1">
+              <span className="text-xs text-content-secondary">
+                Showing {historyPage * HISTORY_PAGE_SIZE + 1}
+                -{Math.min((historyPage + 1) * HISTORY_PAGE_SIZE, historyRows.length)} of {historyRows.length}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setHistoryPage(p => Math.max(p - 1, 0))}
+                  disabled={historyPage === 0}
+                  className="px-3 py-1.5 text-xs font-medium rounded-btn border border-surface-border text-content-secondary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-bg">
+                  Previous
+                </button>
+                <button
+                  onClick={() => setHistoryPage(p => (p + 1) * HISTORY_PAGE_SIZE < historyRows.length ? p + 1 : p)}
+                  disabled={(historyPage + 1) * HISTORY_PAGE_SIZE >= historyRows.length}
+                  className="px-3 py-1.5 text-xs font-medium rounded-btn border border-surface-border text-content-secondary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-bg">
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </div>
