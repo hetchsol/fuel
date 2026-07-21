@@ -1099,7 +1099,7 @@ export default function Infrastructure() {
                   return (
                     <div className="mb-3 space-y-2">
                       <label className="block text-xs font-semibold text-content-secondary">Configuration</label>
-                      <div className="grid grid-cols-3 gap-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1">
                         {(['all_diesel', 'all_petrol', 'mixed'] as const).map(p => (
                           <button
                             key={p}

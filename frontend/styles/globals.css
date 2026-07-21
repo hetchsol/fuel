@@ -277,6 +277,16 @@ textarea:disabled {
   cursor: not-allowed;
 }
 
+/* iOS Safari auto-zooms the page when focusing an input rendered below 16px.
+   Force 16px on mobile viewports only so desktop text-xs/text-sm density is untouched. */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='submit']):not([type='button']):not([type='reset']):not([type='color']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* Style select option dropdowns for dark theme */
 select option {
   background-color: var(--color-bg-card);

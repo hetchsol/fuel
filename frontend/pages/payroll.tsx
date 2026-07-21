@@ -157,6 +157,7 @@ function OverviewTab({ runs, pendingLeave, pendingAdvances, onTabChange }: {
         </Card>
       )}
       <Card title="Recent Runs">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-surface-border"><Th>Period</Th><Th>Status</Th><Th right>Net</Th><Th right>Employer Cost</Th></tr></thead>
           <tbody>
@@ -171,6 +172,7 @@ function OverviewTab({ runs, pendingLeave, pendingAdvances, onTabChange }: {
             {runs.length === 0 && <tr><td colSpan={4} className="text-center py-6 text-content-secondary text-sm">No payroll runs yet</td></tr>}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   )
@@ -329,7 +331,7 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
 
             {/* Salary & Employment — single dense row */}
             <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-wide mb-2">Salary & Employment</p>
-            <div className="grid grid-cols-5 gap-2 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
               <Input label="Basic (ZMW)" value={form.basic_salary} onChange={stf('basic_salary')} type="number" step="0.01" />
               <Input label="Housing (ZMW)" value={form.housing_allowance} onChange={stf('housing_allowance')} type="number" step="0.01" />
               <Input label="Transport (ZMW)" value={form.transport_allowance} onChange={stf('transport_allowance')} type="number" step="0.01" />
@@ -337,7 +339,7 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
                 options={[{value:'permanent',label:'Permanent'},{value:'contract',label:'Contract'},{value:'casual',label:'Casual'}]} />
               <Input label="Hrs / Week" value={form.contracted_hours_per_week} onChange={stf('contracted_hours_per_week')} type="number" />
             </div>
-            <div className="grid grid-cols-5 gap-2 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
               <Input label="Leave Days / Yr" value={form.annual_leave_days} onChange={stf('annual_leave_days')} type="number" />
               <Input label="Start Date" value={form.start_date} onChange={stf('start_date')} type="date" />
               <div className="col-span-2">
@@ -349,7 +351,7 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
 
             {/* Statutory numbers */}
             <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-wide mb-2">Statutory Numbers</p>
-            <div className="grid grid-cols-5 gap-2 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
               <Input label="NRC Number" value={form.nrc_number} onChange={stf('nrc_number')} />
               <Input label="TPIN" value={form.tpin} onChange={stf('tpin')} />
               <Input label="NAPSA Number" value={form.napsa_number} onChange={stf('napsa_number')} />
@@ -359,7 +361,7 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
 
             {/* Payment details */}
             <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-wide mb-2">Payment Details</p>
-            <div className="grid grid-cols-5 gap-2 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
               <Select label="Method" value={form.preferred_payment_method} onChange={stf('preferred_payment_method')}
                 options={[{value:'bank',label:'Bank Transfer'},{value:'mobile_money',label:'Mobile Money'},{value:'cash',label:'Cash'}]} />
               <Input label="Bank Name" value={form.bank_name} onChange={stf('bank_name')} />
@@ -367,7 +369,7 @@ function StaffSetupTab({ profiles, users, wcfCategories, onSave }: {
               <Input label="Account Number" value={form.bank_account_number} onChange={stf('bank_account_number')} />
               <div />
             </div>
-            <div className="grid grid-cols-5 gap-2 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
               <Select label="Mobile Provider" value={form.mobile_money_provider} onChange={stf('mobile_money_provider')}
                 options={[{value:'',label:'— None —'},{value:'airtel',label:'Airtel Money'},{value:'mtn',label:'MTN Mobile Money'},{value:'zamtel',label:'Zamtel Kwacha'}]} />
               <Input label="Mobile Number" value={form.mobile_money_number} onChange={stf('mobile_money_number')} />
@@ -570,6 +572,7 @@ function LeaveTab({ users, leaveTypes, onRefresh }: {
       </div>
       {subTab === 'requests' && (
         <Card title="Leave Requests">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-surface-border">
               <Th>Employee</Th><Th>Type</Th><Th>From</Th><Th>To</Th><Th>Days</Th><Th>Status</Th><Th>Notes</Th><Th>Actions</Th>
@@ -597,10 +600,12 @@ function LeaveTab({ users, leaveTypes, onRefresh }: {
               {requests.length === 0 && <tr><td colSpan={8} className="text-center py-6 text-content-secondary text-sm">No leave requests</td></tr>}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
       {subTab === 'balances' && (
         <Card title={`Leave Balances — ${new Date().getFullYear()}`}>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-surface-border">
               <Th>Employee</Th><Th>Leave Type</Th><Th right>Entitled</Th><Th right>Accrued</Th><Th right>Taken</Th><Th right>Carry Fwd</Th><Th right>Remaining</Th>
@@ -620,6 +625,7 @@ function LeaveTab({ users, leaveTypes, onRefresh }: {
               {balances.length === 0 && <tr><td colSpan={7} className="text-center py-6 text-content-secondary text-sm">No balances found</td></tr>}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
     </div>
@@ -707,6 +713,7 @@ function AdvancesTab({ users, onRefresh }: { users: any[]; onRefresh: () => void
         </Card>
       )}
       <Card title="Salary Advances">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-surface-border">
             <Th>Employee</Th><Th right>Amount</Th><Th right>Monthly</Th><Th right>Outstanding</Th><Th right>Months</Th><Th>Reason</Th><Th>Status</Th><Th>Actions</Th>
@@ -778,6 +785,7 @@ function AdvancesTab({ users, onRefresh }: { users: any[]; onRefresh: () => void
             {advances.length === 0 && <tr><td colSpan={8} className="text-center py-6 text-content-secondary text-sm">No salary advances</td></tr>}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   )
@@ -993,6 +1001,7 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
               <div key={k as string}><p className="text-xs text-content-secondary">{k}</p><p className="font-semibold">{v}</p></div>
             ))}
           </div>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-surface-border">
@@ -1063,6 +1072,7 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
               })}
             </tbody>
           </table>
+          </div>
           {runDetail.payslips.some(s => s.napsa_employee_override != null || s.nhima_employee_override != null || s.paye_override != null) && (
             <p className="text-xs text-orange-600 mt-2">* Overridden value — hover to see calculated amount</p>
           )}
@@ -1071,6 +1081,7 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
 
       {/* Run list */}
       <Card title="All Runs">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-surface-border"><Th>Period</Th><Th>Status</Th><Th right>Gross</Th><Th right>Net</Th><Th right>Employer Cost</Th><Th>Action</Th></tr></thead>
           <tbody>
@@ -1087,6 +1098,7 @@ function PayrollRunTab({ runs, users, onRefresh, userRole }: {
             {runs.length === 0 && <tr><td colSpan={6} className="text-center py-6 text-content-secondary text-sm">No runs yet</td></tr>}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   )
@@ -1153,6 +1165,7 @@ function PaymentsTab({ runs, users, onRefresh, userRole }: {
         )}
       </Card>
       <Card title="Run Summary">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-surface-border"><Th>Period</Th><Th>Status</Th><Th right>Net Pay</Th><Th>Approved</Th></tr></thead>
           <tbody>
@@ -1167,6 +1180,7 @@ function PaymentsTab({ runs, users, onRefresh, userRole }: {
             {approvedRuns.length === 0 && <tr><td colSpan={4} className="text-center py-6 text-content-secondary text-sm">No approved runs</td></tr>}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   )
@@ -1293,6 +1307,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
                     ['TOTAL','','','',fmt(statutory.paye.total)],
                   ])}>Export CSV</Btn>
                 }>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead><tr className="border-b border-surface-border">
                       <Th>Name</Th><Th>TPIN</Th><Th right>Gross</Th><Th right>Taxable</Th><Th right>PAYE</Th>
@@ -1306,6 +1321,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
                       ))}
                     </tbody>
                   </table>
+                  </div>
                   <p className="text-xs text-content-secondary mt-2 font-semibold">Total PAYE: {fmt(statutory.paye.total)}</p>
                 </Card>
 
@@ -1317,6 +1333,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
                     ['TOTAL','','',fmt(statutory.napsa.total_employee),fmt(statutory.napsa.total_employer),fmt(statutory.napsa.total)],
                   ])}>Export CSV</Btn>
                 }>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead><tr className="border-b border-surface-border">
                       <Th>Name</Th><Th>NAPSA No.</Th><Th right>Gross</Th><Th right>Employee</Th><Th right>Employer</Th><Th right>Total</Th>
@@ -1330,6 +1347,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
                       ))}
                     </tbody>
                   </table>
+                  </div>
                   <p className="text-xs text-content-secondary mt-2 font-semibold">
                     Employee: {fmt(statutory.napsa.total_employee)} | Employer: {fmt(statutory.napsa.total_employer)} | Total: {fmt(statutory.napsa.total)}
                   </p>
@@ -1343,6 +1361,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
                     ['TOTAL','','',fmt(statutory.nhima.total_employee),fmt(statutory.nhima.total_employer),fmt(statutory.nhima.total)],
                   ])}>Export CSV</Btn>
                 }>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead><tr className="border-b border-surface-border">
                       <Th>Name</Th><Th>NHIMA No.</Th><Th right>Gross</Th><Th right>Employee</Th><Th right>Employer</Th><Th right>Total</Th>
@@ -1356,6 +1375,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
                       ))}
                     </tbody>
                   </table>
+                  </div>
                   <p className="text-xs text-content-secondary mt-2 font-semibold">
                     Employee: {fmt(statutory.nhima.total_employee)} | Employer: {fmt(statutory.nhima.total_employer)} | Total: {fmt(statutory.nhima.total)}
                   </p>
@@ -1369,6 +1389,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
                     ['TOTAL','',fmt(statutory.wcf.total_employer)],
                   ])}>Export CSV</Btn>
                 }>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead><tr className="border-b border-surface-border">
                       <Th>Name</Th><Th right>Gross</Th><Th right>WCF (Employer)</Th>
@@ -1381,6 +1402,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
                       ))}
                     </tbody>
                   </table>
+                  </div>
                   <p className="text-xs text-content-secondary mt-2 font-semibold">Total WCF: {fmt(statutory.wcf.total_employer)}</p>
                 </Card>
               </>
@@ -1535,6 +1557,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
             ))}
           </div>
           <p className="text-xs font-semibold text-content-secondary uppercase mb-2">PAYE Bands</p>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-surface-border"><Th>Min (ZMW)</Th><Th>Max (ZMW)</Th><Th>Rate</Th></tr></thead>
             <tbody>
@@ -1547,6 +1570,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
               ))}
             </tbody>
           </table>
+          </div>
           {userRole === 'owner' && (
             <p className="text-xs text-content-secondary mt-3">To update rates, post new statutory rates via the API with a future effective_from date. Historical payslips will retain the rates used at the time of their run.</p>
           )}
@@ -1555,6 +1579,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
 
       {subTab === 'leavetypes' && (
         <Card title="Leave Types">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-surface-border"><Th>Type</Th><Th>Days / Year</Th><Th>Full Pay Days</Th><Th>Half Pay Days</Th><Th>Docs Required</Th><Th>System</Th></tr></thead>
             <tbody>
@@ -1570,11 +1595,13 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
               ))}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
 
       {subTab === 'wcf' && (
         <Card title="WCF Categories">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-surface-border"><Th>Category</Th><Th>Rate</Th><Th>Description</Th><Th>Effective From</Th><Th>Active</Th></tr></thead>
             <tbody>
@@ -1589,6 +1616,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
               ))}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
 
@@ -1609,6 +1637,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
             </Card>
           )}
           <Card title={`Public Holidays — ${new Date().getFullYear()}`}>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b border-surface-border"><Th>Date</Th><Th>Day</Th><Th>Name</Th><Th>Recurring</Th><Th>Notes</Th>{userRole === 'owner' && <Th>Remove</Th>}</tr></thead>
               <tbody>
@@ -1628,6 +1657,7 @@ function StatutoryTab({ runs, rates, leaveTypes, wcfCategories, holidays, onRefr
                 })}
               </tbody>
             </table>
+            </div>
           </Card>
         </div>
       )}

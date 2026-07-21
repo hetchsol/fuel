@@ -272,6 +272,7 @@ export default function UsersManagement() {
         <div className="text-center py-8">Loading...</div>
       ) : (
         <div className="bg-surface-card rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-surface-border">
             <thead className="bg-surface-bg">
               <tr>
@@ -364,6 +365,7 @@ export default function UsersManagement() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

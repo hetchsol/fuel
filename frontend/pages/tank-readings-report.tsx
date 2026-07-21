@@ -601,7 +601,7 @@ export default function TankReadingsReport() {
                   <h3 className="text-sm font-semibold text-content-secondary uppercase tracking-wide mb-3">
                     Tank Dip Readings
                   </h3>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="bg-surface-bg rounded-lg p-4 text-center">
                       <div className="text-xs text-content-secondary mb-1">Opening</div>
                       <div className="text-xl font-bold text-content-primary font-mono">

@@ -189,7 +189,7 @@ export default function POSSales() {
 
       {/* Selectors */}
       <div className="glass-card-static rounded-card p-5 space-y-4">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Date */}
           <div>
             <label className="block text-xs font-medium text-content-secondary mb-1">Date</label>
@@ -322,6 +322,7 @@ export default function POSSales() {
               <div className="px-5 py-3 border-b border-surface-border">
                 <h2 className="text-sm font-semibold text-content-primary">Receipts this session</h2>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-border bg-surface-bg">
@@ -356,6 +357,7 @@ export default function POSSales() {
                   </tr>
                 </tfoot>
               </table>
+              </div>
               <div className="px-5 py-4 border-t border-surface-border flex justify-end">
                 <button
                   onClick={saveAll}

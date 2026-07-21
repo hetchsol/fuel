@@ -603,7 +603,7 @@ export default function SetupWizard() {
                         <button onClick={() => removeTankRow(idx)} className="text-xs text-status-error hover:text-status-error/80 transition-colors">Remove</button>
                       )}
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <div>
                         <label className="block text-xs text-content-secondary mb-1">Tank ID</label>
                         <input type="text" value={row.id} onChange={e => updateTankRow(idx, 'id', e.target.value)} className={smallInputClass} />
@@ -691,7 +691,7 @@ export default function SetupWizard() {
               {/* Allowable Losses */}
               <div className="p-3 bg-surface-card/30 border border-surface-border rounded-lg space-y-2">
                 <p className="text-xs font-semibold text-content-secondary">Allowable Losses</p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <label className="block text-xs text-content-secondary mb-1">Diesel (%)</label>
                     <input type="number" step="0.1" min="0" value={dieselLoss} onChange={e => setDieselLoss(parseFloat(e.target.value) || 0)} className={smallInputClass} />
@@ -851,7 +851,7 @@ export default function SetupWizard() {
                     <option value="manager">Manager</option>
                   </select>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <label className="block text-xs text-content-secondary mb-1">Full Name</label>
                     <input type="text" value={staffForm.full_name} onChange={e => setStaffForm({ ...staffForm, full_name: e.target.value })} placeholder="John Banda" className={smallInputClass} />

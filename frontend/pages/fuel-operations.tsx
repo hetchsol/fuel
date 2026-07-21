@@ -939,7 +939,7 @@ export default function FuelOperations() {
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3 mb-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2">
                           <div>
                             <p className="text-xs text-content-secondary">Before</p>
                             <p className="text-sm font-semibold text-content-primary">{delivery.volume_before.toLocaleString()} L</p>
@@ -980,7 +980,7 @@ export default function FuelOperations() {
                             }`}>
                               Reconciliation: {delivery.recon_status.replace(/_/g, ' ')}
                             </p>
-                            <div className="grid grid-cols-3 gap-2 text-xs mb-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs mb-2">
                               <div>
                                 <p className="text-content-secondary">OMC Invoice</p>
                                 <p className="font-semibold text-content-primary">{(delivery.invoice_volume_liters ?? delivery.expected_volume)?.toLocaleString() ?? '—'} L</p>

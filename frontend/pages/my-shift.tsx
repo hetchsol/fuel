@@ -1398,6 +1398,7 @@ export default function MyShift() {
                 </span>
               )}
             </div>
+            <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
@@ -1453,6 +1454,7 @@ export default function MyShift() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Opening stock summary (read-only) — filtered by assignment */}
@@ -1627,7 +1629,157 @@ export default function MyShift() {
               <span className="text-xs font-normal" style={{ color: theme.textSecondary }}>{nozzleRows.length} nozzle{nozzleRows.length !== 1 ? 's' : ''} {showNozzles ? '−' : '+'}</span>
             </button>
             {showNozzles && (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile card list — mirrors the table below, same state/handlers, presentation only */}
+            <div className="md:hidden space-y-3 p-3">
+              {nozzleRows.map((row, idx) => {
+                const comp = nozzleComputations[idx]
+                const closingVal = parseFloat(row.closing_reading)
+                const hasError = row.closing_reading !== '' && !isNaN(closingVal) && closingVal < row.opening_reading
+                const mechCloseVal = parseFloat(row.mechanical_closing)
+                const mechError = row.mechanical_closing !== '' && !isNaN(mechCloseVal) && mechCloseVal < row.mechanical_opening
+                const showDeviationNote = (comp.flagged || comp.lossExceedsThreshold) && comp.mechValid && row.closing_reading !== ''
+                return (
+                  <div key={row.nozzle_id} className="rounded-lg p-3" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-bold" style={{ color: theme.textPrimary }}>
+                        {row.fuel_type_abbrev && row.display_label ? `${row.fuel_type_abbrev} ${row.display_label}` : row.nozzle_id}
+                      </span>
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                        style={{
+                          backgroundColor: row.fuel_type === 'Petrol' ? 'var(--color-action-primary-light)' : 'var(--color-status-pending-light)',
+                          color: row.fuel_type === 'Petrol' ? 'var(--color-action-primary)' : 'var(--color-status-warning)',
+                        }}>
+                        {row.fuel_type}
+                      </span>
+                    </div>
+
+                    <div className="text-[10px] uppercase font-semibold mb-1" style={{ color: theme.primary }}>Electronic</div>
+                    <div className="grid grid-cols-2 gap-2 mb-1">
+                      <div>
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Open</label>
+                        <input type="number" step="0.001" value={row.opening_reading || ''}
+                          onChange={e => updateOpeningReading(row.nozzle_id, e.target.value)}
+                          placeholder="Elect. open"
+                          className="w-full px-2 py-1.5 rounded border text-sm text-right font-mono" style={inputStyle} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Close</label>
+                        {row.closing_verified && row.closing_reading !== '' ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="font-mono text-sm" style={{ color: theme.textPrimary }}>{row.closing_reading}</span>
+                            <span title="Double-entry verified" style={{ color: 'var(--color-status-success)' }}>✓</span>
+                            <button type="button" onClick={() => setActiveEntry({ nozzleId: row.nozzle_id, field: 'electronic' })}
+                              className="text-xs underline" style={{ color: theme.primary }}>Re-do</button>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => setActiveEntry({ nozzleId: row.nozzle_id, field: 'electronic' })}
+                            className="w-full min-h-[44px] px-2 py-1.5 rounded border text-sm font-medium"
+                            style={{ ...inputStyle, borderColor: theme.primary, color: theme.primary }}>
+                            Enter ✎
+                          </button>
+                        )}
+                        {hasError && (
+                          <div className="text-xs mt-0.5" style={{ color: 'var(--color-status-error)' }}>Must be &ge; opening</div>
+                        )}
+                      </div>
+                      {priceChangeDetected && (
+                        <div className="col-span-2">
+                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Changeover (Midnight)</label>
+                          <input type="number" step="0.001" value={row.changeover_reading}
+                            onChange={e => setNozzleRows(prev => prev.map(r => r.nozzle_id === row.nozzle_id ? { ...r, changeover_reading: e.target.value } : r))}
+                            placeholder="Midnight"
+                            className="w-full px-2 py-1.5 rounded border text-sm text-right font-mono"
+                            style={{
+                              ...inputStyle,
+                              borderColor: row.changeover_reading && (parseFloat(row.changeover_reading) < row.opening_reading || (row.closing_reading && parseFloat(row.changeover_reading) > parseFloat(row.closing_reading)))
+                                ? 'var(--color-status-error)' : 'var(--color-status-warning)',
+                            }} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right text-xs mb-3" style={{ color: theme.textSecondary }}>
+                      Volume: <span className="font-mono font-medium" style={{ color: theme.textPrimary }}>
+                        {comp.valid && row.closing_reading !== '' ? comp.volume.toLocaleString(undefined, { minimumFractionDigits: 3 }) : '-'}
+                      </span>
+                    </div>
+
+                    <div className="pt-2" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                      <div className="text-[10px] uppercase font-semibold mb-1" style={{ color: 'var(--color-status-warning)' }}>Mechanical</div>
+                      <div className="grid grid-cols-2 gap-2 mb-1">
+                        <div>
+                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Open</label>
+                          <input type="number" step="0.001" value={row.mechanical_opening || ''}
+                            onChange={e => updateMechOpening(row.nozzle_id, e.target.value)}
+                            placeholder="Mech open"
+                            className="w-full px-2 py-1.5 rounded border text-sm text-right font-mono" style={inputStyle} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Close</label>
+                          {row.mech_closing_verified && row.mechanical_closing !== '' ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="font-mono text-sm" style={{ color: theme.textPrimary }}>{row.mechanical_closing}</span>
+                              <span title="Double-entry verified" style={{ color: 'var(--color-status-success)' }}>✓</span>
+                              <button type="button" onClick={() => setActiveEntry({ nozzleId: row.nozzle_id, field: 'mechanical' })}
+                                className="text-xs underline" style={{ color: theme.primary }}>Re-do</button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => setActiveEntry({ nozzleId: row.nozzle_id, field: 'mechanical' })}
+                              className="w-full min-h-[44px] px-2 py-1.5 rounded border text-sm font-medium"
+                              style={{ ...inputStyle, borderColor: theme.primary, color: theme.primary }}>
+                              Enter ✎
+                            </button>
+                          )}
+                          {mechError && (
+                            <div className="text-xs mt-0.5" style={{ color: 'var(--color-status-error)' }}>Must be &ge; opening</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right text-xs" style={{ color: theme.textSecondary }}>
+                        Volume: <span className="font-mono font-medium" style={{ color: theme.textPrimary }}>
+                          {comp.mechValid && row.mechanical_closing !== '' ? comp.mechVolume.toLocaleString(undefined, { minimumFractionDigits: 3 }) : '-'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                      <span className="text-xs" style={{ color: theme.textSecondary }}>Deviation</span>
+                      <span className="text-xs font-mono" style={{
+                        color: comp.flagged || comp.lossExceedsThreshold ? 'var(--color-status-error)' : theme.textSecondary,
+                        fontWeight: comp.flagged || comp.lossExceedsThreshold ? 600 : 400,
+                      }}>
+                        {comp.mechValid && row.closing_reading !== '' && comp.valid
+                          ? <>
+                              {comp.flagged && <span title="Deviation exceeds threshold">! </span>}
+                              {comp.lossExceedsThreshold && <span title={`Loss exceeds ${nozzleLossThreshold}L threshold`}>!! </span>}
+                              {comp.deviationL.toFixed(3)} L ({comp.deviationPct.toFixed(2)}%)
+                            </>
+                          : '-'}
+                      </span>
+                    </div>
+                    {showDeviationNote && (
+                      <div className="mt-2 p-2 rounded" style={{ backgroundColor: 'var(--color-status-error-light)' }}>
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: 'var(--color-status-error)' }}>
+                          {comp.lossExceedsThreshold
+                            ? `Loss: ${comp.deviationL.toFixed(1)}L exceeds ${nozzleLossThreshold}L`
+                            : `Deviation: ${comp.deviationPct.toFixed(2)}% exceeds ${meterThreshold}%`}
+                        </label>
+                        <input type="text" value={row.deviation_note}
+                          onChange={e => setNozzleRows(prev => prev.map(r => r.nozzle_id === row.nozzle_id ? { ...r, deviation_note: e.target.value } : r))}
+                          placeholder="Explain deviation (required to proceed)"
+                          className="w-full px-2 py-1.5 rounded border text-xs"
+                          style={{ ...inputStyle, borderColor: row.deviation_note.trim() ? theme.border : 'var(--color-status-error)' }} />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              <div className="flex items-center justify-between px-1 py-2 font-semibold" style={{ color: theme.textPrimary }}>
+                <span>Total Volume</span>
+                <span className="font-mono" style={{ color: theme.primary }}>{totalVolume.toLocaleString(undefined, { minimumFractionDigits: 3 })} L</span>
+              </div>
+            </div>
+            <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 {/* Group header row */}
@@ -1820,7 +1972,8 @@ export default function MyShift() {
                 </tr>
               </tfoot>
             </table>
-          </div>
+            </div>
+            </>
           )}
           </div>
 
@@ -1941,7 +2094,7 @@ export default function MyShift() {
               ) : (
                 <div className="space-y-2">
                   {lpgTrades.map((trade, idx) => (
-                    <div key={idx} className="grid grid-cols-7 gap-2 items-center">
+                    <div key={idx} className="grid grid-cols-2 sm:grid-cols-7 gap-2 items-center">
                       <div className="col-span-2">
                         <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>From (empty)</label>
                         <select
@@ -1968,7 +2121,7 @@ export default function MyShift() {
                           ))}
                         </select>
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-1 sm:col-span-2">
                         <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Qty</label>
                         <input
                           type="number" min={0} step={1}
@@ -1991,7 +2144,7 @@ export default function MyShift() {
                         </button>
                       </div>
                       {trade.from_size_kg === trade.to_size_kg && (
-                        <div className="col-span-7 text-xs" style={{ color: 'var(--color-status-error)' }}>
+                        <div className="col-span-2 sm:col-span-7 text-xs" style={{ color: 'var(--color-status-error)' }}>
                           From and To sizes must differ.
                         </div>
                       )}
@@ -2591,6 +2744,7 @@ export default function MyShift() {
           {isAttendant ? (
             /* Attendant view: volumes only, no monetary info */
             <div>
+              <div className="overflow-x-auto">
               <table className="min-w-full text-sm mb-4">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
@@ -2637,6 +2791,7 @@ export default function MyShift() {
                   })}
                 </tbody>
               </table>
+              </div>
               <div className="rounded-lg p-4 text-center"
                 style={{ backgroundColor: 'var(--color-action-primary-light)', borderWidth: 1, borderColor: theme.primary }}>
                 <p className="text-sm font-medium" style={{ color: theme.textPrimary }}>
@@ -2650,6 +2805,7 @@ export default function MyShift() {
           ) : (
             /* Supervisor/Owner view: full financial breakdown */
             <>
+              <div className="overflow-x-auto">
               <table className="min-w-full text-sm mb-4">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
@@ -2710,6 +2866,7 @@ export default function MyShift() {
                   })}
                 </tbody>
               </table>
+              </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                 <SummaryCell label="Fuel Revenue" value={handoverResult.fuel_revenue} theme={theme} />

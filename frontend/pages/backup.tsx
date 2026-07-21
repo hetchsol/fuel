@@ -185,6 +185,7 @@ export default function BackupPage() {
             <p className="text-sm text-content-secondary">Loading...</p>
           ) : status?.snapshots?.length > 0 ? (
             <div className="border border-surface-border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
               <table className="min-w-full text-xs">
                 <thead className="bg-surface-bg">
                   <tr>
@@ -215,6 +216,7 @@ export default function BackupPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           ) : (
             <p className="text-sm text-content-secondary">

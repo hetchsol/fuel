@@ -2613,7 +2613,7 @@ export default function DailyTankReading() {
                         {/* Formula Breakdown */}
                         <div className="mt-3 pt-3 border-t-2" style={{ borderColor: theme.primary + '40' }}>
                           <p className="text-xs font-medium mb-2" style={{ color: theme.primary }}>Calculation Breakdown:</p>
-                          <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                             <div className="rounded p-2" style={{ backgroundColor: theme.cardBg }}>
                               <p className="opacity-75" style={{ color: theme.primary }}>Opening Volume</p>
                               <p className="font-bold" style={{ color: theme.primary }}>{parseFloat(formData.opening_volume).toFixed(3)}L</p>

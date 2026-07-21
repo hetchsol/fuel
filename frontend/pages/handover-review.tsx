@@ -737,6 +737,44 @@ export default function HandoverReview() {
             </div>
           ) : (
             <>
+            {/* Mobile card list — same data/handlers as the table below, presentation only */}
+            <div className="md:hidden space-y-3 p-3">
+              {awaitingClosing.slice((awaitingPage - 1) * PAGE_SIZE, awaitingPage * PAGE_SIZE).map(h => (
+                <div key={h.handover_id} className="rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
+                  <div className="flex items-center justify-between mb-2 gap-2">
+                    <span className="font-semibold text-sm" style={{ color: theme.textPrimary }}>{h.attendant_name}</span>
+                    {h.is_stale && (
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold shrink-0"
+                        style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+                        Stale
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Date</label>
+                      <div style={{ color: theme.textPrimary }}>{formatDateToDisplay(h.date)}</div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Shift</label>
+                      <div style={{ color: theme.textSecondary }}>{h.shift_type}</div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Waiting</label>
+                      <div className="font-mono" style={{ color: theme.textSecondary }}>
+                        {h.hours_waiting != null ? `${h.hours_waiting}h` : '-'}
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => { setStatusTab('todo'); setClosingFormId(h.handover_id) }}
+                    className="w-full min-h-[44px] px-2 py-1 text-sm font-medium rounded text-white"
+                    style={{ backgroundColor: 'var(--color-action-primary)' }}>
+                    Close & Approve
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
@@ -774,6 +812,7 @@ export default function HandoverReview() {
                 ))}
               </tbody>
             </table>
+            </div>
             <Pagination total={awaitingClosing.length} pageSize={PAGE_SIZE} page={awaitingPage} onPageChange={setAwaitingPage} />
             </>
           )}
@@ -782,8 +821,178 @@ export default function HandoverReview() {
 
       {/* Handover table */}
       {statusTab !== 'awaiting' && (
-      <div className="rounded-lg shadow overflow-x-auto"
+      <div className="rounded-lg shadow"
         style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+        {/* Mobile card list — same data/handlers as the table below, presentation only */}
+        <div className="md:hidden space-y-3 p-3">
+          {displayedHandovers.length === 0 && (
+            <div className="px-4 py-8 text-center text-sm" style={{ color: theme.textSecondary }}>No handovers found</div>
+          )}
+          {displayedHandovers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(h => {
+            const rs = h.review_status || 'submitted'
+            const styleMap = REVIEW_STATUS_STYLES[rs] || REVIEW_STATUS_STYLES.submitted
+            const isExpanded = expandedId === h.handover_id
+            const isAwaiting = statusTab === 'todo' && h.phase === 'readings_verified'
+            const isFullySubmitted = h.phase == null || h.phase === 'completed'
+            const canSelect = rs === 'submitted' && isFullySubmitted
+            const canAct = (rs === 'submitted' || rs === 'flagged') && isFullySubmitted
+            return (
+              <div key={h.handover_id} className="rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}
+                onClick={() => { if (!isAwaiting) setExpandedId(isExpanded ? null : h.handover_id) }}>
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {statusTab !== 'approved' && canSelect && (
+                      <input type="checkbox" checked={selectedIds.has(h.handover_id)}
+                        onChange={() => toggleSelect(h.handover_id)} onClick={e => e.stopPropagation()} className="rounded shrink-0" />
+                    )}
+                    <span className="font-semibold text-sm truncate" style={{ color: theme.textPrimary }}>{h.attendant_name}</span>
+                  </div>
+                  {isAwaiting ? (
+                    <span className="inline-block px-2 py-0.5 rounded text-xs font-medium shrink-0"
+                      style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+                      Awaiting closing
+                    </span>
+                  ) : (
+                    <span className="inline-block px-2 py-0.5 rounded text-xs font-medium shrink-0"
+                      style={{ backgroundColor: styleMap.bg, color: styleMap.color }}>
+                      {styleMap.label}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-2">
+                  <div>
+                    <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Date</label>
+                    <div style={{ color: theme.textPrimary }}>{formatDateToDisplay(h.date)} &middot; {h.shift_type}</div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Difference</label>
+                    <div className="font-mono font-bold" style={{ color: isAwaiting ? theme.textSecondary : h.difference >= 0 ? 'var(--color-status-success)' : 'var(--color-status-error)' }}>
+                      {isAwaiting || h.source === 'readings' ? '—' : `${h.difference >= 0 ? '+' : ''}K${h.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Expected Cash</label>
+                    <div className="font-mono" style={{ color: theme.textPrimary }}>
+                      {isAwaiting || h.source === 'readings' ? '—' : `K${h.expected_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Actual Cash</label>
+                    <div className="font-mono" style={{ color: theme.textPrimary }}>
+                      {isAwaiting || h.source === 'readings' ? '—' : `K${h.actual_cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {isAwaiting ? (
+                    h.hours_waiting != null && (
+                      <span className="text-xs font-mono" style={{ color: theme.textSecondary }}>{h.hours_waiting}h waiting</span>
+                    )
+                  ) : (
+                    <>
+                      {h.source === 'readings' && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                          style={{ backgroundColor: 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
+                          Enter Readings
+                        </span>
+                      )}
+                      {(h.auto_flag_reasons || []).map(flag => (
+                        <span key={flag} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                          style={{ backgroundColor: 'var(--color-status-error-light, #fde8e8)', color: 'var(--color-status-error)' }}>
+                          {FLAG_LABELS[flag] || flag}
+                        </span>
+                      ))}
+                    </>
+                  )}
+                  {h.is_stale && (
+                    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                      style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+                      Stale
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
+                  {isAwaiting ? (
+                    <button
+                      onClick={() => setClosingFormId(closingFormId === h.handover_id ? null : h.handover_id)}
+                      className="min-h-[44px] px-3 py-1 text-sm font-medium rounded text-white"
+                      style={{ backgroundColor: closingFormId === h.handover_id ? theme.textSecondary : 'var(--color-action-primary)' }}>
+                      {closingFormId === h.handover_id ? 'Cancel' : 'Close & Approve'}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setReadingsModal(h)}
+                        className="min-h-[44px] px-3 py-1 text-sm font-medium rounded"
+                        style={{ backgroundColor: theme.cardBg, color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
+                        Readings
+                      </button>
+                      {canAct && (
+                        <>
+                          <button
+                            onClick={() => {
+                              if (rs === 'flagged') { setApproveModalId(h); setApproveNote('') }
+                              else { handleApprove(h) }
+                            }}
+                            disabled={actionLoading}
+                            className="min-h-[44px] px-3 py-1 text-sm font-medium rounded text-white"
+                            style={{ backgroundColor: 'var(--color-status-success)' }}>
+                            Approve
+                          </button>
+                          <button onClick={() => { setReturnModalId(h); setReturnNote('') }}
+                            className="min-h-[44px] px-3 py-1 text-sm font-medium rounded"
+                            style={{ backgroundColor: 'var(--color-status-warning-light, #fff8e1)', color: 'var(--color-status-warning)' }}>
+                            Return
+                          </button>
+                        </>
+                      )}
+                      {rs === 'approved' && (
+                        <span className="text-xs self-center" style={{ color: 'var(--color-status-success)' }}>Done</span>
+                      )}
+                      {rs === 'returned' && (
+                        <span className="text-xs self-center" style={{ color: 'var(--color-status-warning)' }}>Returned</span>
+                      )}
+                    </>
+                  )}
+                </div>
+                {isExpanded && !isAwaiting && (
+                  <div className="mt-3 pt-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }} onClick={e => e.stopPropagation()}>
+                    <ExpandedDetail h={h} theme={theme} onRefresh={fetchQueue} />
+                  </div>
+                )}
+                {closingFormId === h.handover_id && isAwaiting && (
+                  <div className="mt-3 pt-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }} onClick={e => e.stopPropagation()}>
+                    <ClosingForm
+                      h={h}
+                      theme={theme}
+                      creditAccounts={creditAccounts}
+                      fuelPrices={fuelPrices}
+                      safeDeposit={closingSafeDeposit}
+                      cash={closingCash}
+                      onCashChange={setClosingCash}
+                      posTypes={posTypes}
+                      posAmounts={closingPosAmounts}
+                      onPosAmountsChange={setClosingPosAmounts}
+                      posRefs={closingPosRefs}
+                      onPosRefsChange={setClosingPosRefs}
+                      posTerminalBatch={closingPosTerminalBatch}
+                      onPosTerminalBatchChange={setClosingPosTerminalBatch}
+                      notes={closingNotes}
+                      onNotesChange={setClosingNotes}
+                      creditItems={closingCreditItems}
+                      onCreditItemsChange={setClosingCreditItems}
+                      submitting={closingSubmitting}
+                      error={closingError}
+                      onSubmit={() => handleCloseAndApprove(h)}
+                      onCancel={() => setClosingFormId(null)}
+                    />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ backgroundColor: theme.background }}>
@@ -988,6 +1197,7 @@ export default function HandoverReview() {
             )
           })}
         </table>
+        </div>
         <Pagination total={displayedHandovers.length} pageSize={PAGE_SIZE} page={page} onPageChange={setPage} />
       </div>
       )}
@@ -1446,6 +1656,7 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
       {/* Nozzle readings */}
       <div>
         <div className="text-xs font-medium uppercase mb-2" style={{ color: theme.textSecondary }}>Nozzle Readings</div>
+        <div className="overflow-x-auto">
         <table className="min-w-full text-xs">
           <thead>
             <tr style={{ backgroundColor: theme.cardBg }}>
@@ -1530,6 +1741,7 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Financial summary — hidden for enter-readings source rows */}
@@ -1617,6 +1829,7 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
       {expandedStock === 'lpg' && h.stock_snapshot?.lpg_cylinders && (
         <div className="mt-3 rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
           <div className="text-xs font-semibold uppercase mb-2" style={{ color: theme.textSecondary }}>LPG Cylinder Breakdown</div>
+          <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
             <thead>
               <tr>
@@ -1650,12 +1863,14 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       {expandedStock === 'accessories' && h.stock_snapshot?.accessories && (
         <div className="mt-3 rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
           <div className="text-xs font-semibold uppercase mb-2" style={{ color: theme.textSecondary }}>Accessories Breakdown</div>
+          <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
             <thead>
               <tr>
@@ -1681,12 +1896,14 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       {expandedStock === 'lubricants' && h.stock_snapshot?.lubricants && (
         <div className="mt-3 rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
           <div className="text-xs font-semibold uppercase mb-2" style={{ color: theme.textSecondary }}>Lubricants Breakdown</div>
+          <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
             <thead>
               <tr>
@@ -1712,6 +1929,7 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -1719,6 +1937,7 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
       {h.credit_sale_details && h.credit_sale_details.length > 0 && (
         <div>
           <div className="text-xs font-medium uppercase mb-2" style={{ color: theme.textSecondary }}>Credit Sale Items</div>
+          <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
             <thead>
               <tr style={{ backgroundColor: theme.cardBg }}>
@@ -1772,6 +1991,7 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

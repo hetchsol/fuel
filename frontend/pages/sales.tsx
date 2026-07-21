@@ -86,6 +86,7 @@ export default function Sales() {
 
       {!loading && records.length > 0 && (
         <div className="bg-surface-card rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-surface-border">
             <thead className="bg-surface-bg">
               <tr>
@@ -126,6 +127,7 @@ export default function Sales() {
               ))}
             </tbody>
           </table>
+          </div>
           <Pagination total={records.length} pageSize={PAGE_SIZE} page={page} onPageChange={setPage} />
         </div>
       )}

@@ -642,7 +642,7 @@ export default function ThreeWayReconciliation() {
                           {selectedReading.variances.tank_vs_nozzle.status}
                         </span>
                       </div>
-                      <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                         <div>
                           <div className="text-content-secondary">Liters</div>
                           <div className="font-semibold">{selectedReading.variances.tank_vs_nozzle.variance_liters.toLocaleString()}</div>
@@ -666,7 +666,7 @@ export default function ThreeWayReconciliation() {
                             {selectedReading.variances.tank_vs_cash.status}
                           </span>
                         </div>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                           <div>
                             <div className="text-content-secondary">Liters</div>
                             <div className="font-semibold">{selectedReading.variances.tank_vs_cash.variance_liters.toLocaleString()}</div>
@@ -691,7 +691,7 @@ export default function ThreeWayReconciliation() {
                             {selectedReading.variances.nozzle_vs_cash.status}
                           </span>
                         </div>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                           <div>
                             <div className="text-content-secondary">Liters</div>
                             <div className="font-semibold">{selectedReading.variances.nozzle_vs_cash.variance_liters.toLocaleString()}</div>

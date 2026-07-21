@@ -1961,7 +1961,7 @@ function TankCalibrationTab() {
               Clear Calibration
             </button>
           </div>
-          <div className="max-h-64 overflow-y-auto border border-surface-border rounded-lg">
+          <div className="max-h-64 overflow-auto border border-surface-border rounded-lg">
             <table className="min-w-full text-sm">
               <thead className="sticky top-0 bg-surface-bg">
                 <tr>
