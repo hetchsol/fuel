@@ -1026,9 +1026,18 @@ export default function HandoverReview() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ backgroundColor: theme.background }}>
-                      {['Nozzle', 'Fuel', 'Mech. Opening', 'Elect. Opening', 'Elect. Closing', 'Mech. Closing', 'Volume Sold (L)', 'Revenue (K)'].map(col => (
-                        <th key={col} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
-                          style={{ color: theme.textSecondary }}>{col}</th>
+                      {[
+                        { label: 'Nozzle', align: 'text-left' },
+                        { label: 'Fuel', align: 'text-left' },
+                        { label: 'Mech. Opening', align: 'text-right' },
+                        { label: 'Elect. Opening', align: 'text-right' },
+                        { label: 'Elect. Closing', align: 'text-right' },
+                        { label: 'Mech. Closing', align: 'text-right' },
+                        { label: 'Volume Sold (L)', align: 'text-right' },
+                        { label: 'Revenue (K)', align: 'text-right' },
+                      ].map(col => (
+                        <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase whitespace-nowrap`}
+                          style={{ color: theme.textSecondary }}>{col.label}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1440,8 +1449,17 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
         <table className="min-w-full text-xs">
           <thead>
             <tr style={{ backgroundColor: theme.cardBg }}>
-              {['Nozzle', 'Fuel', 'Elect. Open', 'Elect. Close', 'Volume (L)', 'Mech. Vol', 'Deviation', 'Revenue'].map(col => (
-                <th key={col} className="px-2 py-1 text-left font-medium uppercase" style={{ color: theme.textSecondary }}>{col}</th>
+              {[
+                { label: 'Nozzle', align: 'text-left' },
+                { label: 'Fuel', align: 'text-left' },
+                { label: 'Elect. Open', align: 'text-right' },
+                { label: 'Elect. Close', align: 'text-right' },
+                { label: 'Volume (L)', align: 'text-right' },
+                { label: 'Mech. Vol', align: 'text-right' },
+                { label: 'Deviation', align: 'text-right' },
+                { label: 'Revenue', align: 'text-right' },
+              ].map(col => (
+                <th key={col.label} className={`px-2 py-1 ${col.align} font-medium uppercase`} style={{ color: theme.textSecondary }}>{col.label}</th>
               ))}
             </tr>
           </thead>
