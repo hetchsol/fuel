@@ -76,6 +76,8 @@ export default function TankDips() {
   })
   const [historyEndDate, setHistoryEndDate] = useState(() => new Date().toISOString().split('T')[0])
   const [historyShift, setHistoryShift] = useState('All')
+  const [historyFuelType, setHistoryFuelType] = useState('All')
+  const [historyTankId, setHistoryTankId] = useState('All')
   const [historyRows, setHistoryRows] = useState<HistoryRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyPage, setHistoryPage] = useState(0)
@@ -210,6 +212,12 @@ export default function TankDips() {
     }
   }, [activeTab, historyStartDate, historyEndDate, historyShift, tanks])
 
+  // Fuel type / tank are filtered client-side against the already-fetched
+  // range, so just reset paging rather than re-fetching.
+  useEffect(() => {
+    setHistoryPage(0)
+  }, [historyFuelType, historyTankId])
+
   const dipDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   const convertDip = async (tankId: string, dip: string): Promise<{ volume: number | null; error: boolean }> => {
@@ -325,11 +333,18 @@ export default function TankDips() {
 
   const tankName = (t: Tank) => t.display_name || `${t.fuel_type} Tank (${t.tank_id})`
 
-  const historyPagination = !historyLoading && historyRows.length > HISTORY_PAGE_SIZE && (
+  const historyFuelTypes = Array.from(new Set(tanks.map(t => t.fuel_type))).sort()
+  const historyTankOptions = historyFuelType === 'All' ? tanks : tanks.filter(t => t.fuel_type === historyFuelType)
+  const filteredHistoryRows = historyRows.filter(r =>
+    (historyFuelType === 'All' || r.fuel_type === historyFuelType) &&
+    (historyTankId === 'All' || r.tank_id === historyTankId)
+  )
+
+  const historyPagination = !historyLoading && filteredHistoryRows.length > HISTORY_PAGE_SIZE && (
     <div className="flex items-center justify-between px-1">
       <span className="text-xs text-content-secondary">
         Showing {historyPage * HISTORY_PAGE_SIZE + 1}
-        -{Math.min((historyPage + 1) * HISTORY_PAGE_SIZE, historyRows.length)} of {historyRows.length}
+        -{Math.min((historyPage + 1) * HISTORY_PAGE_SIZE, filteredHistoryRows.length)} of {filteredHistoryRows.length}
       </span>
       <div className="flex gap-2">
         <button
@@ -339,8 +354,8 @@ export default function TankDips() {
           Previous
         </button>
         <button
-          onClick={() => setHistoryPage(p => (p + 1) * HISTORY_PAGE_SIZE < historyRows.length ? p + 1 : p)}
-          disabled={(historyPage + 1) * HISTORY_PAGE_SIZE >= historyRows.length}
+          onClick={() => setHistoryPage(p => (p + 1) * HISTORY_PAGE_SIZE < filteredHistoryRows.length ? p + 1 : p)}
+          disabled={(historyPage + 1) * HISTORY_PAGE_SIZE >= filteredHistoryRows.length}
           className="px-3 py-1.5 text-xs font-medium rounded-btn border border-surface-border text-content-secondary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-bg">
           Next
         </button>
@@ -402,15 +417,34 @@ export default function TankDips() {
                 <option value="Night">Night</option>
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Fuel Type</label>
+              <select value={historyFuelType}
+                onChange={e => { setHistoryFuelType(e.target.value); setHistoryTankId('All') }}
+                className="px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary">
+                <option value="All">All</option>
+                {historyFuelTypes.map(ft => <option key={ft} value={ft}>{ft}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-content-secondary mb-1">Tank</label>
+              <select value={historyTankId} onChange={e => setHistoryTankId(e.target.value)}
+                className="px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary">
+                <option value="All">All</option>
+                {historyTankOptions.map(t => <option key={t.tank_id} value={t.tank_id}>{tankName(t)}</option>)}
+              </select>
+            </div>
           </div>
 
           <div className="mb-3">{historyPagination}</div>
 
           {historyLoading ? (
             <div className="glass-card p-8 text-center text-content-secondary text-sm">Loading...</div>
-          ) : historyRows.length === 0 ? (
+          ) : filteredHistoryRows.length === 0 ? (
             <div className="glass-card p-8 text-center text-content-secondary text-sm">
-              No dip readings recorded between {historyStartDate} and {historyEndDate}{historyShift !== 'All' ? ` (${historyShift})` : ''}.
+              No dip readings recorded between {historyStartDate} and {historyEndDate}{historyShift !== 'All' ? ` (${historyShift})` : ''}
+              {historyFuelType !== 'All' ? ` for ${historyFuelType}` : ''}
+              {historyTankId !== 'All' ? ` (${(() => { const t = tanks.find(t => t.tank_id === historyTankId); return t ? tankName(t) : historyTankId })()})` : ''}.
             </div>
           ) : (
             <div className="glass-card overflow-x-auto">
@@ -425,7 +459,7 @@ export default function TankDips() {
                   </tr>
                 </thead>
                 <tbody>
-                  {historyRows.slice(historyPage * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE + HISTORY_PAGE_SIZE).map((r, i) => {
+                  {filteredHistoryRows.slice(historyPage * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE + HISTORY_PAGE_SIZE).map((r, i) => {
                     const isDiesel = r.fuel_type === 'Diesel'
                     return (
                       <tr key={`${r.date}-${r.shift_type}-${r.tank_id}-${i}`} className="border-t border-surface-border">
