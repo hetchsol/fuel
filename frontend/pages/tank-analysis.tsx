@@ -490,8 +490,18 @@ export default function TankAnalysis() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-surface-border" style={{ backgroundColor: 'var(--color-surface-bg)' }}>
-                  {['Date', 'Shift', 'Opening (L)', 'Closing (L)', 'Movement (L)', 'Elec Dispensed (L)', 'Elec vs Tank (L)', 'Elec vs Tank %', 'Status'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">{h}</th>
+                  {[
+                    { label: 'Date', align: 'text-left' },
+                    { label: 'Shift', align: 'text-left' },
+                    { label: 'Opening (L)', align: 'text-right' },
+                    { label: 'Closing (L)', align: 'text-right' },
+                    { label: 'Movement (L)', align: 'text-right' },
+                    { label: 'Elec Dispensed (L)', align: 'text-right' },
+                    { label: 'Elec vs Tank (L)', align: 'text-right' },
+                    { label: 'Elec vs Tank %', align: 'text-right' },
+                    { label: 'Status', align: 'text-left' },
+                  ].map(col => (
+                    <th key={col.label} className={`px-4 py-3 ${col.align} text-xs font-medium uppercase text-content-secondary whitespace-nowrap`}>{col.label}</th>
                   ))}
                 </tr>
               </thead>

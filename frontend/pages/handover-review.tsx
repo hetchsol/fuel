@@ -1722,8 +1722,15 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
           <table className="min-w-full text-xs">
             <thead>
               <tr style={{ backgroundColor: theme.cardBg }}>
-                {['Account', 'Fuel Type', 'Volume (L)', 'Price/L', 'Amount', 'Source'].map(col => (
-                  <th key={col} className="px-2 py-1 text-left font-medium uppercase" style={{ color: theme.textSecondary }}>{col}</th>
+                {[
+                  { label: 'Account', align: 'text-left' },
+                  { label: 'Fuel Type', align: 'text-left' },
+                  { label: 'Volume (L)', align: 'text-right' },
+                  { label: 'Price/L', align: 'text-right' },
+                  { label: 'Amount', align: 'text-right' },
+                  { label: 'Source', align: 'text-left' },
+                ].map(col => (
+                  <th key={col.label} className={`px-2 py-1 ${col.align} font-medium uppercase`} style={{ color: theme.textSecondary }}>{col.label}</th>
                 ))}
               </tr>
             </thead>

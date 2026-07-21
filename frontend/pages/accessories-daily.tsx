@@ -208,8 +208,17 @@ export default function AccessoriesDaily() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-surface-bg border-b border-surface-border">
-                  {['Product', 'Price', 'Opening', 'Additions', 'Sold', 'Damaged', 'Closing', 'Value'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase text-content-secondary">{h}</th>
+                  {[
+                    { label: 'Product', align: 'text-left' },
+                    { label: 'Price', align: 'text-right' },
+                    { label: 'Opening', align: 'text-left' },
+                    { label: 'Additions', align: 'text-left' },
+                    { label: 'Sold', align: 'text-left' },
+                    { label: 'Damaged', align: 'text-left' },
+                    { label: 'Closing', align: 'text-right' },
+                    { label: 'Value', align: 'text-right' },
+                  ].map(col => (
+                    <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase text-content-secondary`}>{col.label}</th>
                   ))}
                 </tr>
               </thead>

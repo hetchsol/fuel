@@ -1636,17 +1636,17 @@ export default function MyShift() {
                   <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Fuel</th>
                   <th colSpan={priceChangeDetected ? 4 : 3} className="px-3 py-1 text-center text-xs font-semibold uppercase" style={{ color: theme.primary, borderBottomColor: theme.primary, borderBottomWidth: 2 }}>Electronic</th>
                   <th colSpan={3} className="px-3 py-1 text-center text-xs font-semibold uppercase" style={{ color: 'var(--color-status-warning)', borderBottomColor: 'var(--color-status-warning)', borderBottomWidth: 2 }}>Mechanical</th>
-                  <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Deviation</th>
+                  <th rowSpan={2} className="px-3 py-1 text-right text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Deviation</th>
                 </tr>
                 {/* Sub-header row */}
                 <tr style={{ backgroundColor: theme.background }}>
-                  <th className="px-3 py-1 text-center text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Open</th>
-                  {priceChangeDetected && <th className="px-3 py-1 text-center text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Changeover</th>}
-                  <th className="px-3 py-1 text-center text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Close</th>
-                  <th className="px-3 py-1 text-center text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Volume</th>
-                  <th className="px-3 py-1 text-center text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Open</th>
-                  <th className="px-3 py-1 text-center text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Close</th>
-                  <th className="px-3 py-1 text-center text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Volume</th>
+                  <th className="px-3 py-1 text-right text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Open</th>
+                  {priceChangeDetected && <th className="px-3 py-1 text-right text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Changeover</th>}
+                  <th className="px-3 py-1 text-right text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Close</th>
+                  <th className="px-3 py-1 text-right text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Volume</th>
+                  <th className="px-3 py-1 text-right text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Open</th>
+                  <th className="px-3 py-1 text-right text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Close</th>
+                  <th className="px-3 py-1 text-right text-xs font-medium uppercase whitespace-nowrap" style={{ color: theme.textSecondary }}>Volume</th>
                 </tr>
               </thead>
               <tbody>
@@ -2261,13 +2261,13 @@ export default function MyShift() {
                   <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Fuel</th>
                   <th colSpan={3} className="px-3 py-1 text-center text-xs font-semibold uppercase" style={{ color: theme.primary, borderBottomColor: theme.primary, borderBottomWidth: 2 }}>Electronic</th>
                   <th colSpan={1} className="px-3 py-1 text-center text-xs font-semibold uppercase" style={{ color: 'var(--color-status-warning)', borderBottomColor: 'var(--color-status-warning)', borderBottomWidth: 2 }}>Mechanical</th>
-                  <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Deviation</th>
+                  <th rowSpan={2} className="px-3 py-1 text-right text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Deviation</th>
                 </tr>
                 <tr style={{ backgroundColor: theme.background }}>
-                  <th className="px-3 py-1 text-center text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Open</th>
-                  <th className="px-3 py-1 text-center text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Close</th>
-                  <th className="px-3 py-1 text-center text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Volume</th>
-                  <th className="px-3 py-1 text-center text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Volume</th>
+                  <th className="px-3 py-1 text-right text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Open</th>
+                  <th className="px-3 py-1 text-right text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Close</th>
+                  <th className="px-3 py-1 text-right text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Volume</th>
+                  <th className="px-3 py-1 text-right text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Volume</th>
                 </tr>
               </thead>
               <tbody>
@@ -2386,9 +2386,16 @@ export default function MyShift() {
               <table className="min-w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
-                    {['Product', 'Opening', 'Sold', 'Damaged', 'Closing', 'Variance'].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
-                        style={{ color: theme.textSecondary }}>{h}</th>
+                    {[
+                      { label: 'Product', align: 'text-left' },
+                      { label: 'Opening', align: 'text-center' },
+                      { label: 'Sold', align: 'text-center' },
+                      { label: 'Damaged', align: 'text-center' },
+                      { label: 'Closing', align: 'text-center' },
+                      { label: 'Variance', align: 'text-center' },
+                    ].map(col => (
+                      <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase`}
+                        style={{ color: theme.textSecondary }}>{col.label}</th>
                     ))}
                   </tr>
                 </thead>
@@ -2427,9 +2434,16 @@ export default function MyShift() {
               <table className="min-w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
-                    {['Product', 'Opening', 'Sold', 'Damaged', 'Closing', 'Variance'].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
-                        style={{ color: theme.textSecondary }}>{h}</th>
+                    {[
+                      { label: 'Product', align: 'text-left' },
+                      { label: 'Opening', align: 'text-center' },
+                      { label: 'Sold', align: 'text-center' },
+                      { label: 'Damaged', align: 'text-center' },
+                      { label: 'Closing', align: 'text-center' },
+                      { label: 'Variance', align: 'text-center' },
+                    ].map(col => (
+                      <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase`}
+                        style={{ color: theme.textSecondary }}>{col.label}</th>
                     ))}
                   </tr>
                 </thead>
@@ -2580,9 +2594,15 @@ export default function MyShift() {
               <table className="min-w-full text-sm mb-4">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
-                    {['Nozzle', 'Fuel', 'Volume (L)', 'Mech. Vol', 'Deviation'].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
-                        style={{ color: theme.textSecondary }}>{h}</th>
+                    {[
+                      { label: 'Nozzle', align: 'text-left' },
+                      { label: 'Fuel', align: 'text-left' },
+                      { label: 'Volume (L)', align: 'text-right' },
+                      { label: 'Mech. Vol', align: 'text-right' },
+                      { label: 'Deviation', align: 'text-right' },
+                    ].map(col => (
+                      <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase whitespace-nowrap`}
+                        style={{ color: theme.textSecondary }}>{col.label}</th>
                     ))}
                   </tr>
                 </thead>
@@ -2637,14 +2657,14 @@ export default function MyShift() {
                     <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Fuel</th>
                     <th colSpan={3} className="px-3 py-1 text-center text-xs font-semibold uppercase" style={{ color: theme.primary, borderBottomColor: theme.primary, borderBottomWidth: 2 }}>Electronic</th>
                     <th colSpan={1} className="px-3 py-1 text-center text-xs font-semibold uppercase" style={{ color: 'var(--color-status-warning)', borderBottomColor: 'var(--color-status-warning)', borderBottomWidth: 2 }}>Mechanical</th>
-                    <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Deviation</th>
-                    <th rowSpan={2} className="px-3 py-1 text-left text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Revenue</th>
+                    <th rowSpan={2} className="px-3 py-1 text-right text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Deviation</th>
+                    <th rowSpan={2} className="px-3 py-1 text-right text-xs font-medium uppercase" style={{ color: theme.textSecondary, borderBottomColor: theme.border, borderBottomWidth: 1 }}>Revenue</th>
                   </tr>
                   <tr style={{ backgroundColor: theme.background }}>
-                    <th className="px-3 py-1 text-center text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Open</th>
-                    <th className="px-3 py-1 text-center text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Close</th>
-                    <th className="px-3 py-1 text-center text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Volume</th>
-                    <th className="px-3 py-1 text-center text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Volume</th>
+                    <th className="px-3 py-1 text-right text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Open</th>
+                    <th className="px-3 py-1 text-right text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Close</th>
+                    <th className="px-3 py-1 text-right text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Volume</th>
+                    <th className="px-3 py-1 text-right text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Volume</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3259,8 +3279,22 @@ function PastHandoversTable({ handovers, theme, isAttendant = false }: { handove
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const fmtZMW = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2 })
 
-  const attendantHeaders = ['Date', 'Shift', 'Review']
-  const fullHeaders = ['Date', 'Shift', 'Attendant', 'Fuel Rev.', 'Total Expected', 'Expected Cash', 'Actual Cash', 'Difference', 'Review']
+  const attendantHeaders = [
+    { label: 'Date', align: 'text-left' },
+    { label: 'Shift', align: 'text-left' },
+    { label: 'Review', align: 'text-left' },
+  ]
+  const fullHeaders = [
+    { label: 'Date', align: 'text-left' },
+    { label: 'Shift', align: 'text-left' },
+    { label: 'Attendant', align: 'text-left' },
+    { label: 'Fuel Rev.', align: 'text-right' },
+    { label: 'Total Expected', align: 'text-right' },
+    { label: 'Expected Cash', align: 'text-right' },
+    { label: 'Actual Cash', align: 'text-right' },
+    { label: 'Difference', align: 'text-right' },
+    { label: 'Review', align: 'text-left' },
+  ]
 
   return (
     <div className="rounded-lg shadow overflow-x-auto"
@@ -3272,9 +3306,9 @@ function PastHandoversTable({ handovers, theme, isAttendant = false }: { handove
       <table className="min-w-full text-sm">
         <thead>
           <tr style={{ backgroundColor: theme.background }}>
-            {(isAttendant ? attendantHeaders : fullHeaders).map(h => (
-              <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase"
-                style={{ color: theme.textSecondary }}>{h}</th>
+            {(isAttendant ? attendantHeaders : fullHeaders).map(col => (
+              <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase`}
+                style={{ color: theme.textSecondary }}>{col.label}</th>
             ))}
           </tr>
         </thead>

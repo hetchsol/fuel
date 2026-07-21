@@ -392,8 +392,16 @@ function LubricantsTab({ rows, onAdd, onEdit, onDelete, onStock }: {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-surface-bg border-t border-surface-border">
-                      {['Name / Code', 'Size', 'Price', 'Stores', 'Forecourt', 'Re-order', 'Actions'].map(h => (
-                        <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">{h}</th>
+                      {[
+                        { label: 'Name / Code', align: 'text-left' },
+                        { label: 'Size', align: 'text-left' },
+                        { label: 'Price', align: 'text-right' },
+                        { label: 'Stores', align: 'text-right' },
+                        { label: 'Forecourt', align: 'text-right' },
+                        { label: 'Re-order', align: 'text-right' },
+                        { label: 'Actions', align: 'text-left' },
+                      ].map(col => (
+                        <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase text-content-secondary whitespace-nowrap`}>{col.label}</th>
                       ))}
                     </tr>
                   </thead>
@@ -574,8 +582,15 @@ function AccessoriesTab({ rows, onAdd, onEdit, onDelete, onStock }: {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-surface-bg border-b border-surface-border">
-              {['Description / Code', 'Price', 'Stores', 'Forecourt', 'Re-order', 'Actions'].map(h => (
-                <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">{h}</th>
+              {[
+                { label: 'Description / Code', align: 'text-left' },
+                { label: 'Price', align: 'text-right' },
+                { label: 'Stores', align: 'text-right' },
+                { label: 'Forecourt', align: 'text-right' },
+                { label: 'Re-order', align: 'text-right' },
+                { label: 'Actions', align: 'text-left' },
+              ].map(col => (
+                <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase text-content-secondary whitespace-nowrap`}>{col.label}</th>
               ))}
             </tr>
           </thead>
@@ -666,8 +681,16 @@ function MovementsTab({ movements }: { movements: Movement[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-surface-bg border-b border-surface-border">
-              {['When', 'Type', 'Item', 'Qty', 'Flow', 'By', 'Note'].map(h => (
-                <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">{h}</th>
+              {[
+                { label: 'When', align: 'text-left' },
+                { label: 'Type', align: 'text-left' },
+                { label: 'Item', align: 'text-left' },
+                { label: 'Qty', align: 'text-right' },
+                { label: 'Flow', align: 'text-left' },
+                { label: 'By', align: 'text-left' },
+                { label: 'Note', align: 'text-left' },
+              ].map(col => (
+                <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase text-content-secondary whitespace-nowrap`}>{col.label}</th>
               ))}
             </tr>
           </thead>
