@@ -37,6 +37,63 @@ const LPG_SIZES = [3, 6, 9, 19, 45, 48]
 const LUB_CATS = ['Engine Oil', 'Gear Oil', 'Transmission Fluid', 'Hydraulic Fluid',
                   'Brake Fluid', 'Coolant', 'Grease', 'Filters', 'Other']
 
+// Product code auto-generation — e.g. "15W-40 Diesel Engine Oil 4L" -> "EO-15W40-4L".
+// Suggests a code from the name/category so staff don't have to invent one, but the
+// code field stays editable in the modal in case the suggestion needs a tweak.
+const LUB_CODE_PREFIX: Record<string, string> = {
+  'Engine Oil': 'EO', 'Gear Oil': 'GO', 'Transmission Fluid': 'ATF', 'Hydraulic Fluid': 'HO',
+  'Brake Fluid': 'BF', 'Coolant': 'CL', 'Grease': 'GR', 'Filters': 'FI', 'Other': 'GEN',
+}
+// Words redundant in the code because the category prefix already implies them.
+const LUB_FILLER_WORDS: Record<string, string[]> = {
+  'Engine Oil': ['engine', 'oil'], 'Gear Oil': ['gear', 'oil'],
+  'Transmission Fluid': ['transmission', 'fluid', 'automatic'],
+  'Hydraulic Fluid': ['hydraulic', 'fluid', 'oil'], 'Brake Fluid': ['brake', 'fluid'],
+  'Coolant': ['coolant', 'antifreeze'], 'Grease': ['grease'], 'Filters': ['filter', 'filters'], 'Other': [],
+}
+const GENERIC_FILLER_WORDS = ['diesel', 'petrol', 'synthetic', 'mineral', 'fully', 'semi']
+
+function stripWords(text: string, words: string[]) {
+  let out = text
+  for (const w of words) out = out.replace(new RegExp(`\\b${w}\\b`, 'gi'), ' ')
+  return out
+}
+
+function dedupeCode(code: string, existing: string[]) {
+  if (!existing.includes(code)) return code
+  let n = 2
+  while (existing.includes(`${code}-${n}`)) n++
+  return `${code}-${n}`
+}
+
+function deriveLubricantCode(name: string, category: string, existing: string[]): string {
+  const trimmed = name.trim()
+  if (!trimmed) return ''
+  const prefix = LUB_CODE_PREFIX[category] || 'GEN'
+  // Staff convention is to end the name with the size (e.g. "...4L", "...500ml").
+  const sizeMatch = trimmed.match(/(\d+(?:\.\d+)?)\s*([a-zA-Z³]+)\s*$/)
+  const sizeToken = sizeMatch ? `${sizeMatch[1]}${sizeMatch[2]}`.toUpperCase() : ''
+  let rest = sizeMatch ? trimmed.slice(0, trimmed.length - sizeMatch[0].length) : trimmed
+  rest = stripWords(rest, LUB_FILLER_WORDS[category] || [])
+  rest = stripWords(rest, GENERIC_FILLER_WORDS)
+  let grade = rest.replace(/[\s-]+/g, '').toUpperCase()
+  if (!grade) grade = (trimmed.split(/\s+/)[0] || 'NEW').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'NEW'
+  const code = sizeToken ? `${prefix}-${grade}-${sizeToken}` : `${prefix}-${grade}`
+  return dedupeCode(code, existing)
+}
+
+function deriveAccessoryCode(name: string, existing: string[]): string {
+  const trimmed = name.trim()
+  if (!trimmed) return ''
+  const burnerMatch = trimmed.match(/(\d+)\s*-?\s*burner/i)
+  let cleaned = trimmed.replace(/\bgas\b|\blpg\b/gi, ' ')
+  if (burnerMatch) cleaned = cleaned.replace(/\d+\s*-?\s*burner/i, ' ')
+  const words = cleaned.trim().split(/\s+/).filter(Boolean)
+  const noun = (words[words.length - 1] || 'ITEM').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'ITEM'
+  const code = burnerMatch ? `ACC-${noun}-${burnerMatch[1]}B` : `ACC-${noun}`
+  return dedupeCode(code, existing)
+}
+
 const UOM_OPTIONS: { group: string; units: { code: string; label: string }[] }[] = [
   { group: 'Volume', units: [
     { code: 'mL', label: 'mL — Millilitre' },
@@ -287,6 +344,7 @@ export default function StoresDashboard() {
 
       {itemModal !== null && (
         <ItemModal type={itemModal.type} item={itemModal.item}
+          existingCodes={(itemModal.type === 'lubricant' ? lubricants : accessories).map(r => r.product_code)}
           onClose={() => setItemModal(null)}
           onDone={() => { setItemModal(null); fetchAll() }} />
       )}
@@ -724,9 +782,10 @@ function MovementsTab({ movements }: { movements: Movement[] }) {
 
 // ── Item Modal (add/edit lubricant or accessory) ─────────────────────
 
-function ItemModal({ type, item, onClose, onDone }: {
+function ItemModal({ type, item, existingCodes, onClose, onDone }: {
   type: 'lubricant' | 'accessory'
   item: LubRow | AccRow | null
+  existingCodes: string[]
   onClose: () => void
   onDone: () => void
 }) {
@@ -735,6 +794,8 @@ function ItemModal({ type, item, onClose, onDone }: {
 
   const [name, setName] = useState(item ? (item as any).description : '')
   const [code, setCode] = useState(item?.product_code || '')
+  // Once the user edits the code by hand, stop overwriting it with new suggestions.
+  const [codeTouched, setCodeTouched] = useState(!isNew)
   const [subCat, setSubCat] = useState(isLub ? (item as LubRow | null)?.sub_category || 'Engine Oil' : '')
   const [uom, setUom] = useState(
     isLub ? ((item as LubRow | null)?.unit_size || 'L') : 'ea'
@@ -742,6 +803,12 @@ function ItemModal({ type, item, onClose, onDone }: {
   const [sellingPrice, setSellingPrice] = useState(String(item?.selling_price || ''))
   const [reorderLevel, setReorderLevel] = useState(String(item?.reorder_level || ''))
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!isNew || codeTouched) return
+    setCode(isLub ? deriveLubricantCode(name, subCat, existingCodes) : deriveAccessoryCode(name, existingCodes))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, subCat, isNew, codeTouched])
 
   const submit = async () => {
     if (!name.trim() || !code.trim()) { toast.error('Name and product code are required.'); return }
@@ -787,7 +854,16 @@ function ItemModal({ type, item, onClose, onDone }: {
         </h3>
         <div className="space-y-3">
           <Field label="Name / Description" value={name} onChange={setName} placeholder="e.g. 15W-40 Diesel Engine Oil 4L" />
-          <Field label="Product code" value={code} onChange={setCode} placeholder="e.g. EO-15W40-4L" disabled={!isNew} />
+          <div>
+            <Field label="Product code" value={code}
+              onChange={v => { setCode(v); setCodeTouched(true) }}
+              placeholder="e.g. EO-15W40-4L" disabled={!isNew} />
+            {isNew && (
+              <p className="text-[10px] text-content-secondary mt-1">
+                Auto-generated from the name{isLub ? ' and category' : ''} — edit if it needs adjusting.
+              </p>
+            )}
+          </div>
           {isLub && (
             <div>
               <label className="block text-xs font-medium text-content-secondary mb-1">Category</label>
