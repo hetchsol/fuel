@@ -358,7 +358,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       label: 'Shift Status',
       roles: ['supervisor', 'manager', 'owner'],
       children: [
-        { path: '/my-shift', label: 'Shift Status', roles: ['supervisor'] },
+        { path: '/my-shift', label: 'View Status', roles: ['supervisor'] },
         { path: '/shift-closing', label: 'Close Shift', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/my-payslip', label: 'My Payslips', roles: ['supervisor', 'manager', 'owner'] },
       ]
