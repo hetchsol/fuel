@@ -582,8 +582,47 @@ def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, use
     return nozzle_summaries, round(fuel_revenue, 2)
 
 
-def _process_stock_snapshot(stock_snapshot, station_id, storage):
-    """Process stock counts and compute sales. Returns (lpg_sales, lub_sales, acc_sales, enriched_snapshot, stock_variance_flags)."""
+def _process_stock_snapshot(stock_snapshot, station_id, storage, my_assignment=None, role=None):
+    """Process stock counts and compute sales. Returns (lpg_sales, lub_sales, acc_sales, enriched_snapshot, stock_variance_flags).
+
+    Mirrors _process_nozzle_readings' two assignment checks: an attendant not assigned to a
+    product line must not be able to submit (and thereby overwrite) data for it, and an
+    attendant who IS assigned must submit it — a silently-empty submission from the right
+    attendant must not be able to sail through un-flagged, the same way "missing readings
+    for assigned nozzle(s)" blocks a partial nozzle submission. Unlike nozzles, assignment
+    here is a whole-category flag rather than per-item IDs, so both checks are category-level
+    rather than per-row.
+
+    Only enforced for attendants (role == "user") — supervisors/managers/owners closing
+    their own personal shift have always been able to fill these sections regardless of
+    their own assignment flags (see the `!isAttendant` visibility bypass in my-shift.tsx),
+    since assignment flags are a per-attendant roster concept, not something set on a
+    supervisor's own shift record.
+    """
+    lpg_rows = stock_snapshot.lpg_cylinders if stock_snapshot else []
+    acc_rows = stock_snapshot.accessories if stock_snapshot else []
+    lub_rows = stock_snapshot.lubricants if stock_snapshot else []
+
+    if role == "user":
+        assignment = my_assignment or {}
+        if lpg_rows and not assignment.get("assigned_lpg", False):
+            raise HTTPException(status_code=400, detail="You are not assigned to LPG for this shift")
+        if acc_rows and not assignment.get("assigned_accessories", False):
+            raise HTTPException(status_code=400, detail="You are not assigned to Accessories for this shift")
+        if lub_rows and not assignment.get("assigned_lubricants", False):
+            raise HTTPException(status_code=400, detail="You are not assigned to Lubricants for this shift")
+
+        # Reverse direction: assigned but nothing submitted for it. A quiet shift still
+        # submits a full row set with closing == opening (the "Confirm No Sales" flow in
+        # my-shift.tsx), so a genuinely empty list here means the category was skipped
+        # entirely, not that nothing sold.
+        if assignment.get("assigned_lpg", False) and not lpg_rows:
+            raise HTTPException(status_code=400, detail="Missing LPG closing stock — you are assigned to LPG for this shift.")
+        if assignment.get("assigned_accessories", False) and not acc_rows:
+            raise HTTPException(status_code=400, detail="Missing Accessories closing stock — you are assigned to Accessories for this shift.")
+        if assignment.get("assigned_lubricants", False) and not lub_rows:
+            raise HTTPException(status_code=400, detail="Missing Lubricants closing stock — you are assigned to Lubricants for this shift.")
+
     if not stock_snapshot:
         return 0.0, 0.0, 0.0, None, []
 
@@ -2046,7 +2085,7 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
         shift_date=shift.get("date"), shift_type=shift.get("shift_type"))
 
     lpg_sales, lubricant_sales, accessory_sales, enriched_snapshot, stock_variance_flags = \
-        _process_stock_snapshot(data.stock_snapshot, station_id, storage)
+        _process_stock_snapshot(data.stock_snapshot, station_id, storage, my_assignment, ctx["role"])
 
     total_expected = round(fuel_revenue + lpg_sales + lubricant_sales + accessory_sales, 2)
 
@@ -2397,7 +2436,7 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
 
     if data.stock_snapshot:
         lpg_sales, lubricant_sales, accessory_sales, enriched_snapshot, stock_variance_flags = \
-            _process_stock_snapshot(data.stock_snapshot, station_id, storage)
+            _process_stock_snapshot(data.stock_snapshot, station_id, storage, my_assignment, ctx["role"])
 
     total_expected = round(fuel_revenue + lpg_sales + lubricant_sales + accessory_sales, 2)
 

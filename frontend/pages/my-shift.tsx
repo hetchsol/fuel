@@ -615,8 +615,17 @@ export default function MyShift() {
     setSuccess('')
 
     try {
+      // Only submit stock data for product lines this attendant is actually assigned to —
+      // the backend now rejects an attendant's submission that includes rows for an
+      // unassigned category, since a shift's real assigned attendant's data must never be
+      // overwritten by whoever else on the shift happens to submit their (unassigned,
+      // still-default) rows last. Matches the section-visibility condition below exactly:
+      // supervisors/managers/owners closing their own personal shift are unaffected.
+      const canSubmitLpg = !isAttendant || assignmentInfo?.assigned_lpg
+      const canSubmitAcc = !isAttendant || assignmentInfo?.assigned_accessories
+      const canSubmitLub = !isAttendant || assignmentInfo?.assigned_lubricants
       const stockSnapshot = {
-        lpg_cylinders: lpgRows.map((row) => ({
+        lpg_cylinders: canSubmitLpg ? lpgRows.map((row) => ({
           size_kg: row.size_kg,
           opening_full: row.opening_full,
           opening_empty: row.opening_empty,
@@ -627,8 +636,8 @@ export default function MyShift() {
           sold_with_cylinder: parseInt(row.sold_with_cylinder) || 0,
           damaged: parseInt(row.damaged) || 0,
           variance_note: row.variance_note || null,
-        })),
-        accessories: accessoryRows.map((row) => ({
+        })) : [],
+        accessories: canSubmitAcc ? accessoryRows.map((row) => ({
           product_code: row.product_code,
           description: row.description,
           opening_stock: row.opening_stock,
@@ -637,8 +646,8 @@ export default function MyShift() {
           damaged: parseInt(row.damaged) || 0,
           closing_stock: parseInt(row.closing_stock) || 0,
           variance_note: row.variance_note || null,
-        })),
-        lubricants: lubricantRows.map((row) => ({
+        })) : [],
+        lubricants: canSubmitLub ? lubricantRows.map((row) => ({
           product_code: row.product_code,
           description: row.description,
           opening_stock: row.opening_stock,
@@ -647,17 +656,17 @@ export default function MyShift() {
           damaged: parseInt(row.damaged) || 0,
           closing_stock: parseInt(row.closing_stock) || 0,
           variance_note: row.variance_note || null,
-        })),
-        lpg_trades: lpgTrades
+        })) : [],
+        lpg_trades: canSubmitLpg ? lpgTrades
           .filter(t => (parseInt(t.quantity) || 0) > 0 && t.from_size_kg !== t.to_size_kg)
           .map(t => ({
             from_size_kg: t.from_size_kg,
             to_size_kg: t.to_size_kg,
             quantity: parseInt(t.quantity) || 0,
-          })),
-        lpg_no_sales: lpgNoSales,
-        acc_no_sales: accNoSales,
-        lub_no_sales: lubNoSales,
+          })) : [],
+        lpg_no_sales: canSubmitLpg ? lpgNoSales : false,
+        acc_no_sales: canSubmitAcc ? accNoSales : false,
+        lub_no_sales: canSubmitLub ? lubNoSales : false,
       }
 
       const res = await authFetch(`${BASE}/handover/submit-readings`, {
