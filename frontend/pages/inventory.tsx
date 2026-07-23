@@ -74,12 +74,6 @@ export default function Inventory() {
     return 'bg-green-500'
   }
 
-  const getLocationBadgeColor = (location: string) => {
-    if (location === 'Island 3') return 'bg-action-primary-light text-action-primary border-action-primary'
-    if (location === 'Buffer') return 'bg-category-a-light text-category-a border-category-a-border'
-    return 'bg-surface-bg text-content-primary border-surface-border'
-  }
-
   const getExportConfig = useCallback((): ExportConfig | null => {
     if (activeTab === 'tanks' && tanks.length) {
       return {
@@ -270,69 +264,56 @@ export default function Inventory() {
             <p className="text-sm text-content-secondary">Gas stoves, cookers, hoses, and regulators</p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {lpgAccessories.map(accessory => {
-              const stockPercentage = (accessory.current_stock / accessory.opening_stock) * 100
-              return (
-                <div
-                  key={accessory.product_code}
-                  className="bg-surface-card rounded-lg shadow-lg p-6 border-2 border-surface-border hover:border-category-c-border transition-colors"
-                >
-                  <div className="mb-4">
-                    <p className="text-xs text-content-secondary font-medium">Product Code</p>
-                    <p className="text-sm font-bold text-content-secondary">{accessory.product_code}</p>
-                  </div>
-
-                  <h3 className="text-lg font-bold text-content-primary mb-4 min-h-[3rem]">
-                    {accessory.description}
-                  </h3>
-
-                  {/* Price */}
-                  <div className="mb-4 p-3 bg-action-primary-light rounded-lg border border-action-primary">
-                    <p className="text-xs text-content-secondary">Unit Price</p>
-                    <p className="text-2xl font-bold text-action-primary">
-                      {formatCurrency(accessory.unit_price)}
-                    </p>
-                  </div>
-
-                  {/* Stock Info */}
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-content-secondary">Current Stock</span>
-                      <span className="text-xl font-bold text-content-primary">{accessory.current_stock}</span>
-                    </div>
-
-                    {/* Stock Progress Bar */}
-                    <div>
-                      <div className="flex justify-between text-xs text-content-secondary mb-1">
-                        <span>Stock Level</span>
-                        <span className="font-semibold">{stockPercentage.toFixed(0)}%</span>
-                      </div>
-                      <div className="w-full bg-surface-border rounded-full h-3 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${getStockStatusColor(
-                            accessory.current_stock,
-                            accessory.opening_stock
-                          )}`}
-                          style={{ width: `${Math.min(stockPercentage, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="pt-3 border-t border-surface-border text-xs text-content-secondary">
-                      Opening Stock: {accessory.opening_stock}
-                    </div>
-                  </div>
-
-                  {/* Stock Status Alert */}
-                  {stockPercentage <= 20 && (
-                    <div className="mt-3 p-2 bg-status-error-light border border-status-error rounded">
-                      <p className="text-xs text-status-error font-semibold">⚠️ Low Stock - Reorder Soon!</p>
-                    </div>
+          <div className="bg-surface-card rounded-lg border border-surface-border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-surface-bg border-b border-surface-border">
+                    {[
+                      { label: 'Product', align: 'text-left' },
+                      { label: 'Unit Price', align: 'text-right' },
+                      { label: 'Opening', align: 'text-right' },
+                      { label: 'Current', align: 'text-right' },
+                      { label: 'Stock Level', align: 'text-left' },
+                    ].map(col => (
+                      <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase text-content-secondary whitespace-nowrap`}>{col.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {lpgAccessories.length === 0 && (
+                    <tr><td colSpan={5} className="px-3 py-6 text-center text-sm text-content-secondary">No accessories in catalog.</td></tr>
                   )}
-                </div>
-              )
-            })}
+                  {lpgAccessories.map(accessory => {
+                    const stockPercentage = (accessory.current_stock / accessory.opening_stock) * 100
+                    const low = stockPercentage <= 20
+                    return (
+                      <tr key={accessory.product_code}
+                        className={`border-t border-surface-border ${low ? 'bg-status-error/5' : 'hover:bg-surface-bg'}`}>
+                        <td className="px-3 py-2 align-top">
+                          <p className="text-sm font-medium text-content-primary">{accessory.description}</p>
+                          <p className="text-[10px] font-mono text-content-secondary">{accessory.product_code}</p>
+                        </td>
+                        <td className="px-3 py-2 align-top text-right text-xs text-content-primary whitespace-nowrap">{formatCurrency(accessory.unit_price)}</td>
+                        <td className="px-3 py-2 align-top text-right text-xs text-content-secondary">{accessory.opening_stock}</td>
+                        <td className="px-3 py-2 align-top text-right text-sm font-semibold text-content-primary">{accessory.current_stock}</td>
+                        <td className="px-3 py-2 align-top">
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 bg-surface-border rounded-full h-2 overflow-hidden">
+                              <div className={`h-full rounded-full ${getStockStatusColor(accessory.current_stock, accessory.opening_stock)}`}
+                                style={{ width: `${Math.min(stockPercentage, 100)}%` }} />
+                            </div>
+                            <span className={`text-xs font-semibold whitespace-nowrap ${low ? 'text-status-error' : 'text-content-secondary'}`}>
+                              {stockPercentage.toFixed(0)}%{low ? ' — reorder' : ''}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* LPG Info Panel */}
@@ -363,77 +344,61 @@ export default function Inventory() {
               Active Sales Location
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {lubricants.filter(lube => lube.location === 'Island 3').map(lube => {
-                const stockPercentage = (lube.current_stock / lube.opening_stock) * 100
-                const stockValue = lube.current_stock * lube.unit_price
-                return (
-                  <div
-                    key={lube.product_code}
-                    className="bg-surface-card rounded-lg shadow-lg p-5 border-2 border-action-primary hover:border-blue-400 transition-colors"
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <p className="text-xs text-content-secondary font-medium">Code: {lube.product_code}</p>
-                        <h3 className="font-bold text-content-primary mt-1">{lube.description}</h3>
-                      </div>
-                      <span className={`px-2 py-1 text-xs font-semibold rounded border ${getLocationBadgeColor(lube.location)}`}>
-                        {lube.location}
-                      </span>
-                    </div>
-
-                    <div className="mb-3 p-2 bg-surface-bg rounded border border-surface-border">
-                      <p className="text-xs text-content-secondary">Category</p>
-                      <p className="text-sm font-semibold text-content-primary">{lube.category}</p>
-                    </div>
-
-                    {/* Price & Stock Value */}
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                      <div>
-                        <p className="text-xs text-content-secondary">Unit Price</p>
-                        <p className="text-sm font-bold text-content-primary">{formatCurrency(lube.unit_price)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-content-secondary">Stock Value</p>
-                        <p className="text-sm font-bold text-status-success">{formatCurrency(stockValue)}</p>
-                      </div>
-                    </div>
-
-                    {/* Current Stock */}
-                    <div className="mb-3">
-                      <p className="text-xs text-content-secondary mb-1">Current Stock</p>
-                      <p className="text-2xl font-bold text-content-primary">{lube.current_stock} units</p>
-                    </div>
-
-                    {/* Stock Progress */}
-                    <div className="mb-2">
-                      <div className="flex justify-between text-xs text-content-secondary mb-1">
-                        <span>Stock Level</span>
-                        <span className="font-semibold">{stockPercentage.toFixed(0)}%</span>
-                      </div>
-                      <div className="w-full bg-surface-border rounded-full h-3 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${getStockStatusColor(
-                            lube.current_stock,
-                            lube.opening_stock
-                          )}`}
-                          style={{ width: `${Math.min(stockPercentage, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="text-xs text-content-secondary">
-                      Opening: {lube.opening_stock} units
-                    </div>
-
-                    {stockPercentage <= 30 && (
-                      <div className="mt-3 p-2 bg-status-pending-light border border-status-warning rounded">
-                        <p className="text-xs text-status-warning font-semibold">⚠️ Transfer from Buffer Needed</p>
-                      </div>
+            <div className="bg-surface-card rounded-lg border border-surface-border overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-surface-bg border-b border-surface-border">
+                      {[
+                        { label: 'Product', align: 'text-left' },
+                        { label: 'Category', align: 'text-left' },
+                        { label: 'Unit Price', align: 'text-right' },
+                        { label: 'Opening', align: 'text-right' },
+                        { label: 'Current', align: 'text-right' },
+                        { label: 'Stock Value', align: 'text-right' },
+                        { label: 'Stock Level', align: 'text-left' },
+                      ].map(col => (
+                        <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase text-content-secondary whitespace-nowrap`}>{col.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lubricants.filter(lube => lube.location === 'Island 3').length === 0 && (
+                      <tr><td colSpan={7} className="px-3 py-6 text-center text-sm text-content-secondary">No lubricants at this location.</td></tr>
                     )}
-                  </div>
-                )
-              })}
+                    {lubricants.filter(lube => lube.location === 'Island 3').map(lube => {
+                      const stockPercentage = (lube.current_stock / lube.opening_stock) * 100
+                      const stockValue = lube.current_stock * lube.unit_price
+                      const needsTransfer = stockPercentage <= 30
+                      return (
+                        <tr key={lube.product_code}
+                          className={`border-t border-surface-border ${needsTransfer ? 'bg-status-warning/5' : 'hover:bg-surface-bg'}`}>
+                          <td className="px-3 py-2 align-top">
+                            <p className="text-sm font-medium text-content-primary">{lube.description}</p>
+                            <p className="text-[10px] font-mono text-content-secondary">{lube.product_code}</p>
+                          </td>
+                          <td className="px-3 py-2 align-top text-xs text-content-secondary whitespace-nowrap">{lube.category}</td>
+                          <td className="px-3 py-2 align-top text-right text-xs text-content-primary whitespace-nowrap">{formatCurrency(lube.unit_price)}</td>
+                          <td className="px-3 py-2 align-top text-right text-xs text-content-secondary">{lube.opening_stock}</td>
+                          <td className="px-3 py-2 align-top text-right text-sm font-semibold text-content-primary">{lube.current_stock}</td>
+                          <td className="px-3 py-2 align-top text-right text-xs font-semibold text-status-success whitespace-nowrap">{formatCurrency(stockValue)}</td>
+                          <td className="px-3 py-2 align-top">
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 bg-surface-border rounded-full h-2 overflow-hidden">
+                                <div className={`h-full rounded-full ${getStockStatusColor(lube.current_stock, lube.opening_stock)}`}
+                                  style={{ width: `${Math.min(stockPercentage, 100)}%` }} />
+                              </div>
+                              <span className={`text-xs font-semibold whitespace-nowrap ${needsTransfer ? 'text-status-warning' : 'text-content-secondary'}`}>
+                                {stockPercentage.toFixed(0)}%{needsTransfer ? ' — transfer needed' : ''}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
@@ -444,41 +409,42 @@ export default function Inventory() {
               Reserve Stock
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {lubricants.filter(lube => lube.location === 'Buffer').map(lube => {
-                const stockValue = lube.current_stock * lube.unit_price
-                return (
-                  <div
-                    key={lube.product_code}
-                    className="bg-surface-card rounded-lg shadow-lg p-5 border-2 border-category-a-border"
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <p className="text-xs text-content-secondary font-medium">Code: {lube.product_code}</p>
-                        <h3 className="font-bold text-content-primary mt-1">{lube.description}</h3>
-                      </div>
-                      <span className={`px-2 py-1 text-xs font-semibold rounded border ${getLocationBadgeColor(lube.location)}`}>
-                        {lube.location}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <p className="text-xs text-content-secondary">Current Stock</p>
-                        <p className="text-lg font-bold text-content-primary">{lube.current_stock}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-content-secondary">Unit Price</p>
-                        <p className="text-sm font-semibold text-content-secondary">{formatCurrency(lube.unit_price)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-content-secondary">Total Value</p>
-                        <p className="text-sm font-bold text-status-success">{formatCurrency(stockValue)}</p>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="bg-surface-card rounded-lg border border-surface-border overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-surface-bg border-b border-surface-border">
+                      {[
+                        { label: 'Product', align: 'text-left' },
+                        { label: 'Current Stock', align: 'text-right' },
+                        { label: 'Unit Price', align: 'text-right' },
+                        { label: 'Total Value', align: 'text-right' },
+                      ].map(col => (
+                        <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase text-content-secondary whitespace-nowrap`}>{col.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lubricants.filter(lube => lube.location === 'Buffer').length === 0 && (
+                      <tr><td colSpan={4} className="px-3 py-6 text-center text-sm text-content-secondary">No lubricants at this location.</td></tr>
+                    )}
+                    {lubricants.filter(lube => lube.location === 'Buffer').map(lube => {
+                      const stockValue = lube.current_stock * lube.unit_price
+                      return (
+                        <tr key={lube.product_code} className="border-t border-surface-border hover:bg-surface-bg">
+                          <td className="px-3 py-2 align-top">
+                            <p className="text-sm font-medium text-content-primary">{lube.description}</p>
+                            <p className="text-[10px] font-mono text-content-secondary">{lube.product_code}</p>
+                          </td>
+                          <td className="px-3 py-2 align-top text-right text-sm font-semibold text-content-primary">{lube.current_stock}</td>
+                          <td className="px-3 py-2 align-top text-right text-xs text-content-secondary whitespace-nowrap">{formatCurrency(lube.unit_price)}</td>
+                          <td className="px-3 py-2 align-top text-right text-xs font-semibold text-status-success whitespace-nowrap">{formatCurrency(stockValue)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
