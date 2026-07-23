@@ -59,11 +59,72 @@ function stripWords(text: string, words: string[]) {
   return out
 }
 
+// Fuzzy search: query characters must appear in order in the target, not
+// necessarily consecutively — e.g. "ERO" matches "Enduro" (e-...-r-...-o).
+// A plain substring match is always also a valid subsequence, so this alone
+// covers both exact and fuzzy search without needing a separate .includes().
+function isSubsequence(query: string, target: string): boolean {
+  if (!query) return true
+  const q = query.toLowerCase()
+  const t = target.toLowerCase()
+  let qi = 0
+  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+    if (t[ti] === q[qi]) qi++
+  }
+  return qi === q.length
+}
+
 function dedupeCode(code: string, existing: string[]) {
   if (!existing.includes(code)) return code
   let n = 2
   while (existing.includes(`${code}-${n}`)) n++
   return `${code}-${n}`
+}
+
+// How much of the code a "grade" segment is allowed to take before we start
+// abbreviating — short names (SAE30, DOT4, 80W90, GREEN...) pass through
+// untouched as a single token; longer ones (brand + model + viscosity, e.g.
+// "Enduro D6 15W-40") get split into a brand-abbreviation segment and a
+// grade-numbers segment, so the code stays a short, readable clue rather
+// than the whole name mashed together.
+const GRADE_MAX_LEN = 10
+
+// Consonant-skeleton abbreviation for a single word, e.g. "Enduro" -> "ENDR":
+// always keep the first letter, then keep consonants (skip vowels) until the
+// target length is reached. Used when there's only one brand/descriptor word
+// to abbreviate, since a single initial ("E") would be too short to be a
+// useful clue on its own.
+function abbreviateWord(w: string, targetLen = 4): string {
+  const up = w.toUpperCase()
+  let out = up[0] || ''
+  for (let i = 1; i < up.length && out.length < targetLen; i++) {
+    if (!'AEIOU'.includes(up[i])) out += up[i]
+  }
+  return out
+}
+
+function abbreviateGrade(rest: string): string {
+  const words = rest.trim().split(/\s+/).filter(Boolean)
+  const combined = words.join('').replace(/-/g, '').toUpperCase()
+  if (combined.length <= GRADE_MAX_LEN) return combined
+
+  // Too long: split into grade-like words (contain a digit — these identify
+  // the product, e.g. D6, 15W-40, 7900) and plain brand/descriptor words
+  // (Enduro, Total, Rubia). Grade words are kept intact; brand words are
+  // abbreviated — one initial each when there are several, or a longer
+  // consonant-skeleton abbreviation when there's only one.
+  const gradeWords: string[] = []
+  const brandWords: string[] = []
+  for (const w of words) {
+    const clean = w.replace(/-/g, '')
+    if (/\d/.test(clean)) gradeWords.push(clean.toUpperCase())
+    else brandWords.push(clean)
+  }
+  const brandAbbrev = brandWords.length === 0 ? ''
+    : brandWords.length === 1 ? abbreviateWord(brandWords[0])
+    : brandWords.map(w => (w[0] || '').toUpperCase()).join('')
+  const gradeTokens = gradeWords.join('')
+  return [brandAbbrev, gradeTokens].filter(Boolean).join('-')
 }
 
 function deriveLubricantCode(name: string, category: string, existing: string[]): string {
@@ -76,7 +137,7 @@ function deriveLubricantCode(name: string, category: string, existing: string[])
   let rest = sizeMatch ? trimmed.slice(0, trimmed.length - sizeMatch[0].length) : trimmed
   rest = stripWords(rest, LUB_FILLER_WORDS[category] || [])
   rest = stripWords(rest, GENERIC_FILLER_WORDS)
-  let grade = rest.replace(/[\s-]+/g, '').toUpperCase()
+  let grade = abbreviateGrade(rest)
   if (!grade) grade = (trimmed.split(/\s+/)[0] || 'NEW').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'NEW'
   const code = sizeToken ? `${prefix}-${grade}-${sizeToken}` : `${prefix}-${grade}`
   return dedupeCode(code, existing)
@@ -388,11 +449,9 @@ function LubricantsTab({ rows, onAdd, onEdit, onDelete, onStock }: {
   const cats = Array.from(new Set(rows.map(r => r.sub_category))).sort()
   const reorderCount = rows.filter(r => r.needs_reorder).length
 
-  const q = search.toLowerCase()
+  const q = search.trim()
   const visible = rows.filter(r =>
-    !q ||
-    r.description.toLowerCase().includes(q) ||
-    r.product_code.toLowerCase().includes(q)
+    isSubsequence(q, r.description) || isSubsequence(q, r.product_code)
   )
 
   const grouped: Record<string, LubRow[]> = {}
@@ -613,11 +672,9 @@ function AccessoriesTab({ rows, onAdd, onEdit, onDelete, onStock }: {
   const [search, setSearch] = useState('')
   const reorderCount = rows.filter(r => r.needs_reorder).length
 
-  const q = search.toLowerCase()
+  const q = search.trim()
   const visible = rows.filter(r =>
-    !q ||
-    r.description.toLowerCase().includes(q) ||
-    r.product_code.toLowerCase().includes(q)
+    isSubsequence(q, r.description) || isSubsequence(q, r.product_code)
   )
 
   return (
