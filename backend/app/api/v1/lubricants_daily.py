@@ -148,6 +148,62 @@ def save_product_catalog(station_id: str, catalog: list):
 
 # ===== ENDPOINTS =====
 
+# These two literal /products/pricing routes must be registered before the
+# /products/{location} catch-all below -- FastAPI matches routes in registration
+# order, so /products/{location} would otherwise swallow "pricing" as the location
+# path parameter and 400 with "Location must be 'Island 3' or 'Buffer'" for every
+# request to /products/pricing (this broke the Stores/Stock Lubricants tab and the
+# Lubricants Daily "Edit Prices" modal, both of which call GET /products/pricing).
+
+@router.get("/products/pricing")
+def get_product_pricing(ctx: dict = Depends(get_station_context)):
+    """Get lubricant product catalog with current prices."""
+    return load_product_catalog(ctx["station_id"])
+
+
+@router.put("/products/pricing", dependencies=[Depends(require_supervisor_or_owner)])
+def update_product_pricing(items: List[dict], ctx: dict = Depends(get_station_context)):
+    """
+    Update lubricant product prices and optional per-SKU re-order levels.
+    Each item may carry `selling_price` and/or `reorder_level` (omitted -> kept).
+    Supervisor / owner only.
+    """
+    station_id = ctx["station_id"]
+    catalog = load_product_catalog(station_id)
+
+    # Validate every input up-front so bad values are caught even for SKUs that
+    # don't (yet) exist in the catalog.
+    by_code: dict = {}
+    for item in items:
+        code = item.get('product_code')
+        if not code:
+            continue
+        if 'selling_price' in item:
+            sp = item['selling_price']
+            if not isinstance(sp, (int, float)) or sp < 0:
+                raise HTTPException(status_code=400, detail=f"Invalid price for {code}")
+        if 'reorder_level' in item and item['reorder_level'] is not None:
+            try:
+                lvl = int(item['reorder_level'])
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail=f"Invalid reorder_level for {code}")
+            if lvl < 0:
+                raise HTTPException(status_code=400, detail=f"reorder_level for {code} cannot be negative")
+        by_code[code] = item
+
+    for product in catalog:
+        upd = by_code.get(product['product_code'])
+        if not upd:
+            continue
+        if 'selling_price' in upd:
+            product['selling_price'] = upd['selling_price']
+        if 'reorder_level' in upd and upd['reorder_level'] is not None:
+            product['reorder_level'] = int(upd['reorder_level'])
+
+    save_product_catalog(station_id, catalog)
+    return {"status": "success", "message": "Product catalog updated", "count": len(by_code)}
+
+
 @router.get("/products/{location}")
 def get_products_for_location(
     location: str,
@@ -495,52 +551,3 @@ def bulk_transfer(
         "created_at": datetime.now().isoformat(),
         "message": f"Transfer of {total_items} items from Buffer to Island 3 recorded. Update daily entries to reflect changes.",
     }
-
-
-@router.get("/products/pricing")
-def get_product_pricing(ctx: dict = Depends(get_station_context)):
-    """Get lubricant product catalog with current prices."""
-    return load_product_catalog(ctx["station_id"])
-
-
-@router.put("/products/pricing", dependencies=[Depends(require_supervisor_or_owner)])
-def update_product_pricing(items: List[dict], ctx: dict = Depends(get_station_context)):
-    """
-    Update lubricant product prices and optional per-SKU re-order levels.
-    Each item may carry `selling_price` and/or `reorder_level` (omitted -> kept).
-    Supervisor / owner only.
-    """
-    station_id = ctx["station_id"]
-    catalog = load_product_catalog(station_id)
-
-    # Validate every input up-front so bad values are caught even for SKUs that
-    # don't (yet) exist in the catalog.
-    by_code: dict = {}
-    for item in items:
-        code = item.get('product_code')
-        if not code:
-            continue
-        if 'selling_price' in item:
-            sp = item['selling_price']
-            if not isinstance(sp, (int, float)) or sp < 0:
-                raise HTTPException(status_code=400, detail=f"Invalid price for {code}")
-        if 'reorder_level' in item and item['reorder_level'] is not None:
-            try:
-                lvl = int(item['reorder_level'])
-            except (ValueError, TypeError):
-                raise HTTPException(status_code=400, detail=f"Invalid reorder_level for {code}")
-            if lvl < 0:
-                raise HTTPException(status_code=400, detail=f"reorder_level for {code} cannot be negative")
-        by_code[code] = item
-
-    for product in catalog:
-        upd = by_code.get(product['product_code'])
-        if not upd:
-            continue
-        if 'selling_price' in upd:
-            product['selling_price'] = upd['selling_price']
-        if 'reorder_level' in upd and upd['reorder_level'] is not None:
-            product['reorder_level'] = int(upd['reorder_level'])
-
-    save_product_catalog(station_id, catalog)
-    return {"status": "success", "message": "Product catalog updated", "count": len(by_code)}
