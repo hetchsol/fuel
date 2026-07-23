@@ -341,7 +341,7 @@ export default function LubricantsDaily() {
       </div>
 
       {/* Summary strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
         <div className="bg-surface-card rounded-lg border border-surface-border p-4">
           <p className="text-xs text-content-secondary mb-1">Total Revenue</p>
           <p className="text-2xl font-bold text-action-primary">{fmt(totalRevenue)}</p>
