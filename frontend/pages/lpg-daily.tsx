@@ -122,12 +122,13 @@ export default function LPGDaily() {
     tradedOutMap[t.to_size_kg] = (tradedOutMap[t.to_size_kg] || 0) + t.quantity
   }
 
-  // Recalculate cylinder rows when inputs change
+  // Recalculate cylinder rows when inputs change.
+  // Quantity fields (balance, closing_empty) never depend on pricing having loaded —
+  // only the revenue fields (value_refill etc.) do, so they fall back to 0 without a
+  // price rather than freezing the whole row's quantities at their initial values.
   useEffect(() => {
-    if (pricing.length === 0) return
     setCylinderRows(prev => prev.map(row => {
       const p = pricing.find(pr => pr.size_kg === row.size_kg)
-      if (!p) return row
       const t_in = tradedInMap[row.size_kg] || 0
       const t_out = tradedOutMap[row.size_kg] || 0
       // traded_in cylinders are empties returned by the customer, not full stock
@@ -142,9 +143,9 @@ export default function LPGDaily() {
         traded_out: t_out,
         balance,
         closing_empty,
-        value_refill: p.price_refill * row.sold_refill,
-        value_with_cylinder: p.price_with_cylinder * row.sold_with_cylinder,
-        total_value: p.price_refill * row.sold_refill + p.price_with_cylinder * row.sold_with_cylinder,
+        value_refill: p ? p.price_refill * row.sold_refill : 0,
+        value_with_cylinder: p ? p.price_with_cylinder * row.sold_with_cylinder : 0,
+        total_value: p ? p.price_refill * row.sold_refill + p.price_with_cylinder * row.sold_with_cylinder : 0,
       }
     }))
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -249,11 +250,11 @@ export default function LPGDaily() {
     } catch (err: any) { toast.error(err.message) }
   }
 
-  const numInput = (value: number, onChange: (v: number) => void, extraClass = '') => (
+  const cellInput = (value: number, onChange: (v: number) => void, extraClass = '') => (
     <input
       type="number" min={0} value={value}
       onChange={e => onChange(parseInt(e.target.value) || 0)}
-      className={`w-full px-2 py-1.5 rounded border border-surface-border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary ${extraClass}`}
+      className={`w-16 px-1.5 py-1 rounded border border-surface-border bg-surface-bg text-content-primary text-xs text-right focus:outline-none focus:border-action-primary ${extraClass}`}
     />
   )
 
@@ -334,176 +335,135 @@ export default function LPGDaily() {
             </div>
           )}
 
-          {/* Cylinder cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
-            {cylinderRows.map(row => {
-              const p = pricing.find(pr => pr.size_kg === row.size_kg)
-              const tIn = tradedInMap[row.size_kg] || 0
-              const tOut = tradedOutMap[row.size_kg] || 0
-              const hasActivity = row.opening_balance > 0 || row.receipts > 0
-                || row.sold_refill > 0 || row.sold_with_cylinder > 0
-                || tIn > 0 || tOut > 0
-                || row.opening_empty > 0 || row.closing_empty > 0
+          {/* Cylinder table — one row per size instead of one tall card per size */}
+          <div className="bg-surface-card rounded-lg border border-surface-border overflow-hidden mb-6">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-surface-bg border-b border-surface-border">
+                    {[
+                      { label: 'Size', align: 'text-left' },
+                      { label: 'Opening', align: 'text-left' },
+                      { label: 'Received', align: 'text-left' },
+                      { label: 'Sold Refill', align: 'text-left' },
+                      { label: 'Sold New', align: 'text-left' },
+                      { label: 'Damaged', align: 'text-left' },
+                      { label: 'Trade', align: 'text-left' },
+                      { label: 'Closing (Full)', align: 'text-left' },
+                      { label: 'Your Count', align: 'text-left' },
+                      { label: 'Opening Empty', align: 'text-left' },
+                      { label: 'Closing Empty', align: 'text-left' },
+                      { label: 'Revenue', align: 'text-right' },
+                    ].map(col => (
+                      <th key={col.label} className={`px-3 py-2 ${col.align} text-xs font-medium uppercase text-content-secondary whitespace-nowrap`}>{col.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {cylinderRows.map(row => {
+                    const p = pricing.find(pr => pr.size_kg === row.size_kg)
+                    const tIn = tradedInMap[row.size_kg] || 0
+                    const tOut = tradedOutMap[row.size_kg] || 0
+                    const hasActivity = row.opening_balance > 0 || row.receipts > 0
+                      || row.sold_refill > 0 || row.sold_with_cylinder > 0
+                      || tIn > 0 || tOut > 0
+                      || row.opening_empty > 0 || row.closing_empty > 0
+                    const diff = row.closing_count - row.balance
 
-              return (
-                <div key={row.size_kg}
-                  className={`bg-surface-card rounded-lg border-2 p-4 ${
-                    row.balance < 0
-                      ? 'border-status-error'
-                      : hasActivity
-                      ? 'border-action-primary'
-                      : 'border-surface-border'
-                  }`}>
-
-                  {/* Card header */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <p className="text-lg font-bold text-content-primary">{row.size_kg} kg</p>
-                      {p && (
-                        <p className="text-xs text-content-secondary mt-0.5">
-                          Refill {fmt(p.price_refill)}&nbsp;&nbsp;|&nbsp;&nbsp;New {fmt(p.price_with_cylinder)}
-                        </p>
-                      )}
-                    </div>
-                    {row.total_value > 0 && (
-                      <span className="text-sm font-bold text-action-primary">{fmt(row.total_value)}</span>
-                    )}
-                  </div>
-
-                  {/* Full cylinders section */}
-                  <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-widest mb-2">Full Cylinders</p>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 mb-2">
-                    <div>
-                      <label className="block text-xs text-content-secondary mb-0.5">Opening</label>
-                      {canManage
-                        ? numInput(row.opening_balance, v => updateCylinder(row.size_kg, 'opening_balance', v))
-                        : <p className="text-sm font-medium text-content-primary px-2 py-1.5">{row.opening_balance}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-xs text-content-secondary mb-0.5">Received</label>
-                      {canManage
-                        ? numInput(row.receipts, v => updateCylinder(row.size_kg, 'receipts', v))
-                        : <p className="text-sm text-content-secondary px-2 py-1.5">{row.receipts}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-xs text-content-secondary mb-0.5">Sold (Refill)</label>
-                      {numInput(row.sold_refill, v => updateCylinder(row.size_kg, 'sold_refill', v))}
-                    </div>
-                    <div>
-                      <label className="block text-xs text-content-secondary mb-0.5">Sold (New)</label>
-                      {numInput(row.sold_with_cylinder, v => updateCylinder(row.size_kg, 'sold_with_cylinder', v))}
-                    </div>
-                    {canManage && (
-                      <div>
-                        <label className="block text-xs text-content-secondary mb-0.5">Damaged</label>
-                        <input type="number" min={0} value={row.damaged || 0}
-                          onChange={e => updateCylinder(row.size_kg, 'damaged', parseInt(e.target.value) || 0)}
-                          className={`w-full px-2 py-1.5 rounded border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary ${
-                            row.damaged > 0 ? 'border-status-warning' : 'border-surface-border'
-                          }`} />
-                      </div>
-                    )}
-                    {/* Trade impact — read-only, derived from trades list */}
-                    {(tIn > 0 || tOut > 0) && (
-                      <div className="flex flex-col justify-end gap-0.5 pb-1">
-                        {tIn > 0 && <span className="text-xs text-status-success font-medium">+{tIn} traded in</span>}
-                        {tOut > 0 && <span className="text-xs text-status-error font-medium">-{tOut} traded out</span>}
-                      </div>
-                    )}
-                  </div>
-
-                  {canManage && row.damaged > 0 && (
-                    <input type="text" value={row.damage_note || ''}
-                      onChange={e => updateCylinderStr(row.size_kg, 'damage_note', e.target.value)}
-                      placeholder="Damage reason (required)"
-                      className={`w-full px-2 py-1.5 rounded border bg-surface-bg text-content-primary text-xs mb-3 focus:outline-none focus:border-action-primary ${
-                        (row.damage_note || '').trim() ? 'border-surface-border' : 'border-status-error'
-                      }`} />
-                  )}
-
-                  {/* Closing full — calculated, plus attendant physical count */}
-                  <div className={`px-3 py-2 rounded mb-2 ${
-                    row.balance < 0
-                      ? 'bg-status-error/10 border border-status-error'
-                      : 'bg-surface-bg border border-surface-border'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-content-secondary">Expected Closing (Full)</span>
-                      <span className={`text-xl font-bold ${row.balance < 0 ? 'text-status-error' : 'text-content-primary'}`}>
-                        {row.balance}
-                        {row.balance < 0 && <span className="text-xs font-normal ml-1">oversell</span>}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Attendant closing count + diff */}
-                  <div className="mb-4">
-                    <label className="block text-xs text-content-secondary mb-0.5">Your Closing Count (Full)</label>
-                    {numInput(row.closing_count, v => updateCylinder(row.size_kg, 'closing_count', v))}
-                    {(() => {
-                      const diff = row.closing_count - row.balance
-                      if (diff === 0) return (
-                        <p className="text-xs text-status-success mt-1">Matches expected</p>
-                      )
-                      return (
-                        <p className="text-xs text-status-error mt-1">
-                          {diff > 0 ? `${diff} more` : `${Math.abs(diff)} fewer`} than expected — verify count
-                        </p>
-                      )
-                    })()}
-                  </div>
-
-                  {/* Empty cylinders section */}
-                  <p className="text-[10px] font-semibold text-content-secondary uppercase tracking-widest mb-2">Empty Cylinders</p>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                    <div>
-                      <label className="block text-xs text-content-secondary mb-0.5">Opening Empty</label>
-                      {canManage
-                        ? numInput(row.opening_empty, v => updateCylinder(row.size_kg, 'opening_empty', v))
-                        : <p className="text-sm text-content-secondary px-2 py-1.5">{row.opening_empty}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-xs text-content-secondary mb-0.5">
-                        Closing Empty
-                        {row.closing_empty_override && (
-                          <button onClick={() => resetClosingEmpty(row.size_kg)}
-                            className="ml-1.5 text-[10px] text-action-primary underline">reset</button>
-                        )}
-                      </label>
-                      {canManage
-                        ? (
-                          <input
-                            type="number" min={0} value={row.closing_empty}
-                            onChange={e => overrideClosingEmpty(row.size_kg, parseInt(e.target.value) || 0)}
-                            className={`w-full px-2 py-1.5 rounded border bg-surface-bg text-content-primary text-sm text-right focus:outline-none focus:border-action-primary ${
-                              row.closing_empty_override ? 'border-status-warning' : 'border-surface-border'
-                            }`}
-                          />
-                        )
-                        : <p className="text-sm text-content-secondary px-2 py-1.5">{row.closing_empty}</p>}
-                    </div>
-                  </div>
-
-                  {/* Revenue breakdown */}
-                  {(row.value_refill > 0 || row.value_with_cylinder > 0) && (
-                    <div className="mt-3 pt-3 border-t border-surface-border space-y-0.5">
-                      {row.value_refill > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-content-secondary">Refill revenue</span>
-                          <span className="font-medium text-content-primary">{fmt(row.value_refill)}</span>
-                        </div>
-                      )}
-                      {row.value_with_cylinder > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-content-secondary">New cylinder revenue</span>
-                          <span className="font-medium text-content-primary">{fmt(row.value_with_cylinder)}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+                    return (
+                      <tr key={row.size_kg}
+                        className={`border-t border-surface-border ${
+                          row.balance < 0 ? 'bg-status-error/10'
+                          : hasActivity ? 'bg-action-primary-light/30'
+                          : 'hover:bg-surface-bg'
+                        }`}>
+                        <td className="px-3 py-2 align-top">
+                          <p className="text-xs font-bold text-content-primary whitespace-nowrap">{row.size_kg} kg</p>
+                          {p && (
+                            <p className="text-[10px] text-content-secondary whitespace-nowrap">
+                              R {fmt(p.price_refill)} / N {fmt(p.price_with_cylinder)}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          {canManage
+                            ? cellInput(row.opening_balance, v => updateCylinder(row.size_kg, 'opening_balance', v))
+                            : <span className="text-xs text-content-primary">{row.opening_balance}</span>}
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          {canManage
+                            ? cellInput(row.receipts, v => updateCylinder(row.size_kg, 'receipts', v))
+                            : <span className="text-xs text-content-secondary">{row.receipts}</span>}
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          {cellInput(row.sold_refill, v => updateCylinder(row.size_kg, 'sold_refill', v))}
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          {cellInput(row.sold_with_cylinder, v => updateCylinder(row.size_kg, 'sold_with_cylinder', v))}
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          {canManage ? (
+                            <>
+                              {cellInput(row.damaged || 0, v => updateCylinder(row.size_kg, 'damaged', v),
+                                row.damaged > 0 ? 'border-status-warning' : '')}
+                              {row.damaged > 0 && (
+                                <input type="text" value={row.damage_note || ''}
+                                  onChange={e => updateCylinderStr(row.size_kg, 'damage_note', e.target.value)}
+                                  placeholder="Reason"
+                                  className={`mt-1 w-28 px-1.5 py-1 rounded border bg-surface-bg text-content-primary text-[10px] focus:outline-none ${
+                                    (row.damage_note || '').trim() ? 'border-surface-border' : 'border-status-error'
+                                  }`} />
+                              )}
+                            </>
+                          ) : <span className="text-xs text-content-secondary">{row.damaged || 0}</span>}
+                        </td>
+                        <td className="px-3 py-2 align-top whitespace-nowrap">
+                          {tIn > 0 && <p className="text-xs text-status-success font-medium">+{tIn} in</p>}
+                          {tOut > 0 && <p className="text-xs text-status-error font-medium">-{tOut} out</p>}
+                          {tIn === 0 && tOut === 0 && <span className="text-xs text-content-secondary">-</span>}
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <span className={`text-sm font-bold ${row.balance < 0 ? 'text-status-error' : 'text-content-primary'}`}>
+                            {row.balance}
+                          </span>
+                          {row.balance < 0 && <p className="text-[10px] text-status-error whitespace-nowrap">oversell</p>}
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          {cellInput(row.closing_count, v => updateCylinder(row.size_kg, 'closing_count', v))}
+                          {diff !== 0 && (
+                            <p className="text-[10px] text-status-error mt-0.5 whitespace-nowrap">
+                              {diff > 0 ? `+${diff}` : diff} vs expected
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          {canManage
+                            ? cellInput(row.opening_empty, v => updateCylinder(row.size_kg, 'opening_empty', v))
+                            : <span className="text-xs text-content-secondary">{row.opening_empty}</span>}
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          {canManage ? (
+                            <>
+                              {cellInput(row.closing_empty, v => overrideClosingEmpty(row.size_kg, v),
+                                row.closing_empty_override ? 'border-status-warning' : '')}
+                              {row.closing_empty_override && (
+                                <button onClick={() => resetClosingEmpty(row.size_kg)}
+                                  className="block text-[10px] text-action-primary underline mt-0.5">reset</button>
+                              )}
+                            </>
+                          ) : <span className="text-xs text-content-secondary">{row.closing_empty}</span>}
+                        </td>
+                        <td className="px-3 py-2 align-top text-right">
+                          <span className={`text-xs font-semibold ${row.total_value > 0 ? 'text-action-primary' : 'text-content-secondary'}`}>
+                            {row.total_value > 0 ? fmt(row.total_value) : '-'}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Trades section (supervisor+) */}
