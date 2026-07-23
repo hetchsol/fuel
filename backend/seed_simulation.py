@@ -294,17 +294,9 @@ def main():
             ],
             "status": "completed",
             "created_by": "system", "created_at": f"{plan['date']}T06:00:00",
-            "tank_dip_readings": [
-                {"tank_id": "TANK-DIESEL", "opening_dip_cm": d_open_dip, "closing_dip_cm": d_close_dip,
-                 "opening_volume_liters": round(d_open_dip * 785.4, 0),
-                 "closing_volume_liters": round(d_close_dip * 785.4, 0),
-                 "recorded_at": f"{plan['date']}T18:00:00", "recorded_by": "system"},
-                {"tank_id": "TANK-PETROL", "opening_dip_cm": p_open_dip, "closing_dip_cm": p_close_dip,
-                 "opening_volume_liters": round(p_open_dip * 785.4, 0),
-                 "closing_volume_liters": round(p_close_dip * 785.4, 0),
-                 "recorded_at": f"{plan['date']}T18:00:00", "recorded_by": "system"},
-            ],
         }
+        # Tank dips live in tank_readings.json, not on the shift record — see
+        # wherever this script seeds tank_readings (if it does) for that data.
 
         # Handovers (one per attendant)
         for att_key, att_info, att_nozzles, cash_diff, dep_times in [

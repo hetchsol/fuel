@@ -149,6 +149,31 @@ export function formatDateRange(startDate: string, endDate: string): string {
 }
 
 /**
+ * Format a date with an ordinal day and full month name, e.g. "21st July 2026"
+ */
+export function formatDateOrdinalLong(dateStr: string | null | undefined): string {
+  if (!dateStr) return ''
+
+  try {
+    let date: Date
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [year, month, day] = dateStr.split('-').map(Number)
+      date = new Date(year, month - 1, day)
+    } else {
+      date = new Date(dateStr)
+    }
+    if (isNaN(date.getTime())) return dateStr
+
+    const day = date.getDate()
+    const suffix = (day >= 11 && day <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[day % 10] || 'th'
+    const month = date.toLocaleString('en-GB', { month: 'long' })
+    return `${day}${suffix} ${month} ${date.getFullYear()}`
+  } catch (error) {
+    return dateStr
+  }
+}
+
+/**
  * Parse various date formats to Date object
  */
 export function parseFlexibleDate(dateStr: string): Date | null {

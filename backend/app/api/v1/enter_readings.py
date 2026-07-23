@@ -73,12 +73,19 @@ def _find_tank_reading(tank_readings_db: dict, tank_id: str, date: str, shift_ty
     return best
 
 
-def _find_previous_shift_readings(shift: dict, user_id: str, storage: dict, station_id: str) -> dict:
+def _find_previous_shift_readings(shift: dict, storage: dict, station_id: str) -> dict:
     """
     Try to auto-fill opening readings from the previous shift's closing.
     Night shift -> same-date Day shift closing
     Day shift  -> previous-date Night shift closing
     Falls back to nozzle's current electronic/mechanical reading.
+
+    Keyed by nozzle_id, not by attendant: a meter reading belongs to the nozzle,
+    not to whoever was assigned to it, so this scans every closing record for the
+    previous shift (any attendant) rather than only the current shift's attendant's
+    own record. Otherwise, carry-forward silently fails whenever the attendant
+    assigned to a nozzle changes between shifts.
+
     Returns {nozzle_id: {electronic, mechanical}} or empty.
     """
     readings_db = _load_readings(station_id)
@@ -112,18 +119,30 @@ def _find_previous_shift_readings(shift: dict, user_id: str, storage: dict, stat
     if not prev_shift_id:
         return {}
 
-    # Look for this user's closing record in that shift
-    closing_key = f"AR-{prev_shift_id}-{user_id}-C"
-    record = readings_db.get(closing_key)
-    if not record:
-        return {}
-
+    prefix = f"AR-{prev_shift_id}-"
     result = {}
-    for nr in record.get("nozzle_readings", []):
-        result[nr["nozzle_id"]] = {
-            "electronic": nr["electronic_reading"],
-            "mechanical": nr["mechanical_reading"],
-        }
+    result_from = {}  # nozzle_id -> submitted_at of the record it came from, for conflict resolution
+    for key, record in readings_db.items():
+        if not (key.startswith(prefix) and key.endswith("-C")):
+            continue
+        submitted_at = record.get("submitted_at", "")
+        for nr in record.get("nozzle_readings", []):
+            nid = nr["nozzle_id"]
+            if nid in result and submitted_at <= result_from.get(nid, ""):
+                # Two attendants both have a closing reading for this nozzle on the
+                # same previous shift — shouldn't happen under exclusive assignment,
+                # but don't silently overwrite with an older record if it does.
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Conflicting previous-shift closing readings for nozzle {nid} "
+                    f"in shift {prev_shift_id} — keeping the later submission."
+                )
+                continue
+            result[nid] = {
+                "electronic": nr["electronic_reading"],
+                "mechanical": nr["mechanical_reading"],
+            }
+            result_from[nid] = submitted_at
     return result
 
 
@@ -172,7 +191,7 @@ async def get_my_shift_readings(ctx: dict = Depends(get_station_context)):
     closing_submitted = closing_key in readings_db
 
     # Auto-fill from previous shift closing
-    prev_readings = _find_previous_shift_readings(my_shift, user_id, storage, station_id)
+    prev_readings = _find_previous_shift_readings(my_shift, storage, station_id)
 
     # If opening already submitted, use those values for reference
     opening_record = readings_db.get(opening_key, {})
@@ -648,10 +667,20 @@ async def get_shift_summary(shift_id: str, ctx: dict = Depends(get_station_conte
     # Load tank_readings.json for delivery-adjusted tank movement
     tank_readings_db = _load_tank_readings_db(station_id)
 
-    # Tank dip comparison — use delivery-adjusted movement when available
-    tank_dips = shift.get("tank_dip_readings", [])
+    # Tank dip comparison — use delivery-adjusted movement when available.
+    # Tank dips live in tank_readings.json, keyed by tank_id/date/shift_type.
     shift_date = shift.get("date", "")
     shift_type = shift.get("shift_type", "")
+    tank_dips = [
+        {
+            "tank_id": tr.get("tank_id", ""),
+            "opening_volume_liters": tr.get("opening_volume"),
+            "closing_volume_liters": tr.get("closing_volume"),
+        }
+        for tr in tank_readings_db.values()
+        if tr.get("date") == shift_date and tr.get("shift_type") == shift_type
+        and (tr.get("opening_dip_cm") is not None or tr.get("closing_dip_cm") is not None)
+    ]
     reconciliation = []
     for dip in tank_dips:
         tank_id = dip.get("tank_id", "")

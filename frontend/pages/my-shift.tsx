@@ -5,7 +5,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import DoubleEntryModal from '../components/DoubleEntryModal'
 import { getHeaders, authFetch } from '../lib/api'
-import { formatDateToDisplay } from '../lib/dateUtils'
+import { formatDateToDisplay, formatDateOrdinalLong } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -1351,6 +1351,19 @@ export default function MyShift() {
             </div>
           </button>
         {showStartShift && <div className="space-y-6 p-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+
+          {/* Confirmation summary — what the attendant is about to confirm */}
+          <div className="rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
+            <div className="text-sm font-semibold" style={{ color: theme.textPrimary }}>
+              {formatDateOrdinalLong(shiftInfo?.date)} — {shiftInfo?.shift_type} Shift
+            </div>
+            <div className="text-xs mt-1" style={{ color: theme.textSecondary }}>
+              Nozzles: {assignmentInfo?.nozzle_ids?.join(', ') || 'None assigned'}
+              {assignmentInfo?.assigned_lpg && <> | LPG</>}
+              {assignmentInfo?.assigned_lubricants && <> | Lubricants</>}
+              {assignmentInfo?.assigned_accessories && <> | Accessories</>}
+            </div>
+          </div>
 
           {/* Blocked credit accounts warning — suspended, no Pre-Paid balance, or Post-Paid at ceiling */}
           {(() => {

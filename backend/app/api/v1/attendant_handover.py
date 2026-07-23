@@ -100,10 +100,17 @@ def _save_opening_verifications(data: dict, station_id: str):
     save_station_json(station_id, 'opening_verifications.json', data)
 
 
-def _find_previous_shift_readings(shift: dict, user_id: str, storage: dict, station_id: str) -> dict:
+def _find_previous_shift_readings(shift: dict, storage: dict, station_id: str) -> dict:
     """
     Look up the previous shift's closing readings from attendant_readings.json.
     Night -> same-date Day; Day -> previous-date Night.
+
+    Keyed by nozzle_id, not by attendant: a meter reading belongs to the nozzle,
+    not to whoever was assigned to it, so this scans every closing record for the
+    previous shift (any attendant) rather than only the current shift's attendant's
+    own record. Otherwise, carry-forward silently fails whenever the attendant
+    assigned to a nozzle changes between shifts.
+
     Returns {nozzle_id: {electronic, mechanical}} or empty.
     """
     from datetime import timedelta
@@ -132,17 +139,30 @@ def _find_previous_shift_readings(shift: dict, user_id: str, storage: dict, stat
     if not prev_shift_id:
         return {}
 
-    closing_key = f"AR-{prev_shift_id}-{user_id}-C"
-    record = readings_db.get(closing_key)
-    if not record:
-        return {}
-
+    prefix = f"AR-{prev_shift_id}-"
     result = {}
-    for nr in record.get("nozzle_readings", []):
-        result[nr["nozzle_id"]] = {
-            "electronic": nr["electronic_reading"],
-            "mechanical": nr["mechanical_reading"],
-        }
+    result_from = {}  # nozzle_id -> submitted_at of the record it came from, for conflict resolution
+    for key, record in readings_db.items():
+        if not (key.startswith(prefix) and key.endswith("-C")):
+            continue
+        submitted_at = record.get("submitted_at", "")
+        for nr in record.get("nozzle_readings", []):
+            nid = nr["nozzle_id"]
+            if nid in result and submitted_at <= result_from.get(nid, ""):
+                # Two attendants both have a closing reading for this nozzle on the
+                # same previous shift — shouldn't happen under exclusive assignment,
+                # but don't silently overwrite with an older record if it does.
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Conflicting previous-shift closing readings for nozzle {nid} "
+                    f"in shift {prev_shift_id} — keeping the later submission."
+                )
+                continue
+            result[nid] = {
+                "electronic": nr["electronic_reading"],
+                "mechanical": nr["mechanical_reading"],
+            }
+            result_from[nid] = submitted_at
     return result
 
 
@@ -1420,7 +1440,7 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
             "electronic": nr["electronic_reading"],
             "mechanical": nr["mechanical_reading"],
         }
-    prev_readings = _find_previous_shift_readings(my_shift, user_id, storage, ctx["station_id"])
+    prev_readings = _find_previous_shift_readings(my_shift, storage, ctx["station_id"])
 
     nozzle_details = []
     price_change_detected = False

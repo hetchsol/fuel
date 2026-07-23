@@ -60,12 +60,15 @@ export default function DayChecklist({ date }: { date: string }) {
         ? (activeShift.assignments?.length || activeShift.attendants?.length || 0)
         : 0
 
-      // Tank dips — only checkable once we have a shift id.
+      // Tank dips — only checkable once we have a shift id. Tank dip data lives
+      // in tank_readings.json (Operations > Tank Dips page), keyed by
+      // date + shift_type, not on the shift record itself.
       let dips: any[] = []
       if (activeShift?.shift_id) {
-        dips = (await authFetch(
-          `${BASE}/shifts/${encodeURIComponent(activeShift.shift_id)}/tank-dip-readings`, opts,
+        const tankReadings: any[] = (await authFetch(
+          `${BASE}/tank-readings/dips?date=${date}&shift_type=${activeShift.shift_type}`, opts,
         ).then(asJson).catch(() => null)) || []
+        dips = tankReadings.filter(r => r.opening_dip_cm != null || r.closing_dip_cm != null)
       }
 
       if (cancelled) return

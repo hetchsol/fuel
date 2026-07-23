@@ -189,8 +189,7 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
     shift_date = shift.get('date', '')
     shift_type_str = shift.get('shift_type', '')
 
-    # Primary: tank_readings.json (entered via Operations > Tank Dips page)
-    # Fallback: inline shift dip readings (legacy, entered via Shifts page)
+    # Tank dip readings live in tank_readings.json (entered via Operations > Tank Dips page).
     station_tank_readings = _load_station_tank_readings(ctx["station_id"])
     tank_reading_entries = {}  # tank_id -> tank_readings.json entry (for nozzle fallback)
     tank_dip_readings = []
@@ -207,14 +206,6 @@ def calculate_tank_volume_movement_analysis(shift_id: str, ctx: dict = Depends(g
                     'opening_volume_liters': tr.get('opening_volume'),
                     'closing_volume_liters': tr.get('closing_volume'),
                 })
-
-    if not tank_dip_readings:
-        # Fallback: inline dip readings stored on the shift record (legacy path)
-        for dip in shift.get('tank_dip_readings', []):
-            tank_id = dip.get('tank_id', '')
-            tank_dip_readings.append(dip)
-            if tank_id not in tank_reading_entries:
-                tank_reading_entries[tank_id] = {}
 
     if not tank_dip_readings:
         raise HTTPException(
