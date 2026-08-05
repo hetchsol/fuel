@@ -105,6 +105,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Deposit overdue alert
   const [depositOverdue, setDepositOverdue] = useState(false)
 
+  // Manager+ forcing function: block every other screen while shift closures
+  // have gone stale — the attendant is stuck waiting on the manager to dip
+  // the tank and close the handover, past the backend's STALE_READINGS_HOURS.
+  const [staleClosureCount, setStaleClosureCount] = useState(0)
+
   useEffect(() => {
     const userData = localStorage.getItem('user')
     if (userData) {
@@ -190,6 +195,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     const interval = setInterval(fetchCount, 60000)
     return () => clearInterval(interval)
   }, [isSupervisorOrOwner, router.pathname])
+
+  // Poll for stale awaiting-closing handovers — manager/owner only. The count
+  // (not the list) is enough here; handover-review is where they act on it.
+  useEffect(() => {
+    if (router.pathname === '/login' || router.pathname === '/setup' || router.pathname === '/initializing') return
+    if (!isManagerOrAbove) return
+    const checkStaleClosures = () => {
+      authFetch(`${BASE}/handover/review-queue`, { headers: getHeaders() })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => setStaleClosureCount(data?.stale_readings_count || 0))
+        .catch(() => {})
+    }
+    checkStaleClosures()
+    const interval = setInterval(checkStaleClosures, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [isManagerOrAbove, router.pathname])
 
   // Periodic deposit overdue check — every 5 minutes for all roles
   useEffect(() => {
@@ -497,6 +518,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   if (router.pathname === '/login' || router.pathname === '/setup' || loading) {
     return <>{children}</>
   }
+
+  // Every screen is blocked except the one place a manager can actually clear
+  // the backlog. Re-checked on every navigation, so it lifts itself the moment
+  // the count drops to zero — no separate "unblock" action needed.
+  const closureBlockActive = isManagerOrAbove && staleClosureCount > 0 && router.pathname !== '/handover-review'
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -884,7 +910,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       )}
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 w-full relative">
-        {children}
+        {closureBlockActive ? (
+          <div className="rounded-card shadow p-8 text-center max-w-lg mx-auto mt-12 glass-card-static border-2 border-status-error">
+            <h2 className="text-lg font-bold mb-2 text-content-primary">
+              {staleClosureCount} shift{staleClosureCount !== 1 ? 's' : ''} awaiting closure
+            </h2>
+            <p className="text-sm mb-5 text-content-secondary">
+              {staleClosureCount !== 1 ? 'These have' : 'This has'} been waiting over 4 hours for tank dips and cash
+              reconciliation. Close {staleClosureCount !== 1 ? 'them' : 'it'} before doing anything else.
+            </p>
+            <Link
+              href="/handover-review"
+              className="inline-block px-5 py-2.5 rounded-btn text-sm font-semibold text-white bg-action-primary hover:opacity-90 transition-opacity"
+            >
+              Go to Handover Review
+            </Link>
+          </div>
+        ) : children}
       </main>
 
       <Footer userRole={user?.role} />

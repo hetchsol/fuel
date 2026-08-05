@@ -54,29 +54,44 @@ def _save_handovers(data: dict, station_id: str):
     save_station_json(station_id, 'attendant_handovers.json', data)
 
 
-def _missing_tank_dips(station_id: str, shift_date: str, storage: dict) -> list:
-    """Return tank_ids that lack a COMPLETE (opening + closing) dip for shift_date.
+def _missing_dips_for_tanks(
+    station_id: str, shift_date: str, shift_type: str, tank_ids, storage: dict,
+    require_opening: bool = True,
+) -> list:
+    """Return tank_ids (restricted to `tank_ids`) that lack a dip reading for
+    this exact shift_date + shift_type.
 
-    A record merely existing isn't enough — a dip-only row can have one of the
-    two fields still null (e.g. opening recorded, closing never followed up),
-    which used to slip past this check and reach shift close.
+    Matching by date alone used to let a Day-shift dip silently satisfy a
+    Night-shift check on the same date — shift_type must match too.
+    """
+    if not tank_ids:
+        return []
+    tank_readings = load_station_json(station_id, 'tank_readings.json', default={})
+    have_dip = set()
+    for r in tank_readings.values():
+        if r.get("date") != shift_date or r.get("shift_type") != shift_type:
+            continue
+        if r.get("closing_dip_cm") is None:
+            continue
+        if require_opening and r.get("opening_dip_cm") is None:
+            continue
+        have_dip.add(r.get("tank_id"))
+    return [t for t in tank_ids if t not in have_dip]
+
+
+def _missing_tank_dips(station_id: str, shift_date: str, shift_type: str, storage: dict) -> list:
+    """Return tank_ids that lack a COMPLETE (opening + closing) dip for this
+    exact shift_date + shift_type.
     """
     tanks_data = storage.get("tanks", {})
     if not tanks_data:
         return []
-    tank_readings = load_station_json(station_id, 'tank_readings.json', default={})
-    tanks_with_dips = {
-        r.get("tank_id") for r in tank_readings.values()
-        if r.get("date") == shift_date
-        and r.get("opening_dip_cm") is not None
-        and r.get("closing_dip_cm") is not None
-    }
-    return [t for t in tanks_data if t not in tanks_with_dips]
+    return _missing_dips_for_tanks(station_id, shift_date, shift_type, list(tanks_data), storage)
 
 
-def _require_dips_complete(station_id: str, shift_date: str, storage: dict):
-    """Raise 400 if any active tank lacks a complete dip reading for shift_date."""
-    missing = _missing_tank_dips(station_id, shift_date, storage)
+def _require_dips_complete(station_id: str, shift_date: str, shift_type: str, storage: dict):
+    """Raise 400 if any active tank lacks a complete dip reading for this shift."""
+    missing = _missing_tank_dips(station_id, shift_date, shift_type, storage)
     if missing:
         tanks_data = storage.get("tanks", {})
         missing_labels = [
@@ -85,7 +100,7 @@ def _require_dips_complete(station_id: str, shift_date: str, storage: dict):
         ]
         raise HTTPException(
             status_code=400,
-            detail=f"Tank dips for {shift_date} have not been fully recorded (opening and "
+            detail=f"Tank dips for {shift_date} ({shift_type}) have not been fully recorded (opening and "
                    f"closing) for all tanks ({', '.join(missing_labels)}). Record dips before closing this shift.",
         )
 
@@ -1685,7 +1700,7 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
 
     # Retrospective entry closes the shift the same as a normal close — it must
     # not become a way to finish a shift without ever recording its tank dips.
-    _require_dips_complete(station_id, shift.get("date", ""), storage)
+    _require_dips_complete(station_id, shift.get("date", ""), shift.get("shift_type", ""), storage)
 
     # Find attendant assignment
     attendant_assignment = None
@@ -2060,6 +2075,26 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
 
     shift, my_assignment, allowed_nozzle_ids = _validate_shift_and_assignment(data.shift_id, ctx, storage)
 
+    # The manager is on-site at shift close — block the handover until they've
+    # dipped every tank this attendant's nozzles draw from, so the tank-vs-nozzle
+    # variance check below has real data instead of silently no-oping later.
+    tank_ids = {get_tank_id_for_nozzle(nid, storage=storage) for nid in allowed_nozzle_ids}
+    tank_ids.discard(None)
+    missing_dip_tanks = _missing_dips_for_tanks(
+        station_id, shift.get("date", ""), shift.get("shift_type", ""), tank_ids, storage,
+        require_opening=False)
+    if missing_dip_tanks:
+        tanks_data = storage.get("tanks", {})
+        missing_labels = [
+            tanks_data.get(t, {}).get("fuel_type") or tanks_data.get(t, {}).get("name") or t
+            for t in missing_dip_tanks
+        ]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Manager must record the closing tank dip for {', '.join(missing_labels)} "
+                   f"before this handover can be submitted.",
+        )
+
     # Prevent duplicate Phase 1 submissions
     handovers = _load_handovers(station_id)
     has_handover = False
@@ -2093,6 +2128,16 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
     phase1_flags = _compute_phase1_flags(nozzle_summaries, stock_variance_flags, storage)
     if any(ns.changeover_estimated for ns in nozzle_summaries):
         phase1_flags.append("changeover_estimated")
+
+    # The dip gate above guarantees every tank this attendant's nozzles draw
+    # from already has a closing dip, so the tank-vs-nozzle reconciliation can
+    # run right now instead of silently no-oping until cash close.
+    variance_flags, _ = _compute_tank_nozzle_variance(
+        station_id, data.shift_id, storage,
+        current_attendant_id=user_id, current_nozzle_summaries=nozzle_summaries)
+    for f in variance_flags:
+        if f not in phase1_flags:
+            phase1_flags.append(f)
 
     handover_id = f"HO-{data.shift_id}-{user_id}-{datetime.now().strftime('%H%M%S')}"
     now_iso = datetime.now().isoformat()
@@ -2229,7 +2274,7 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
         raise HTTPException(status_code=403, detail="Only the assigned attendant or a supervisor/manager/owner can submit shift closing")
 
     # Block closing if tank dips are missing for this shift's date
-    _require_dips_complete(station_id, handover.get("date", ""), storage)
+    _require_dips_complete(station_id, handover.get("date", ""), handover.get("shift_type", ""), storage)
 
     # Block closing this attendant's handover until every attendant on the
     # shift has at least submitted their readings.
@@ -2441,7 +2486,7 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     total_expected = round(fuel_revenue + lpg_sales + lubricant_sales + accessory_sales, 2)
 
     # Block closing if tank dips are missing for this shift's date
-    _require_dips_complete(station_id, shift.get("date", ""), storage)
+    _require_dips_complete(station_id, shift.get("date", ""), shift.get("shift_type", ""), storage)
 
     # Block closing this attendant's handover until every attendant on the
     # shift has at least submitted their readings (this call itself counts

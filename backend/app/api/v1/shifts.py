@@ -307,7 +307,9 @@ def complete_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     # become a way to finish a shift without its tank dips — same requirement
     # as the attendant-facing close path.
     from .attendant_handover import _require_dips_complete
-    _require_dips_complete(ctx["station_id"], shifts_data[shift_id].get("date", ""), storage)
+    _require_dips_complete(
+        ctx["station_id"], shifts_data[shift_id].get("date", ""),
+        shifts_data[shift_id].get("shift_type", ""), storage)
 
     shifts_data[shift_id]["status"] = "completed"
     shifts_data[shift_id]["completed_at"] = datetime.now().isoformat()
@@ -355,7 +357,9 @@ def reconcile_shift(shift_id: str, ctx: dict = Depends(get_station_context)):
     # that gap forward. Re-check live rather than trust the stored flag, so
     # a manager who has since backfilled the dip isn't blocked.
     from .attendant_handover import _require_dips_complete
-    _require_dips_complete(ctx["station_id"], shifts_data[shift_id].get("date", ""), storage)
+    _require_dips_complete(
+        ctx["station_id"], shifts_data[shift_id].get("date", ""),
+        shifts_data[shift_id].get("shift_type", ""), storage)
 
     shifts_data[shift_id]["status"] = "reconciled"
     shifts_data[shift_id]["reconciled_at"] = datetime.now().isoformat()

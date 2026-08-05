@@ -81,19 +81,32 @@ def record_tank_dips(
     delivery_invoice_number: Optional[str] = None,
     delivery_time: Optional[str] = None,
     delivery_volume_liters: Optional[float] = None,
+    delegate_reason: Optional[str] = None,
     ctx: dict = Depends(get_station_context),
 ):
     """
     Manager+ only. Create or update dip readings for a single tank/date/shift.
     When closing dip exceeds opening dip a delivery is required and written to
     tank_deliveries.json in the same request — one path, one save.
+
+    A supervisor may record dips on the manager's behalf when the manager is
+    unavailable at shift close, but only with a stated reason — logged and
+    notified, since this bypasses the normal separation between the person
+    dispensing fuel and the person verifying stock.
     """
     from ...services.dip_conversion import dip_to_volume, get_calibration_version
     from ...database.storage import save_station_storage
+    from ...services.audit_service import log_audit_event
 
     role = ctx.get("role", "")
-    if role not in ("manager", "owner"):
-        raise HTTPException(status_code=403, detail="Only managers and owners can record tank dip readings.")
+    is_delegate = role == "supervisor"
+    if role not in ("manager", "owner") and not is_delegate:
+        raise HTTPException(status_code=403, detail="Only managers, owners, or a delegating supervisor can record tank dip readings.")
+    if is_delegate and not (delegate_reason or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="A reason is required when a supervisor records dips because the manager is unavailable.",
+        )
 
     station_id = ctx["station_id"]
     storage = ctx["storage"]
@@ -163,6 +176,11 @@ def record_tank_dips(
             "deliveries": [],
         }
 
+    if is_delegate:
+        tank_readings_db[reading_id]["delegated_by"] = ctx.get("full_name") or ctx.get("username")
+        tank_readings_db[reading_id]["delegate_reason"] = delegate_reason.strip()
+        tank_readings_db[reading_id]["delegated_at"] = now
+
     # Write or update delivery record when supplier is provided
     delivery_id = tank_readings_db[reading_id].get("delivery_id")
     if delivery_supplier:
@@ -223,6 +241,30 @@ def record_tank_dips(
 
     save_tank_readings(tank_readings_db, station_id)
     save_station_storage(station_id)
+
+    if is_delegate:
+        delegate_name = ctx.get("full_name") or ctx.get("username")
+        log_audit_event(
+            station_id=station_id,
+            action="tank_dip_delegated",
+            performed_by=ctx["username"],
+            entity_type="tank_reading",
+            entity_id=reading_id,
+            details={"tank_id": tank_id, "date": date, "shift_type": shift_type, "reason": delegate_reason},
+        )
+        create_notification(
+            station_id=station_id,
+            type="TANK_DIP_DELEGATED",
+            severity="high",
+            title="Tank Dip Entered by Delegate (Manager Unavailable)",
+            message=(
+                f"{delegate_name} (Supervisor) recorded the {shift_type} shift dip for tank {tank_id} "
+                f"on {date} because the manager was unavailable. Reason: {delegate_reason.strip()}"
+            ),
+            entity_type="tank_reading",
+            entity_id=reading_id,
+            created_by=ctx["username"],
+        )
 
     rec = tank_readings_db[reading_id]
     return {

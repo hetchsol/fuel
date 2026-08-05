@@ -119,7 +119,7 @@ def _missing_dip_tanks(station_id: str, shift: dict, storage: dict) -> list:
     if not shift_date:
         return []
     from ..api.v1.attendant_handover import _missing_tank_dips
-    missing_ids = _missing_tank_dips(station_id, shift_date, storage)
+    missing_ids = _missing_tank_dips(station_id, shift_date, shift.get("shift_type", ""), storage)
     tanks_data = storage.get("tanks", {})
     return [
         tanks_data.get(t, {}).get("fuel_type") or tanks_data.get(t, {}).get("name") or t
