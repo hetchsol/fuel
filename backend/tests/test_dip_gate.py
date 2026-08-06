@@ -52,7 +52,7 @@ def test_require_dips_complete_raises_with_shift_type_in_message(monkeypatch):
         ah._require_dips_complete("ST001", "2026-08-05", "Night", storage)
         assert False, "expected HTTPException"
     except Exception as exc:
-        assert exc.status_code == 400
+        assert exc.status_code == 409  # distinguishes "missing dips" from other 400s at the call sites
         assert "Night" in exc.detail
         assert "Diesel" in exc.detail
 

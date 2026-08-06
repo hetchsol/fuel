@@ -90,7 +90,12 @@ def _missing_tank_dips(station_id: str, shift_date: str, shift_type: str, storag
 
 
 def _require_dips_complete(station_id: str, shift_date: str, shift_type: str, storage: dict):
-    """Raise 400 if any active tank lacks a complete dip reading for this shift."""
+    """Raise 409 if any active tank lacks a complete dip reading for this shift.
+
+    409 (not 400) is deliberate: callers use the status code to distinguish
+    "blocked by missing dips, go capture them" from ordinary validation
+    errors — see handover-review.tsx's Close & Approve flow.
+    """
     missing = _missing_tank_dips(station_id, shift_date, shift_type, storage)
     if missing:
         tanks_data = storage.get("tanks", {})
@@ -99,7 +104,7 @@ def _require_dips_complete(station_id: str, shift_date: str, shift_type: str, st
             for t in missing
         ]
         raise HTTPException(
-            status_code=400,
+            status_code=409,
             detail=f"Tank dips for {shift_date} ({shift_type}) have not been fully recorded (opening and "
                    f"closing) for all tanks ({', '.join(missing_labels)}). Record dips before closing this shift.",
         )

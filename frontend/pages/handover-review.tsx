@@ -516,6 +516,12 @@ export default function HandoverReview() {
         }),
       })
       if (!closeRes.ok) {
+        if (closeRes.status === 409) {
+          // Blocked on missing tank dips — this form has no dip inputs, so send
+          // the manager to Shift Closing, which now forces dip entry first.
+          router.push(`/shift-closing?handover_id=${encodeURIComponent(h.handover_id)}`)
+          return
+        }
         const err = await closeRes.json().catch(() => ({ detail: 'Closing failed' }))
         throw new Error(err.detail)
       }
