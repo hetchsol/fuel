@@ -46,6 +46,25 @@ export async function loadTankDips(date: string, shiftType: string): Promise<Tan
   return { tanks, dips, allComplete }
 }
 
+// The backend's dip-completeness gate requires BOTH an opening and a closing
+// dip on the record — closing alone can never satisfy it. If a tank has no
+// opening dip yet, carry it forward from the previous shift's closing dip
+// (the same lookup the standalone Tank Dips page already uses) so entering
+// just the closing reading here is actually enough to unblock the shift.
+async function resolveOpeningDip(tankId: string, date: string, shiftType: string): Promise<string | null> {
+  try {
+    const res = await authFetch(
+      `${BASE}/tank-readings/readings/${tankId}/previous-shift?current_date=${date}&shift_type=${shiftType}`,
+      { headers: getAuthHeaders() },
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    return data?.opening_dip_cm != null ? String(data.opening_dip_cm) : null
+  } catch {
+    return null
+  }
+}
+
 export async function saveTankDips(
   date: string,
   shiftType: string,
@@ -58,12 +77,19 @@ export async function saveTankDips(
   for (const tank of tanks) {
     const dip = dips[tank.tank_id]
     if (!dip?.closing_dip_cm) continue
+
+    let openingDipCm = dip.opening_dip_cm
+    if (!openingDipCm) {
+      openingDipCm = await resolveOpeningDip(tank.tank_id, date, shiftType)
+    }
+
     const params = new URLSearchParams({
       tank_id: tank.tank_id,
       date,
       shift_type: shiftType,
       recorded_by: userId,
       closing_dip_cm: dip.closing_dip_cm,
+      ...(openingDipCm ? { opening_dip_cm: openingDipCm } : {}),
       ...(delegateReason ? { delegate_reason: delegateReason } : {}),
     })
     await authFetch(`${BASE}/tank-readings/dips?${params}`, { method: 'POST', headers: getAuthHeaders() })
