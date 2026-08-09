@@ -25,7 +25,9 @@ export interface TankDipsLoadResult {
 // Night check on the same date, matching the backend gate exactly.
 export async function loadTankDips(date: string, shiftType: string): Promise<TankDipsLoadResult> {
   const [tanksRes, dipsRes] = await Promise.all([
-    authFetch(`${BASE}/tanks/`, { headers: getAuthHeaders() }),
+    // Not "/tanks/" — that route doesn't exist (404), which used to silently
+    // make every shift look like it had zero tanks to gate on.
+    authFetch(`${BASE}/tanks/levels`, { headers: getAuthHeaders() }),
     authFetch(`${BASE}/tank-readings/dips?date=${date}&shift_type=${shiftType}`, { headers: getAuthHeaders() }),
   ])
   const tanks: TankInfo[] = tanksRes.ok ? await tanksRes.json() : []
