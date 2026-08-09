@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ReasonChips, { REASON_PRESETS } from '../components/ReasonChips'
+import TankDipsCapture from '../components/TankDipsCapture'
+import { loadTankDips } from '../lib/tankDips'
 import { getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import Pagination from '../components/Pagination'
@@ -148,6 +150,13 @@ export default function HandoverReview() {
 
   // Readings modal
   const [readingsModal, setReadingsModal] = useState<HandoverEntry | null>(null)
+
+  // Tank dips modal — shown when Close & Approve finds (or hits) missing dips.
+  // dipModalRetryClose distinguishes "opened from the proactive pre-check"
+  // (save -> open the cash form) from "opened after a 409 mid-submit"
+  // (save -> retry the close automatically, cash data is already filled in).
+  const [dipModalHandover, setDipModalHandover] = useState<HandoverEntry | null>(null)
+  const [dipModalRetryClose, setDipModalRetryClose] = useState(false)
 
   // Selection for batch-approve
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -517,9 +526,11 @@ export default function HandoverReview() {
       })
       if (!closeRes.ok) {
         if (closeRes.status === 409) {
-          // Blocked on missing tank dips — this form has no dip inputs, so send
-          // the manager to Shift Closing, which now forces dip entry first.
-          router.push(`/shift-closing?handover_id=${encodeURIComponent(h.handover_id)}`)
+          // Blocked on missing tank dips, discovered mid-submit (e.g. it changed
+          // since the pre-check). This form has no dip inputs, so open the modal
+          // in place — on save, retry this same close with the cash data intact.
+          setDipModalHandover(h)
+          setDipModalRetryClose(true)
           return
         }
         const err = await closeRes.json().catch(() => ({ detail: 'Closing failed' }))
@@ -551,6 +562,21 @@ export default function HandoverReview() {
     } finally {
       setClosingSubmitting(false)
     }
+  }
+
+  // Entry point for all "Close & Approve" buttons: check dips before ever
+  // showing the cash form, so a manager isn't blocked after filling it in.
+  const openCloseAndApprove = async (h: HandoverEntry) => {
+    if (closingFormId === h.handover_id) { setClosingFormId(null); return }
+    try {
+      const { allComplete } = await loadTankDips(h.date, h.shift_type)
+      if (!allComplete) {
+        setDipModalHandover(h)
+        setDipModalRetryClose(false)
+        return
+      }
+    } catch {}
+    setClosingFormId(h.handover_id)
   }
 
   const getExportConfig = (): ExportConfig | null => {
@@ -772,7 +798,7 @@ export default function HandoverReview() {
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => { setStatusTab('todo'); setClosingFormId(h.handover_id) }}
+                  <button onClick={() => { setStatusTab('todo'); openCloseAndApprove(h) }}
                     className="w-full min-h-[44px] px-2 py-1 text-sm font-medium rounded text-white"
                     style={{ backgroundColor: 'var(--color-action-primary)' }}>
                     Close & Approve
@@ -808,7 +834,7 @@ export default function HandoverReview() {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <button onClick={() => { setStatusTab('todo'); setClosingFormId(h.handover_id) }}
+                      <button onClick={() => { setStatusTab('todo'); openCloseAndApprove(h) }}
                         className="px-2 py-1 text-xs font-medium rounded text-white"
                         style={{ backgroundColor: 'var(--color-action-primary)' }}>
                         Close & Approve
@@ -920,7 +946,7 @@ export default function HandoverReview() {
                 <div className="flex gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
                   {isAwaiting ? (
                     <button
-                      onClick={() => setClosingFormId(closingFormId === h.handover_id ? null : h.handover_id)}
+                      onClick={() => openCloseAndApprove(h)}
                       className="min-h-[44px] px-3 py-1 text-sm font-medium rounded text-white"
                       style={{ backgroundColor: closingFormId === h.handover_id ? theme.textSecondary : 'var(--color-action-primary)' }}>
                       {closingFormId === h.handover_id ? 'Cancel' : 'Close & Approve'}
@@ -1112,7 +1138,7 @@ export default function HandoverReview() {
                     <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                       {isAwaiting ? (
                         <button
-                          onClick={() => setClosingFormId(closingFormId === h.handover_id ? null : h.handover_id)}
+                          onClick={() => openCloseAndApprove(h)}
                           className="px-2 py-1 text-xs font-medium rounded text-white"
                           style={{ backgroundColor: closingFormId === h.handover_id ? theme.textSecondary : 'var(--color-action-primary)' }}>
                           {closingFormId === h.handover_id ? 'Cancel' : 'Close & Approve'}
@@ -1335,6 +1361,52 @@ export default function HandoverReview() {
                 style={{ backgroundColor: 'var(--color-status-warning)' }}>
                 {actionLoading ? 'Returning...' : 'Confirm Return'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tank Dips Modal — shown instead of the cash form when dips are missing */}
+      {dipModalHandover && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setDipModalHandover(null)}>
+          <div className="rounded-lg shadow-xl w-full max-w-lg"
+            style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4"
+              style={{ borderBottomColor: theme.border, borderBottomWidth: 1 }}>
+              <div>
+                <div className="font-semibold text-base" style={{ color: theme.textPrimary }}>
+                  Tank Dips Required
+                </div>
+                <div className="text-xs mt-0.5" style={{ color: theme.textSecondary }}>
+                  {dipModalHandover.attendant_name} — {formatDateToDisplay(dipModalHandover.date)} {dipModalHandover.shift_type}
+                </div>
+              </div>
+              <button onClick={() => setDipModalHandover(null)}
+                className="text-lg leading-none px-2 py-1 rounded hover:bg-surface-bg"
+                style={{ color: theme.textSecondary }}>
+                x
+              </button>
+            </div>
+            <div className="p-5">
+              <TankDipsCapture
+                date={dipModalHandover.date}
+                shiftType={dipModalHandover.shift_type}
+                userRole={(() => {
+                  const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null
+                  return userData ? (JSON.parse(userData).role || '') : ''
+                })()}
+                continueLabel="Save & Continue"
+                onSaved={() => {
+                  const h = dipModalHandover
+                  const retry = dipModalRetryClose
+                  setDipModalHandover(null)
+                  if (!h) return
+                  if (retry) handleCloseAndApprove(h)
+                  else setClosingFormId(h.handover_id)
+                }}
+              />
             </div>
           </div>
         </div>

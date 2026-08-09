@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
+import TankDipsCapture from '../components/TankDipsCapture'
 import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
@@ -64,17 +65,10 @@ export default function ShiftClosing() {
   // Safe deposit info (display only)
   const [safeDepositTotal, setSafeDepositTotal] = useState(0)
 
-  // Tank dips
-  const [tanks, setTanks] = useState<{ tank_id: string; fuel_type: string; display_name: string }[]>([])
-  const [tankDips, setTankDips] = useState<Record<string, { closing_dip_cm: string; already_recorded: boolean }>>({})
-
   // Dips must be entered and saved before the rest of the close form is shown —
   // the manager is on-site right now, so this is the moment to force it.
+  // (Tank/dip data itself lives inside <TankDipsCapture>, not here.)
   const [step, setStep] = useState<'dips' | 'close'>('dips')
-
-  // Delegate path: a supervisor can record the closing dip when the manager
-  // isn't on-site, but must state why — logged and notified either way.
-  const [delegateReason, setDelegateReason] = useState('')
 
   // Co-attendants who haven't submitted readings yet (blocks closing any attendant on the shift)
   const [pendingAttendants, setPendingAttendants] = useState<{ attendant_id: string; attendant_name: string }[]>([])
@@ -127,27 +121,6 @@ export default function ShiftClosing() {
     } catch {}
   }
 
-  const loadDipsAndTanks = async (date: string) => {
-    try {
-      const [tanksRes, dipsRes] = await Promise.all([
-        authFetch(`${BASE}/tanks/`, { headers: getAuthHeaders() }),
-        authFetch(`${BASE}/tank-readings/dips-for-date?date=${date}`, { headers: getAuthHeaders() }),
-      ])
-      const tanksData = tanksRes.ok ? await tanksRes.json() : []
-      setTanks(tanksData)
-      const existingDips: any[] = dipsRes.ok ? await dipsRes.json() : []
-      const dipMap: Record<string, { closing_dip_cm: string; already_recorded: boolean }> = {}
-      for (const t of tanksData) {
-        const found = existingDips.find((d: any) => d.tank_id === t.tank_id)
-        dipMap[t.tank_id] = {
-          closing_dip_cm: found?.closing_dip_cm != null ? String(found.closing_dip_cm) : '',
-          already_recorded: found?.closing_dip_cm != null,
-        }
-      }
-      setTankDips(dipMap)
-    } catch {}
-  }
-
   // Manager: load a specific awaiting-closing handover directly (no my-shift call needed)
   const loadManagerData = async (handoverObj: any) => {
     setLoading(true)
@@ -163,10 +136,7 @@ export default function ShiftClosing() {
       status: handoverObj.status || 'active',
     })
     try {
-      await Promise.all([
-        loadSupportingData(handoverObj.shift_id),
-        loadDipsAndTanks(handoverObj.date),
-      ])
+      await loadSupportingData(handoverObj.shift_id)
     } catch (err: any) {
       setError(err.message || 'Failed to load supporting data')
     } finally {
@@ -201,10 +171,7 @@ export default function ShiftClosing() {
       }
 
       setHandover(shiftData.readings_verified_handover)
-      await Promise.all([
-        loadSupportingData(shiftData.shift?.shift_id || shiftId),
-        loadDipsAndTanks(shiftData.shift?.date || ''),
-      ])
+      await loadSupportingData(shiftData.shift?.shift_id || shiftId)
     } catch (err: any) {
       setError(err.message || 'Failed to load data')
     } finally {
@@ -284,48 +251,8 @@ export default function ShiftClosing() {
   const totalAccounted = actualCashVal + posTotal + creditVal
   const difference = totalAccounted - totalExpected
 
-  const allDipsEntered = tanks.length === 0 || tanks.every(t => (tankDips[t.tank_id]?.closing_dip_cm || '') !== '')
   const allAttendantsSubmitted = pendingAttendants.length === 0
-  const canSubmit = actualCash !== '' && allDipsEntered && allAttendantsSubmitted && !submitting
-  const isDelegate = userRole === 'supervisor'
-  const canContinueDips = allDipsEntered && (!isDelegate || delegateReason.trim() !== '')
-
-  // Stations with no tanks configured have nothing to gate on — skip straight to close.
-  const effectiveStep: 'dips' | 'close' = tanks.length === 0 ? 'close' : step
-
-  const saveDips = async () => {
-    const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null
-    const userId = userData ? JSON.parse(userData).user_id : ''
-    const shiftDate = shiftInfo?.date || handover.date || ''
-    const shiftType = shiftInfo?.shift_type || handover.shift_type || 'day'
-    for (const tank of tanks) {
-      const dip = tankDips[tank.tank_id]
-      if (!dip?.closing_dip_cm) continue
-      const params = new URLSearchParams({
-        tank_id: tank.tank_id,
-        date: shiftDate,
-        shift_type: shiftType,
-        recorded_by: userId,
-        closing_dip_cm: dip.closing_dip_cm,
-        ...(isDelegate ? { delegate_reason: delegateReason.trim() } : {}),
-      })
-      await authFetch(`${BASE}/tank-readings/dips?${params}`, { method: 'POST', headers: getAuthHeaders() })
-    }
-  }
-
-  const handleContinueFromDips = async () => {
-    if (!canContinueDips) return
-    setSubmitting(true)
-    setError('')
-    try {
-      await saveDips()
-      setStep('close')
-    } catch (err: any) {
-      setError(err.message || 'Failed to save tank dips')
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  const canSubmit = actualCash !== '' && allAttendantsSubmitted && !submitting
 
   const handleSubmit = async () => {
     if (!handover) return
@@ -337,11 +264,6 @@ export default function ShiftClosing() {
       .filter(i => i.amount > 0)
 
     try {
-      // Dips were already saved and confirmed in the "dips" step — re-save
-      // here too in case a value was edited after continuing, without
-      // re-blocking the rest of the form.
-      await saveDips()
-
       const res = await authFetch(`${BASE}/handover/submit-closing`, {
         method: 'POST',
         headers: getAuthHeaders(),
@@ -589,86 +511,35 @@ export default function ShiftClosing() {
           )}
 
           {/* Tank Dips — mandatory first step, gates everything below it */}
-          {tanks.length > 0 && effectiveStep === 'dips' && (
-            <div className="rounded-lg shadow p-4 mb-6" style={{ backgroundColor: theme.cardBg, borderColor: allDipsEntered ? theme.border : 'var(--color-status-warning)', borderWidth: allDipsEntered ? 1 : 2 }}>
+          {step === 'dips' && (
+            <div className="rounded-lg shadow p-4 mb-6" style={{ backgroundColor: theme.cardBg, borderColor: 'var(--color-status-warning)', borderWidth: 2 }}>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: theme.textSecondary }}>Tank Dips — Closing</h2>
                 <span className="text-xs font-medium px-2 py-0.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
                   Step 1 of 2 — required to continue
                 </span>
               </div>
-              <div className="space-y-3">
-                {tanks.map(tank => {
-                  const dip = tankDips[tank.tank_id] || { closing_dip_cm: '', already_recorded: false }
-                  return (
-                    <div key={tank.tank_id} className="flex items-center gap-3">
-                      <div className="flex-1 text-sm font-medium" style={{ color: theme.textPrimary }}>
-                        {tank.display_name || tank.fuel_type}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {dip.already_recorded && dip.closing_dip_cm !== '' && (
-                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }}>
-                            Recorded
-                          </span>
-                        )}
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.1"
-                            value={dip.closing_dip_cm}
-                            onChange={e => setTankDips(prev => ({ ...prev, [tank.tank_id]: { ...prev[tank.tank_id], closing_dip_cm: e.target.value, already_recorded: prev[tank.tank_id]?.already_recorded || false } }))}
-                            placeholder="cm"
-                            className="w-24 px-2 py-1.5 rounded border text-sm text-right font-mono"
-                            style={inputStyle}
-                          />
-                          <span className="text-xs" style={{ color: theme.textSecondary }}>cm</span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {isDelegate && (
-                <div className="mt-4 pt-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                  <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-                    Reason the manager is unavailable (required — logged, and the owner is notified)
-                  </label>
-                  <textarea
-                    value={delegateReason}
-                    onChange={e => setDelegateReason(e.target.value)}
-                    placeholder="e.g. Manager off-site attending to a supplier delivery at another station"
-                    rows={2}
-                    className="w-full px-3 py-2 rounded border text-sm"
-                    style={inputStyle}
-                  />
-                </div>
-              )}
-
-              <div className="mt-4 flex justify-end">
-                <button
-                  onClick={handleContinueFromDips}
-                  disabled={!canContinueDips || submitting}
-                  className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ backgroundColor: canContinueDips ? theme.primary : '#9ca3af' }}>
-                  {submitting ? 'Saving...' : 'Continue to Cash Reconciliation'}
-                </button>
-              </div>
+              <TankDipsCapture
+                date={shiftInfo?.date || handover.date || ''}
+                shiftType={shiftInfo?.shift_type || handover.shift_type || 'Day'}
+                userRole={userRole}
+                onSaved={() => setStep('close')}
+                continueLabel="Continue to Cash Reconciliation"
+              />
             </div>
           )}
 
           {/* Tank Dips — confirmed, past step 1 */}
-          {tanks.length > 0 && effectiveStep === 'close' && (
+          {step === 'close' && (
             <div className="rounded-lg shadow p-3 mb-6 flex justify-between items-center text-sm" style={{ backgroundColor: theme.cardBg, borderColor: 'var(--color-status-success)', borderWidth: 1 }}>
-              <span style={{ color: theme.textSecondary }}>Tank dips recorded for {tanks.length} tank{tanks.length !== 1 ? 's' : ''}</span>
+              <span style={{ color: theme.textSecondary }}>Tank dips recorded for this shift</span>
               <span className="text-xs font-medium px-2 py-0.5 rounded" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }}>
                 Done
               </span>
             </div>
           )}
 
-          {effectiveStep === 'close' && (
+          {step === 'close' && (
           <>
           {/* Safe Deposit Info (display only) */}
           {safeDepositTotal > 0 && (
