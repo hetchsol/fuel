@@ -18,6 +18,12 @@ export default function Settings() {
   })
   const [scheduledPrices, setScheduledPrices] = useState<any[]>([])
   const [scheduleForm, setScheduleForm] = useState({ fuel_type: 'Diesel', new_price_per_liter: '', effective_date: '', effective_time: '00:00' })
+  // Prices as last loaded from the server — diffed against `settings` on
+  // submit so a future effective date only schedules the price fields that
+  // actually changed, not the whole form.
+  const [originalPrices, setOriginalPrices] = useState({ diesel: 0, petrol: 0 })
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const [priceEffectiveDate, setPriceEffectiveDate] = useState(todayStr)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -128,7 +134,11 @@ export default function Settings() {
   const loadSettings = async () => {
     try {
       const res = await authFetch(`${BASE}/settings/fuel`, { headers: getHeaders() })
-      if (res.ok) setSettings(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        setSettings(data)
+        setOriginalPrices({ diesel: data.diesel_price_per_liter, petrol: data.petrol_price_per_liter })
+      }
     } catch (err) {
       console.error('Failed to load settings:', err)
     }
@@ -281,15 +291,59 @@ export default function Settings() {
     setLoading(true)
     setError('')
     setMessage('')
+    const isFutureDated = priceEffectiveDate && priceEffectiveDate > todayStr
     try {
-      const res = await authFetch(`${BASE}/settings/fuel`, {
-        method: 'PUT',
-        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      })
-      if (!res.ok) throw new Error('Failed to update settings')
-      await res.json()
-      setMessage('Settings updated successfully!')
+      if (isFutureDated) {
+        // Only the price fields defer to the effective date — allowable-loss
+        // percentages and the cash threshold apply immediately either way, so
+        // save those now with prices held at their current (unchanged) values,
+        // then schedule whichever price actually changed.
+        const immediateSettings = {
+          ...settings,
+          diesel_price_per_liter: originalPrices.diesel,
+          petrol_price_per_liter: originalPrices.petrol,
+        }
+        const res = await authFetch(`${BASE}/settings/fuel`, {
+          method: 'PUT',
+          headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(immediateSettings),
+        })
+        if (!res.ok) throw new Error('Failed to update settings')
+
+        const scheduleOne = async (fuel_type: string, new_price_per_liter: number) => {
+          const schedRes = await authFetch(`${BASE}/settings/fuel/schedule-price`, {
+            method: 'POST',
+            headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fuel_type, new_price_per_liter, effective_date: priceEffectiveDate, effective_time: '00:00' }),
+          })
+          if (!schedRes.ok) {
+            const err = await schedRes.json().catch(() => ({ detail: `Failed to schedule ${fuel_type} price` }))
+            throw new Error(err.detail || `Failed to schedule ${fuel_type} price`)
+          }
+        }
+        if (settings.diesel_price_per_liter !== originalPrices.diesel) {
+          await scheduleOne('Diesel', settings.diesel_price_per_liter)
+        }
+        if (settings.petrol_price_per_liter !== originalPrices.petrol) {
+          await scheduleOne('Petrol', settings.petrol_price_per_liter)
+        }
+        await loadScheduledPrices()
+        setMessage(
+          settings.diesel_price_per_liter !== originalPrices.diesel || settings.petrol_price_per_liter !== originalPrices.petrol
+            ? `Other settings saved. Price change scheduled for ${priceEffectiveDate}.`
+            : 'Settings updated successfully!'
+        )
+      } else {
+        const res = await authFetch(`${BASE}/settings/fuel`, {
+          method: 'PUT',
+          headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings),
+        })
+        if (!res.ok) throw new Error('Failed to update settings')
+        await res.json()
+        setOriginalPrices({ diesel: settings.diesel_price_per_liter, petrol: settings.petrol_price_per_liter })
+        setMessage('Settings updated successfully!')
+      }
       setTimeout(() => setMessage(''), 3000)
     } catch (err: any) {
       setError(err.message || 'Failed to update settings')
@@ -763,6 +817,21 @@ export default function Settings() {
                     <span className="absolute right-3 top-2 text-content-secondary">ZMW</span>
                   </div>
                 </div>
+              </div>
+              <div className="mt-4 max-w-xs">
+                <label className="block text-sm font-medium text-content-secondary mb-1">Effective Date</label>
+                <input
+                  type="date"
+                  value={priceEffectiveDate}
+                  min={todayStr}
+                  onChange={(e) => setPriceEffectiveDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                />
+                <p className="text-xs text-content-secondary mt-1">
+                  {priceEffectiveDate > todayStr
+                    ? `Price change takes effect automatically on ${priceEffectiveDate} at 00:00. Other settings below still save immediately.`
+                    : 'Today — price change applies as soon as you save.'}
+                </p>
               </div>
             </div>
 
