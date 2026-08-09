@@ -179,8 +179,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // Poll unread notification count for supervisors/owners
   const isSupervisorOrAbove = user && ['supervisor', 'manager', 'owner'].includes(user.role)
-  const isManagerOrAbove = user && ['manager', 'owner'].includes(user.role)
   const isSupervisorOrOwner = isSupervisorOrAbove  // backward compat alias
+
+  // Stale-closure gate applies to managers only, not owners — an owner has
+  // final accountability and may need to handle other things regardless of
+  // what's pending at one station; they still see the count via notifications.
+  const isManagerForClosureGate = user && user.role === 'manager'
 
   useEffect(() => {
     if (router.pathname === '/login' || router.pathname === '/setup') return
@@ -196,11 +200,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval)
   }, [isSupervisorOrOwner, router.pathname])
 
-  // Poll for stale awaiting-closing handovers — manager/owner only. The count
+  // Poll for stale awaiting-closing handovers — manager only. The count
   // (not the list) is enough here; handover-review is where they act on it.
   useEffect(() => {
     if (router.pathname === '/login' || router.pathname === '/setup' || router.pathname === '/initializing') return
-    if (!isManagerOrAbove) return
+    if (!isManagerForClosureGate) return
     const checkStaleClosures = () => {
       authFetch(`${BASE}/handover/review-queue`, { headers: getHeaders() })
         .then(r => r.ok ? r.json() : null)
@@ -210,7 +214,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     checkStaleClosures()
     const interval = setInterval(checkStaleClosures, 5 * 60 * 1000)
     return () => clearInterval(interval)
-  }, [isManagerOrAbove, router.pathname])
+  }, [isManagerForClosureGate, router.pathname])
 
   // Periodic deposit overdue check — every 5 minutes for all roles
   useEffect(() => {
@@ -522,7 +526,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Every screen is blocked except the one place a manager can actually clear
   // the backlog. Re-checked on every navigation, so it lifts itself the moment
   // the count drops to zero — no separate "unblock" action needed.
-  const closureBlockActive = isManagerOrAbove && staleClosureCount > 0 && router.pathname !== '/handover-review'
+  const closureBlockActive = isManagerForClosureGate && staleClosureCount > 0 && router.pathname !== '/handover-review'
 
   return (
     <div className="flex flex-col min-h-screen">
