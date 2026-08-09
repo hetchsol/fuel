@@ -118,6 +118,8 @@ const FLAG_LABELS: Record<string, string> = {
   cash_shortage: 'Cash Shortage',
   meter_deviation: 'Meter Deviation',
   pos_terminal_variance: 'POS Terminal Variance',
+  stock_variance_unexplained: 'Stock Variance',
+  nozzle_loss_exceeded: 'Nozzle Loss Exceeded',
 }
 
 export default function HandoverReview() {
@@ -157,6 +159,12 @@ export default function HandoverReview() {
   // (save -> retry the close automatically, cash data is already filled in).
   const [dipModalHandover, setDipModalHandover] = useState<HandoverEntry | null>(null)
   const [dipModalRetryClose, setDipModalRetryClose] = useState(false)
+
+  // Informational-only: co-attendants on the same shift who haven't submitted
+  // readings yet. Nothing to fix here except wait — no input, just a notice.
+  const [pendingAttendantsModal, setPendingAttendantsModal] = useState<
+    { handover: HandoverEntry; pending: { attendant_id: string; attendant_name: string }[] } | null
+  >(null)
 
   // Selection for batch-approve
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -574,6 +582,17 @@ export default function HandoverReview() {
         setDipModalHandover(h)
         setDipModalRetryClose(false)
         return
+      }
+    } catch {}
+    try {
+      const res = await authFetch(`${BASE}/handover/shift-submission-status/${encodeURIComponent(h.shift_id)}?bar=readings`, { headers: getAuthHeaders() })
+      if (res.ok) {
+        const status = await res.json()
+        const pending = status.pending || []
+        if (pending.length > 0) {
+          setPendingAttendantsModal({ handover: h, pending })
+          return
+        }
       }
     } catch {}
     setClosingFormId(h.handover_id)
@@ -1412,6 +1431,47 @@ export default function HandoverReview() {
         </div>
       )}
 
+      {/* Pending Attendants Modal — informational, nothing to submit; the manager
+          just has to wait for co-attendants on this shift to submit their readings */}
+      {pendingAttendantsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setPendingAttendantsModal(null)}>
+          <div className="rounded-lg shadow-xl w-full max-w-md"
+            style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4"
+              style={{ borderBottomColor: theme.border, borderBottomWidth: 1 }}>
+              <div>
+                <div className="font-semibold text-base" style={{ color: theme.textPrimary }}>
+                  Waiting on Other Attendants
+                </div>
+                <div className="text-xs mt-0.5" style={{ color: theme.textSecondary }}>
+                  {formatDateToDisplay(pendingAttendantsModal.handover.date)} — {pendingAttendantsModal.handover.shift_type} Shift
+                </div>
+              </div>
+              <button onClick={() => setPendingAttendantsModal(null)}
+                className="text-lg leading-none px-2 py-1 rounded hover:bg-surface-bg"
+                style={{ color: theme.textSecondary }}>
+                x
+              </button>
+            </div>
+            <div className="p-5">
+              <p className="text-sm" style={{ color: theme.textPrimary }}>
+                {pendingAttendantsModal.pending.map(a => a.attendant_name).join(', ')} still need to submit
+                readings before any attendant on this shift can be closed.
+              </p>
+              <div className="mt-4 flex justify-end">
+                <button onClick={() => setPendingAttendantsModal(null)}
+                  className="px-4 py-2 text-sm font-medium rounded text-white"
+                  style={{ backgroundColor: 'var(--color-action-primary)' }}>
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Approve Flagged Modal — a justification note is required */}
       {approveModalId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -1492,6 +1552,15 @@ function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
 
   return (
     <div className="p-4 space-y-4">
+      {/* Flagged heads-up — approving still requires a note, same as everywhere else; this
+          just avoids that being a surprise after filling in the whole form. */}
+      {h.auto_flag_reasons && h.auto_flag_reasons.length > 0 && (
+        <div className="rounded-lg p-3 text-sm"
+          style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)', borderWidth: 1, borderColor: 'var(--color-status-warning)' }}>
+          This shift is flagged: {h.auto_flag_reasons.map(f => FLAG_LABELS[f] || f).join(', ')}. Approving it will require a note.
+        </div>
+      )}
+
       {/* Phase 1 summary — context for the manager */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 rounded-lg text-sm"
         style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border }}>
@@ -1521,6 +1590,19 @@ function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
             onChange={e => onCashChange(e.target.value)}
             className="w-full px-3 py-2 rounded border text-sm text-right font-mono"
             style={inputStyle} />
+          {/* Informational only — deposits are a subset of total cash, not necessarily
+              equal to it, so this is context for the manager's own judgment, not a rule. */}
+          {safeDeposit > 0 && cash !== '' && (
+            <div className="mt-1.5 text-xs font-mono flex gap-3">
+              <span style={{ color: theme.textSecondary }}>Safe deposits: {fmtK(safeDeposit)}</span>
+              <span style={{ color: theme.textSecondary }}>Cash entered: {fmtK(cashVal)}</span>
+              {cashVal < safeDeposit && (
+                <span style={{ color: 'var(--color-status-warning)', fontWeight: 600 }}>
+                  Entered cash is less than recorded deposits
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
