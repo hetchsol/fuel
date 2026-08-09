@@ -1380,7 +1380,7 @@ export default function HandoverReview() {
                   Tank Dips Required
                 </div>
                 <div className="text-xs mt-0.5" style={{ color: theme.textSecondary }}>
-                  {dipModalHandover.attendant_name} — {formatDateToDisplay(dipModalHandover.date)} {dipModalHandover.shift_type}
+                  {formatDateToDisplay(dipModalHandover.date)} — {dipModalHandover.shift_type} Shift
                 </div>
               </div>
               <button onClick={() => setDipModalHandover(null)}

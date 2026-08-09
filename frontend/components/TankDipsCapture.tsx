@@ -74,11 +74,14 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
       )}
       <div className="space-y-3">
         {tanks.map(tank => {
-          const dip = dips[tank.tank_id] || { closing_dip_cm: '', already_recorded: false }
+          const dip = dips[tank.tank_id] || { opening_dip_cm: null, closing_dip_cm: '', already_recorded: false }
           return (
             <div key={tank.tank_id} className="flex items-center gap-3">
               <div className="flex-1 text-sm font-medium" style={{ color: theme.textPrimary }}>
                 {tank.display_name || tank.fuel_type}
+              </div>
+              <div className="text-xs text-right" style={{ color: theme.textSecondary, minWidth: 90 }}>
+                Opening: {dip.opening_dip_cm != null ? `${dip.opening_dip_cm} cm` : '—'}
               </div>
               <div className="flex items-center gap-2">
                 {dip.already_recorded && dip.closing_dip_cm !== '' && (
@@ -93,8 +96,8 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
                     step="0.1"
                     value={dip.closing_dip_cm}
                     onChange={e => setDips(prev => ({ ...prev, [tank.tank_id]: { ...prev[tank.tank_id], closing_dip_cm: e.target.value, already_recorded: prev[tank.tank_id]?.already_recorded || false } }))}
-                    placeholder="cm"
-                    className="w-24 px-2 py-1.5 rounded border text-sm text-right font-mono"
+                    placeholder="closing cm"
+                    className="w-28 px-2 py-1.5 rounded border text-sm text-right font-mono"
                     style={inputStyle}
                   />
                   <span className="text-xs" style={{ color: theme.textSecondary }}>cm</span>

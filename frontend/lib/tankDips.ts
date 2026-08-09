@@ -11,6 +11,7 @@ export interface TankInfo {
 }
 
 export interface TankDipState {
+  opening_dip_cm: string | null
   closing_dip_cm: string
   already_recorded: boolean
 }
@@ -36,6 +37,7 @@ export async function loadTankDips(date: string, shiftType: string): Promise<Tan
   for (const t of tanks) {
     const found = existingDips.find((d: any) => d.tank_id === t.tank_id)
     dips[t.tank_id] = {
+      opening_dip_cm: found?.opening_dip_cm != null ? String(found.opening_dip_cm) : null,
       closing_dip_cm: found?.closing_dip_cm != null ? String(found.closing_dip_cm) : '',
       already_recorded: found?.closing_dip_cm != null,
     }
