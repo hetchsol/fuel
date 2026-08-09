@@ -19,7 +19,7 @@ from ...config import resolve_fuel_price, resolve_fuel_price_for_shift, apply_du
 from ...database.storage import get_nozzle, get_tank_id_for_nozzle, save_station_storage
 from ...services.inventory import process_credit_sale
 from .accounts import generate_client_code, generate_auth_reference
-from .auth import get_current_user, require_supervisor_or_owner, require_manager_or_owner, get_station_context
+from .auth import get_current_user, require_supervisor_or_owner, require_manager_or_owner, require_owner, get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
 from ...services.shift_status import assert_shift_editable, advance_shift_on_approval
@@ -1207,6 +1207,88 @@ def _create_reconciliation(nozzle_summaries, lpg_sales, lubricant_sales, accesso
         _save_reconciliation_entry(recon_entry, station_id, storage)
     except Exception:
         pass  # Non-critical
+
+
+def admin_override_close(
+    station_id: str, handover_ids: list, reason: str,
+    performed_by: str, performed_by_name: str, storage: dict,
+) -> tuple:
+    """
+    Owner-only administrative closure for a backlog of stuck handovers — no
+    real cash count, no dip verification. Carries the *expected* figures
+    forward (difference=0) rather than fabricating a verified reconciliation,
+    and stamps every record with an admin_override marker so it stays
+    permanently distinguishable from a real close wherever it's viewed later.
+
+    Replicates the end state of submit_closing + review_handover(approve) in
+    one step per handover; skips (does not raise on) anything not eligible so
+    one stale id in a bulk selection doesn't abort the rest of the batch.
+    Returns (closed: list[handover_id], skipped: list[{handover_id, reason}]).
+    """
+    handovers = _load_handovers(station_id)
+    shifts_data = storage.get("shifts", {})
+    closed, skipped = [], []
+    now_iso = datetime.now().isoformat()
+
+    for handover_id in handover_ids:
+        handover = handovers.get(handover_id)
+        if not handover:
+            skipped.append({"handover_id": handover_id, "reason": "Handover not found"})
+            continue
+        if handover.get("phase") != "readings_verified":
+            skipped.append({"handover_id": handover_id, "reason": f"Not awaiting closing (phase={handover.get('phase')})"})
+            continue
+
+        shift_id = handover.get("shift_id", "")
+        total_expected = handover.get("total_expected", 0)
+        credit_sales = handover.get("credit_sales", 0) or 0
+        expected_cash = round(total_expected - credit_sales, 2)
+
+        handover["phase"] = "completed"
+        handover["phase_2_completed_at"] = now_iso
+        handover["actual_cash"] = expected_cash
+        handover["expected_cash"] = expected_cash
+        handover["total_accounted"] = total_expected
+        handover["difference"] = 0
+        handover["review_status"] = "approved"
+        handover["admin_override"] = {
+            "reason": reason,
+            "overridden_by": performed_by,
+            "overridden_by_name": performed_by_name,
+            "overridden_at": now_iso,
+        }
+        handover["supervisor_review"] = {
+            "reviewed_by": performed_by,
+            "reviewed_by_name": performed_by_name,
+            "reviewed_at": now_iso,
+            "action": "approve",
+            "note": f"[Administrative override] {reason}",
+        }
+        _save_handovers(handovers, station_id)
+
+        try:
+            apply_handover_sales(station_id, handover, performed_by)
+        except Exception:
+            pass  # Stock sync is best-effort — must not block the close itself.
+
+        nozzle_summaries = [HandoverNozzleReadingSummary(**ns) for ns in handover.get("nozzle_summaries", [])]
+        shift = shifts_data.get(shift_id, {})
+        _create_reconciliation(
+            nozzle_summaries, handover.get("lpg_sales", 0), handover.get("lubricant_sales", 0),
+            handover.get("accessory_sales", 0), credit_sales, expected_cash, expected_cash,
+            0, shift, handover.get("attendant_id", ""), handover.get("attendant_name", ""),
+            station_id, storage, f"[Administrative override] {reason}")
+
+        advance_shift_on_approval(shift_id, station_id, storage, performed_by)
+
+        log_audit_event(
+            station_id=station_id, action="handover_admin_override_close",
+            performed_by=performed_by, entity_type="handover", entity_id=handover_id,
+            details={"shift_id": shift_id, "reason": reason, "total_expected": total_expected},
+        )
+        closed.append(handover_id)
+
+    return closed, skipped
 
 
 def _update_nozzle_state(nozzle_readings, storage, shift_date=None, shift_type=None, attendant_name=None):
@@ -3153,6 +3235,38 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
         )
 
     return {"status": "success", "review_status": handover["review_status"], "handover_id": data.handover_id}
+
+
+class AdminOverrideCloseInput(BaseModel):
+    handover_ids: List[str]
+    reason: str
+
+
+@router.post("/admin-override-close", dependencies=[Depends(require_owner)])
+async def admin_override_close_endpoint(data: AdminOverrideCloseInput, ctx: dict = Depends(get_station_context)):
+    """
+    Owner-only bulk administrative closure for a stuck backlog — see
+    admin_override_close() for what this does and doesn't verify.
+    """
+    if not (data.reason or "").strip():
+        raise HTTPException(status_code=400, detail="A reason is required to administratively close shifts.")
+    if not data.handover_ids:
+        raise HTTPException(status_code=400, detail="No shifts selected")
+
+    station_id = ctx["station_id"]
+    closed, skipped = admin_override_close(
+        station_id, data.handover_ids, data.reason.strip(), ctx["username"], ctx["full_name"], ctx["storage"])
+
+    if closed:
+        create_notification(
+            station_id=station_id, type="HANDOVER_ADMIN_OVERRIDE_CLOSE", severity="high",
+            title="Shifts Administratively Closed",
+            message=f"{ctx['full_name']} administratively closed {len(closed)} shift(s) without cash/dip "
+                    f"verification. Reason: {data.reason.strip()}",
+            entity_type="handover", created_by=ctx["username"],
+        )
+
+    return {"status": "success", "closed": closed, "skipped": skipped}
 
 
 @router.post("/batch-approve")

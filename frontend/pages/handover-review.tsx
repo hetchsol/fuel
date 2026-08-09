@@ -97,6 +97,7 @@ interface HandoverEntry {
     note?: string
   } | null
   auto_flag_reasons?: string[] | null
+  admin_override?: { reason: string; overridden_by_name: string; overridden_at: string } | null
   notes?: string | null
   created_at: string
   stock_snapshot?: any
@@ -166,6 +167,15 @@ export default function HandoverReview() {
     { handover: HandoverEntry; pending: { attendant_id: string; attendant_name: string }[] } | null
   >(null)
 
+  // Owner-only bulk administrative override for a stuck Awaiting Closing backlog.
+  // Separate selection set from `selectedIds` (used by the pending-tab batch
+  // approve) so the two don't interfere with each other.
+  const [overrideSelectedIds, setOverrideSelectedIds] = useState<Set<string>>(new Set())
+  const [overrideModalOpen, setOverrideModalOpen] = useState(false)
+  const [overrideReason, setOverrideReason] = useState('')
+  const [overrideLoading, setOverrideLoading] = useState(false)
+  const [overrideError, setOverrideError] = useState('')
+
   // Selection for batch-approve
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -192,6 +202,8 @@ export default function HandoverReview() {
   const [fuelPrices, setFuelPrices] = useState<Record<string, number>>({ Diesel: 0, Petrol: 0 })
   const [posTypes, setPosTypes] = useState<{ type_id: string; name: string; is_active: boolean }[]>([])
 
+  const [currentUserRole, setCurrentUserRole] = useState('')
+
   // Auth check
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -200,6 +212,7 @@ export default function HandoverReview() {
       if (user.role !== 'supervisor' && user.role !== 'manager' && user.role !== 'owner') {
         router.push('/')
       }
+      setCurrentUserRole(user.role || '')
     } else {
       router.push('/login')
     }
@@ -598,6 +611,47 @@ export default function HandoverReview() {
     setClosingFormId(h.handover_id)
   }
 
+  const toggleOverrideSelectAll = () => {
+    const ids = awaitingClosing.map(h => h.handover_id)
+    setOverrideSelectedIds(prev => prev.size === ids.length ? new Set() : new Set(ids))
+  }
+
+  const toggleOverrideRow = (id: string) => {
+    setOverrideSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleAdminOverrideClose = async () => {
+    if (!overrideReason.trim() || overrideSelectedIds.size === 0) return
+    setOverrideLoading(true)
+    setOverrideError('')
+    try {
+      const res = await authFetch(`${BASE}/handover/admin-override-close`, {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handover_ids: Array.from(overrideSelectedIds), reason: overrideReason.trim() }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Failed to close shifts' }))
+        throw new Error(err.detail || 'Failed to close shifts')
+      }
+      const data = await res.json()
+      setOverrideModalOpen(false)
+      setOverrideReason('')
+      setOverrideSelectedIds(new Set())
+      setSuccessMsg(`${data.closed.length} shift(s) administratively closed.${data.skipped.length ? ` ${data.skipped.length} skipped (no longer awaiting closing).` : ''}`)
+      fetchQueue()
+    } catch (err: any) {
+      setOverrideError(err.message || 'Failed to close shifts')
+    } finally {
+      setOverrideLoading(false)
+    }
+  }
+
   const getExportConfig = (): ExportConfig | null => {
     if (displayedHandovers.length === 0) return null
     const tabLabel: Record<string, string> = {
@@ -780,6 +834,24 @@ export default function HandoverReview() {
 
       {/* Awaiting Closing list — Phase-1 handovers not yet closed (no financials yet) */}
       {statusTab === 'awaiting' && (
+        <>
+        {currentUserRole === 'owner' && overrideSelectedIds.size > 0 && (
+          <div className="flex items-center gap-3 p-3 mb-3 rounded-lg"
+            style={{ backgroundColor: 'var(--color-status-warning-light)', borderWidth: 1, borderColor: 'var(--color-status-warning)' }}>
+            <span className="text-sm font-medium" style={{ color: 'var(--color-status-warning)' }}>
+              {overrideSelectedIds.size} selected
+            </span>
+            <button onClick={() => setOverrideModalOpen(true)}
+              className="px-4 py-1.5 text-sm font-medium rounded text-white"
+              style={{ backgroundColor: 'var(--color-status-warning)' }}>
+              Override Close Selected (Owner)
+            </button>
+            <button onClick={() => setOverrideSelectedIds(new Set())}
+              className="text-sm" style={{ color: 'var(--color-status-warning)' }}>
+              Clear
+            </button>
+          </div>
+        )}
         <div className="rounded-lg shadow overflow-x-auto"
           style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
           {awaitingClosing.length === 0 ? (
@@ -793,7 +865,13 @@ export default function HandoverReview() {
               {awaitingClosing.slice((awaitingPage - 1) * PAGE_SIZE, awaitingPage * PAGE_SIZE).map(h => (
                 <div key={h.handover_id} className="rounded-lg p-3" style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }}>
                   <div className="flex items-center justify-between mb-2 gap-2">
-                    <span className="font-semibold text-sm" style={{ color: theme.textPrimary }}>{h.attendant_name}</span>
+                    <span className="flex items-center gap-2">
+                      {currentUserRole === 'owner' && (
+                        <input type="checkbox" checked={overrideSelectedIds.has(h.handover_id)}
+                          onChange={() => toggleOverrideRow(h.handover_id)} />
+                      )}
+                      <span className="font-semibold text-sm" style={{ color: theme.textPrimary }}>{h.attendant_name}</span>
+                    </span>
                     {h.is_stale && (
                       <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold shrink-0"
                         style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
@@ -829,6 +907,13 @@ export default function HandoverReview() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>
+                  {currentUserRole === 'owner' && (
+                    <th className="px-3 py-2 w-8">
+                      <input type="checkbox"
+                        checked={overrideSelectedIds.size === awaitingClosing.length && awaitingClosing.length > 0}
+                        onChange={toggleOverrideSelectAll} />
+                    </th>
+                  )}
                   {['Date', 'Shift', 'Attendant', 'Waiting', '', 'Action'].map((h, i) => (
                     <th key={i} className="px-3 py-2 text-left text-xs font-medium uppercase whitespace-nowrap"
                       style={{ color: theme.textSecondary }}>{h}</th>
@@ -838,6 +923,12 @@ export default function HandoverReview() {
               <tbody>
                 {awaitingClosing.slice((awaitingPage - 1) * PAGE_SIZE, awaitingPage * PAGE_SIZE).map(h => (
                   <tr key={h.handover_id} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    {currentUserRole === 'owner' && (
+                      <td className="px-3 py-2">
+                        <input type="checkbox" checked={overrideSelectedIds.has(h.handover_id)}
+                          onChange={() => toggleOverrideRow(h.handover_id)} />
+                      </td>
+                    )}
                     <td className="px-3 py-2" style={{ color: theme.textPrimary }}>{formatDateToDisplay(h.date)}</td>
                     <td className="px-3 py-2" style={{ color: theme.textSecondary }}>{h.shift_type}</td>
                     <td className="px-3 py-2 font-medium" style={{ color: theme.textPrimary }}>{h.attendant_name}</td>
@@ -868,6 +959,7 @@ export default function HandoverReview() {
             </>
           )}
         </div>
+        </>
       )}
 
       {/* Handover table */}
@@ -907,6 +999,13 @@ export default function HandoverReview() {
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-medium shrink-0"
                       style={{ backgroundColor: styleMap.bg, color: styleMap.color }}>
                       {styleMap.label}
+                    </span>
+                  )}
+                  {h.admin_override && (
+                    <span className="inline-block px-2 py-0.5 rounded text-xs font-medium shrink-0"
+                      style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}
+                      title={`Reason: ${h.admin_override.reason}`}>
+                      Admin Override
                     </span>
                   )}
                 </div>
@@ -1151,6 +1250,13 @@ export default function HandoverReview() {
                         <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
                           style={{ backgroundColor: styleMap.bg, color: styleMap.color }}>
                           {styleMap.label}
+                        </span>
+                      )}
+                      {h.admin_override && (
+                        <span className="inline-block ml-1 px-2 py-0.5 rounded text-xs font-medium"
+                          style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}
+                          title={`Reason: ${h.admin_override.reason}`}>
+                          Admin Override
                         </span>
                       )}
                     </td>
@@ -1412,10 +1518,7 @@ export default function HandoverReview() {
               <TankDipsCapture
                 date={dipModalHandover.date}
                 shiftType={dipModalHandover.shift_type}
-                userRole={(() => {
-                  const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null
-                  return userData ? (JSON.parse(userData).role || '') : ''
-                })()}
+                userRole={currentUserRole}
                 continueLabel="Save & Continue"
                 onSaved={() => {
                   const h = dipModalHandover
@@ -1502,6 +1605,50 @@ export default function HandoverReview() {
                 className="px-4 py-2 text-sm font-medium rounded text-white disabled:opacity-50"
                 style={{ backgroundColor: 'var(--color-status-success)' }}>
                 {actionLoading ? 'Approving...' : 'Confirm Approve'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Override Close Modal — bulk, owner only, reason required */}
+      {overrideModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="rounded-lg shadow-lg p-6 w-full max-w-md"
+            style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+            <h3 className="text-lg font-semibold mb-3" style={{ color: theme.textPrimary }}>
+              Administratively Close {overrideSelectedIds.size} Shift{overrideSelectedIds.size !== 1 ? 's' : ''}
+            </h3>
+            <p className="text-sm mb-3" style={{ color: theme.textSecondary }}>
+              This closes the selected shifts using expected figures — no tank dip or cash verification.
+              It's permanently marked as an administrative override, not a real reconciliation. A reason is
+              required and recorded in the audit trail.
+            </p>
+            <textarea
+              rows={3}
+              value={overrideReason}
+              onChange={e => setOverrideReason(e.target.value)}
+              placeholder="Reason for administratively closing these shifts (required)"
+              className="w-full px-3 py-2 text-sm rounded border resize-none"
+              style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}
+            />
+            {overrideError && (
+              <div className="text-xs p-2 mt-2 rounded"
+                style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)' }}>
+                {overrideError}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => { setOverrideModalOpen(false); setOverrideError('') }}
+                className="px-4 py-2 text-sm rounded"
+                style={{ color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
+                Cancel
+              </button>
+              <button onClick={handleAdminOverrideClose}
+                disabled={!overrideReason.trim() || overrideLoading}
+                className="px-4 py-2 text-sm font-medium rounded text-white disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-status-warning)' }}>
+                {overrideLoading ? 'Closing...' : 'Confirm Override Close'}
               </button>
             </div>
           </div>
