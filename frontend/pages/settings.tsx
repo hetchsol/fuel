@@ -4,7 +4,7 @@ import { getHeaders, authFetch } from '../lib/api'
 
 const BASE = '/api/v1'
 
-type SettingsTab = 'system' | 'fuel' | 'tax-levy' | 'validation' | 'stock-alerts' | 'recon-tolerances' | 'email' | 'tank-calibration' | 'pos'
+type SettingsTab = 'system' | 'fuel' | 'price-corrections' | 'tax-levy' | 'validation' | 'stock-alerts' | 'recon-tolerances' | 'email' | 'tank-calibration' | 'pos'
 
 export default function Settings() {
   const router = useRouter()
@@ -24,6 +24,17 @@ export default function Settings() {
   const [originalPrices, setOriginalPrices] = useState({ diesel: 0, petrol: 0 })
   const todayStr = new Date().toISOString().slice(0, 10)
   const [priceEffectiveDate, setPriceEffectiveDate] = useState(todayStr)
+
+  // Retroactive price correction (separate adjustment records, originals untouched)
+  const [pcFuelType, setPcFuelType] = useState<'Diesel' | 'Petrol'>('Diesel')
+  const [pcNewPrice, setPcNewPrice] = useState('')
+  const [pcLoading, setPcLoading] = useState(false)
+  const [pcApplying, setPcApplying] = useState(false)
+  const [pcError, setPcError] = useState('')
+  const [pcPreview, setPcPreview] = useState<any>(null)
+  const [pcSelectedIds, setPcSelectedIds] = useState<Set<string>>(new Set())
+  const [pcHistory, setPcHistory] = useState<any[]>([])
+  const [pcHistoryLoading, setPcHistoryLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -129,6 +140,10 @@ export default function Settings() {
     loadPosSettings()
   }, [])
 
+  useEffect(() => {
+    if (activeTab === 'price-corrections') loadPcHistory()
+  }, [activeTab])
+
   // ── Loaders ──────────────────────────────────────────────
 
   const loadSettings = async () => {
@@ -192,6 +207,83 @@ export default function Settings() {
         loadScheduledPrices()
       }
     } catch {}
+  }
+
+  const loadPcHistory = async () => {
+    setPcHistoryLoading(true)
+    try {
+      const res = await authFetch(`${BASE}/settings/fuel/corrections`, { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setPcHistory(data.corrections || [])
+      }
+    } catch {} finally {
+      setPcHistoryLoading(false)
+    }
+  }
+
+  const handlePcPreview = async () => {
+    const price = parseFloat(pcNewPrice)
+    if (!price || price <= 0) { setPcError('Enter a valid new price'); return }
+    setPcLoading(true)
+    setPcError('')
+    setPcPreview(null)
+    setPcSelectedIds(new Set())
+    try {
+      const res = await authFetch(`${BASE}/settings/fuel/correction-preview?fuel_type=${pcFuelType}&new_price=${price}`, { headers: getHeaders() })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Failed to preview' }))
+        throw new Error(err.detail || 'Failed to preview')
+      }
+      const data = await res.json()
+      setPcPreview(data)
+      setPcSelectedIds(new Set(data.rows.map((r: any) => r.handover_id)))
+    } catch (err: any) {
+      setPcError(err.message || 'Failed to preview')
+    } finally {
+      setPcLoading(false)
+    }
+  }
+
+  const togglePcSelectAll = () => {
+    if (!pcPreview) return
+    if (pcSelectedIds.size === pcPreview.rows.length) setPcSelectedIds(new Set())
+    else setPcSelectedIds(new Set(pcPreview.rows.map((r: any) => r.handover_id)))
+  }
+
+  const togglePcRow = (id: string) => {
+    setPcSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handlePcApply = async (handoverIds: string[]) => {
+    if (handoverIds.length === 0) return
+    setPcApplying(true)
+    setPcError('')
+    try {
+      const price = parseFloat(pcNewPrice)
+      const res = await authFetch(`${BASE}/settings/fuel/corrections/apply`, {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fuel_type: pcFuelType, new_price: price, handover_ids: handoverIds }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Failed to apply correction' }))
+        throw new Error(err.detail || 'Failed to apply correction')
+      }
+      setMessage(`Correction applied to ${handoverIds.length} shift(s).`)
+      setTimeout(() => setMessage(''), 3000)
+      await handlePcPreview()
+      await loadPcHistory()
+    } catch (err: any) {
+      setPcError(err.message || 'Failed to apply correction')
+    } finally {
+      setPcApplying(false)
+    }
   }
 
   const loadSystemSettings = async () => {
@@ -608,6 +700,7 @@ export default function Settings() {
   const allTabs: { id: SettingsTab; label: string }[] = [
     { id: 'system', label: 'System Information' },
     { id: 'fuel', label: 'Fuel Settings' },
+    { id: 'price-corrections', label: 'Price Corrections' },
     { id: 'tax-levy', label: 'Tax & Levy' },
     { id: 'validation', label: 'Validation Thresholds' },
     { id: 'stock-alerts', label: 'Stock Alerts' },
@@ -1012,6 +1105,181 @@ export default function Settings() {
               <li>Losses exceeding these thresholds will be flagged in delivery reports</li>
               <li>These settings are used to validate stock movements and calculate expected inventory</li>
             </ul>
+          </div>
+        </div>
+      )}
+
+      {/* ── Price Corrections Tab ── */}
+      {activeTab === 'price-corrections' && (
+        <div className="bg-surface-card rounded-lg shadow p-6">
+          <div className="space-y-6">
+            <div className="border-b pb-4">
+              <h2 className="text-xl font-semibold text-content-primary mb-2">Retroactive Price Correction</h2>
+              <p className="text-sm text-content-secondary">
+                Find shifts closed since the last price change and see what their revenue would be at the
+                new price. Applying creates a separate correction record for reference — the original
+                shift data is never changed.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-xs font-medium text-content-secondary mb-1">Fuel Type</label>
+                <select value={pcFuelType}
+                  onChange={e => { setPcFuelType(e.target.value as 'Diesel' | 'Petrol'); setPcPreview(null) }}
+                  className="px-3 py-2 border border-surface-border rounded-md text-sm">
+                  <option value="Diesel">Diesel</option>
+                  <option value="Petrol">Petrol</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-content-secondary mb-1">New Price (ZMW)</label>
+                <input type="number" step="0.01" min="0" value={pcNewPrice}
+                  onChange={e => setPcNewPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="px-3 py-2 border border-surface-border rounded-md text-sm w-32" />
+              </div>
+              <button type="button" onClick={handlePcPreview} disabled={pcLoading || !pcNewPrice}
+                className="px-4 py-2 bg-action-primary text-white rounded-md text-sm font-medium disabled:opacity-50">
+                {pcLoading ? 'Checking...' : 'Preview'}
+              </button>
+            </div>
+
+            {pcError && (
+              <div className="p-3 bg-status-error-light border border-status-error rounded-md">
+                <p className="text-sm text-status-error">{pcError}</p>
+              </div>
+            )}
+
+            {pcPreview && (
+              <div>
+                {!pcPreview.boundary_found ? (
+                  <p className="text-sm text-content-secondary">
+                    No prior price change found on record for {pcFuelType} — nothing to auto-detect a range from.
+                  </p>
+                ) : pcPreview.rows.length === 0 ? (
+                  <p className="text-sm text-content-secondary">
+                    No outstanding shifts since {pcPreview.since?.slice(0, 10)} (previous price K{pcPreview.old_price}) —
+                    everything is already at the current price or already corrected.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-sm text-content-secondary mb-3">
+                      Previous price K{pcPreview.old_price}/L effective from {pcPreview.since?.slice(0, 10)}.{' '}
+                      {pcPreview.rows.length} shift(s) affected.
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-surface-bg">
+                            <th className="px-2 py-2 text-left">
+                              <input type="checkbox"
+                                checked={pcSelectedIds.size === pcPreview.rows.length && pcPreview.rows.length > 0}
+                                onChange={togglePcSelectAll} />
+                            </th>
+                            <th className="px-2 py-2 text-left">Date</th>
+                            <th className="px-2 py-2 text-left">Shift</th>
+                            <th className="px-2 py-2 text-left">Attendant</th>
+                            <th className="px-2 py-2 text-right">Old Revenue</th>
+                            <th className="px-2 py-2 text-right">New Revenue</th>
+                            <th className="px-2 py-2 text-right">Variance</th>
+                            {currentUserRole === 'owner' && <th className="px-2 py-2 text-right">Action</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pcPreview.rows.map((r: any) => (
+                            <tr key={r.handover_id} className="border-b border-surface-border">
+                              <td className="px-2 py-2">
+                                <input type="checkbox" checked={pcSelectedIds.has(r.handover_id)}
+                                  onChange={() => togglePcRow(r.handover_id)} />
+                              </td>
+                              <td className="px-2 py-2">{r.date}</td>
+                              <td className="px-2 py-2">{r.shift_type}</td>
+                              <td className="px-2 py-2">{r.attendant_name}</td>
+                              <td className="px-2 py-2 text-right font-mono">K{r.old_revenue.toFixed(2)}</td>
+                              <td className="px-2 py-2 text-right font-mono">K{r.new_revenue.toFixed(2)}</td>
+                              <td className={`px-2 py-2 text-right font-mono ${r.variance >= 0 ? 'text-status-success' : 'text-status-error'}`}>
+                                {r.variance >= 0 ? '+' : ''}K{r.variance.toFixed(2)}
+                              </td>
+                              {currentUserRole === 'owner' && (
+                                <td className="px-2 py-2 text-right">
+                                  <button type="button" disabled={pcApplying} onClick={() => handlePcApply([r.handover_id])}
+                                    className="px-2 py-1 text-xs font-medium rounded bg-action-primary text-white disabled:opacity-50">
+                                    Apply
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="font-semibold">
+                            <td colSpan={4} className="px-2 py-2 text-right">Total</td>
+                            <td className="px-2 py-2 text-right font-mono">K{pcPreview.total_old_revenue.toFixed(2)}</td>
+                            <td className="px-2 py-2 text-right font-mono">K{pcPreview.total_new_revenue.toFixed(2)}</td>
+                            <td className="px-2 py-2 text-right font-mono">
+                              {pcPreview.total_variance >= 0 ? '+' : ''}K{pcPreview.total_variance.toFixed(2)}
+                            </td>
+                            {currentUserRole === 'owner' && <td />}
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    {currentUserRole === 'owner' ? (
+                      <div className="mt-4 flex justify-end">
+                        <button type="button" disabled={pcApplying || pcSelectedIds.size === 0}
+                          onClick={() => handlePcApply(Array.from(pcSelectedIds))}
+                          className="px-4 py-2 bg-action-primary text-white rounded-md text-sm font-medium disabled:opacity-50">
+                          {pcApplying ? 'Applying...' : `Apply Selected (${pcSelectedIds.size})`}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-content-secondary mt-3">Only an owner can apply a correction.</p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Correction History */}
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold text-content-primary mb-3">Correction History</h3>
+              {pcHistoryLoading ? (
+                <p className="text-sm text-content-secondary">Loading...</p>
+              ) : pcHistory.length === 0 ? (
+                <p className="text-sm text-content-secondary">No corrections applied yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-surface-bg">
+                        <th className="px-2 py-2 text-left">Applied</th>
+                        <th className="px-2 py-2 text-left">Shift Date</th>
+                        <th className="px-2 py-2 text-left">Fuel</th>
+                        <th className="px-2 py-2 text-right">New Price</th>
+                        <th className="px-2 py-2 text-right">Variance</th>
+                        <th className="px-2 py-2 text-left">By</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pcHistory.map((c: any) => (
+                        <tr key={c.correction_id} className="border-b border-surface-border">
+                          <td className="px-2 py-2">{c.applied_at?.slice(0, 10)}</td>
+                          <td className="px-2 py-2">{c.date} {c.shift_type}</td>
+                          <td className="px-2 py-2">{c.fuel_type}</td>
+                          <td className="px-2 py-2 text-right font-mono">K{c.new_price?.toFixed(2)}</td>
+                          <td className={`px-2 py-2 text-right font-mono ${c.variance >= 0 ? 'text-status-success' : 'text-status-error'}`}>
+                            {c.variance >= 0 ? '+' : ''}K{c.variance?.toFixed(2)}
+                          </td>
+                          <td className="px-2 py-2">{c.applied_by}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
