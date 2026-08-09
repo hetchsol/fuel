@@ -201,20 +201,28 @@ def get_correction_preview(
     return compute_correction_preview(ctx["station_id"], fuel_type, new_price, since_override=since)
 
 
-@router.post("/fuel/corrections/apply", dependencies=[Depends(require_owner)])
+@router.post("/fuel/corrections/apply", dependencies=[Depends(require_manager_or_owner)])
 def apply_fuel_corrections(data: ApplyCorrectionsInput, ctx: dict = Depends(get_station_context)):
     """
     Apply a retroactive price correction to one or more already-closed shifts
     (one id = single-shift apply, several = bulk — same endpoint either way).
     Writes separate adjustment records; the original handovers are never
-    edited, so no shift/day locking is relevant here. Owner only.
+    edited, so no shift/day locking is relevant here. Owner, or a manager
+    the owner has granted a time-boxed delegation to, only.
     """
+    from ...services.price_correction import apply_corrections, is_delegated
+    role = ctx.get("role", "")
+    if role != "owner" and not (role == "manager" and is_delegated(ctx["station_id"], ctx["username"])):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the owner, or a manager with an active delegation, can apply price corrections.",
+        )
+
     if data.fuel_type not in ("Diesel", "Petrol"):
         raise HTTPException(status_code=400, detail="fuel_type must be 'Diesel' or 'Petrol'")
     if not data.handover_ids:
         raise HTTPException(status_code=400, detail="No shifts selected")
 
-    from ...services.price_correction import apply_corrections
     station_id = ctx["station_id"]
     created = apply_corrections(station_id, data.fuel_type, data.new_price, data.handover_ids, ctx["username"])
 
@@ -245,6 +253,66 @@ def get_fuel_corrections(
     """List previously applied price corrections, newest first. Reference/audit log."""
     from ...services.price_correction import list_corrections
     return {"corrections": list_corrections(ctx["station_id"], fuel_type, start_date, end_date)}
+
+
+class DelegateCorrectionsInput(_BaseModel):
+    manager_username: str
+    manager_full_name: str
+    expires_at: str  # ISO datetime
+
+
+@router.post("/fuel/corrections/delegate", dependencies=[Depends(require_owner)])
+def delegate_fuel_corrections(data: DelegateCorrectionsInput, ctx: dict = Depends(get_station_context)):
+    """Grant a named manager time-boxed access to apply price corrections. Owner only."""
+    from ...services.price_correction import grant_delegation
+    station_id = ctx["station_id"]
+    record = grant_delegation(station_id, data.manager_username, data.manager_full_name, data.expires_at, ctx["username"])
+
+    log_audit_event(
+        station_id=station_id, action="price_correction_delegation_granted",
+        performed_by=ctx["username"], entity_type="fuel_settings", entity_id=record["delegation_id"],
+        details={"manager_username": data.manager_username, "expires_at": data.expires_at},
+    )
+    create_notification(
+        station_id=station_id, type="PRICE_CORRECTION_DELEGATED", severity="medium",
+        title="Price Correction Access Delegated",
+        message=f"{data.manager_full_name} can now apply price corrections until {data.expires_at}.",
+        entity_type="fuel_settings", entity_id=record["delegation_id"], created_by=ctx["username"],
+    )
+    return {"status": "success", "delegation": record}
+
+
+@router.delete("/fuel/corrections/delegate/{delegation_id}", dependencies=[Depends(require_owner)])
+def revoke_fuel_corrections_delegation(delegation_id: str, ctx: dict = Depends(get_station_context)):
+    """Revoke a price-correction delegation early. Owner only."""
+    from ...services.price_correction import revoke_delegation
+    station_id = ctx["station_id"]
+    ok = revoke_delegation(station_id, delegation_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Delegation not found or already revoked")
+
+    log_audit_event(
+        station_id=station_id, action="price_correction_delegation_revoked",
+        performed_by=ctx["username"], entity_type="fuel_settings", entity_id=delegation_id,
+    )
+    return {"status": "success"}
+
+
+@router.get("/fuel/corrections/delegations", dependencies=[Depends(require_owner)])
+def get_fuel_corrections_delegations(ctx: dict = Depends(get_station_context)):
+    """List all price-correction delegations (active, expired, revoked). Owner only."""
+    from ...services.price_correction import list_delegations
+    return {"delegations": list_delegations(ctx["station_id"])}
+
+
+@router.get("/fuel/corrections/my-access", dependencies=[Depends(require_manager_or_owner)])
+def get_my_correction_access(ctx: dict = Depends(get_station_context)):
+    """Whether the caller can apply price corrections right now — owner always; manager only if delegated."""
+    role = ctx.get("role", "")
+    if role == "owner":
+        return {"can_apply": True}
+    from ...services.price_correction import is_delegated
+    return {"can_apply": is_delegated(ctx["station_id"], ctx["username"])}
 
 
 @router.get("/business-info")

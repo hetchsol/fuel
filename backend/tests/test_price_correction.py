@@ -4,6 +4,8 @@ changed, preview what already-closed shifts since then would earn at the
 new price, and persist approved corrections as separate records that never
 touch the original handover.
 """
+from datetime import datetime, timedelta
+
 import app.services.price_correction as pc
 import app.api.v1.settings as settings_api
 
@@ -203,3 +205,132 @@ def test_apply_endpoint_succeeds_for_owner(client, owner_headers, monkeypatch):
                        json={"fuel_type": "Diesel", "new_price": 26.86, "handover_ids": ["HO-1"]})
     assert res.status_code == 200
     assert res.json()["applied"] == 1
+
+
+# ── Owner-to-manager delegation ─────────────────────────────────────────
+
+def _iso(dt):
+    return dt.isoformat()
+
+
+def test_is_delegated_true_within_window(monkeypatch):
+    future = _iso(datetime.now() + timedelta(hours=1))
+    monkeypatch.setattr(pc, "load_station_json", lambda sid, fn, default=None: {
+        "PCD-1": {"manager_username": "mgr1", "revoked_at": None, "expires_at": future},
+    })
+    assert pc.is_delegated("ST001", "mgr1") is True
+    assert pc.is_delegated("ST001", "someone_else") is False
+
+
+def test_is_delegated_false_after_expiry(monkeypatch):
+    past = _iso(datetime.now() - timedelta(hours=1))
+    monkeypatch.setattr(pc, "load_station_json", lambda sid, fn, default=None: {
+        "PCD-1": {"manager_username": "mgr1", "revoked_at": None, "expires_at": past},
+    })
+    assert pc.is_delegated("ST001", "mgr1") is False
+
+
+def test_is_delegated_false_after_revoke(monkeypatch):
+    future = _iso(datetime.now() + timedelta(hours=1))
+    monkeypatch.setattr(pc, "load_station_json", lambda sid, fn, default=None: {
+        "PCD-1": {"manager_username": "mgr1", "revoked_at": "2026-01-01T00:00:00", "expires_at": future},
+    })
+    assert pc.is_delegated("ST001", "mgr1") is False
+
+
+def test_grant_and_revoke_delegation(monkeypatch):
+    saved = {}
+    monkeypatch.setattr(pc, "load_station_json", lambda sid, fn, default=None: saved.get(fn, default if default is not None else {}))
+    monkeypatch.setattr(pc, "save_station_json", lambda sid, fn, data: saved.__setitem__(fn, data))
+
+    record = pc.grant_delegation("ST001", "mgr1", "Test Manager", "2099-01-01T00:00:00", "owner1")
+    assert record["manager_username"] == "mgr1"
+    assert record["revoked_at"] is None
+
+    assert pc.revoke_delegation("ST001", record["delegation_id"]) is True
+    assert saved['price_correction_delegations.json'][record["delegation_id"]]["revoked_at"] is not None
+    # revoking an already-revoked (or unknown) id is a no-op, not an error
+    assert pc.revoke_delegation("ST001", record["delegation_id"]) is False
+    assert pc.revoke_delegation("ST001", "PCD-nonexistent") is False
+
+
+def test_list_delegations_status(monkeypatch):
+    future = _iso(datetime.now() + timedelta(hours=1))
+    past = _iso(datetime.now() - timedelta(hours=1))
+    monkeypatch.setattr(pc, "load_station_json", lambda sid, fn, default=None: {
+        "PCD-active": {"manager_username": "mgr1", "granted_at": "2026-01-01T00:00:00", "revoked_at": None, "expires_at": future},
+        "PCD-expired": {"manager_username": "mgr2", "granted_at": "2026-01-02T00:00:00", "revoked_at": None, "expires_at": past},
+        "PCD-revoked": {"manager_username": "mgr3", "granted_at": "2026-01-03T00:00:00", "revoked_at": "2026-01-04T00:00:00", "expires_at": future},
+    })
+    rows = pc.list_delegations("ST001")
+    statuses = {r["manager_username"]: r["status"] for r in rows}
+    assert statuses == {"mgr1": "active", "mgr2": "expired", "mgr3": "revoked"}
+
+
+def test_apply_endpoint_403_for_manager_without_delegation(client, create_staff, monkeypatch):
+    _isolate_endpoints(monkeypatch)
+    monkeypatch.setattr(pc, "is_delegated", lambda sid, username: False)
+    create_staff("mgr_pc_nodel", "Test Manager", "manager", password="test1234")
+    res = client.post("/api/v1/auth/login", json={"username": "mgr_pc_nodel", "password": "test1234"})
+    headers = {"Authorization": f"Bearer {res.json()['access_token']}", "X-Station-Id": "ST001", "Content-Type": "application/json"}
+
+    res = client.post("/api/v1/settings/fuel/corrections/apply", headers=headers,
+                       json={"fuel_type": "Diesel", "new_price": 26.86, "handover_ids": ["HO-1"]})
+    assert res.status_code == 403
+
+
+def test_apply_endpoint_200_for_delegated_manager(client, create_staff, monkeypatch):
+    _isolate_endpoints(monkeypatch)
+    monkeypatch.setattr(pc, "is_delegated", lambda sid, username: True)
+    monkeypatch.setattr(pc, "apply_corrections", lambda sid, ft, price, ids, by: [
+        {"correction_id": "PC-1", "handover_id": "HO-1", "variance": 50.0},
+    ])
+    create_staff("mgr_pc_del", "Test Manager", "manager", password="test1234")
+    res = client.post("/api/v1/auth/login", json={"username": "mgr_pc_del", "password": "test1234"})
+    headers = {"Authorization": f"Bearer {res.json()['access_token']}", "X-Station-Id": "ST001", "Content-Type": "application/json"}
+
+    res = client.post("/api/v1/settings/fuel/corrections/apply", headers=headers,
+                       json={"fuel_type": "Diesel", "new_price": 26.86, "handover_ids": ["HO-1"]})
+    assert res.status_code == 200
+    assert res.json()["applied"] == 1
+
+
+def test_delegate_and_list_endpoints_forbidden_for_manager(client, create_staff, monkeypatch):
+    _isolate_endpoints(monkeypatch)
+    create_staff("mgr_pc_deleg", "Test Manager", "manager", password="test1234")
+    res = client.post("/api/v1/auth/login", json={"username": "mgr_pc_deleg", "password": "test1234"})
+    headers = {"Authorization": f"Bearer {res.json()['access_token']}", "X-Station-Id": "ST001", "Content-Type": "application/json"}
+
+    res = client.post("/api/v1/settings/fuel/corrections/delegate", headers=headers,
+                       json={"manager_username": "mgr2", "manager_full_name": "M2", "expires_at": "2099-01-01T00:00:00"})
+    assert res.status_code == 403
+
+    res = client.get("/api/v1/settings/fuel/corrections/delegations", headers=headers)
+    assert res.status_code == 403
+
+
+def test_delegate_endpoint_succeeds_for_owner(client, owner_headers, monkeypatch):
+    _isolate_endpoints(monkeypatch)
+    monkeypatch.setattr(pc, "grant_delegation", lambda sid, u, n, exp, by: {
+        "delegation_id": "PCD-1", "manager_username": u, "manager_full_name": n,
+        "granted_by": by, "granted_at": "2026-01-01T00:00:00", "expires_at": exp, "revoked_at": None,
+    })
+    res = client.post("/api/v1/settings/fuel/corrections/delegate", headers=owner_headers,
+                       json={"manager_username": "mgr2", "manager_full_name": "M2", "expires_at": "2099-01-01T00:00:00"})
+    assert res.status_code == 200
+    assert res.json()["delegation"]["manager_username"] == "mgr2"
+
+
+def test_my_access_endpoint(client, owner_headers, create_staff, monkeypatch):
+    _isolate_endpoints(monkeypatch)
+    res = client.get("/api/v1/settings/fuel/corrections/my-access", headers=owner_headers)
+    assert res.status_code == 200
+    assert res.json()["can_apply"] is True
+
+    monkeypatch.setattr(pc, "is_delegated", lambda sid, username: False)
+    create_staff("mgr_pc_access", "Test Manager", "manager", password="test1234")
+    login = client.post("/api/v1/auth/login", json={"username": "mgr_pc_access", "password": "test1234"})
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}", "X-Station-Id": "ST001"}
+    res = client.get("/api/v1/settings/fuel/corrections/my-access", headers=headers)
+    assert res.status_code == 200
+    assert res.json()["can_apply"] is False

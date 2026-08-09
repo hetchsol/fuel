@@ -199,3 +199,68 @@ def list_corrections(
         rows = [r for r in rows if r.get("date", "") <= end_date]
     rows.sort(key=lambda r: r.get("applied_at", ""), reverse=True)
     return rows
+
+
+# ── Time-boxed owner-to-manager delegation for applying corrections ──────
+#
+# Separate from the supervisor tank-dip delegate (a per-action reason check)
+# — this is a standing grant the owner sets up in advance for one named
+# manager, good until an expiry the owner picks, with no separate "activate"
+# step: it's live the moment it's granted and lapses on its own.
+
+def grant_delegation(
+    station_id: str, manager_username: str, manager_full_name: str,
+    expires_at: str, granted_by: str,
+) -> dict:
+    delegations = load_station_json(station_id, 'price_correction_delegations.json', default={})
+    delegation_id = f"PCD-{uuid.uuid4().hex[:10]}"
+    record = {
+        "delegation_id": delegation_id,
+        "manager_username": manager_username,
+        "manager_full_name": manager_full_name,
+        "granted_by": granted_by,
+        "granted_at": datetime.now().isoformat(),
+        "expires_at": expires_at,
+        "revoked_at": None,
+    }
+    delegations[delegation_id] = record
+    save_station_json(station_id, 'price_correction_delegations.json', delegations)
+    return record
+
+
+def revoke_delegation(station_id: str, delegation_id: str) -> bool:
+    delegations = load_station_json(station_id, 'price_correction_delegations.json', default={})
+    record = delegations.get(delegation_id)
+    if not record or record.get("revoked_at"):
+        return False
+    record["revoked_at"] = datetime.now().isoformat()
+    save_station_json(station_id, 'price_correction_delegations.json', delegations)
+    return True
+
+
+def is_delegated(station_id: str, username: str) -> bool:
+    now = datetime.now().isoformat()
+    delegations = load_station_json(station_id, 'price_correction_delegations.json', default={})
+    return any(
+        d.get("manager_username") == username
+        and not d.get("revoked_at")
+        and d.get("expires_at", "") > now
+        for d in delegations.values()
+    )
+
+
+def list_delegations(station_id: str) -> list:
+    now = datetime.now().isoformat()
+    delegations = load_station_json(station_id, 'price_correction_delegations.json', default={})
+    rows = []
+    for d in delegations.values():
+        row = dict(d)
+        if row.get("revoked_at"):
+            row["status"] = "revoked"
+        elif row.get("expires_at", "") <= now:
+            row["status"] = "expired"
+        else:
+            row["status"] = "active"
+        rows.append(row)
+    rows.sort(key=lambda r: r.get("granted_at", ""), reverse=True)
+    return rows

@@ -35,6 +35,15 @@ export default function Settings() {
   const [pcSelectedIds, setPcSelectedIds] = useState<Set<string>>(new Set())
   const [pcHistory, setPcHistory] = useState<any[]>([])
   const [pcHistoryLoading, setPcHistoryLoading] = useState(false)
+  // Owner-to-manager delegation for applying corrections
+  const [canApplyCorrections, setCanApplyCorrections] = useState(false)
+  const [pcManagers, setPcManagers] = useState<{ username: string; full_name: string }[]>([])
+  const [pcDelegateManager, setPcDelegateManager] = useState('')
+  const [pcDelegateDate, setPcDelegateDate] = useState('')
+  const [pcDelegateTime, setPcDelegateTime] = useState('23:59')
+  const [pcDelegations, setPcDelegations] = useState<any[]>([])
+  const [pcDelegateError, setPcDelegateError] = useState('')
+  const [pcDelegateLoading, setPcDelegateLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -141,8 +150,15 @@ export default function Settings() {
   }, [])
 
   useEffect(() => {
-    if (activeTab === 'price-corrections') loadPcHistory()
-  }, [activeTab])
+    if (activeTab === 'price-corrections') {
+      loadPcHistory()
+      loadMyCorrectionAccess()
+      if (currentUserRole === 'owner') {
+        loadPcManagers()
+        loadPcDelegations()
+      }
+    }
+  }, [activeTab, currentUserRole])
 
   // ── Loaders ──────────────────────────────────────────────
 
@@ -284,6 +300,71 @@ export default function Settings() {
     } finally {
       setPcApplying(false)
     }
+  }
+
+  const loadMyCorrectionAccess = async () => {
+    try {
+      const res = await authFetch(`${BASE}/settings/fuel/corrections/my-access`, { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setCanApplyCorrections(!!data.can_apply)
+      }
+    } catch {}
+  }
+
+  const loadPcManagers = async () => {
+    try {
+      const res = await authFetch(`${BASE}/auth/users`, { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setPcManagers((Array.isArray(data) ? data : []).filter((u: any) => u.role === 'manager'))
+      }
+    } catch {}
+  }
+
+  const loadPcDelegations = async () => {
+    try {
+      const res = await authFetch(`${BASE}/settings/fuel/corrections/delegations`, { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setPcDelegations(data.delegations || [])
+      }
+    } catch {}
+  }
+
+  const handleGrantDelegation = async () => {
+    const manager = pcManagers.find(m => m.username === pcDelegateManager)
+    if (!manager || !pcDelegateDate) { setPcDelegateError('Pick a manager and an expiration date'); return }
+    setPcDelegateLoading(true)
+    setPcDelegateError('')
+    try {
+      const expiresAt = `${pcDelegateDate}T${pcDelegateTime || '23:59'}:00`
+      const res = await authFetch(`${BASE}/settings/fuel/corrections/delegate`, {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manager_username: manager.username, manager_full_name: manager.full_name, expires_at: expiresAt }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Failed to grant access' }))
+        throw new Error(err.detail || 'Failed to grant access')
+      }
+      setPcDelegateManager('')
+      setPcDelegateDate('')
+      await loadPcDelegations()
+    } catch (err: any) {
+      setPcDelegateError(err.message || 'Failed to grant access')
+    } finally {
+      setPcDelegateLoading(false)
+    }
+  }
+
+  const handleRevokeDelegation = async (delegationId: string) => {
+    try {
+      const res = await authFetch(`${BASE}/settings/fuel/corrections/delegate/${delegationId}`, {
+        method: 'DELETE', headers: getHeaders(),
+      })
+      if (res.ok) await loadPcDelegations()
+    } catch {}
   }
 
   const loadSystemSettings = async () => {
@@ -1183,7 +1264,7 @@ export default function Settings() {
                             <th className="px-2 py-2 text-right">Old Revenue</th>
                             <th className="px-2 py-2 text-right">New Revenue</th>
                             <th className="px-2 py-2 text-right">Variance</th>
-                            {currentUserRole === 'owner' && <th className="px-2 py-2 text-right">Action</th>}
+                            {canApplyCorrections && <th className="px-2 py-2 text-right">Action</th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -1201,7 +1282,7 @@ export default function Settings() {
                               <td className={`px-2 py-2 text-right font-mono ${r.variance >= 0 ? 'text-status-success' : 'text-status-error'}`}>
                                 {r.variance >= 0 ? '+' : ''}K{r.variance.toFixed(2)}
                               </td>
-                              {currentUserRole === 'owner' && (
+                              {canApplyCorrections && (
                                 <td className="px-2 py-2 text-right">
                                   <button type="button" disabled={pcApplying} onClick={() => handlePcApply([r.handover_id])}
                                     className="px-2 py-1 text-xs font-medium rounded bg-action-primary text-white disabled:opacity-50">
@@ -1220,13 +1301,13 @@ export default function Settings() {
                             <td className="px-2 py-2 text-right font-mono">
                               {pcPreview.total_variance >= 0 ? '+' : ''}K{pcPreview.total_variance.toFixed(2)}
                             </td>
-                            {currentUserRole === 'owner' && <td />}
+                            {canApplyCorrections && <td />}
                           </tr>
                         </tfoot>
                       </table>
                     </div>
 
-                    {currentUserRole === 'owner' ? (
+                    {canApplyCorrections ? (
                       <div className="mt-4 flex justify-end">
                         <button type="button" disabled={pcApplying || pcSelectedIds.size === 0}
                           onClick={() => handlePcApply(Array.from(pcSelectedIds))}
@@ -1235,9 +1316,99 @@ export default function Settings() {
                         </button>
                       </div>
                     ) : (
-                      <p className="text-xs text-content-secondary mt-3">Only an owner can apply a correction.</p>
+                      <p className="text-xs text-content-secondary mt-3">Only an owner, or a manager with an active delegation, can apply a correction.</p>
                     )}
                   </>
+                )}
+              </div>
+            )}
+
+            {/* Delegate Access — owner only */}
+            {currentUserRole === 'owner' && (
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold text-content-primary mb-2">Delegate Access</h3>
+                <p className="text-sm text-content-secondary mb-3">
+                  Grant a manager temporary access to apply price corrections. Access lapses on its own at
+                  the expiration you set — no need to remember to revoke it, though you can end it early.
+                </p>
+                <div className="flex flex-wrap items-end gap-3 mb-4">
+                  <div>
+                    <label className="block text-xs font-medium text-content-secondary mb-1">Manager</label>
+                    <select value={pcDelegateManager} onChange={e => setPcDelegateManager(e.target.value)}
+                      className="px-3 py-2 border border-surface-border rounded-md text-sm min-w-[10rem]">
+                      <option value="">-- Select --</option>
+                      {pcManagers.map(m => (
+                        <option key={m.username} value={m.username}>{m.full_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-content-secondary mb-1">Expires (Date)</label>
+                    <input type="date" value={pcDelegateDate} min={todayStr}
+                      onChange={e => setPcDelegateDate(e.target.value)}
+                      className="px-3 py-2 border border-surface-border rounded-md text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-content-secondary mb-1">Time</label>
+                    <input type="time" value={pcDelegateTime}
+                      onChange={e => setPcDelegateTime(e.target.value)}
+                      className="px-3 py-2 border border-surface-border rounded-md text-sm" />
+                  </div>
+                  <button type="button" onClick={handleGrantDelegation}
+                    disabled={pcDelegateLoading || !pcDelegateManager || !pcDelegateDate}
+                    className="px-4 py-2 bg-action-primary text-white rounded-md text-sm font-medium disabled:opacity-50">
+                    {pcDelegateLoading ? 'Granting...' : 'Grant Access'}
+                  </button>
+                </div>
+
+                {pcDelegateError && (
+                  <div className="p-3 mb-3 bg-status-error-light border border-status-error rounded-md">
+                    <p className="text-sm text-status-error">{pcDelegateError}</p>
+                  </div>
+                )}
+
+                {pcDelegations.length === 0 ? (
+                  <p className="text-sm text-content-secondary">No delegations granted yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-surface-bg">
+                          <th className="px-2 py-2 text-left">Manager</th>
+                          <th className="px-2 py-2 text-left">Granted</th>
+                          <th className="px-2 py-2 text-left">Expires</th>
+                          <th className="px-2 py-2 text-left">Status</th>
+                          <th className="px-2 py-2 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pcDelegations.map((d: any) => (
+                          <tr key={d.delegation_id} className="border-b border-surface-border">
+                            <td className="px-2 py-2">{d.manager_full_name}</td>
+                            <td className="px-2 py-2">{d.granted_at?.slice(0, 16).replace('T', ' ')}</td>
+                            <td className="px-2 py-2">{d.expires_at?.slice(0, 16).replace('T', ' ')}</td>
+                            <td className="px-2 py-2">
+                              <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                                d.status === 'active' ? 'bg-status-success-light text-status-success'
+                                  : d.status === 'expired' ? 'bg-surface-bg text-content-secondary'
+                                  : 'bg-status-error-light text-status-error'
+                              }`}>
+                                {d.status}
+                              </span>
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              {d.status === 'active' && (
+                                <button type="button" onClick={() => handleRevokeDelegation(d.delegation_id)}
+                                  className="px-2 py-1 text-xs font-medium rounded border border-status-error text-status-error">
+                                  Revoke
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             )}
