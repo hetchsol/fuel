@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { authFetch, BASE } from '../lib/api'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 export default function StationsPage() {
   const router = useRouter()
@@ -230,7 +231,7 @@ export default function StationsPage() {
                     </div>
 
                     {station.location && <p className="text-sm mb-2" style={{ color: theme.textSecondary }}>{station.location}</p>}
-                    {station.created_at && <p className="text-xs mb-3" style={{ color: theme.textSecondary }}>Created: {new Date(station.created_at).toLocaleDateString()}</p>}
+                    {station.created_at && <p className="text-xs mb-3" style={{ color: theme.textSecondary }}>Created: {formatDateToDisplay(station.created_at)}</p>}
 
                     <div className="flex gap-2">
                       {!isCurrent && !isDisabled && (

@@ -185,7 +185,7 @@ export default function TankAnalysis() {
       subtitle: `${startDate} to ${endDate}`,
       filename: `tank_analysis_${selectedTank}_${startDate}_${endDate}`,
       columns: [
-        { header: 'Date', key: 'date' },
+        { header: 'Date', key: 'date', format: 'date' },
         { header: 'Shift', key: 'shift_type' },
         { header: 'Opening Vol (L)', key: 'opening_volume', format: 'number' },
         { header: 'Closing Vol (L)', key: 'closing_volume', format: 'number' },

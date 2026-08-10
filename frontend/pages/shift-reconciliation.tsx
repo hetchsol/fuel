@@ -107,7 +107,7 @@ function ShiftReconciliationView() {
       ],
       columns: [
         { header: 'Shift', key: 'shift_type' },
-        { header: 'Date', key: 'date' },
+        { header: 'Date', key: 'date', format: 'date' },
         { header: 'Petrol Revenue', key: 'petrol_revenue', format: 'currency' },
         { header: 'Diesel Revenue', key: 'diesel_revenue', format: 'currency' },
         { header: 'LPG Revenue', key: 'lpg_revenue', format: 'currency' },

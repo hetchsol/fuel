@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
 import { authFetch, getHeaders, isManagerOrAbove } from '../lib/api'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -54,8 +55,7 @@ function getPreviousShift(date: string, shiftType: string): { prevDate: string; 
 }
 
 function formatShiftDate(date: string, shift: string): string {
-  const d = new Date(date + 'T12:00:00')
-  return `${d.getDate()} ${d.toLocaleString('en', { month: 'short' })} ${shift}`
+  return `${formatDateToDisplay(date)} ${shift}`
 }
 
 export default function TankDips() {

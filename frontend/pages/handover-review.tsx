@@ -659,7 +659,7 @@ export default function HandoverReview() {
       approved: 'Approved', awaiting: 'Awaiting Closing',
     }
     const subtitle = [
-      filterDate ? `Date: ${filterDate}` : '',
+      filterDate ? `Date: ${formatDateToDisplay(filterDate)}` : '',
       filterShiftType ? `Shift: ${filterShiftType}` : '',
     ].filter(Boolean).join('  |  ') || undefined
     return {
@@ -673,7 +673,7 @@ export default function HandoverReview() {
         { label: 'Approved Today', value: summaryApprovedToday },
       ],
       columns: [
-        { header: 'Date', key: 'date' },
+        { header: 'Date', key: 'date', format: 'date' },
         { header: 'Shift', key: 'shift_id' },
         { header: 'Attendant', key: 'attendant_name' },
         { header: 'Expected Cash', key: 'expected_cash', format: 'currency' },

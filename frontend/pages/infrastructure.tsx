@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getHeaders, authFetch } from '../lib/api'
+import { formatDateTimeToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -586,7 +587,7 @@ export default function Infrastructure() {
   }
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString()
+    return formatDateTimeToDisplay(dateStr)
   }
 
   const getNozzleColor = (fuelType: string) => {

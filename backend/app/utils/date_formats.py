@@ -1,12 +1,12 @@
 """
 Date Format Utilities
-Standardizes date format to DD-MM-YYYY throughout the application
+Standardizes displayed date format to "10 August 2026" (D MMMM YYYY) throughout the application
 """
 from datetime import datetime
 from typing import Optional
 
 
-# Standard date format: DD-MM-YYYY
+# Legacy DD-MM-YYYY format, still used for parsing/validation helpers below
 DATE_FORMAT = "%d-%m-%Y"
 DATETIME_FORMAT = "%d-%m-%Y %H:%M:%S"
 
@@ -16,13 +16,13 @@ ISO_DATE_FORMAT = "%Y-%m-%d"
 
 def format_date_to_display(date_str: Optional[str]) -> Optional[str]:
     """
-    Convert ISO format (YYYY-MM-DD) to display format (DD-MM-YYYY)
+    Convert ISO format (YYYY-MM-DD) to display format ("10 August 2026")
 
     Args:
         date_str: Date string in ISO format (YYYY-MM-DD)
 
     Returns:
-        Date string in DD-MM-YYYY format
+        Date string in "D MMMM YYYY" format
     """
     if not date_str:
         return None
@@ -30,10 +30,10 @@ def format_date_to_display(date_str: Optional[str]) -> Optional[str]:
     try:
         # Parse ISO format
         date_obj = datetime.strptime(date_str[:10], ISO_DATE_FORMAT)
-        # Return in DD-MM-YYYY format
-        return date_obj.strftime(DATE_FORMAT)
+        # Return as "10 August 2026" (day without leading zero, full month, year)
+        return f"{date_obj.day} {date_obj.strftime('%B %Y')}"
     except (ValueError, TypeError):
-        # If already in DD-MM-YYYY or invalid, return as is
+        # If invalid, return as is
         return date_str
 
 
@@ -67,13 +67,13 @@ def format_date_to_iso(date_str: Optional[str]) -> Optional[str]:
 
 def format_datetime_to_display(datetime_str: Optional[str]) -> Optional[str]:
     """
-    Convert ISO datetime to display format (DD-MM-YYYY HH:MM:SS)
+    Convert ISO datetime to display format ("10 August 2026, 14:30:05")
 
     Args:
         datetime_str: Datetime string in ISO format
 
     Returns:
-        Datetime string in DD-MM-YYYY HH:MM:SS format
+        Datetime string in "D MMMM YYYY, HH:MM:SS" format
     """
     if not datetime_str:
         return None
@@ -85,8 +85,8 @@ def format_datetime_to_display(datetime_str: Optional[str]) -> Optional[str]:
         else:
             dt_obj = datetime.strptime(datetime_str[:19], "%Y-%m-%d %H:%M:%S")
 
-        # Return in DD-MM-YYYY HH:MM:SS format
-        return dt_obj.strftime(DATETIME_FORMAT)
+        # Return as "10 August 2026, 14:30:05"
+        return f"{dt_obj.day} {dt_obj.strftime('%B %Y, %H:%M:%S')}"
     except (ValueError, TypeError):
         return datetime_str
 

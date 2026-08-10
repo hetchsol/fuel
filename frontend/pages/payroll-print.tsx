@@ -6,6 +6,7 @@ import autoTable from 'jspdf-autotable'
 import { authFetch } from '../lib/api'
 import { PAYROLL, periodLabel } from '../lib/payroll'
 import { exportToExcel } from '../lib/exportUtils'
+import { formatDateTimeToDisplay } from '../lib/dateUtils'
 
 interface BusinessInfo {
   business_name: string
@@ -261,7 +262,7 @@ function buildPayslipPage(doc: jsPDF, data: PrintData, slip: PrintPayslip) {
   doc.text('Authorised Signature & Date', margin + half + 20, sigY + 4)
 
   // Footer
-  const ts = new Date().toLocaleString()
+  const ts = formatDateTimeToDisplay(new Date().toISOString())
   doc.setFontSize(7)
   doc.setTextColor(160)
   doc.text(`Generated: ${ts}`, margin, ph - 8)
@@ -434,7 +435,7 @@ function generateSchedulePDF(data: PrintData) {
   doc.text('Approved by & Date', pw - margin - sigW, sigY + 4)
 
   // Footer
-  const ts = new Date().toLocaleString()
+  const ts = formatDateTimeToDisplay(new Date().toISOString())
   doc.setFontSize(6.5)
   doc.setTextColor(160)
   doc.text(`Generated: ${ts}`, margin, ph - 8)

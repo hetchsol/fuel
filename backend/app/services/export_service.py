@@ -9,6 +9,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
+from ..utils.date_formats import format_date_to_display, format_datetime_to_display
+
 
 # ---------- shared helpers ----------
 
@@ -115,7 +117,7 @@ def _add_timestamp_footer(ws, row: int, col_count: int):
     row += 1  # blank row
     merge_end = get_column_letter(max(col_count, 1))
     ws.merge_cells(f"A{row}:{merge_end}{row}")
-    cell = ws.cell(row=row, column=1, value=f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    cell = ws.cell(row=row, column=1, value=f"Generated: {format_datetime_to_display(datetime.now().isoformat())}")
     cell.font = FOOTER_FONT
     cell.alignment = CENTER_ALIGN
 
@@ -136,7 +138,7 @@ _TR_HEADERS = [
 
 def _tank_reading_row(r: dict) -> list:
     return [
-        r.get("date", ""),
+        format_date_to_display(r.get("date")) or "",
         r.get("shift_type", ""),
         r.get("tank_name") or r.get("tank_id", ""),
         r.get("fuel_type", ""),
@@ -212,7 +214,7 @@ def _sale_row(s: dict) -> list:
     return [
         s.get("sale_id", ""),
         s.get("shift_id", ""),
-        s.get("date", ""),
+        format_date_to_display(s.get("date")) or "",
         s.get("fuel_type", ""),
         s.get("mechanical_opening"),
         s.get("mechanical_closing"),
@@ -274,7 +276,7 @@ _RECON_HEADERS = [
 def _recon_row(r: dict) -> list:
     return [
         r.get("shift_id", ""),
-        r.get("date", ""),
+        format_date_to_display(r.get("date")) or "",
         r.get("shift_type", ""),
         r.get("petrol_revenue"),
         r.get("diesel_revenue"),

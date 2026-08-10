@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { authFetch } from '../lib/api'
+import { formatDateToDisplay } from '../lib/dateUtils'
 import {
   PAYROLL, fmtZMW, periodLabel, MONTH_NAMES,
   type EmployeeProfile, type StatutoryRates, type WcfCategory,
@@ -1174,7 +1175,7 @@ function PaymentsTab({ runs, users, onRefresh, userRole }: {
                 <Td>{periodLabel(r.period_month, r.period_year)}</Td>
                 <Td><Badge status={r.status} /></Td>
                 <Td right>{fmt(r.total_net)}</Td>
-                <Td>{r.approved_at ? new Date(r.approved_at).toLocaleDateString('en-GB') : '—'}</Td>
+                <Td>{r.approved_at ? formatDateToDisplay(r.approved_at) : '—'}</Td>
               </tr>
             ))}
             {approvedRuns.length === 0 && <tr><td colSpan={4} className="text-center py-6 text-content-secondary text-sm">No approved runs</td></tr>}

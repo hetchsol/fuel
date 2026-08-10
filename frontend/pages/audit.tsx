@@ -3,6 +3,7 @@ import { getHeaders, BASE, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import Pagination from '../components/Pagination'
 import { ExportConfig } from '../lib/exportUtils'
+import { formatDateTimeToDisplay } from '../lib/dateUtils'
 
 const PAGE_SIZE = 25
 
@@ -60,12 +61,7 @@ function formatAction(action: string): string {
 }
 
 function formatTimestamp(ts: string): string {
-  try {
-    const d = new Date(ts)
-    return d.toLocaleString()
-  } catch {
-    return ts
-  }
+  return formatDateTimeToDisplay(ts)
 }
 
 export default function AuditLogPage() {
@@ -123,7 +119,7 @@ export default function AuditLogPage() {
       subtitle: `${entries.length} entries`,
       filename: `audit_log_${new Date().toISOString().slice(0,10)}`,
       columns: [
-        { header: 'Timestamp', key: 'timestamp' },
+        { header: 'Timestamp', key: 'timestamp', format: 'datetime' },
         { header: 'Action', key: 'action' },
         { header: 'Entity Type', key: 'entity_type' },
         { header: 'Entity ID', key: 'entity_id' },

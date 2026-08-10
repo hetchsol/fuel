@@ -3,7 +3,7 @@ import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Pagination from '../components/Pagination'
 import { getHeaders, authFetch } from '../lib/api'
-import { formatDateToDisplay } from '../lib/dateUtils'
+import { formatDateToDisplay, formatDateTimeToDisplay } from '../lib/dateUtils'
 
 const HISTORY_PAGE_SIZE = 20
 
@@ -1254,14 +1254,14 @@ export default function Shifts() {
                       {/* Timestamp */}
                       {reading.recorded_at && (
                         <div className="text-[10px] text-content-secondary mt-1">
-                          Last updated: {new Date(reading.recorded_at).toLocaleString()}
+                          Last updated: {formatDateTimeToDisplay(reading.recorded_at)}
                         </div>
                       )}
 
                       {/* Edited-by trail (corrections are logged) */}
                       {reading.edited_by && (
                         <div className="text-[10px] text-status-warning mt-1">
-                          Corrected by {reading.edited_by}{reading.edited_at ? ` on ${new Date(reading.edited_at).toLocaleString()}` : ''}
+                          Corrected by {reading.edited_by}{reading.edited_at ? ` on ${formatDateTimeToDisplay(reading.edited_at)}` : ''}
                         </div>
                       )}
 

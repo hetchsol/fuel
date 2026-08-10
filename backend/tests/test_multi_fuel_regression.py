@@ -101,7 +101,7 @@ class TestExportFormatsAreStable:
         assert "Tank" in csv  # header
         assert "TANK-DIESEL-1" in csv  # row value
         assert "Diesel" in csv
-        assert "2026-04-01" in csv
+        assert "1 April 2026" in csv
 
     def test_F2_sales_csv_includes_fuel_type_column(self):
         sample = [{

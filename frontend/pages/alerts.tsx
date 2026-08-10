@@ -96,7 +96,7 @@ function AnomalyAlertsView() {
         { header: 'Tank', key: 'tank_id' },
         { header: 'Fuel Type', key: 'fuel_type' },
         { header: 'Type', key: 'type' },
-        { header: 'Date', key: 'date' },
+        { header: 'Date', key: 'date', format: 'date' },
         { header: 'Description', key: 'description' },
         { header: 'Value', key: 'value', format: 'number' },
         { header: 'Threshold', key: 'threshold', format: 'number' },

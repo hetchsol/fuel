@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { getHeaders, authFetch } from '../lib/api'
+import { formatDateToDisplay, formatDateTimeToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -1240,13 +1241,13 @@ export default function Settings() {
                   </p>
                 ) : pcPreview.rows.length === 0 ? (
                   <p className="text-sm text-content-secondary">
-                    No outstanding shifts since {pcPreview.since?.slice(0, 10)} (previous price K{pcPreview.old_price}) —
+                    No outstanding shifts since {formatDateToDisplay(pcPreview.since)} (previous price K{pcPreview.old_price}) —
                     everything is already at the current price or already corrected.
                   </p>
                 ) : (
                   <>
                     <p className="text-sm text-content-secondary mb-3">
-                      Previous price K{pcPreview.old_price}/L effective from {pcPreview.since?.slice(0, 10)}.{' '}
+                      Previous price K{pcPreview.old_price}/L effective from {formatDateToDisplay(pcPreview.since)}.{' '}
                       {pcPreview.rows.length} shift(s) affected.
                     </p>
                     <div className="overflow-x-auto">
@@ -1385,8 +1386,8 @@ export default function Settings() {
                         {pcDelegations.map((d: any) => (
                           <tr key={d.delegation_id} className="border-b border-surface-border">
                             <td className="px-2 py-2">{d.manager_full_name}</td>
-                            <td className="px-2 py-2">{d.granted_at?.slice(0, 16).replace('T', ' ')}</td>
-                            <td className="px-2 py-2">{d.expires_at?.slice(0, 16).replace('T', ' ')}</td>
+                            <td className="px-2 py-2">{formatDateTimeToDisplay(d.granted_at)}</td>
+                            <td className="px-2 py-2">{formatDateTimeToDisplay(d.expires_at)}</td>
                             <td className="px-2 py-2">
                               <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                                 d.status === 'active' ? 'bg-status-success-light text-status-success'
@@ -1436,8 +1437,8 @@ export default function Settings() {
                     <tbody>
                       {pcHistory.map((c: any) => (
                         <tr key={c.correction_id} className="border-b border-surface-border">
-                          <td className="px-2 py-2">{c.applied_at?.slice(0, 10)}</td>
-                          <td className="px-2 py-2">{c.date} {c.shift_type}</td>
+                          <td className="px-2 py-2">{formatDateToDisplay(c.applied_at)}</td>
+                          <td className="px-2 py-2">{formatDateToDisplay(c.date)} {c.shift_type}</td>
                           <td className="px-2 py-2">{c.fuel_type}</td>
                           <td className="px-2 py-2 text-right font-mono">K{c.new_price?.toFixed(2)}</td>
                           <td className={`px-2 py-2 text-right font-mono ${c.variance >= 0 ? 'text-status-success' : 'text-status-error'}`}>
@@ -2461,7 +2462,7 @@ function TankCalibrationTab() {
             <div>
               <h3 className="text-sm font-semibold text-content-primary">Current Calibration — {selectedTank}</h3>
               <p className="text-xs text-content-secondary">
-                {calibration.point_count} data points — Uploaded {new Date(calibration.uploaded_at).toLocaleDateString()} by {calibration.uploaded_by}
+                {calibration.point_count} data points — Uploaded {formatDateToDisplay(calibration.uploaded_at)} by {calibration.uploaded_by}
               </p>
             </div>
             <button onClick={handleClear}

@@ -1,13 +1,14 @@
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { formatDateToDisplay, formatDateTimeToDisplay } from './dateUtils'
 
 // ─── Types ───────────────────────────────────────────────
 export interface ExportColumn {
   header: string
   key: string
   width?: number
-  format?: 'currency' | 'number' | 'percent' | 'text'
+  format?: 'currency' | 'number' | 'percent' | 'text' | 'date' | 'datetime'
 }
 
 export interface BusinessInfo {
@@ -33,12 +34,16 @@ function formatValue(value: any, format?: string): string {
   if (format === 'currency') return `ZMW ${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   if (format === 'number') return Number(value).toLocaleString()
   if (format === 'percent') return `${Number(value).toFixed(2)}%`
+  if (format === 'date') return formatDateToDisplay(String(value))
+  if (format === 'datetime') return formatDateTimeToDisplay(String(value))
   return String(value)
 }
 
 function rawValue(value: any, format?: string): any {
   if (value === null || value === undefined) return ''
   if (format === 'currency' || format === 'number' || format === 'percent') return Number(value)
+  if (format === 'date') return formatDateToDisplay(String(value))
+  if (format === 'datetime') return formatDateTimeToDisplay(String(value))
   return String(value)
 }
 
@@ -74,7 +79,7 @@ export function exportToCSV(config: ExportConfig) {
   )
 
   rows.push('')
-  rows.push(`Generated,${esc(new Date().toLocaleString())}`)
+  rows.push(`Generated,${esc(formatDateTimeToDisplay(new Date().toISOString()))}`)
 
   const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
@@ -89,7 +94,7 @@ export function exportToCSV(config: ExportConfig) {
 export function exportToExcel(config: ExportConfig) {
   const wb = XLSX.utils.book_new()
   const biz = config.businessInfo
-  const timestamp = new Date().toLocaleString()
+  const timestamp = formatDateTimeToDisplay(new Date().toISOString())
 
   // Build rows
   const headerRow = config.columns.map(c => c.header)
@@ -152,7 +157,7 @@ export function exportToPDF(config: ExportConfig) {
   const pageWidth = doc.internal.pageSize.width
   const centerX = pageWidth / 2
   const biz = config.businessInfo
-  const timestamp = new Date().toLocaleString()
+  const timestamp = formatDateTimeToDisplay(new Date().toISOString())
 
   // ── Business Header (centered, uppercase) ──
   let y = 14

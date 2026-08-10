@@ -1,6 +1,7 @@
 import { authFetch, BASE, getHeaders } from '../lib/api'
 import { useState, useEffect } from 'react'
 import Pagination from '../components/Pagination'
+import { formatDateToDisplay } from '../lib/dateUtils'
 
 const PAGE_SIZE = 25
 
@@ -105,7 +106,7 @@ export default function Sales() {
               {records.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((r) => (
                 <tr key={r.sale_id} className="hover:bg-surface-bg">
                   <td className="px-4 py-3 text-sm text-content-primary">
-                    {r.date || (r.created_at ? r.created_at.slice(0, 10) : '-')}
+                    {formatDateToDisplay(r.date || (r.created_at ? r.created_at.slice(0, 10) : '')) || '-'}
                   </td>
                   <td className="px-4 py-3 text-sm text-content-secondary font-mono">{r.shift_id}</td>
                   <td className="px-4 py-3 text-sm text-content-primary">{r.fuel_type}</td>

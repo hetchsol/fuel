@@ -8,7 +8,7 @@ import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
 import AdvancedReports from './advanced-reports'
 import TankReadingsReport from './tank-readings-report'
-import { formatDateToDisplay } from '../lib/dateUtils'
+import { formatDateToDisplay, formatDateTimeToDisplay } from '../lib/dateUtils'
 
 interface Product {
     product_type: string;
@@ -586,7 +586,7 @@ function SalesReportsView() {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                         <p>
-                                            Generated at: <span className="font-semibold">{new Date(reportData.generated_at).toLocaleString()}</span>
+                                            Generated at: <span className="font-semibold">{formatDateTimeToDisplay(reportData.generated_at)}</span>
                                         </p>
                                     </div>
                                 )}

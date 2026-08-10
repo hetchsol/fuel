@@ -208,7 +208,7 @@ export default function TankReadingsReport() {
         title: 'Tank Readings',
         filename: `tank_readings_${selectedTank}_${startDate}_${endDate}`,
         columns: [
-          { header: 'Date', key: 'date' },
+          { header: 'Date', key: 'date', format: 'date' },
           { header: 'Shift', key: 'shift_type' },
           { header: 'Opening cm', key: 'opening_dip_cm', format: 'number' },
           { header: 'Opening L', key: 'opening_volume', format: 'number' },
@@ -225,7 +225,7 @@ export default function TankReadingsReport() {
       title: 'Dip Ledger',
       filename: `dip_ledger_${startDate}_${endDate}`,
       columns: [
-        { header: 'Date', key: 'date' },
+        { header: 'Date', key: 'date', format: 'date' },
         { header: 'Shift', key: 'shift_type' },
         { header: 'Tank', key: 'tank_id' },
         { header: 'Fuel', key: 'fuel_type' },

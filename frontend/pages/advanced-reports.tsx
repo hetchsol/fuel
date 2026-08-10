@@ -250,7 +250,7 @@ export default function AdvancedReports() {
           ...reportData.by_type.map((t: any) => ({ label: t.type_name, value: formatCurrency(t.total) })),
         ],
         columns: [
-          { header: 'Date', key: 'date' },
+          { header: 'Date', key: 'date', format: 'date' },
           { header: 'Shift', key: 'shift_type' },
           { header: 'Attendant', key: 'attendant_name' },
           { header: 'Payment Type', key: 'type_name' },
@@ -272,7 +272,7 @@ export default function AdvancedReports() {
           value: typeof v === 'number' ? (k.includes('revenue') ? formatCurrency(v) : v.toLocaleString()) : String(v),
         })) : [],
         columns: [
-          { header: 'Date', key: 'date' },
+          { header: 'Date', key: 'date', format: 'date' },
           { header: 'Shift', key: 'shift_type' },
           { header: 'Shift ID', key: 'shift_id' },
           { header: 'Nozzle', key: 'nozzle_id' },
@@ -301,7 +301,7 @@ export default function AdvancedReports() {
           { label: 'Overall Deviation', value: `${reportData.summary?.overall_deviation} L` },
         ],
         columns: [
-          { header: 'Date', key: 'date' },
+          { header: 'Date', key: 'date', format: 'date' },
           { header: 'Shift', key: 'shift_type' },
           { header: 'Attendant', key: 'staff_name' },
           { header: 'Elec Open', key: 'electronic_opening', format: 'number' },
@@ -326,7 +326,7 @@ export default function AdvancedReports() {
           value: typeof v === 'number' ? (k.includes('revenue') ? formatCurrency(v) : v.toLocaleString()) : String(v),
         })) : [],
         columns: [
-          { header: 'Date', key: 'date' },
+          { header: 'Date', key: 'date', format: 'date' },
           { header: 'Shift', key: 'shift_type' },
           { header: 'Attendant', key: 'attendant' },
           { header: 'Nozzle', key: 'nozzle_id' },

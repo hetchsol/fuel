@@ -1,33 +1,34 @@
 /**
  * Date Format Utilities
- * Standardizes date format to DD-MM-YYYY throughout the frontend
+ * Standardizes date format to "10 August 2026" (D MMMM YYYY) throughout the frontend
  */
 
-// Standard date format: DD-MM-YYYY
-export const DATE_FORMAT = 'DD-MM-YYYY'
-export const DATETIME_FORMAT = 'DD-MM-YYYY HH:mm:ss'
+// Standard date format: D MMMM YYYY, e.g. "10 August 2026"
+export const DATE_FORMAT = 'D MMMM YYYY'
+export const DATETIME_FORMAT = 'D MMMM YYYY, HH:mm:ss'
 
 /**
- * Convert ISO date string (YYYY-MM-DD) to display format (DD-MM-YYYY)
+ * Convert ISO date string (YYYY-MM-DD) to display format ("10 August 2026")
  */
 export function formatDateToDisplay(dateStr: string | null | undefined): string {
   if (!dateStr) return ''
 
   try {
-    // For plain YYYY-MM-DD strings, use string splitting to avoid UTC-offset day shifts
+    let date: Date
+    // For plain YYYY-MM-DD strings, construct in local time to avoid UTC-offset day shifts
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      const [year, month, day] = dateStr.split('-')
-      return `${day}-${month}-${year}`
+      const [year, month, day] = dateStr.split('-').map(Number)
+      date = new Date(year, month - 1, day)
+    } else {
+      date = new Date(dateStr)
     }
-
-    const date = new Date(dateStr)
     if (isNaN(date.getTime())) return dateStr
 
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = date.getDate()
+    const month = date.toLocaleString('en-GB', { month: 'long' })
     const year = date.getFullYear()
 
-    return `${day}-${month}-${year}`
+    return `${day} ${month} ${year}`
   } catch (error) {
     return dateStr
   }
@@ -70,7 +71,7 @@ export function formatDateToISO(dateStr: string | null | undefined): string {
 }
 
 /**
- * Convert ISO datetime to display format (DD-MM-YYYY HH:mm:ss)
+ * Convert ISO datetime to display format ("10 August 2026, 14:30:05")
  */
 export function formatDateTimeToDisplay(datetimeStr: string | null | undefined): string {
   if (!datetimeStr) return ''
@@ -79,21 +80,21 @@ export function formatDateTimeToDisplay(datetimeStr: string | null | undefined):
     const date = new Date(datetimeStr)
     if (isNaN(date.getTime())) return datetimeStr
 
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = date.getDate()
+    const month = date.toLocaleString('en-GB', { month: 'long' })
     const year = date.getFullYear()
     const hours = String(date.getHours()).padStart(2, '0')
     const minutes = String(date.getMinutes()).padStart(2, '0')
     const seconds = String(date.getSeconds()).padStart(2, '0')
 
-    return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`
+    return `${day} ${month} ${year}, ${hours}:${minutes}:${seconds}`
   } catch (error) {
     return datetimeStr
   }
 }
 
 /**
- * Get today's date in DD-MM-YYYY format
+ * Get today's date in display format ("10 August 2026")
  */
 export function getTodayDisplay(): string {
   return formatDateToDisplay(new Date().toISOString())
@@ -140,37 +141,12 @@ export function isValidDisplayDate(dateStr: string): boolean {
 
 /**
  * Get date range string for display
- * Example: "01-12-2025 to 14-12-2025"
+ * Example: "1 December 2025 to 14 December 2025"
  */
 export function formatDateRange(startDate: string, endDate: string): string {
   const start = formatDateToDisplay(startDate)
   const end = formatDateToDisplay(endDate)
   return `${start} to ${end}`
-}
-
-/**
- * Format a date with an ordinal day and full month name, e.g. "21st July 2026"
- */
-export function formatDateOrdinalLong(dateStr: string | null | undefined): string {
-  if (!dateStr) return ''
-
-  try {
-    let date: Date
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      const [year, month, day] = dateStr.split('-').map(Number)
-      date = new Date(year, month - 1, day)
-    } else {
-      date = new Date(dateStr)
-    }
-    if (isNaN(date.getTime())) return dateStr
-
-    const day = date.getDate()
-    const suffix = (day >= 11 && day <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[day % 10] || 'th'
-    const month = date.toLocaleString('en-GB', { month: 'long' })
-    return `${day}${suffix} ${month} ${date.getFullYear()}`
-  } catch (error) {
-    return dateStr
-  }
 }
 
 /**

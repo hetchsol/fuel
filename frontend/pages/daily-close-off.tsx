@@ -111,7 +111,7 @@ export default function DailyCloseOff() {
     }
 
     const confirmed = window.confirm(
-      `This will lock all handovers for ${selectedDate} and cannot be undone.\n\nBank deposit: ${fmt(parseFloat(bankDeposit))}\n\nContinue?`
+      `This will lock all handovers for ${formatDateToDisplay(selectedDate)} and cannot be undone.\n\nBank deposit: ${fmt(parseFloat(bankDeposit))}\n\nContinue?`
     )
     if (!confirmed) return
 
@@ -131,7 +131,7 @@ export default function DailyCloseOff() {
         const err = await res.json().catch(() => ({ detail: 'Failed to close day' }))
         throw new Error(err.detail || 'Failed to close day')
       }
-      toast.success(`Day ${selectedDate} closed successfully`)
+      toast.success(`Day ${formatDateToDisplay(selectedDate)} closed successfully`)
       fetchSummary()
       if (showHistory) fetchHistory()
     } catch (err: any) {
@@ -162,7 +162,7 @@ export default function DailyCloseOff() {
     if (!summary?.approved_handovers?.length) return null
     return {
       title: 'Daily Close-Off Report',
-      subtitle: `Date: ${selectedDate} — ${isClosed ? 'Closed' : 'Open'}`,
+      subtitle: `Date: ${formatDateToDisplay(selectedDate)} — ${isClosed ? 'Closed' : 'Open'}`,
       filename: `daily_close_off_${selectedDate}`,
       summaryCards: [
         { label: 'Total Revenue', value: `ZMW ${(totals.total_revenue || 0).toLocaleString()}` },
@@ -311,7 +311,7 @@ export default function DailyCloseOff() {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-content-primary">Approved Shifts</h2>
-                  <p className="text-xs text-content-secondary">{summary.approved_handovers.length} handover(s) for {selectedDate}</p>
+                  <p className="text-xs text-content-secondary">{summary.approved_handovers.length} handover(s) for {formatDateToDisplay(selectedDate)}</p>
                 </div>
               </div>
 
@@ -368,7 +368,7 @@ export default function DailyCloseOff() {
               <svg className="w-16 h-16 text-content-secondary/20 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              <p className="text-content-secondary/60 font-medium">No handovers for {selectedDate}</p>
+              <p className="text-content-secondary/60 font-medium">No handovers for {formatDateToDisplay(selectedDate)}</p>
               <p className="text-content-secondary/40 text-sm mt-1">Nothing to close off</p>
             </div>
           )}

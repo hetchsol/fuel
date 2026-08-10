@@ -345,7 +345,7 @@ export default function FuelOperations() {
         title: 'Fuel Operations — Deliveries',
         filename: `fuel_operations_${new Date().toISOString().slice(0, 10)}`,
         columns: [
-          { header: 'Date', key: 'date' },
+          { header: 'Date', key: 'date', format: 'date' },
           { header: 'Tank', key: 'tank_id' },
           { header: 'Supplier', key: 'supplier' },
           { header: 'Invoice', key: 'invoice_number' },
@@ -362,7 +362,7 @@ export default function FuelOperations() {
         title: 'Fuel Operations — Readings',
         filename: `fuel_readings_${new Date().toISOString().slice(0, 10)}`,
         columns: [
-          { header: 'Date', key: 'date' },
+          { header: 'Date', key: 'date', format: 'date' },
           { header: 'Tank', key: 'tank_id' },
           { header: 'Opening Vol (L)', key: 'opening_volume', format: 'number' },
           { header: 'Closing Vol (L)', key: 'closing_volume', format: 'number' },
