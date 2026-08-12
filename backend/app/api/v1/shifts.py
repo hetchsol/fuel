@@ -542,6 +542,8 @@ def record_tank_dip_reading(shift_id: str, reading: TankDipReading, ctx: dict = 
     if reading.tank_id not in tanks:
         raise HTTPException(status_code=404, detail=f"Tank {reading.tank_id} not found")
 
+    assert_shift_editable(shifts_data[shift_id])
+
     shift = shifts_data[shift_id]
 
     # Initialize tank_dip_readings if not exists

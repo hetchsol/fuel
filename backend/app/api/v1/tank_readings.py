@@ -110,6 +110,19 @@ def record_tank_dips(
 
     station_id = ctx["station_id"]
     storage = ctx["storage"]
+
+    # Block dip/delivery edits once the owning shift is locked (reconciled at
+    # Daily Close-Off / inactive). Permissive if no matching shift exists yet
+    # — same default assert_shift_editable already uses everywhere else.
+    from ...services.shift_status import assert_shift_editable
+    matching_shift = next(
+        (s for s in storage.get("shifts", {}).values()
+         if s.get("date") == date and s.get("shift_type", "").lower() == shift_type.lower()),
+        None
+    )
+    if matching_shift:
+        assert_shift_editable(matching_shift)
+
     ensure_calibration_loaded(tank_id, station_id)
     tank_readings_db = load_tank_readings(station_id)
 
@@ -611,6 +624,19 @@ def submit_tank_reading(
     station_id = ctx["station_id"]
     storage = ctx["storage"]
     role = ctx.get("role", "")
+
+    # Block dip/delivery edits once the owning shift is locked (reconciled at
+    # Daily Close-Off / inactive). Permissive if no matching shift exists yet.
+    from ...services.shift_status import assert_shift_editable
+    matching_shift = next(
+        (s for s in storage.get("shifts", {}).values()
+         if s.get("date") == reading_input.date
+         and s.get("shift_type", "").lower() == reading_input.shift_type.lower()),
+        None
+    )
+    if matching_shift:
+        assert_shift_editable(matching_shift)
+
     ensure_calibration_loaded(reading_input.tank_id, station_id)
     tank_readings_db = load_tank_readings(station_id)
     tank_deliveries_db = load_tank_deliveries(station_id)

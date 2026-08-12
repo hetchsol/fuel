@@ -5,19 +5,26 @@ Locking prevents further edits to handovers for that date.
 """
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel
 
 from .auth import get_station_context, require_manager_or_owner
 from ...database.station_files import load_station_json, save_station_json
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
-from ...services.shift_status import reconcile_shifts_for_date
+from ...services.shift_status import (
+    reconcile_shifts_for_date,
+    unreconcile_shifts_for_date,
+    _shift_fully_approved,
+)
 
 router = APIRouter()
 
 CLOSE_OFF_FILE = "daily_close_offs.json"
 HANDOVERS_FILE = "attendant_handovers.json"
+REOPEN_LOG_FILE = "daily_close_off_reopen_log.json"
+
+MANAGER_REOPEN_WINDOW = timedelta(hours=4)
 
 
 def _load_close_offs(station_id: str) -> dict:
@@ -26,6 +33,14 @@ def _load_close_offs(station_id: str) -> dict:
 
 def _save_close_offs(station_id: str, data: dict):
     save_station_json(station_id, CLOSE_OFF_FILE, data)
+
+
+def _load_reopen_log(station_id: str) -> list:
+    return load_station_json(station_id, REOPEN_LOG_FILE, default=[])
+
+
+def _save_reopen_log(station_id: str, data: list):
+    save_station_json(station_id, REOPEN_LOG_FILE, data)
 
 
 def _load_handovers(station_id: str) -> dict:
@@ -157,7 +172,8 @@ async def close_day(
 ):
     """
     Close off a day: lock handovers, record bank deposit, create audit trail.
-    Owner only. All handovers for the date must be approved.
+    Owner only. Both the Day and Night shift for the date must be recorded
+    and fully closed (all handovers approved) before the day can be banked.
     """
     station_id = ctx["station_id"]
     now = datetime.now()
@@ -171,11 +187,43 @@ async def close_day(
     if data.date in close_offs:
         raise HTTPException(status_code=400, detail=f"Day {data.date} is already closed.")
 
-    # Load handovers for the date
+    # Require both the Day and Night shift for this date to be recorded and
+    # genuinely, cleanly closed (status 'completed' — not 'active', and
+    # deliberately not 'auto-closed', which is a 20-hour stale-shift timeout
+    # fallback rather than a real all-attendants-approved completion). The
+    # handover-approval check further below only sees what exists, never what's
+    # missing — this is what catches a whole shift that was never even started.
+    shifts_for_date = [
+        (sid, s) for sid, s in ctx["storage"].get("shifts", {}).items()
+        if s.get("date") == data.date
+    ]
+    day_entry = next(
+        (pair for pair in shifts_for_date if pair[1].get("shift_type", "").lower() == "day"), None
+    )
+    night_entry = next(
+        (pair for pair in shifts_for_date if pair[1].get("shift_type", "").lower() == "night"), None
+    )
+    for label, entry in (("Day", day_entry), ("Night", night_entry)):
+        if entry is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot close day: {label} shift has not been recorded for {data.date}.",
+            )
+        if entry[1].get("status") != "completed":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot close day: {label} shift is not yet fully closed "
+                       f"(status: {entry[1].get('status', 'unknown')}).",
+            )
+    day_shift_id, night_shift_id = day_entry[0], night_entry[0]
+
+    # Load handovers for the date — scoped to exactly the two verified shifts,
+    # not a blanket date match, so a stray/duplicate handover sharing the date
+    # can't inflate or dilute the banked total.
     all_handovers = _load_handovers(station_id)
     date_handovers = {
         hid: h for hid, h in all_handovers.items()
-        if h.get("date") == data.date
+        if h.get("shift_id") in (day_shift_id, night_shift_id)
     }
 
     if not date_handovers:
@@ -287,6 +335,159 @@ async def close_day(
         pass  # Never block main operation
 
     return close_off_record
+
+
+# ── POST /reopen ─────────────────────────────────────────────
+class ReopenDayInput(BaseModel):
+    date: str
+    reason: str
+
+
+@router.post("/reopen", dependencies=[Depends(require_manager_or_owner)])
+async def reopen_day(
+    data: ReopenDayInput,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Reopen a closed day so an omitted/incomplete shift can still be closed
+    and approved, then the day re-banked with both shifts consolidated.
+
+    Owners may reopen any closed day at any time. Managers may only reopen
+    within 4 hours of the original closure — past that, only the owner can.
+
+    Never touches an already-approved handover's cash/POS/reading data (that
+    stays permanently locked regardless — see review_handover's "Cannot
+    modify an approved handover" guard). Only shifts that turn out to still
+    be genuinely incomplete are reverted to editable; a shift that was
+    already fully and correctly closed is left alone and stays locked.
+    """
+    station_id = ctx["station_id"]
+    now = datetime.now()
+
+    reason = (data.reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="A reason is required to reopen a closed day.")
+
+    close_offs = _load_close_offs(station_id)
+    prior_record = close_offs.get(data.date)
+    if prior_record is None:
+        raise HTTPException(status_code=400, detail=f"Day {data.date} is not closed.")
+
+    is_manager = ctx.get("role") == "manager"
+    if is_manager:
+        closed_at_str = prior_record.get("closed_at")
+        closed_at = None
+        if closed_at_str:
+            try:
+                closed_at = datetime.fromisoformat(closed_at_str)
+            except ValueError:
+                closed_at = None
+        if closed_at is None or (now - closed_at) > MANAGER_REOPEN_WINDOW:
+            raise HTTPException(
+                status_code=403,
+                detail="This day was closed more than 4 hours ago — only the owner can reopen it now.",
+            )
+
+    # Everything below only mutates once validation has fully passed, and the
+    # actual unlock (popping close_offs, last) happens only after every other
+    # write has already succeeded — so a failure partway through leaves the
+    # day still looking closed rather than falsely looking reopened.
+    handover_ids = prior_record.get("handover_ids", [])
+    all_handovers = _load_handovers(station_id)
+    storage = ctx["storage"]
+    shifts_data = storage.get("shifts", {})
+
+    # Discover candidate shifts by date, not by prior_record["handover_ids"] —
+    # a shift that was completely omitted (the motivating case: a shift with
+    # zero handovers at all) is never referenced by any handover_id, so it
+    # would otherwise be invisible here and never get reverted.
+    incomplete_shift_ids = [
+        sid for sid, s in shifts_data.items()
+        if s.get("date") == data.date
+        and not _shift_fully_approved(s, sid, station_id, storage)
+    ]
+
+    # Archive the prior closure before anything else changes — full history
+    # survives even though the live daily_close_offs.json key is about to go.
+    reopen_log = _load_reopen_log(station_id)
+    reopen_log.append({
+        "date": data.date,
+        "reason": reason,
+        "reopened_by": ctx.get("username", ""),
+        "reopened_by_name": ctx.get("full_name", ""),
+        "reopened_at": now.isoformat(),
+        "prior_record": prior_record,
+    })
+    _save_reopen_log(station_id, reopen_log)
+
+    # Revert only the genuinely incomplete shift(s) — a shift that was already
+    # fully approved is left at 'reconciled', so its dips/deliveries stay
+    # locked and its data surface stays untouched.
+    reverted = unreconcile_shifts_for_date(
+        incomplete_shift_ids, station_id, storage, ctx.get("username", "")
+    )
+
+    # Clear the day-lock stamp on affected handovers (informational only —
+    # nothing reads it as a gate, close_offs membership below is what actually
+    # unlocks handover work) and leave a traceable marker on each.
+    for hid in handover_ids:
+        h = all_handovers.get(hid)
+        if not h:
+            continue
+        h["day_closed"] = False
+        h.pop("day_closed_at", None)
+        h.setdefault("reopen_history", []).append({
+            "reason": reason,
+            "reopened_by": ctx.get("username", ""),
+            "reopened_by_name": ctx.get("full_name", ""),
+            "reopened_at": now.isoformat(),
+        })
+    _save_handovers(station_id, all_handovers)
+
+    # The actual unlock: every day-lock guard in attendant_handover.py checks
+    # plain membership in this dict, so popping the date re-opens all of them.
+    del close_offs[data.date]
+    _save_close_offs(station_id, close_offs)
+
+    # Audit trail
+    try:
+        log_audit_event(
+            station_id=station_id,
+            action="daily_close_off_reopen",
+            performed_by=ctx.get("username", ""),
+            entity_type="daily_close_off",
+            entity_id=data.date,
+            details={
+                "reason": reason,
+                "prior_summary": prior_record.get("summary"),
+                "handover_count": len(handover_ids),
+                "shift_ids_reverted": reverted,
+            },
+            notes=reason,
+        )
+    except Exception:
+        pass  # Never block main operation
+
+    # Notification — severity reflects how exceptional the path taken was.
+    try:
+        create_notification(
+            station_id=station_id,
+            type="DAY_REOPENED",
+            severity="medium" if is_manager else "high",
+            title=f"Day Reopened: {data.date}",
+            message=f"{ctx.get('full_name', '')} reopened {data.date} for correction. Reason: {reason}",
+            entity_type="daily_close_off",
+            entity_id=data.date,
+            created_by=ctx.get("username", ""),
+        )
+    except Exception:
+        pass  # Never block main operation
+
+    return {
+        "status": "success",
+        "date": data.date,
+        "shifts_reverted": reverted,
+    }
 
 
 # ── GET /history ──────────────────────────────────────────────

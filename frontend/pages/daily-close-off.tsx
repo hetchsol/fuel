@@ -33,6 +33,11 @@ export default function DailyCloseOff() {
   const [history, setHistory] = useState<any[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
+  // Reopen closed day
+  const [reopenModalOpen, setReopenModalOpen] = useState(false)
+  const [reopenReason, setReopenReason] = useState('')
+  const [reopenLoading, setReopenLoading] = useState(false)
+
   // Auth check — owner only
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -141,6 +146,33 @@ export default function DailyCloseOff() {
     }
   }
 
+  // Reopen a closed day
+  const handleReopenDay = async () => {
+    const reason = reopenReason.trim()
+    if (!reason) return
+    setReopenLoading(true)
+    try {
+      const res = await authFetch(`${BASE}/daily-close-off/reopen`, {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate, reason }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Failed to reopen day' }))
+        throw new Error(err.detail || 'Failed to reopen day')
+      }
+      toast.success(`Day ${formatDateToDisplay(selectedDate)} reopened`)
+      setReopenModalOpen(false)
+      setReopenReason('')
+      fetchSummary()
+      if (showHistory) fetchHistory()
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setReopenLoading(false)
+    }
+  }
+
   const isClosed = summary?.already_closed
   const totals = summary?.totals || {}
 
@@ -195,6 +227,14 @@ export default function DailyCloseOff() {
   const depositVariance = depositNum - (totals.total_actual_cash || 0)
   const canClose = !isClosed && hasApproved && !hasUnapproved && bankDeposit && !isNaN(parseFloat(bankDeposit))
 
+  // A manager may self-service reopen within 4 hours of the original closure;
+  // past that, only the owner can. The server enforces this too — this is
+  // just so the button reflects reality instead of failing at submit time.
+  const reopenDeadline = record?.closed_at
+    ? new Date(new Date(record.closed_at).getTime() + 4 * 60 * 60 * 1000)
+    : null
+  const canReopen = userRole === 'owner' || (userRole === 'manager' && !!reopenDeadline && Date.now() <= reopenDeadline.getTime())
+
   return (
     <div>
       {/* Header */}
@@ -242,17 +282,36 @@ export default function DailyCloseOff() {
           {/* Already Closed Banner */}
           {isClosed && record && (
             <div className="glass-card p-5 mb-6 border-l-4 border-status-success animate-fade-in-up-1">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-status-success/15 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-status-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-status-success/15 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-status-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-status-success">Day Closed</h3>
+                    <p className="text-xs text-content-secondary">
+                      Closed by {record.closed_by_name} on {formatDateTimeToDisplay(record.closed_at)}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-status-success">Day Closed</h3>
-                  <p className="text-xs text-content-secondary">
-                    Closed by {record.closed_by_name} on {formatDateTimeToDisplay(record.closed_at)}
-                  </p>
+                <div className="text-right shrink-0">
+                  {canReopen ? (
+                    <button
+                      onClick={() => setReopenModalOpen(true)}
+                      className="px-4 py-2 text-xs font-semibold rounded-btn border border-status-warning text-status-warning hover:bg-status-warning/10 transition-colors"
+                    >
+                      Reopen This Day
+                    </button>
+                  ) : userRole === 'manager' ? (
+                    <p className="text-xs text-content-secondary/60 max-w-[180px]">Only the owner can reopen this now</p>
+                  ) : null}
+                  {userRole === 'manager' && canReopen && reopenDeadline && (
+                    <p className="text-[10px] text-content-secondary mt-1">
+                      Reopens available until {formatDateTimeToDisplay(reopenDeadline.toISOString())}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
@@ -587,6 +646,46 @@ export default function DailyCloseOff() {
               </div>
             )}
           </div>
+
+          {/* Reopen Day Modal */}
+          {reopenModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="glass-card p-6 w-full max-w-md rounded-card">
+                <h3 className="text-lg font-semibold text-content-primary mb-2">
+                  Reopen {formatDateToDisplay(selectedDate)}
+                </h3>
+                <p className="text-sm text-content-secondary mb-4">
+                  This unlocks any outstanding shift for this day so it can be closed and approved, then
+                  the day can be banked again with both shifts consolidated. A shift that was already
+                  fully and correctly closed is left untouched and stays locked. A reason is required and
+                  recorded in the audit trail.
+                </p>
+                <textarea
+                  rows={3}
+                  value={reopenReason}
+                  onChange={(e) => setReopenReason(e.target.value)}
+                  placeholder="Reason for reopening this day (required)"
+                  className="w-full px-3 py-2 text-sm rounded-input border border-surface-border resize-none focus:outline-none focus:ring-2 focus:ring-action-primary"
+                />
+                <div className="flex justify-end gap-2 mt-4">
+                  <button
+                    onClick={() => { setReopenModalOpen(false); setReopenReason('') }}
+                    disabled={reopenLoading}
+                    className="px-4 py-2 text-sm font-medium rounded-btn border border-surface-border text-content-secondary hover:bg-white/[0.03] transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleReopenDay}
+                    disabled={!reopenReason.trim() || reopenLoading}
+                    className="px-4 py-2 text-sm font-semibold rounded-btn bg-status-warning text-white hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {reopenLoading ? 'Reopening...' : 'Confirm Reopen'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
