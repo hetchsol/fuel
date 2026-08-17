@@ -63,8 +63,24 @@ export default function TankDips() {
   const [userRole, setUserRole] = useState('')
   const [userName, setUserName] = useState('')
   const [tanks, setTanks] = useState<Tank[]>([])
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
-  const [shiftType, setShiftType] = useState('Day')
+  // Read directly off the URL rather than router.query — this page is only
+  // ever reached by client-side navigation (no dynamic segments), so the
+  // query string is already present on first render; waiting on router.isReady
+  // would just cost an extra fetch-with-default-then-refetch round trip.
+  const [date, setDate] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const q = new URLSearchParams(window.location.search).get('date')
+      if (q) return q
+    }
+    return new Date().toISOString().split('T')[0]
+  })
+  const [shiftType, setShiftType] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const q = new URLSearchParams(window.location.search).get('shift_type')
+      if (q === 'Day' || q === 'Night') return q
+    }
+    return 'Day'
+  })
   const [rows, setRows] = useState<DipRow[]>([])
   const [loading, setLoading] = useState(true)
 

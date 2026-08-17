@@ -165,6 +165,10 @@ export default function HandoverReview() {
   // can't fix is wrong server-side — stop retrying automatically and surface
   // it instead of reopening the modal again.
   const [dipRetryAttempted, setDipRetryAttempted] = useState<string | null>(null)
+  // True only for the "still blocked after one retry" case above — lets the
+  // cash form offer a direct link to the standalone Tank Dips page instead of
+  // just naming the problem.
+  const [closingDipBlocked, setClosingDipBlocked] = useState(false)
 
   // Informational-only: co-attendants on the same shift who haven't submitted
   // readings yet. Nothing to fix here except wait — no input, just a notice.
@@ -523,6 +527,7 @@ export default function HandoverReview() {
   const handleCloseAndApprove = async (h: HandoverEntry) => {
     setClosingSubmitting(true)
     setClosingError('')
+    setClosingDipBlocked(false)
     const actualCashVal = parseFloat(closingCash) || 0
     const posItems = posTypes
       .map(t => ({ type_id: t.type_id, type_name: t.name, amount: parseFloat(closingPosAmounts[t.type_id] || '0') || 0, reference: closingPosRefs[t.type_id] || undefined }))
@@ -556,7 +561,8 @@ export default function HandoverReview() {
             // Already looped through the dip modal once for this handover and
             // it still won't clear — don't reopen it again and spin forever.
             const err = await closeRes.json().catch(() => ({ detail: 'Tank dips are still incomplete for this shift.' }))
-            setClosingError(`${err.detail} Check the Tank Dips page for this date/shift and try again.`)
+            setClosingError(err.detail)
+            setClosingDipBlocked(true)
             return
           }
           // Blocked on missing tank dips, discovered mid-submit (e.g. it changed
@@ -603,6 +609,7 @@ export default function HandoverReview() {
   const openCloseAndApprove = async (h: HandoverEntry) => {
     if (closingFormId === h.handover_id) { setClosingFormId(null); return }
     setDipRetryAttempted(null)
+    setClosingDipBlocked(false)
     try {
       const { allComplete } = await loadTankDips(h.date, h.shift_type)
       if (!allComplete) {
@@ -1147,6 +1154,7 @@ export default function HandoverReview() {
                       onCreditItemsChange={setClosingCreditItems}
                       submitting={closingSubmitting}
                       error={closingError}
+                      dipBlocked={closingDipBlocked}
                       onSubmit={() => handleCloseAndApprove(h)}
                       onCancel={() => setClosingFormId(null)}
                     />
@@ -1358,6 +1366,7 @@ export default function HandoverReview() {
                           onCreditItemsChange={setClosingCreditItems}
                           submitting={closingSubmitting}
                           error={closingError}
+                          dipBlocked={closingDipBlocked}
                           onSubmit={() => handleCloseAndApprove(h)}
                           onCancel={() => setClosingFormId(null)}
                         />
@@ -1694,6 +1703,7 @@ interface ClosingFormProps {
   onCreditItemsChange: (items: CreditItem[]) => void
   submitting: boolean
   error: string
+  dipBlocked?: boolean
   onSubmit: () => void
   onCancel: () => void
 }
@@ -1702,7 +1712,7 @@ function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
   cash, onCashChange, posTypes, posAmounts, onPosAmountsChange, posRefs, onPosRefsChange,
   posTerminalBatch, onPosTerminalBatchChange,
   notes, onNotesChange,
-  creditItems, onCreditItemsChange, submitting, error, onSubmit, onCancel,
+  creditItems, onCreditItemsChange, submitting, error, dipBlocked, onSubmit, onCancel,
 }: ClosingFormProps) {
   const cashVal = parseFloat(cash) || 0
   const posVal = posTypes.reduce((s, t) => s + (parseFloat(posAmounts[t.type_id] || '0') || 0), 0)
@@ -1931,7 +1941,13 @@ function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
       {error && (
         <div className="text-xs p-2 rounded"
           style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)' }}>
-          {error}
+          <div>{error}</div>
+          {dipBlocked && (
+            <Link href={`/tank-dips?date=${encodeURIComponent(h.date)}&shift_type=${encodeURIComponent(h.shift_type)}`}
+              className="inline-block mt-1.5 font-medium underline">
+              Open Tank Dips for {formatDateToDisplay(h.date)} ({h.shift_type}) to record them
+            </Link>
+          )}
         </div>
       )}
 
