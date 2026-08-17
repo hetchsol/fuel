@@ -317,26 +317,9 @@ export default function HandoverReview() {
         setClosingPosAmounts(init)
       })
       .catch(() => {})
-    // Non-fuel products a credit sale can be entered against — reusing the
-    // same priced catalogs the stock-count pages already draw on, so a credit
-    // sale here always matches revenue that's genuinely counted for the shift.
-    Promise.all([
-      authFetch(`${BASE}/lubricants-daily/products`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : []),
-      authFetch(`${BASE}/lpg-daily/accessories/inventory`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : []),
-    ]).then(([lubricants, accessories]) => {
-      const seenLubricantCodes = new Set<string>()
-      const lubricantProducts: OtherProduct[] = []
-      for (const p of (lubricants || [])) {
-        const baseCode = String(p.product_code || '').replace(/-BUF$/, '')
-        if (seenLubricantCodes.has(baseCode)) continue
-        seenLubricantCodes.add(baseCode)
-        lubricantProducts.push({ code: baseCode, label: p.description, unit_price: p.unit_price || 0, category: 'Lubricant' })
-      }
-      const accessoryProducts: OtherProduct[] = (accessories || []).map((p: any) => ({
-        code: p.product_code, label: p.description, unit_price: p.unit_price || 0, category: 'Accessory',
-      }))
-      setOtherProducts([...lubricantProducts, ...accessoryProducts])
-    }).catch(() => {})
+    // Non-fuel products a credit sale can be entered against — see
+    // fetchOtherProducts for why these specific catalogs.
+    fetchOtherProducts().then(setOtherProducts)
   }, [])
 
   // When a closing form opens: reset fields + fetch safe deposits for pre-fill
@@ -1170,7 +1153,7 @@ export default function HandoverReview() {
                 </div>
                 {isExpanded && !isAwaiting && (
                   <div className="mt-3 pt-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }} onClick={e => e.stopPropagation()}>
-                    <ExpandedDetail h={h} theme={theme} onRefresh={fetchQueue} />
+                    <ExpandedDetail h={h} theme={theme} onRefresh={fetchQueue} currentUserRole={currentUserRole} />
                   </div>
                 )}
                 {closingFormId === h.handover_id && isAwaiting && (
@@ -1381,7 +1364,7 @@ export default function HandoverReview() {
                     <tr>
                       <td colSpan={statusTab !== 'approved' ? 10 : 9}
                         style={{ backgroundColor: theme.background, borderTopColor: theme.border, borderTopWidth: 1 }}>
-                        <ExpandedDetail h={h} theme={theme} onRefresh={fetchQueue} />
+                        <ExpandedDetail h={h} theme={theme} onRefresh={fetchQueue} currentUserRole={currentUserRole} />
                       </td>
                     </tr>
                   )}
@@ -1730,6 +1713,140 @@ export default function HandoverReview() {
 }
 
 
+// Inline "create credit account" — shared by ClosingForm (Close & Approve)
+// and CreditPanel (post-approval credit entry), both of which need the same
+// escape hatch when the account they want isn't set up yet. POSTs to the
+// same /accounts/ endpoint the standalone Accounts page uses.
+function NewAccountModal({ theme, onClose, onCreated }: { theme: any; onClose: () => void; onCreated: (acct: any) => void }) {
+  const [name, setName] = useState('')
+  const [type, setType] = useState<'Post-Paid' | 'Pre-Paid'>('Post-Paid')
+  const [creditLimit, setCreditLimit] = useState('')
+  const [openingBalance, setOpeningBalance] = useState('')
+  const [defaultPrice, setDefaultPrice] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const inputStyle = { backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }
+
+  const submit = async () => {
+    if (!name.trim()) { setError('Account name is required.'); return }
+    setSaving(true)
+    setError('')
+    try {
+      const isPrePaid = type === 'Pre-Paid'
+      const res = await authFetch(`${BASE}/accounts/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          account_id: '',
+          account_name: name.trim(),
+          account_type: type,
+          credit_limit: isPrePaid ? 0 : (parseFloat(creditLimit) || 0),
+          opening_balance: isPrePaid ? (parseFloat(openingBalance) || 0) : null,
+          current_balance: 0,
+          approved_overdraft: 0,
+          default_price_per_liter: defaultPrice ? parseFloat(defaultPrice) : null,
+        }),
+      })
+      const acct = await res.json().catch(() => null)
+      if (!res.ok) {
+        const detail = Array.isArray(acct?.detail) ? acct.detail.map((d: any) => d.msg || d).join(', ') : (acct?.detail || 'Failed to create account')
+        throw new Error(detail)
+      }
+      onCreated(acct)
+    } catch (e: any) {
+      setError(e.message || 'Failed to create account')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="rounded-lg shadow-xl w-full max-w-sm p-4 space-y-3"
+        style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}
+        onClick={e => e.stopPropagation()}>
+        <div className="font-semibold text-sm" style={{ color: theme.textPrimary }}>New Credit Account</div>
+        {error && (
+          <div className="text-xs p-2 rounded" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)' }}>
+            {error}
+          </div>
+        )}
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Account Name *</label>
+          <input type="text" value={name} onChange={e => setName(e.target.value)}
+            className="w-full px-3 py-2 rounded border text-sm" style={inputStyle} autoFocus />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Type</label>
+            <select value={type} onChange={e => setType(e.target.value as 'Post-Paid' | 'Pre-Paid')}
+              className="w-full px-3 py-2 rounded border text-sm" style={inputStyle}>
+              <option value="Post-Paid">Post-Paid</option>
+              <option value="Pre-Paid">Pre-Paid</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+              {type === 'Pre-Paid' ? 'Opening Balance' : 'Credit Limit'}
+            </label>
+            <input type="number" min={0} step="0.01"
+              value={type === 'Pre-Paid' ? openingBalance : creditLimit}
+              onChange={e => type === 'Pre-Paid' ? setOpeningBalance(e.target.value) : setCreditLimit(e.target.value)}
+              className="w-full px-3 py-2 rounded border text-sm text-right font-mono" style={inputStyle} />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+            Default Price / Liter (optional — overrides the standard fuel price for this account)
+          </label>
+          <input type="number" min={0} step="0.01" value={defaultPrice} onChange={e => setDefaultPrice(e.target.value)}
+            className="w-full px-3 py-2 rounded border text-sm text-right font-mono" style={inputStyle} />
+        </div>
+        <div className="flex gap-2 justify-end pt-1">
+          <button onClick={onClose}
+            className="px-4 py-2 text-sm rounded" style={{ color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
+            Cancel
+          </button>
+          <button onClick={submit} disabled={saving || !name.trim()}
+            className="px-4 py-2 text-sm font-semibold rounded text-white disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-action-primary)' }}>
+            {saving ? 'Creating...' : 'Create Account'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Fetch the non-fuel products a credit sale can be entered against — the same
+// priced catalogs the stock-count pages already draw on, so a credit sale
+// for one of these always matches revenue already counted in the shift's
+// total_expected. Shared by ClosingForm's parent (HandoverReview) and
+// CreditPanel, which each fetch it independently to match their existing
+// self-contained data-loading style.
+async function fetchOtherProducts(): Promise<OtherProduct[]> {
+  try {
+    const [lubricants, accessories] = await Promise.all([
+      authFetch(`${BASE}/lubricants-daily/products`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : []),
+      authFetch(`${BASE}/lpg-daily/accessories/inventory`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : []),
+    ])
+    const seenLubricantCodes = new Set<string>()
+    const lubricantProducts: OtherProduct[] = []
+    for (const p of (lubricants || [])) {
+      const baseCode = String(p.product_code || '').replace(/-BUF$/, '')
+      if (seenLubricantCodes.has(baseCode)) continue
+      seenLubricantCodes.add(baseCode)
+      lubricantProducts.push({ code: baseCode, label: p.description, unit_price: p.unit_price || 0, category: 'Lubricant' })
+    }
+    const accessoryProducts: OtherProduct[] = (accessories || []).map((p: any) => ({
+      code: p.product_code, label: p.description, unit_price: p.unit_price || 0, category: 'Accessory',
+    }))
+    return [...lubricantProducts, ...accessoryProducts]
+  } catch {
+    return []
+  }
+}
+
 interface ClosingFormProps {
   h: HandoverEntry
   theme: any
@@ -1772,66 +1889,26 @@ function ClosingForm({ h, theme, creditAccounts, otherProducts, onAccountCreated
   const difference = totalAccounted - (h.total_expected || 0)
   const inputStyle = { backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }
 
-  // Inline "create credit account" — reuses POST /accounts/ (the same endpoint
-  // the standalone Accounts page uses), just triggered from wherever the
-  // manager is already looking instead of sending them away to set one up
-  // first. newAccountRowIdx tracks which row (if any) should get the new
-  // account selected once it's created; null means it was opened standalone.
+  // newAccountRowIdx tracks which row (if any) should get the newly created
+  // account selected; null means the modal was opened standalone (the
+  // top-level "+ New Account" button rather than a row's picker).
   const canCreateAccounts = currentUserRole === 'manager' || currentUserRole === 'owner'
   const [showNewAccount, setShowNewAccount] = useState(false)
   const [newAccountRowIdx, setNewAccountRowIdx] = useState<number | null>(null)
-  const [naName, setNaName] = useState('')
-  const [naType, setNaType] = useState<'Post-Paid' | 'Pre-Paid'>('Post-Paid')
-  const [naCreditLimit, setNaCreditLimit] = useState('')
-  const [naOpeningBalance, setNaOpeningBalance] = useState('')
-  const [naDefaultPrice, setNaDefaultPrice] = useState('')
-  const [naSaving, setNaSaving] = useState(false)
-  const [naError, setNaError] = useState('')
 
   const openNewAccount = (rowIdx: number | null) => {
     setNewAccountRowIdx(rowIdx)
-    setNaName(''); setNaType('Post-Paid'); setNaCreditLimit(''); setNaOpeningBalance(''); setNaDefaultPrice('')
-    setNaError('')
     setShowNewAccount(true)
   }
 
-  const submitNewAccount = async () => {
-    if (!naName.trim()) { setNaError('Account name is required.'); return }
-    setNaSaving(true)
-    setNaError('')
-    try {
-      const isPrePaid = naType === 'Pre-Paid'
-      const res = await authFetch(`${BASE}/accounts/`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          account_id: '',
-          account_name: naName.trim(),
-          account_type: naType,
-          credit_limit: isPrePaid ? 0 : (parseFloat(naCreditLimit) || 0),
-          opening_balance: isPrePaid ? (parseFloat(naOpeningBalance) || 0) : null,
-          current_balance: 0,
-          approved_overdraft: 0,
-          default_price_per_liter: naDefaultPrice ? parseFloat(naDefaultPrice) : null,
-        }),
-      })
-      const acct = await res.json().catch(() => null)
-      if (!res.ok) {
-        const detail = Array.isArray(acct?.detail) ? acct.detail.map((d: any) => d.msg || d).join(', ') : (acct?.detail || 'Failed to create account')
-        throw new Error(detail)
-      }
-      onAccountCreated(acct)
-      if (newAccountRowIdx != null) {
-        const updated = [...creditItems]
-        updated[newAccountRowIdx] = { ...updated[newAccountRowIdx], account_id: acct.account_id, account_name: acct.account_name }
-        onCreditItemsChange(updated)
-      }
-      setShowNewAccount(false)
-    } catch (e: any) {
-      setNaError(e.message || 'Failed to create account')
-    } finally {
-      setNaSaving(false)
+  const handleAccountCreatedHere = (acct: any) => {
+    onAccountCreated(acct)
+    if (newAccountRowIdx != null) {
+      const updated = [...creditItems]
+      updated[newAccountRowIdx] = { ...updated[newAccountRowIdx], account_id: acct.account_id, account_name: acct.account_name }
+      onCreditItemsChange(updated)
     }
+    setShowNewAccount(false)
   }
 
   const updateCreditItem = (idx: number, patch: Partial<CreditItem>) => {
@@ -2121,64 +2198,8 @@ function ClosingForm({ h, theme, creditAccounts, otherProducts, onAccountCreated
         )}
       </div>
 
-      {/* New credit account — inline, POSTs to the same /accounts/ endpoint the
-          standalone Accounts page uses. */}
       {showNewAccount && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setShowNewAccount(false)}>
-          <div className="rounded-lg shadow-xl w-full max-w-sm p-4 space-y-3"
-            style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}
-            onClick={e => e.stopPropagation()}>
-            <div className="font-semibold text-sm" style={{ color: theme.textPrimary }}>New Credit Account</div>
-            {naError && (
-              <div className="text-xs p-2 rounded" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)' }}>
-                {naError}
-              </div>
-            )}
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Account Name *</label>
-              <input type="text" value={naName} onChange={e => setNaName(e.target.value)}
-                className="w-full px-3 py-2 rounded border text-sm" style={inputStyle} autoFocus />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Type</label>
-                <select value={naType} onChange={e => setNaType(e.target.value as 'Post-Paid' | 'Pre-Paid')}
-                  className="w-full px-3 py-2 rounded border text-sm" style={inputStyle}>
-                  <option value="Post-Paid">Post-Paid</option>
-                  <option value="Pre-Paid">Pre-Paid</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-                  {naType === 'Pre-Paid' ? 'Opening Balance' : 'Credit Limit'}
-                </label>
-                <input type="number" min={0} step="0.01"
-                  value={naType === 'Pre-Paid' ? naOpeningBalance : naCreditLimit}
-                  onChange={e => naType === 'Pre-Paid' ? setNaOpeningBalance(e.target.value) : setNaCreditLimit(e.target.value)}
-                  className="w-full px-3 py-2 rounded border text-sm text-right font-mono" style={inputStyle} />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-                Default Price / Liter (optional — overrides the standard fuel price for this account)
-              </label>
-              <input type="number" min={0} step="0.01" value={naDefaultPrice} onChange={e => setNaDefaultPrice(e.target.value)}
-                className="w-full px-3 py-2 rounded border text-sm text-right font-mono" style={inputStyle} />
-            </div>
-            <div className="flex gap-2 justify-end pt-1">
-              <button onClick={() => setShowNewAccount(false)}
-                className="px-4 py-2 text-sm rounded" style={{ color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
-                Cancel
-              </button>
-              <button onClick={submitNewAccount} disabled={naSaving || !naName.trim()}
-                className="px-4 py-2 text-sm font-semibold rounded text-white disabled:opacity-50"
-                style={{ backgroundColor: 'var(--color-action-primary)' }}>
-                {naSaving ? 'Creating...' : 'Create Account'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <NewAccountModal theme={theme} onClose={() => setShowNewAccount(false)} onCreated={handleAccountCreatedHere} />
       )}
 
       {/* Notes */}
@@ -2243,7 +2264,7 @@ function ClosingForm({ h, theme, creditAccounts, otherProducts, onAccountCreated
   )
 }
 
-function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any; onRefresh: () => void }) {
+function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverEntry; theme: any; onRefresh: () => void; currentUserRole: string }) {
   const [expandedStock, setExpandedStock] = useState<string | null>(null)
   const [showPOS, setShowPOS] = useState(false)
   const [showCredit, setShowCredit] = useState(false)
@@ -2640,7 +2661,7 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
             style={{ backgroundColor: showCredit ? theme.border : 'var(--color-action-primary-light)', color: 'var(--color-action-primary)' }}>
             {showCredit ? 'Hide Credit Entry' : '+ Add Credit Sales'}
           </button>
-          {showCredit && <CreditPanel handoverId={h.handover_id} existingDetails={h.credit_sale_details ?? []} theme={theme} onSaved={() => { setShowCredit(false); onRefresh() }} />}
+          {showCredit && <CreditPanel handoverId={h.handover_id} existingDetails={h.credit_sale_details ?? []} theme={theme} currentUserRole={currentUserRole} onSaved={() => { setShowCredit(false); onRefresh() }} />}
         </div>
       )}
 
@@ -2870,66 +2891,96 @@ function POSPanel({ handoverId, existingBreakdown, theme, onSaved }: {
   )
 }
 
-function CreditPanel({ handoverId, existingDetails, theme, onSaved }: {
+function CreditPanel({ handoverId, existingDetails, theme, currentUserRole, onSaved }: {
   handoverId: string
   existingDetails: any[]
   theme: any
+  currentUserRole: string
   onSaved: () => void
 }) {
   const [accounts, setAccounts] = useState<any[]>([])
   const [fuelPrices, setFuelPrices] = useState<Record<string, number>>({ Diesel: 0, Petrol: 0 })
+  const [otherProducts, setOtherProducts] = useState<OtherProduct[]>([])
   const [selectedAccountId, setSelectedAccountId] = useState('')
+  const [itemKind, setItemKind] = useState<'fuel' | 'other'>('fuel')
   const [fuelType, setFuelType] = useState('Diesel')
+  const [productCode, setProductCode] = useState('')
+  const [entryMode, setEntryMode] = useState<'liters' | 'amount'>('liters')
   const [volume, setVolume] = useState('')
+  const [amountInput, setAmountInput] = useState('')
+  const [price, setPrice] = useState(0)
   const [items, setItems] = useState<any[]>([])
   const [dupWarning, setDupWarning] = useState('')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const [savedDuplicates, setSavedDuplicates] = useState<any[]>([])
   const [confirmedItems, setConfirmedItems] = useState<any[]>([])
+  const [showNewAccount, setShowNewAccount] = useState(false)
+
+  const canCreateAccounts = currentUserRole === 'manager' || currentUserRole === 'owner'
 
   useEffect(() => {
     authFetch(`${BASE}/handover/credit-accounts`, { headers: getAuthHeaders() })
       .then(r => r.ok ? r.json() : { accounts: [], fuel_prices: {} })
       .then(data => {
-        setAccounts(data.accounts || [])
-        setFuelPrices(data.fuel_prices || { Diesel: 0, Petrol: 0 })
-        const first = (data.accounts || []).find((a: any) => !a.is_suspended)
+        const accts = data.accounts || []
+        const prices = data.fuel_prices || { Diesel: 0, Petrol: 0 }
+        setAccounts(accts)
+        setFuelPrices(prices)
+        const first = accts.find((a: any) => !a.is_suspended)
         if (first) setSelectedAccountId(first.account_id)
+        setPrice(first?.default_price_per_liter || prices.Diesel || 0)
       })
       .catch(() => {})
+    fetchOtherProducts().then(products => {
+      setOtherProducts(products)
+      setProductCode(prev => prev || products[0]?.code || '')
+    })
   }, [])
 
   const selectedAccount = accounts.find(a => a.account_id === selectedAccountId)
-  const pricePerLiter = selectedAccount?.default_price_per_liter || fuelPrices[fuelType] || 0
-  const vol = parseFloat(volume) || 0
-  const lineAmount = Math.round(vol * pricePerLiter * 100) / 100
+  const selectedProduct = otherProducts.find(p => p.code === productCode)
+  const itemLabel = itemKind === 'fuel' ? fuelType : (selectedProduct?.label || '')
+  const vol = entryMode === 'liters' ? (parseFloat(volume) || 0) : (price > 0 ? Math.round(((parseFloat(amountInput) || 0) / price) * 1000) / 1000 : 0)
+  const lineAmount = entryMode === 'amount' ? (parseFloat(amountInput) || 0) : Math.round(vol * price * 100) / 100
 
-  const isDuplicate = (accountId: string, fuel: string): string | null => {
+  const isDuplicate = (accountId: string, label: string): string | null => {
     const allExisting = [
       ...existingDetails.filter(d => d.source !== 'skipped_duplicate'),
       ...items,
     ]
-    const match = allExisting.find(d => d.account_id === accountId && d.fuel_type === fuel)
+    const match = allExisting.find(d => d.account_id === accountId && d.fuel_type === label)
     if (match) {
       const slip = match.slip_number ? ` (Slip: ${match.slip_number})` : ''
-      return `${match.account_name} / ${fuel} already recorded for this shift${slip}`
+      return `${match.account_name} / ${label} already recorded for this shift${slip}`
     }
     return null
   }
 
+  const handleAccountCreated = (acct: any) => {
+    setAccounts(prev => [...prev, acct])
+    setSelectedAccountId(acct.account_id)
+    if (itemKind === 'fuel') {
+      setPrice(acct.default_price_per_liter || fuelPrices[fuelType] || 0)
+    } else {
+      setPrice(selectedProduct?.unit_price || 0)
+    }
+    setShowNewAccount(false)
+  }
+
   const addItem = () => {
-    if (!selectedAccountId || vol <= 0) return
+    if (!selectedAccountId || vol <= 0 || price <= 0) return
     const acct = accounts.find(a => a.account_id === selectedAccountId)
     if (!acct) return
-    const dupMsg = isDuplicate(acct.account_id, fuelType)
+    const dupMsg = isDuplicate(acct.account_id, itemLabel)
     if (dupMsg) { setDupWarning(dupMsg); return }
     setDupWarning('')
     setItems(prev => [...prev, {
-      account_id: acct.account_id, account_name: acct.account_name,
-      fuel_type: fuelType, volume: vol, price_per_liter: pricePerLiter, amount: lineAmount,
+      account_id: acct.account_id, account_name: acct.account_name, item_kind: itemKind,
+      fuel_type: itemLabel, volume: vol, price_per_liter: price, amount: lineAmount,
     }])
     setVolume('')
+    setAmountInput('')
   }
 
   const saveAll = async () => {
@@ -2972,6 +3023,7 @@ function CreditPanel({ handoverId, existingDetails, theme, onSaved }: {
 
   const total = items.reduce((s, i) => s + i.amount, 0)
   const fmtK = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const smallInputStyle = { backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }
 
   return (
     <div className="mt-3" style={{ borderRadius: 8, padding: '0 0 0 3px', background: 'var(--color-action-primary)' }}>
@@ -2985,7 +3037,7 @@ function CreditPanel({ handoverId, existingDetails, theme, onSaved }: {
               style={{ backgroundColor: theme.background }}>
               <div>
                 <span className="font-semibold" style={{ color: theme.textPrimary }}>{item.account_name}</span>
-                <span style={{ color: theme.textSecondary }}> · {item.fuel_type} · {item.volume?.toLocaleString()}L</span>
+                <span style={{ color: theme.textSecondary }}> · {item.fuel_type} · {item.volume?.toLocaleString()}{['Diesel', 'Petrol'].includes(item.fuel_type) ? 'L' : ''}</span>
               </div>
               <div className="flex items-center gap-4">
                 {item.slip_number && (
@@ -3016,32 +3068,112 @@ function CreditPanel({ handoverId, existingDetails, theme, onSaved }: {
           <div className="flex flex-wrap gap-3 items-end">
             <div>
               <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Account</div>
-              <select value={selectedAccountId} onChange={e => { setSelectedAccountId(e.target.value); setDupWarning('') }}
-                className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+              <select value={selectedAccountId}
+                onChange={e => {
+                  if (e.target.value === '__new__') { setShowNewAccount(true); return }
+                  setSelectedAccountId(e.target.value); setDupWarning('')
+                }}
+                className="px-2 py-1.5 text-xs rounded border" style={smallInputStyle}>
                 {accounts.map(a => (
                   <option key={a.account_id} value={a.account_id} disabled={a.is_suspended}>
                     {a.account_name}{a.is_suspended ? ' (Suspended)' : ''}
                   </option>
                 ))}
+                {canCreateAccounts && <option value="__new__">+ New Account...</option>}
               </select>
             </div>
             <div>
-              <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Fuel</div>
-              <select value={fuelType} onChange={e => { setFuelType(e.target.value); setDupWarning('') }}
-                className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
-                <option>Diesel</option>
-                <option>Petrol</option>
+              <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Kind</div>
+              <select value={itemKind}
+                onChange={e => {
+                  const kind = e.target.value as 'fuel' | 'other'
+                  setItemKind(kind)
+                  setDupWarning('')
+                  if (kind === 'fuel') {
+                    setPrice(selectedAccount?.default_price_per_liter || fuelPrices[fuelType] || 0)
+                  } else {
+                    setPrice(selectedProduct?.unit_price || 0)
+                  }
+                }}
+                className="px-2 py-1.5 text-xs rounded border" style={smallInputStyle}>
+                <option value="fuel">Fuel</option>
+                <option value="other">Other</option>
               </select>
             </div>
+            {itemKind === 'fuel' ? (
+              <div>
+                <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Fuel</div>
+                <select value={fuelType}
+                  onChange={e => {
+                    setFuelType(e.target.value)
+                    setPrice(selectedAccount?.default_price_per_liter || fuelPrices[e.target.value] || 0)
+                    setDupWarning('')
+                  }}
+                  className="px-2 py-1.5 text-xs rounded border" style={smallInputStyle}>
+                  <option>Diesel</option>
+                  <option>Petrol</option>
+                </select>
+              </div>
+            ) : (
+              <div>
+                <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Product</div>
+                <select value={productCode}
+                  onChange={e => {
+                    const p = otherProducts.find(op => op.code === e.target.value)
+                    setProductCode(e.target.value)
+                    setPrice(p?.unit_price || 0)
+                    setDupWarning('')
+                  }}
+                  className="min-w-[10rem] px-2 py-1.5 text-xs rounded border" style={smallInputStyle}>
+                  {otherProducts.length === 0 && <option value="">No products available</option>}
+                  {['Lubricant', 'Accessory'].map(cat => {
+                    const rows = otherProducts.filter(p => p.category === cat)
+                    if (rows.length === 0) return null
+                    return (
+                      <optgroup key={cat} label={cat}>
+                        {rows.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
+                      </optgroup>
+                    )
+                  })}
+                </select>
+              </div>
+            )}
             <div>
-              <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Volume (L)</div>
-              <input type="number" min="0" step="0.01" placeholder="0.00" value={volume}
-                onChange={e => { setVolume(e.target.value); setDupWarning('') }} onKeyDown={e => e.key === 'Enter' && addItem()}
-                className="w-24 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
+              <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Entry</div>
+              <select value={entryMode} onChange={e => { setEntryMode(e.target.value as 'liters' | 'amount'); setDupWarning('') }}
+                className="px-2 py-1.5 text-xs rounded border" style={smallInputStyle}>
+                <option value="liters">{itemKind === 'fuel' ? 'Litres' : 'Qty'}</option>
+                <option value="amount">Amount (K)</option>
+              </select>
             </div>
-            {vol > 0 && pricePerLiter > 0 && (
-              <span className="text-xs self-end pb-2 font-semibold" style={{ color: 'var(--color-action-primary)' }}>
-                K{pricePerLiter.toFixed(2)}/L = {fmtK(lineAmount)}
+            {entryMode === 'liters' ? (
+              <div>
+                <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>
+                  {itemKind === 'fuel' ? 'Volume (L)' : 'Quantity'}
+                </div>
+                <input type="number" min="0" step="0.01" placeholder="0.00" value={volume}
+                  onChange={e => { setVolume(e.target.value); setDupWarning('') }} onKeyDown={e => e.key === 'Enter' && addItem()}
+                  className="w-24 px-2 py-1.5 text-xs rounded border" style={smallInputStyle} />
+              </div>
+            ) : (
+              <div>
+                <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Amount (ZMW)</div>
+                <input type="number" min="0" step="0.01" placeholder="0.00" value={amountInput}
+                  onChange={e => { setAmountInput(e.target.value); setDupWarning('') }} onKeyDown={e => e.key === 'Enter' && addItem()}
+                  className="w-24 px-2 py-1.5 text-xs rounded border" style={smallInputStyle} />
+              </div>
+            )}
+            <div>
+              <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Price</div>
+              <input type="number" min="0" step="0.01" placeholder="0.00" value={price || ''}
+                title="Price — editable for a negotiated credit rate"
+                onChange={e => { setPrice(parseFloat(e.target.value) || 0); setDupWarning('') }}
+                className="w-20 px-2 py-1.5 text-xs rounded border text-right font-mono" style={smallInputStyle} />
+            </div>
+            {vol > 0 && price > 0 && (
+              <span className="text-xs self-end pb-2 font-semibold" style={{ color: 'var(--color-action-primary)' }}
+                title={entryMode === 'amount' ? `= ${vol} ${itemKind === 'fuel' ? 'L' : 'units'}` : undefined}>
+                {fmtK(lineAmount)}
               </span>
             )}
             <button onClick={addItem} className="px-3 py-1.5 text-xs font-bold rounded text-white self-end"
@@ -3062,7 +3194,7 @@ function CreditPanel({ handoverId, existingDetails, theme, onSaved }: {
                 <div key={idx} className="flex items-center justify-between text-xs px-2 py-1.5 rounded"
                   style={{ backgroundColor: theme.background }}>
                   <span style={{ color: theme.textSecondary }}>
-                    {item.account_name} · {item.fuel_type} · {item.volume.toLocaleString()}L @ K{item.price_per_liter.toFixed(2)}
+                    {item.account_name} · {item.fuel_type} · {item.volume.toLocaleString()}{item.item_kind === 'fuel' ? 'L' : ' units'} @ K{item.price_per_liter.toFixed(2)}
                   </span>
                   <div className="flex items-center gap-3">
                     <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>{fmtK(item.amount)}</span>
@@ -3086,6 +3218,9 @@ function CreditPanel({ handoverId, existingDetails, theme, onSaved }: {
       )}
 
     </div>
+    {showNewAccount && (
+      <NewAccountModal theme={theme} onClose={() => setShowNewAccount(false)} onCreated={handleAccountCreated} />
+    )}
     </div>
   )
 }
