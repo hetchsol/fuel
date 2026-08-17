@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import TankDipsCapture from '../components/TankDipsCapture'
 import { getHeaders, authFetch } from '../lib/api'
+import { CreditItem, OtherProduct, NewAccountModal, fetchOtherProducts } from '../components/CreditSaleShared'
 
 const BASE = '/api/v1'
 
@@ -13,15 +14,6 @@ function getAuthHeaders() {
 }
 
 const fmtZMW = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
-interface CreditItem {
-  account_id: string
-  account_name: string
-  fuel_type: string
-  volume: string
-  price_per_liter: number
-  amount: number
-}
 
 export default function ShiftClosing() {
   const { theme } = useTheme()
@@ -61,6 +53,8 @@ export default function ShiftClosing() {
   const [creditAccounts, setCreditAccounts] = useState<any[]>([])
   const [creditItems, setCreditItems] = useState<CreditItem[]>([])
   const [fuelPrices, setFuelPrices] = useState<Record<string, number>>({ Diesel: 0, Petrol: 0 })
+  const [otherProducts, setOtherProducts] = useState<OtherProduct[]>([])
+  const [showNewAccount, setShowNewAccount] = useState(false)
 
   // Safe deposit info (display only)
   const [safeDepositTotal, setSafeDepositTotal] = useState(0)
@@ -89,6 +83,7 @@ export default function ShiftClosing() {
       setCreditAccounts(creditData.accounts || [])
       setFuelPrices(creditData.fuel_prices || { Diesel: 0, Petrol: 0 })
     }
+    fetchOtherProducts().then(setOtherProducts)
     try {
       const depRes = await authFetch(`${BASE}/safe-deposits/${shiftId}`, { headers: getAuthHeaders() })
       if (depRes.ok) {
@@ -279,6 +274,7 @@ export default function ShiftClosing() {
             account_name: i.account_name,
             fuel_type: i.fuel_type,
             volume: parseFloat(i.volume) || 0,
+            price_per_liter: i.price_per_liter || 0,
           })),
           notes: notes || null,
         }),
@@ -286,6 +282,17 @@ export default function ShiftClosing() {
 
       if (!res.ok) {
         const err = await res.json()
+        if (res.status === 409) {
+          // Blocked on missing tank dips, discovered mid-submit (e.g. a tank
+          // was added, or a delivery reopened one, since the dips step ran).
+          // Send the manager back to that step instead of leaving them stuck
+          // on a dead-end error — TankDipsCapture will re-check live state
+          // and show exactly what's still missing.
+          setStep('dips')
+          setError(`${err.detail || 'Tank dips are incomplete for this shift.'} Record them below, then continue.`)
+          setSubmitting(false)
+          return
+        }
         throw new Error(err.detail || 'Failed to submit shift closing')
       }
 
@@ -301,6 +308,35 @@ export default function ShiftClosing() {
 
   const isManagerRole = ['manager', 'supervisor', 'owner'].includes(userRole)
   const handoversForDate = managerHandovers.filter((h: any) => h.date === selectedDate)
+  const canCreateAccounts = userRole === 'manager' || userRole === 'owner'
+
+  const updateCreditItem = (idx: number, patch: Partial<CreditItem>) => {
+    setCreditItems(prev => {
+      const updated = [...prev]
+      updated[idx] = { ...updated[idx], ...patch }
+      return updated
+    })
+  }
+
+  // Single source of truth for a row's amount/volume so entering either one
+  // (money or liters/units) always keeps the other consistent for submission
+  // — the backend only ever accepts volume, so "amount" mode is purely a
+  // client-side convenience that back-computes it from the row's price.
+  const recomputeCreditRow = (idx: number, price: number, volumeStr: string, amountStr: string, mode: 'liters' | 'amount') => {
+    if (mode === 'liters') {
+      const vol = parseFloat(volumeStr) || 0
+      updateCreditItem(idx, { volume: volumeStr, price_per_liter: price, amount: Math.round(vol * price * 100) / 100, entry_mode: mode })
+    } else {
+      const amt = parseFloat(amountStr) || 0
+      const vol = price > 0 ? Math.round((amt / price) * 1000) / 1000 : 0
+      updateCreditItem(idx, { volume: String(vol), price_per_liter: price, amount: amt, entry_mode: mode })
+    }
+  }
+
+  const handleAccountCreated = (acct: any) => {
+    setCreditAccounts(prev => [...prev, acct])
+    setShowNewAccount(false)
+  }
 
   if (loading) return <LoadingSpinner text="Loading shift data..." />
 
@@ -619,93 +655,166 @@ export default function ShiftClosing() {
               )}
 
               {/* Credit Sales */}
-              {creditAccounts.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Credit Sales</label>
-                    <button type="button" onClick={() => setCreditItems(prev => [...prev, {
-                      account_id: creditAccounts[0]?.account_id || '',
-                      account_name: creditAccounts[0]?.account_name || '',
-                      fuel_type: 'Diesel',
-                      volume: '',
-                      price_per_liter: creditAccounts[0]?.default_price_per_liter || fuelPrices.Diesel,
-                      amount: 0,
-                    }])}
-                      className="px-2 py-1 text-xs font-medium rounded text-white"
-                      style={{ backgroundColor: theme.primary }}>
-                      + Add
-                    </button>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Credit Sales</label>
+                  <div className="flex gap-2">
+                    {canCreateAccounts && (
+                      <button type="button" onClick={() => setShowNewAccount(true)}
+                        className="px-2 py-1 text-xs font-medium rounded"
+                        style={{ color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
+                        + New Account
+                      </button>
+                    )}
+                    {creditAccounts.length > 0 && (
+                      <button type="button" onClick={() => {
+                        const acct = creditAccounts[0]
+                        setCreditItems(prev => [...prev, {
+                          account_id: acct.account_id,
+                          account_name: acct.account_name,
+                          item_kind: 'fuel',
+                          fuel_type: 'Diesel',
+                          volume: '',
+                          price_per_liter: acct.default_price_per_liter || fuelPrices.Diesel || 0,
+                          amount: 0,
+                          entry_mode: 'liters',
+                        }])
+                      }}
+                        className="px-2 py-1 text-xs font-medium rounded text-white"
+                        style={{ backgroundColor: theme.primary }}>
+                        + Add
+                      </button>
+                    )}
                   </div>
-                  {creditItems.length === 0 && (
-                    <div className="text-xs py-2 text-center" style={{ color: theme.textSecondary }}>No credit sales — tap Add to record one</div>
-                  )}
-                  {creditItems.map((item, idx) => {
-                    const acct = creditAccounts.find((a: any) => a.account_id === item.account_id)
-                    const resolvedPrice = acct?.default_price_per_liter || fuelPrices[item.fuel_type as 'Diesel'|'Petrol'] || 0
-                    const vol = parseFloat(item.volume) || 0
-                    const amt = Math.round(vol * resolvedPrice * 100) / 100
-                    if (item.price_per_liter !== resolvedPrice || item.amount !== amt) {
-                      const updated = [...creditItems]
-                      updated[idx] = { ...item, price_per_liter: resolvedPrice, amount: amt }
-                      setCreditItems(updated)
-                    }
-                    return (
-                      <div key={idx} className="grid grid-cols-12 gap-1 items-end mb-1">
-                        <div className="col-span-4">
-                          {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Account</div>}
-                          <select value={item.account_id} onChange={e => {
-                            const a = creditAccounts.find((x: any) => x.account_id === e.target.value)
-                            const updated = [...creditItems]
-                            updated[idx] = { ...item, account_id: e.target.value, account_name: a?.account_name || '' }
-                            setCreditItems(updated)
-                          }} className="w-full px-1 py-1.5 rounded border text-xs" style={inputStyle}>
-                            {creditAccounts.map((a: any) => <option key={a.account_id} value={a.account_id}>{a.account_name}</option>)}
-                          </select>
-                        </div>
-                        <div className="col-span-2">
-                          {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Fuel</div>}
-                          <select value={item.fuel_type} onChange={e => {
-                            const updated = [...creditItems]
-                            updated[idx] = { ...item, fuel_type: e.target.value }
-                            setCreditItems(updated)
-                          }} className="w-full px-1 py-1.5 rounded border text-xs" style={inputStyle}>
-                            <option value="Diesel">Diesel</option>
-                            <option value="Petrol">Petrol</option>
-                          </select>
-                        </div>
-                        <div className="col-span-2">
-                          {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Vol (L)</div>}
-                          <input type="number" min={0} step="0.01" value={item.volume}
-                            onChange={e => {
-                              const updated = [...creditItems]
-                              updated[idx] = { ...item, volume: e.target.value }
-                              setCreditItems(updated)
-                            }}
-                            placeholder="0" className="w-full px-1 py-1.5 rounded border text-xs text-right font-mono" style={inputStyle} />
-                        </div>
-                        <div className="col-span-1">
-                          {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>K/L</div>}
-                          <div className="px-1 py-1.5 text-xs font-mono text-right" style={{ color: theme.textSecondary }}>{resolvedPrice.toFixed(2)}</div>
-                        </div>
-                        <div className="col-span-2">
-                          {idx === 0 && <div className="text-[10px] mb-0.5" style={{ color: theme.textSecondary }}>Amount</div>}
-                          <div className="px-1 py-1.5 text-xs font-mono text-right font-medium" style={{ color: theme.textPrimary }}>{fmtZMW(amt)}</div>
-                        </div>
-                        <div className="col-span-1 flex justify-center">
-                          {idx === 0 && <div className="text-[10px] mb-0.5 invisible">X</div>}
-                          <button type="button" onClick={() => setCreditItems(prev => prev.filter((_, i) => i !== idx))}
-                            className="text-xs px-1 py-1" style={{ color: 'var(--color-status-error)' }}>X</button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                  {creditItems.length > 0 && (
-                    <div className="flex justify-between text-xs font-semibold pt-1 mt-1" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-                      <span style={{ color: theme.textSecondary }}>Credit Total</span>
-                      <span className="font-mono" style={{ color: theme.textPrimary }}>{fmtZMW(creditItemsTotal)}</span>
-                    </div>
-                  )}
                 </div>
+
+                {creditAccounts.length === 0 && (
+                  <div className="text-xs italic py-2" style={{ color: theme.textSecondary }}>
+                    No credit accounts yet{canCreateAccounts ? ' — use "+ New Account" to set one up.' : '.'}
+                  </div>
+                )}
+                {creditAccounts.length > 0 && creditItems.length === 0 && (
+                  <div className="text-xs py-2 text-center" style={{ color: theme.textSecondary }}>No credit sales — tap Add to record one</div>
+                )}
+
+                {creditItems.map((item, idx) => {
+                  const acct = creditAccounts.find((a: any) => a.account_id === item.account_id)
+                  return (
+                    <div key={idx} className="flex flex-wrap gap-1.5 items-center mb-1.5 text-xs p-1.5 rounded"
+                      style={{ backgroundColor: theme.background }}>
+                      <select value={item.account_id}
+                        onChange={e => {
+                          if (e.target.value === '__new__') { setShowNewAccount(true); return }
+                          const a = creditAccounts.find((x: any) => x.account_id === e.target.value)
+                          updateCreditItem(idx, { account_id: e.target.value, account_name: a?.account_name || '' })
+                        }}
+                        className="min-w-[8rem] flex-1 px-2 py-1 rounded border" style={inputStyle}>
+                        {creditAccounts.map((a: any) => (
+                          <option key={a.account_id} value={a.account_id}>{a.account_name}</option>
+                        ))}
+                        {canCreateAccounts && <option value="__new__">+ New Account...</option>}
+                      </select>
+
+                      <select value={item.item_kind}
+                        onChange={e => {
+                          const kind = e.target.value as 'fuel' | 'other'
+                          if (kind === 'fuel') {
+                            const price = acct?.default_price_per_liter || fuelPrices.Diesel || 0
+                            updateCreditItem(idx, { item_kind: 'fuel', fuel_type: 'Diesel', product_code: undefined, price_per_liter: price, volume: '', amount: 0 })
+                          } else {
+                            const first = otherProducts[0]
+                            updateCreditItem(idx, {
+                              item_kind: 'other', fuel_type: first?.label || '', product_code: first?.code,
+                              price_per_liter: first?.unit_price || 0, volume: '', amount: 0,
+                            })
+                          }
+                        }}
+                        className="w-20 px-2 py-1 rounded border" style={inputStyle}>
+                        <option value="fuel">Fuel</option>
+                        <option value="other">Other</option>
+                      </select>
+
+                      {item.item_kind === 'fuel' ? (
+                        <select value={item.fuel_type}
+                          onChange={e => {
+                            const price = acct?.default_price_per_liter || fuelPrices[e.target.value] || 0
+                            updateCreditItem(idx, { fuel_type: e.target.value, price_per_liter: price })
+                          }}
+                          className="w-20 px-2 py-1 rounded border" style={inputStyle}>
+                          <option>Diesel</option>
+                          <option>Petrol</option>
+                        </select>
+                      ) : (
+                        <select value={item.product_code || ''}
+                          onChange={e => {
+                            const p = otherProducts.find(op => op.code === e.target.value)
+                            updateCreditItem(idx, { fuel_type: p?.label || '', product_code: p?.code, price_per_liter: p?.unit_price || 0 })
+                          }}
+                          className="min-w-[10rem] flex-1 px-2 py-1 rounded border" style={inputStyle}>
+                          {otherProducts.length === 0 && <option value="">No products available</option>}
+                          {['Lubricant', 'Accessory'].map(cat => {
+                            const rows = otherProducts.filter(p => p.category === cat)
+                            if (rows.length === 0) return null
+                            return (
+                              <optgroup key={cat} label={cat}>
+                                {rows.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
+                              </optgroup>
+                            )
+                          })}
+                        </select>
+                      )}
+
+                      <select value={item.entry_mode}
+                        onChange={e => {
+                          const mode = e.target.value as 'liters' | 'amount'
+                          recomputeCreditRow(idx, item.price_per_liter, item.volume, String(item.amount), mode)
+                        }}
+                        className="w-24 px-2 py-1 rounded border" style={inputStyle}>
+                        <option value="liters">{item.item_kind === 'fuel' ? 'Litres' : 'Qty'}</option>
+                        <option value="amount">Amount (K)</option>
+                      </select>
+
+                      {item.entry_mode === 'liters' ? (
+                        <input type="number" min={0} step="0.001" value={item.volume}
+                          placeholder={item.item_kind === 'fuel' ? 'Litres' : 'Qty'}
+                          onChange={e => recomputeCreditRow(idx, item.price_per_liter, e.target.value, String(item.amount), 'liters')}
+                          className="w-20 px-2 py-1 rounded border text-right font-mono" style={inputStyle} />
+                      ) : (
+                        <input type="number" min={0} step="0.01" value={item.amount || ''}
+                          placeholder="Amount"
+                          onChange={e => recomputeCreditRow(idx, item.price_per_liter, item.volume, e.target.value, 'amount')}
+                          className="w-20 px-2 py-1 rounded border text-right font-mono" style={inputStyle} />
+                      )}
+
+                      <input type="number" min={0} step="0.01" value={item.price_per_liter || ''}
+                        title="Price — editable for a negotiated credit rate"
+                        placeholder="Price"
+                        onChange={e => {
+                          const price = parseFloat(e.target.value) || 0
+                          recomputeCreditRow(idx, price, item.volume, String(item.amount), item.entry_mode)
+                        }}
+                        className="w-16 px-2 py-1 rounded border text-right font-mono" style={inputStyle} />
+
+                      <span className="w-20 text-right font-mono" style={{ color: theme.textPrimary }}
+                        title={item.entry_mode === 'amount' ? `${item.volume} ${item.item_kind === 'fuel' ? 'L' : 'units'}` : undefined}>
+                        {fmtZMW(item.amount || 0)}
+                      </span>
+
+                      <button type="button" onClick={() => setCreditItems(prev => prev.filter((_, i) => i !== idx))}
+                        className="px-1" style={{ color: 'var(--color-status-error)' }}>X</button>
+                    </div>
+                  )
+                })}
+                {creditItems.length > 0 && (
+                  <div className="flex justify-between text-xs font-semibold pt-1 mt-1" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                    <span style={{ color: theme.textSecondary }}>Credit Total</span>
+                    <span className="font-mono" style={{ color: theme.textPrimary }}>{fmtZMW(creditItemsTotal)}</span>
+                  </div>
+                )}
+              </div>
+
+              {showNewAccount && (
+                <NewAccountModal theme={theme} onClose={() => setShowNewAccount(false)} onCreated={handleAccountCreated} />
               )}
 
               {/* Notes */}
