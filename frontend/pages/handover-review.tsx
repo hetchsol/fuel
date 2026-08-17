@@ -18,10 +18,24 @@ const PAGE_SIZE = 20
 interface CreditItem {
   account_id: string
   account_name: string
-  fuel_type: string
-  volume: string
-  price_per_liter: number
+  // Client-only — decides which picker/inputs the row renders. Backend only
+  // ever sees fuel_type as a free-text label, so this never needs to travel.
+  item_kind: 'fuel' | 'other'
+  fuel_type: string        // "Diesel"/"Petrol" for fuel rows; product description for other rows
+  product_code?: string    // client-only, lets the price re-fill if the product selection changes
+  volume: string           // liters for fuel; unit quantity for other products
+  price_per_liter: number  // editable — defaults from account/fuel price or product catalog
   amount: number
+  // Client-only — which of volume/amount the manager is directly typing into;
+  // the other is derived from price_per_liter so the backend always gets volume.
+  entry_mode: 'liters' | 'amount'
+}
+
+interface OtherProduct {
+  code: string
+  label: string
+  unit_price: number
+  category: string
 }
 
 const fmtK = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -210,6 +224,7 @@ export default function HandoverReview() {
   const [creditAccounts, setCreditAccounts] = useState<any[]>([])
   const [fuelPrices, setFuelPrices] = useState<Record<string, number>>({ Diesel: 0, Petrol: 0 })
   const [posTypes, setPosTypes] = useState<{ type_id: string; name: string; is_active: boolean }[]>([])
+  const [otherProducts, setOtherProducts] = useState<OtherProduct[]>([])
 
   const [currentUserRole, setCurrentUserRole] = useState('')
 
@@ -302,6 +317,26 @@ export default function HandoverReview() {
         setClosingPosAmounts(init)
       })
       .catch(() => {})
+    // Non-fuel products a credit sale can be entered against — reusing the
+    // same priced catalogs the stock-count pages already draw on, so a credit
+    // sale here always matches revenue that's genuinely counted for the shift.
+    Promise.all([
+      authFetch(`${BASE}/lubricants-daily/products`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : []),
+      authFetch(`${BASE}/lpg-daily/accessories/inventory`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : []),
+    ]).then(([lubricants, accessories]) => {
+      const seenLubricantCodes = new Set<string>()
+      const lubricantProducts: OtherProduct[] = []
+      for (const p of (lubricants || [])) {
+        const baseCode = String(p.product_code || '').replace(/-BUF$/, '')
+        if (seenLubricantCodes.has(baseCode)) continue
+        seenLubricantCodes.add(baseCode)
+        lubricantProducts.push({ code: baseCode, label: p.description, unit_price: p.unit_price || 0, category: 'Lubricant' })
+      }
+      const accessoryProducts: OtherProduct[] = (accessories || []).map((p: any) => ({
+        code: p.product_code, label: p.description, unit_price: p.unit_price || 0, category: 'Accessory',
+      }))
+      setOtherProducts([...lubricantProducts, ...accessoryProducts])
+    }).catch(() => {})
   }, [])
 
   // When a closing form opens: reset fields + fetch safe deposits for pre-fill
@@ -551,6 +586,7 @@ export default function HandoverReview() {
             account_name: i.account_name,
             fuel_type: i.fuel_type,
             volume: parseFloat(i.volume) || 0,
+            price_per_liter: i.price_per_liter || 0,
           })),
           notes: closingNotes || null,
         }),
@@ -602,6 +638,12 @@ export default function HandoverReview() {
     } finally {
       setClosingSubmitting(false)
     }
+  }
+
+  // Shared by both ClosingForm render sites (desktop + mobile) so a credit
+  // account created inline from either one is immediately available in both.
+  const handleAccountCreated = (acct: any) => {
+    setCreditAccounts(prev => [...prev, acct])
   }
 
   // Entry point for all "Close & Approve" buttons: check dips before ever
@@ -1137,6 +1179,9 @@ export default function HandoverReview() {
                       h={h}
                       theme={theme}
                       creditAccounts={creditAccounts}
+                      otherProducts={otherProducts}
+                      onAccountCreated={handleAccountCreated}
+                      currentUserRole={currentUserRole}
                       fuelPrices={fuelPrices}
                       safeDeposit={closingSafeDeposit}
                       cash={closingCash}
@@ -1349,6 +1394,9 @@ export default function HandoverReview() {
                           h={h}
                           theme={theme}
                           creditAccounts={creditAccounts}
+                          otherProducts={otherProducts}
+                          onAccountCreated={handleAccountCreated}
+                          currentUserRole={currentUserRole}
                           fuelPrices={fuelPrices}
                           safeDeposit={closingSafeDeposit}
                           cash={closingCash}
@@ -1686,6 +1734,9 @@ interface ClosingFormProps {
   h: HandoverEntry
   theme: any
   creditAccounts: any[]
+  otherProducts: OtherProduct[]
+  onAccountCreated: (acct: any) => void
+  currentUserRole: string
   fuelPrices: Record<string, number>
   safeDeposit: number
   cash: string
@@ -1708,7 +1759,7 @@ interface ClosingFormProps {
   onCancel: () => void
 }
 
-function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
+function ClosingForm({ h, theme, creditAccounts, otherProducts, onAccountCreated, currentUserRole, fuelPrices, safeDeposit,
   cash, onCashChange, posTypes, posAmounts, onPosAmountsChange, posRefs, onPosRefsChange,
   posTerminalBatch, onPosTerminalBatchChange,
   notes, onNotesChange,
@@ -1720,6 +1771,89 @@ function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
   const totalAccounted = cashVal + posVal + creditTotal
   const difference = totalAccounted - (h.total_expected || 0)
   const inputStyle = { backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }
+
+  // Inline "create credit account" — reuses POST /accounts/ (the same endpoint
+  // the standalone Accounts page uses), just triggered from wherever the
+  // manager is already looking instead of sending them away to set one up
+  // first. newAccountRowIdx tracks which row (if any) should get the new
+  // account selected once it's created; null means it was opened standalone.
+  const canCreateAccounts = currentUserRole === 'manager' || currentUserRole === 'owner'
+  const [showNewAccount, setShowNewAccount] = useState(false)
+  const [newAccountRowIdx, setNewAccountRowIdx] = useState<number | null>(null)
+  const [naName, setNaName] = useState('')
+  const [naType, setNaType] = useState<'Post-Paid' | 'Pre-Paid'>('Post-Paid')
+  const [naCreditLimit, setNaCreditLimit] = useState('')
+  const [naOpeningBalance, setNaOpeningBalance] = useState('')
+  const [naDefaultPrice, setNaDefaultPrice] = useState('')
+  const [naSaving, setNaSaving] = useState(false)
+  const [naError, setNaError] = useState('')
+
+  const openNewAccount = (rowIdx: number | null) => {
+    setNewAccountRowIdx(rowIdx)
+    setNaName(''); setNaType('Post-Paid'); setNaCreditLimit(''); setNaOpeningBalance(''); setNaDefaultPrice('')
+    setNaError('')
+    setShowNewAccount(true)
+  }
+
+  const submitNewAccount = async () => {
+    if (!naName.trim()) { setNaError('Account name is required.'); return }
+    setNaSaving(true)
+    setNaError('')
+    try {
+      const isPrePaid = naType === 'Pre-Paid'
+      const res = await authFetch(`${BASE}/accounts/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          account_id: '',
+          account_name: naName.trim(),
+          account_type: naType,
+          credit_limit: isPrePaid ? 0 : (parseFloat(naCreditLimit) || 0),
+          opening_balance: isPrePaid ? (parseFloat(naOpeningBalance) || 0) : null,
+          current_balance: 0,
+          approved_overdraft: 0,
+          default_price_per_liter: naDefaultPrice ? parseFloat(naDefaultPrice) : null,
+        }),
+      })
+      const acct = await res.json().catch(() => null)
+      if (!res.ok) {
+        const detail = Array.isArray(acct?.detail) ? acct.detail.map((d: any) => d.msg || d).join(', ') : (acct?.detail || 'Failed to create account')
+        throw new Error(detail)
+      }
+      onAccountCreated(acct)
+      if (newAccountRowIdx != null) {
+        const updated = [...creditItems]
+        updated[newAccountRowIdx] = { ...updated[newAccountRowIdx], account_id: acct.account_id, account_name: acct.account_name }
+        onCreditItemsChange(updated)
+      }
+      setShowNewAccount(false)
+    } catch (e: any) {
+      setNaError(e.message || 'Failed to create account')
+    } finally {
+      setNaSaving(false)
+    }
+  }
+
+  const updateCreditItem = (idx: number, patch: Partial<CreditItem>) => {
+    const updated = [...creditItems]
+    updated[idx] = { ...updated[idx], ...patch }
+    onCreditItemsChange(updated)
+  }
+
+  // Single source of truth for a row's amount/volume so entering either one
+  // (money or liters/units) always keeps the other consistent for submission
+  // — the backend only ever accepts volume, so "amount" mode is purely a
+  // client-side convenience that back-computes it from the row's price.
+  const recomputeCreditRow = (idx: number, price: number, volumeStr: string, amountStr: string, mode: 'liters' | 'amount') => {
+    if (mode === 'liters') {
+      const vol = parseFloat(volumeStr) || 0
+      updateCreditItem(idx, { volume: volumeStr, price_per_liter: price, amount: Math.round(vol * price * 100) / 100, entry_mode: mode })
+    } else {
+      const amt = parseFloat(amountStr) || 0
+      const vol = price > 0 ? Math.round((amt / price) * 1000) / 1000 : 0
+      updateCreditItem(idx, { volume: String(vol), price_per_liter: price, amount: amt, entry_mode: mode })
+    }
+  }
 
   return (
     <div className="p-4 space-y-4">
@@ -1831,77 +1965,219 @@ function ClosingForm({ h, theme, creditAccounts, fuelPrices, safeDeposit,
       )}
 
       {/* Credit sales */}
-      {creditAccounts.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Credit Sales</label>
-            <button type="button"
-              onClick={() => onCreditItemsChange([...creditItems, {
-                account_id: creditAccounts[0].account_id,
-                account_name: creditAccounts[0].account_name,
-                fuel_type: 'Diesel',
-                volume: '',
-                price_per_liter: creditAccounts[0].default_price_per_liter || fuelPrices.Diesel || 0,
-                amount: 0,
-              }])}
-              className="px-2 py-1 text-xs font-medium rounded text-white"
-              style={{ backgroundColor: 'var(--color-action-primary)' }}>
-              + Add
-            </button>
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>Credit Sales</label>
+          <div className="flex gap-2">
+            {canCreateAccounts && (
+              <button type="button" onClick={() => openNewAccount(null)}
+                className="px-2 py-1 text-xs font-medium rounded"
+                style={{ color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
+                + New Account
+              </button>
+            )}
+            {creditAccounts.length > 0 && (
+              <button type="button"
+                onClick={() => {
+                  const acct = creditAccounts[0]
+                  onCreditItemsChange([...creditItems, {
+                    account_id: acct.account_id,
+                    account_name: acct.account_name,
+                    item_kind: 'fuel',
+                    fuel_type: 'Diesel',
+                    volume: '',
+                    price_per_liter: acct.default_price_per_liter || fuelPrices.Diesel || 0,
+                    amount: 0,
+                    entry_mode: 'liters',
+                  }])
+                }}
+                className="px-2 py-1 text-xs font-medium rounded text-white"
+                style={{ backgroundColor: 'var(--color-action-primary)' }}>
+                + Add
+              </button>
+            )}
           </div>
-          {creditItems.map((item, idx) => {
-            const acct = creditAccounts.find((a: any) => a.account_id === item.account_id)
-            const resolvedPrice = acct?.default_price_per_liter || fuelPrices[item.fuel_type] || 0
-            const vol = parseFloat(item.volume) || 0
-            const amt = Math.round(vol * resolvedPrice * 100) / 100
-            return (
-              <div key={idx} className="flex gap-2 items-center mb-1 text-xs">
-                <select value={item.account_id}
-                  onChange={e => {
-                    const updated = [...creditItems]
-                    const found = creditAccounts.find((a: any) => a.account_id === e.target.value)
-                    updated[idx] = { ...item, account_id: e.target.value, account_name: found?.account_name || '' }
-                    onCreditItemsChange(updated)
-                  }}
-                  className="flex-1 px-2 py-1 rounded border" style={inputStyle}>
-                  {creditAccounts.map((a: any) => (
-                    <option key={a.account_id} value={a.account_id}>{a.account_name}</option>
-                  ))}
-                </select>
+        </div>
+
+        {creditAccounts.length === 0 && (
+          <div className="text-xs italic" style={{ color: theme.textSecondary }}>
+            No credit accounts yet{canCreateAccounts ? ' — use "+ New Account" to set one up.' : '.'}
+          </div>
+        )}
+
+        {creditItems.map((item, idx) => {
+          const acct = creditAccounts.find((a: any) => a.account_id === item.account_id)
+          return (
+            <div key={idx} className="flex flex-wrap gap-1.5 items-center mb-1.5 text-xs p-1.5 rounded"
+              style={{ backgroundColor: theme.background }}>
+              <select value={item.account_id}
+                onChange={e => {
+                  if (e.target.value === '__new__') { openNewAccount(idx); return }
+                  const found = creditAccounts.find((a: any) => a.account_id === e.target.value)
+                  updateCreditItem(idx, { account_id: e.target.value, account_name: found?.account_name || '' })
+                }}
+                className="min-w-[8rem] flex-1 px-2 py-1 rounded border" style={inputStyle}>
+                {creditAccounts.map((a: any) => (
+                  <option key={a.account_id} value={a.account_id}>{a.account_name}</option>
+                ))}
+                {canCreateAccounts && <option value="__new__">+ New Account...</option>}
+              </select>
+
+              <select value={item.item_kind}
+                onChange={e => {
+                  const kind = e.target.value as 'fuel' | 'other'
+                  if (kind === 'fuel') {
+                    const price = acct?.default_price_per_liter || fuelPrices.Diesel || 0
+                    updateCreditItem(idx, { item_kind: 'fuel', fuel_type: 'Diesel', product_code: undefined, price_per_liter: price, volume: '', amount: 0 })
+                  } else {
+                    const first = otherProducts[0]
+                    updateCreditItem(idx, {
+                      item_kind: 'other', fuel_type: first?.label || '', product_code: first?.code,
+                      price_per_liter: first?.unit_price || 0, volume: '', amount: 0,
+                    })
+                  }
+                }}
+                className="w-20 px-2 py-1 rounded border" style={inputStyle}>
+                <option value="fuel">Fuel</option>
+                <option value="other">Other</option>
+              </select>
+
+              {item.item_kind === 'fuel' ? (
                 <select value={item.fuel_type}
                   onChange={e => {
-                    const updated = [...creditItems]
-                    updated[idx] = { ...item, fuel_type: e.target.value }
-                    onCreditItemsChange(updated)
+                    const price = acct?.default_price_per_liter || fuelPrices[e.target.value] || 0
+                    updateCreditItem(idx, { fuel_type: e.target.value, price_per_liter: price })
                   }}
                   className="w-20 px-2 py-1 rounded border" style={inputStyle}>
                   <option>Diesel</option>
                   <option>Petrol</option>
                 </select>
-                <input type="number" min={0} step="0.001" value={item.volume}
-                  placeholder="Litres"
+              ) : (
+                <select value={item.product_code || ''}
                   onChange={e => {
-                    const updated = [...creditItems]
-                    const v = parseFloat(e.target.value) || 0
-                    updated[idx] = { ...item, volume: e.target.value, price_per_liter: resolvedPrice, amount: Math.round(v * resolvedPrice * 100) / 100 }
-                    onCreditItemsChange(updated)
+                    const p = otherProducts.find(op => op.code === e.target.value)
+                    updateCreditItem(idx, { fuel_type: p?.label || '', product_code: p?.code, price_per_liter: p?.unit_price || 0 })
                   }}
-                  className="w-24 px-2 py-1 rounded border text-right font-mono" style={inputStyle} />
-                <span className="w-24 text-right font-mono" style={{ color: theme.textPrimary }}>
-                  {fmtK(amt)}
-                </span>
-                <button onClick={() => onCreditItemsChange(creditItems.filter((_, i) => i !== idx))}
-                  className="px-1" style={{ color: 'var(--color-status-error)' }}>X</button>
-              </div>
-            )
-          })}
-          {creditItems.length > 0 && (
-            <div className="flex justify-between text-xs font-semibold pt-1 mt-1"
-              style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
-              <span style={{ color: theme.textSecondary }}>Credit Total</span>
-              <span className="font-mono" style={{ color: theme.textPrimary }}>{fmtK(creditTotal)}</span>
+                  className="min-w-[10rem] flex-1 px-2 py-1 rounded border" style={inputStyle}>
+                  {otherProducts.length === 0 && <option value="">No products available</option>}
+                  {['Lubricant', 'Accessory'].map(cat => {
+                    const rows = otherProducts.filter(p => p.category === cat)
+                    if (rows.length === 0) return null
+                    return (
+                      <optgroup key={cat} label={cat}>
+                        {rows.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
+                      </optgroup>
+                    )
+                  })}
+                </select>
+              )}
+
+              <select value={item.entry_mode}
+                onChange={e => {
+                  const mode = e.target.value as 'liters' | 'amount'
+                  recomputeCreditRow(idx, item.price_per_liter, item.volume, String(item.amount), mode)
+                }}
+                className="w-24 px-2 py-1 rounded border" style={inputStyle}>
+                <option value="liters">{item.item_kind === 'fuel' ? 'Litres' : 'Qty'}</option>
+                <option value="amount">Amount (K)</option>
+              </select>
+
+              {item.entry_mode === 'liters' ? (
+                <input type="number" min={0} step="0.001" value={item.volume}
+                  placeholder={item.item_kind === 'fuel' ? 'Litres' : 'Qty'}
+                  onChange={e => recomputeCreditRow(idx, item.price_per_liter, e.target.value, String(item.amount), 'liters')}
+                  className="w-20 px-2 py-1 rounded border text-right font-mono" style={inputStyle} />
+              ) : (
+                <input type="number" min={0} step="0.01" value={item.amount || ''}
+                  placeholder="Amount"
+                  onChange={e => recomputeCreditRow(idx, item.price_per_liter, item.volume, e.target.value, 'amount')}
+                  className="w-20 px-2 py-1 rounded border text-right font-mono" style={inputStyle} />
+              )}
+
+              <input type="number" min={0} step="0.01" value={item.price_per_liter || ''}
+                title="Price — editable for a negotiated credit rate"
+                placeholder="Price"
+                onChange={e => {
+                  const price = parseFloat(e.target.value) || 0
+                  recomputeCreditRow(idx, price, item.volume, String(item.amount), item.entry_mode)
+                }}
+                className="w-16 px-2 py-1 rounded border text-right font-mono" style={inputStyle} />
+
+              <span className="w-20 text-right font-mono" style={{ color: theme.textPrimary }} title={item.entry_mode === 'amount' ? `${item.volume} ${item.item_kind === 'fuel' ? 'L' : 'units'}` : undefined}>
+                {fmtK(item.amount || 0)}
+              </span>
+
+              <button onClick={() => onCreditItemsChange(creditItems.filter((_, i) => i !== idx))}
+                className="px-1" style={{ color: 'var(--color-status-error)' }}>X</button>
             </div>
-          )}
+          )
+        })}
+        {creditItems.length > 0 && (
+          <div className="flex justify-between text-xs font-semibold pt-1 mt-1"
+            style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+            <span style={{ color: theme.textSecondary }}>Credit Total</span>
+            <span className="font-mono" style={{ color: theme.textPrimary }}>{fmtK(creditTotal)}</span>
+          </div>
+        )}
+      </div>
+
+      {/* New credit account — inline, POSTs to the same /accounts/ endpoint the
+          standalone Accounts page uses. */}
+      {showNewAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowNewAccount(false)}>
+          <div className="rounded-lg shadow-xl w-full max-w-sm p-4 space-y-3"
+            style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}
+            onClick={e => e.stopPropagation()}>
+            <div className="font-semibold text-sm" style={{ color: theme.textPrimary }}>New Credit Account</div>
+            {naError && (
+              <div className="text-xs p-2 rounded" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)' }}>
+                {naError}
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Account Name *</label>
+              <input type="text" value={naName} onChange={e => setNaName(e.target.value)}
+                className="w-full px-3 py-2 rounded border text-sm" style={inputStyle} autoFocus />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Type</label>
+                <select value={naType} onChange={e => setNaType(e.target.value as 'Post-Paid' | 'Pre-Paid')}
+                  className="w-full px-3 py-2 rounded border text-sm" style={inputStyle}>
+                  <option value="Post-Paid">Post-Paid</option>
+                  <option value="Pre-Paid">Pre-Paid</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+                  {naType === 'Pre-Paid' ? 'Opening Balance' : 'Credit Limit'}
+                </label>
+                <input type="number" min={0} step="0.01"
+                  value={naType === 'Pre-Paid' ? naOpeningBalance : naCreditLimit}
+                  onChange={e => naType === 'Pre-Paid' ? setNaOpeningBalance(e.target.value) : setNaCreditLimit(e.target.value)}
+                  className="w-full px-3 py-2 rounded border text-sm text-right font-mono" style={inputStyle} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+                Default Price / Liter (optional — overrides the standard fuel price for this account)
+              </label>
+              <input type="number" min={0} step="0.01" value={naDefaultPrice} onChange={e => setNaDefaultPrice(e.target.value)}
+                className="w-full px-3 py-2 rounded border text-sm text-right font-mono" style={inputStyle} />
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <button onClick={() => setShowNewAccount(false)}
+                className="px-4 py-2 text-sm rounded" style={{ color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
+                Cancel
+              </button>
+              <button onClick={submitNewAccount} disabled={naSaving || !naName.trim()}
+                className="px-4 py-2 text-sm font-semibold rounded text-white disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-action-primary)' }}>
+                {naSaving ? 'Creating...' : 'Create Account'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2280,9 +2556,9 @@ function ExpandedDetail({ h, theme, onRefresh }: { h: HandoverEntry; theme: any;
               <tr style={{ backgroundColor: theme.cardBg }}>
                 {[
                   { label: 'Account', align: 'text-left' },
-                  { label: 'Fuel Type', align: 'text-left' },
-                  { label: 'Volume (L)', align: 'text-right' },
-                  { label: 'Price/L', align: 'text-right' },
+                  { label: 'Item', align: 'text-left' },
+                  { label: 'Qty', align: 'text-right' },
+                  { label: 'Price', align: 'text-right' },
                   { label: 'Amount', align: 'text-right' },
                   { label: 'Source', align: 'text-left' },
                 ].map(col => (

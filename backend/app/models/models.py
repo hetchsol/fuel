@@ -370,9 +370,10 @@ class CreditSale(BaseModel):
 class HandoverCreditSaleItem(BaseModel):
     account_id: str
     account_name: str              # Denormalized for display
-    fuel_type: str                 # "Diesel" or "Petrol"
-    volume: float = Field(..., gt=0)
-    price_per_liter: float = 0     # Server-resolved on submit
+    fuel_type: str                 # "Diesel"/"Petrol", or a non-fuel product description
+    volume: float = Field(..., gt=0)  # Liters for fuel; unit quantity for other products
+    price_per_liter: float = 0     # Client override when > 0 (negotiated credit rate, or the
+                                    # only price source for a non-fuel item); otherwise server-resolved
     amount: float = 0              # Server-calculated: volume × price_per_liter
     driver_name: Optional[str] = None
     vehicle_reg: Optional[str] = None

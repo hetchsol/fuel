@@ -817,10 +817,25 @@ def _process_credit_sales(credit_sale_items, storage, shift_id):
                 status_code=400,
                 detail=f"Account '{item.account_name}' is suspended and cannot receive credit sales.",
             )
-        if account and account.get("default_price_per_liter"):
+        # An explicit client-supplied price wins — it's how a manager charges a
+        # negotiated credit rate that differs from the cash price, and it's also
+        # the only price source for a non-fuel product (lubricant/accessory),
+        # since resolve_fuel_price only knows Diesel/Petrol. Falls back to the
+        # account's standing override, then the live fuel price, in that order.
+        if item.price_per_liter and item.price_per_liter > 0:
+            price = item.price_per_liter
+        elif account and account.get("default_price_per_liter"):
             price = account["default_price_per_liter"]
         else:
-            price = resolve_fuel_price(item.fuel_type, storage)
+            try:
+                price = resolve_fuel_price(item.fuel_type, storage)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No price available for '{item.fuel_type}'. Enter a price for this item.",
+                )
+        if price <= 0:
+            raise HTTPException(status_code=400, detail=f"Price for '{item.fuel_type}' must be greater than zero.")
         amount = round(item.volume * price, 2)
         enriched_items.append({
             "account_id": item.account_id, "account_name": item.account_name,
