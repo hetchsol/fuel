@@ -46,7 +46,10 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, shiftType])
 
-  const allDipsEntered = tanks.every(t => (dips[t.tank_id]?.closing_dip_cm || '') !== '')
+  const allDipsEntered = tanks.every(t => {
+    const d = dips[t.tank_id]
+    return (d?.closing_dip_cm || '') !== '' && !!d?.opening_dip_cm
+  })
   const canContinue = allDipsEntered && (!isDelegate || delegateReason.trim() !== '')
 
   const handleSave = async () => {
@@ -74,15 +77,31 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
       )}
       <div className="space-y-3">
         {tanks.map(tank => {
-          const dip = dips[tank.tank_id] || { opening_dip_cm: null, closing_dip_cm: '', already_recorded: false }
+          const dip = dips[tank.tank_id] || { opening_dip_cm: null, opening_resolved: false, closing_dip_cm: '', already_recorded: false }
           return (
             <div key={tank.tank_id} className="flex items-center gap-3">
               <div className="flex-1 text-sm font-medium" style={{ color: theme.textPrimary }}>
                 {tank.display_name || tank.fuel_type}
               </div>
-              <div className="text-xs text-right" style={{ color: theme.textSecondary, minWidth: 90 }}>
-                Opening: {dip.opening_dip_cm != null ? `${dip.opening_dip_cm} cm` : '—'}
-              </div>
+              {dip.opening_resolved ? (
+                <div className="text-xs text-right" style={{ color: theme.textSecondary, minWidth: 90 }}>
+                  Opening: {dip.opening_dip_cm} cm
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.1"
+                    value={dip.opening_dip_cm ?? ''}
+                    onChange={e => setDips(prev => ({ ...prev, [tank.tank_id]: { ...prev[tank.tank_id], opening_dip_cm: e.target.value || null } }))}
+                    placeholder="opening cm"
+                    className="w-28 px-2 py-1.5 rounded border text-sm text-right font-mono"
+                    style={inputStyle}
+                  />
+                  <span className="text-xs" style={{ color: theme.textSecondary }}>cm</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 {dip.already_recorded && dip.closing_dip_cm !== '' && (
                   <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)' }}>
@@ -107,6 +126,12 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
           )
         })}
       </div>
+
+      {tanks.some(t => !dips[t.tank_id]?.opening_resolved) && (
+        <div className="text-xs mt-3" style={{ color: theme.textSecondary }}>
+          Opening dip could not be carried forward automatically for one or more tanks (no previous shift record found) — enter it directly.
+        </div>
+      )}
 
       {isDelegate && (
         <div className="mt-4 pt-4" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>

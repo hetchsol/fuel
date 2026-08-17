@@ -160,6 +160,11 @@ export default function HandoverReview() {
   // (save -> retry the close automatically, cash data is already filled in).
   const [dipModalHandover, setDipModalHandover] = useState<HandoverEntry | null>(null)
   const [dipModalRetryClose, setDipModalRetryClose] = useState(false)
+  // Safety net against a retry loop: if submit-closing still 409s right after
+  // the dip modal was just saved for this same handover, something the modal
+  // can't fix is wrong server-side — stop retrying automatically and surface
+  // it instead of reopening the modal again.
+  const [dipRetryAttempted, setDipRetryAttempted] = useState<string | null>(null)
 
   // Informational-only: co-attendants on the same shift who haven't submitted
   // readings yet. Nothing to fix here except wait — no input, just a notice.
@@ -547,9 +552,17 @@ export default function HandoverReview() {
       })
       if (!closeRes.ok) {
         if (closeRes.status === 409) {
+          if (dipRetryAttempted === h.handover_id) {
+            // Already looped through the dip modal once for this handover and
+            // it still won't clear — don't reopen it again and spin forever.
+            const err = await closeRes.json().catch(() => ({ detail: 'Tank dips are still incomplete for this shift.' }))
+            setClosingError(`${err.detail} Check the Tank Dips page for this date/shift and try again.`)
+            return
+          }
           // Blocked on missing tank dips, discovered mid-submit (e.g. it changed
           // since the pre-check). This form has no dip inputs, so open the modal
           // in place — on save, retry this same close with the cash data intact.
+          setDipRetryAttempted(h.handover_id)
           setDipModalHandover(h)
           setDipModalRetryClose(true)
           return
@@ -589,6 +602,7 @@ export default function HandoverReview() {
   // showing the cash form, so a manager isn't blocked after filling it in.
   const openCloseAndApprove = async (h: HandoverEntry) => {
     if (closingFormId === h.handover_id) { setClosingFormId(null); return }
+    setDipRetryAttempted(null)
     try {
       const { allComplete } = await loadTankDips(h.date, h.shift_type)
       if (!allComplete) {
