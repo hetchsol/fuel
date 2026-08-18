@@ -29,6 +29,18 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
   const [deliveryDetails, setDeliveryDetails] = useState<Record<string, TankDeliveryInfo>>({})
   const [deliveryModalTank, setDeliveryModalTank] = useState<string | null>(null)
 
+  // Snapshot of whether every tank already had both dips on file the moment
+  // this modal opened — not recomputed from the live form state, so it can't
+  // flicker as the user types. When true, the dialog opens on a read-only
+  // Confirm/Edit choice instead of the full editable form: without this,
+  // reopening this modal for an already-complete shift (e.g. the "check
+  // first" pre-flight, or a retry after some unrelated field changed) forced
+  // the manager to re-answer the delivery question and re-submit unchanged
+  // data every single time, which is what made it feel like an endless loop.
+  const [initiallyComplete, setInitiallyComplete] = useState(false)
+  const [editRequested, setEditRequested] = useState(false)
+  const showEditForm = editRequested || !initiallyComplete
+
   const isDelegate = userRole === 'supervisor'
 
   const inputStyle = {
@@ -51,6 +63,8 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
       setDips(result.dips)
       setDeliveryAnswers({})
       setDeliveryDetails({})
+      setInitiallyComplete(result.allComplete)
+      setEditRequested(false)
       setLoading(false)
     }).catch(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -102,6 +116,41 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
   }
 
   if (loading) return <LoadingSpinner text="Loading tanks..." />
+
+  if (!showEditForm) {
+    return (
+      <div>
+        <div className="rounded-lg p-3 mb-3 text-sm" style={{ backgroundColor: 'var(--color-status-success-light)', color: 'var(--color-status-success)', borderWidth: 1, borderColor: 'var(--color-status-success)' }}>
+          Tank dips for this shift are already recorded.
+        </div>
+        <div className="space-y-1.5 mb-4">
+          {tanks.map(tank => {
+            const dip = dips[tank.tank_id]
+            return (
+              <div key={tank.tank_id} className="flex items-center justify-between text-sm p-2 rounded"
+                style={{ backgroundColor: theme.background }}>
+                <span style={{ color: theme.textPrimary }}>{tank.display_name || tank.fuel_type}</span>
+                <span className="font-mono text-xs" style={{ color: theme.textSecondary }}>
+                  Opening {dip?.opening_dip_cm} cm &rarr; Closing {dip?.closing_dip_cm} cm
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={() => setEditRequested(true)}
+            className="px-4 py-2 text-sm rounded" style={{ color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
+            Edit
+          </button>
+          <button onClick={onSaved}
+            className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white"
+            style={{ backgroundColor: theme.primary }}>
+            Confirm — {continueLabel || 'Continue'}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -235,7 +284,13 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
         </div>
       )}
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex justify-end gap-2">
+        {initiallyComplete && (
+          <button onClick={() => setEditRequested(false)}
+            className="px-4 py-2 text-sm rounded" style={{ color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
+            Cancel
+          </button>
+        )}
         <button
           onClick={handleSave}
           disabled={!canContinue || saving}
