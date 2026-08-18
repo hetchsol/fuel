@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getHeaders, authFetch } from '../lib/api'
 import { formatDateToDisplay } from '../lib/dateUtils'
+import Pagination from '../components/Pagination'
 
 const BASE = '/api/v1'
 
@@ -49,6 +50,8 @@ export default function StockTakes() {
   const [busy, setBusy] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [newBin, setNewBin] = useState<Bin>('stores')
+  const [page, setPage] = useState(1)
+  const TAKES_PAGE_SIZE = 20
 
   useEffect(() => {
     const u = localStorage.getItem('user')
@@ -65,6 +68,7 @@ export default function StockTakes() {
       const res = await authFetch(`${BASE}/stores/stock-takes`, { headers: getHeaders() })
       if (!res.ok) throw new Error((await res.json()).detail || 'Failed to load')
       setTakes(await res.json())
+      setPage(1)
     } catch (err: any) {
       toast.error(err.message)
     } finally {
@@ -234,7 +238,7 @@ export default function StockTakes() {
                 No stock takes yet. Start one to count physical stock against the system.
               </td></tr>
             )}
-            {takes.map(t => {
+            {takes.slice((page - 1) * TAKES_PAGE_SIZE, page * TAKES_PAGE_SIZE).map(t => {
               const counted = t.lines.filter(l => l.counted_qty != null).length
               const varianceSum = t.lines.reduce((s, l) => s + (l.variance || 0), 0)
               const s = STATUS_BADGE[t.status] || STATUS_BADGE.draft
@@ -264,6 +268,7 @@ export default function StockTakes() {
             })}
           </tbody>
         </table>
+        <Pagination total={takes.length} pageSize={TAKES_PAGE_SIZE} page={page} onPageChange={setPage} />
       </div>
 
       {/* Active take editor */}

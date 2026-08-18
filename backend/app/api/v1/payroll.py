@@ -473,30 +473,37 @@ def get_leave_balance(
 # PUT /payroll/leave-requests/{request_id}/cancel
 # ══════════════════════════════════════════════════════════
 
-@router.get("/leave-requests", response_model=List[LeaveRequest])
+@router.get("/leave-requests")
 def list_leave_requests(
     status: Optional[str] = Query(default=None),
     user_id: Optional[str] = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=200),
     ctx: dict = Depends(get_station_context),
     current_user: dict = Depends(require_owner),
 ):
     _require_db()
     conn = _get_connection()
-    sql = """
-        SELECT lr.* FROM leave_requests lr
-        JOIN employee_profiles ep ON ep.user_id = lr.user_id
-        WHERE ep.station_id = %s
-    """
+    where = " FROM leave_requests lr JOIN employee_profiles ep ON ep.user_id = lr.user_id WHERE ep.station_id = %s"
     params: list = [_station_id(ctx)]
     if status:
-        sql += " AND lr.status = %s"
+        where += " AND lr.status = %s"
         params.append(status)
     if user_id:
-        sql += " AND lr.user_id = %s"
+        where += " AND lr.user_id = %s"
         params.append(user_id)
-    sql += " ORDER BY lr.created_at DESC"
-    rows = _fetchall(conn, sql, tuple(params))
-    return [_str_dates(r) for r in rows]
+
+    total_row = _fetchone(conn, "SELECT COUNT(*) AS total" + where, tuple(params))
+    total = total_row["total"] if total_row else 0
+
+    sql = "SELECT lr.*" + where + " ORDER BY lr.created_at DESC LIMIT %s OFFSET %s"
+    rows = _fetchall(conn, sql, tuple(params) + (page_size, (page - 1) * page_size))
+    return {
+        "items": [_str_dates(r) for r in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @router.post("/leave-requests", response_model=LeaveRequest)

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { authFetch } from '../lib/api'
 import { formatDateToDisplay } from '../lib/dateUtils'
+import Pagination from '../components/Pagination'
 import {
   PAYROLL, fmtZMW, periodLabel, MONTH_NAMES,
   type EmployeeProfile, type StatutoryRates, type WcfCategory,
@@ -539,17 +540,20 @@ function LeaveTab({ users, leaveTypes, onRefresh }: {
 }) {
   const [subTab, setSubTab] = useState<'requests' | 'balances'>('requests')
   const [requests, setRequests] = useState<LeaveRequest[]>([])
+  const [requestsTotal, setRequestsTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const REQUESTS_PAGE_SIZE = 20
   const [balances, setBalances] = useState<LeaveBalance[]>([])
   const [acting, setActing] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const [rRes, bRes] = await Promise.all([
-      authFetch(`${PAYROLL.leaveRequests()}`),
+      authFetch(`${PAYROLL.leaveRequests(page, REQUESTS_PAGE_SIZE)}`),
       authFetch(`${PAYROLL.leaveBalances()}`),
     ])
-    if (rRes.ok) setRequests(await rRes.json())
+    if (rRes.ok) { const d = await rRes.json(); setRequests(d.items); setRequestsTotal(d.total) }
     if (bRes.ok) setBalances(await bRes.json())
-  }, [])
+  }, [page])
 
   useEffect(() => { load() }, [load])
 
@@ -602,6 +606,7 @@ function LeaveTab({ users, leaveTypes, onRefresh }: {
             </tbody>
           </table>
           </div>
+          <Pagination total={requestsTotal} pageSize={REQUESTS_PAGE_SIZE} page={page} onPageChange={setPage} />
         </Card>
       )}
       {subTab === 'balances' && (
@@ -1740,7 +1745,7 @@ export default function PayrollPage() {
     if (ltRes.ok) setLeaveTypes(await ltRes.json())
     if (holRes.ok) setHolidays(await holRes.json())
     if (usersRes.ok) { const d = await usersRes.json(); setUsers(Array.isArray(d) ? d : d.users || []) }
-    if (leaveRes.ok) { const d = await leaveRes.json(); setPendingLeave(d.length) }
+    if (leaveRes.ok) { const d = await leaveRes.json(); setPendingLeave(d.total) }
     if (advRes.ok) { const d = await advRes.json(); setPendingAdvances(d.filter((a: any) => a.status === 'pending').length) }
     setLoading(false)
   }, [])

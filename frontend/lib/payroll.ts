@@ -27,7 +27,13 @@ export const PAYROLL = {
   leaveBalance:       (uid: string) => `/api/v1/payroll/leave-balances/${uid}`,
 
   // Leave requests
-  leaveRequests:      ()          => `/api/v1/payroll/leave-requests`,
+  leaveRequests:      (page?: number, pageSize?: number) => {
+    const params = new URLSearchParams()
+    if (page) params.set('page', String(page))
+    if (pageSize) params.set('page_size', String(pageSize))
+    const qs = params.toString()
+    return `/api/v1/payroll/leave-requests${qs ? `?${qs}` : ''}`
+  },
   leaveApprove:       (id: string) => `/api/v1/payroll/leave-requests/${id}/approve`,
   leaveReject:        (id: string) => `/api/v1/payroll/leave-requests/${id}/reject`,
   leaveCancel:        (id: string) => `/api/v1/payroll/leave-requests/${id}/cancel`,

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import DoubleEntryModal from '../components/DoubleEntryModal'
+import Pagination from '../components/Pagination'
 import { getHeaders, authFetch } from '../lib/api'
 import { formatDateToDisplay } from '../lib/dateUtils'
 
@@ -3454,8 +3455,13 @@ function ReviewStatusBadge({ status }: { status: string }) {
   )
 }
 
+const PAST_HANDOVERS_PAGE_SIZE = 15
+
 function PastHandoversTable({ handovers, theme, isAttendant = false }: { handovers: HandoverResult[], theme: any, isAttendant?: boolean }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  useEffect(() => { setPage(1) }, [handovers])
+  const pageHandovers = handovers.slice((page - 1) * PAST_HANDOVERS_PAGE_SIZE, page * PAST_HANDOVERS_PAGE_SIZE)
   const fmtZMW = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2 })
 
   const attendantHeaders = [
@@ -3492,7 +3498,7 @@ function PastHandoversTable({ handovers, theme, isAttendant = false }: { handove
           </tr>
         </thead>
         <tbody>
-          {handovers.map(h => {
+          {pageHandovers.map(h => {
             const isApproved = (h.review_status || h.status) === 'approved'
             const isExpanded = expandedId === h.handover_id
             return (
@@ -3589,6 +3595,7 @@ function PastHandoversTable({ handovers, theme, isAttendant = false }: { handove
           })}
         </tbody>
       </table>
+      <Pagination total={handovers.length} pageSize={PAST_HANDOVERS_PAGE_SIZE} page={page} onPageChange={setPage} />
     </div>
   )
 }
