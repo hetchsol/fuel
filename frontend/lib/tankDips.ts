@@ -88,12 +88,20 @@ export async function loadTankDips(date: string, shiftType: string): Promise<Tan
   return { tanks, dips, allComplete }
 }
 
+export interface TankDeliveryInfo {
+  supplier: string
+  invoice?: string
+  time?: string
+  volume?: string
+}
+
 export async function saveTankDips(
   date: string,
   shiftType: string,
   tanks: TankInfo[],
   dips: Record<string, TankDipState>,
   delegateReason?: string,
+  deliveries?: Record<string, TankDeliveryInfo>,
 ) {
   const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null
   const userId = userData ? JSON.parse(userData).user_id : ''
@@ -106,6 +114,8 @@ export async function saveTankDips(
       openingDipCm = await resolveOpeningDip(tank.tank_id, date, shiftType)
     }
 
+    const delivery = deliveries?.[tank.tank_id]
+
     const params = new URLSearchParams({
       tank_id: tank.tank_id,
       date,
@@ -114,6 +124,14 @@ export async function saveTankDips(
       closing_dip_cm: dip.closing_dip_cm,
       ...(openingDipCm ? { opening_dip_cm: openingDipCm } : {}),
       ...(delegateReason ? { delegate_reason: delegateReason } : {}),
+      // Backend requires a delivery on the same request whenever closing > opening
+      // — writes to tank_deliveries.json in that one call, same as the standalone
+      // Tank Dips page already does. Volume is left for the server to derive from
+      // the dip change when not given explicitly.
+      ...(delivery?.supplier ? { delivery_supplier: delivery.supplier } : {}),
+      ...(delivery?.invoice ? { delivery_invoice_number: delivery.invoice } : {}),
+      ...(delivery?.time ? { delivery_time: delivery.time } : {}),
+      ...(delivery?.volume ? { delivery_volume_liters: delivery.volume } : {}),
     })
     const res = await authFetch(`${BASE}/tank-readings/dips?${params}`, { method: 'POST', headers: getAuthHeaders() })
     if (!res.ok) {
