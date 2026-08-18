@@ -115,6 +115,18 @@ export async function saveTankDips(
       ...(openingDipCm ? { opening_dip_cm: openingDipCm } : {}),
       ...(delegateReason ? { delegate_reason: delegateReason } : {}),
     })
-    await authFetch(`${BASE}/tank-readings/dips?${params}`, { method: 'POST', headers: getAuthHeaders() })
+    const res = await authFetch(`${BASE}/tank-readings/dips?${params}`, { method: 'POST', headers: getAuthHeaders() })
+    if (!res.ok) {
+      // Silently swallowing this used to be the bug: the caller (and the
+      // modal) would believe the dip saved and move on, the record stayed
+      // incomplete, and the close would fail the same gate again — reading
+      // as "I entered it and the dialog just keeps popping back up." Most
+      // common causes: the shift is already locked (completed/reconciled),
+      // or the closing dip exceeds the opening dip and needs a delivery
+      // recorded, which this quick-entry form doesn't collect.
+      const err = await res.json().catch(() => ({ detail: 'Failed to save tank dip' }))
+      const label = tank.display_name || tank.fuel_type || tank.tank_id
+      throw new Error(`${label}: ${err.detail || 'Failed to save tank dip'}`)
+    }
   }
 }
