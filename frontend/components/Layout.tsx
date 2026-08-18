@@ -524,9 +524,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   // Every screen is blocked except the one place a manager can actually clear
-  // the backlog. Re-checked on every navigation, so it lifts itself the moment
-  // the count drops to zero — no separate "unblock" action needed.
-  const closureBlockActive = isManagerForClosureGate && staleClosureCount > 0 && router.pathname !== '/handover-review'
+  // the backlog, plus Tank Dips — Close & Approve routes here when a stale
+  // shift is blocked on missing dips, so this must stay reachable or that
+  // link is a dead end. Re-checked on every navigation, so it lifts itself
+  // the moment the count drops to zero — no separate "unblock" action needed.
+  const CLOSURE_GATE_EXEMPT_PATHS = ['/handover-review', '/tank-dips']
+  const closureBlockActive = isManagerForClosureGate && staleClosureCount > 0 && !CLOSURE_GATE_EXEMPT_PATHS.includes(router.pathname)
 
   return (
     <div className="flex flex-col min-h-screen">
