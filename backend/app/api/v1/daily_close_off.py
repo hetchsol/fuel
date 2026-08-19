@@ -102,7 +102,10 @@ async def get_close_off_summary(
     date_handovers = [h for h in all_handovers.values() if h.get("date") == date]
 
     approved = [h for h in date_handovers if h.get("review_status") == "approved"]
-    unapproved = [h for h in date_handovers if h.get("review_status") != "approved"]
+    # Voided handovers are resolved (excluded from sales, don't block the
+    # shift-completion requirement) — they must not show up here as if they
+    # still need someone to approve them.
+    unapproved = [h for h in date_handovers if h.get("review_status") not in ("approved", "voided")]
 
     # Identify flagged handovers (approved but had auto-flags)
     flagged_ids = [
