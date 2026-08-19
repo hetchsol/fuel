@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Pagination from '../components/Pagination'
@@ -611,6 +611,10 @@ export default function Shifts() {
   } | null>(null)
   const [retroOpenings, setRetroOpenings] = useState<Record<string, { electronic: string; mechanical: string }>>({})
   const [retroClosings, setRetroClosings] = useState<Record<string, { electronic: string; mechanical: string }>>({})
+  // Set from a 400 "duplicate_reading" response after a submit attempt — the
+  // manager must explain (e.g. genuine meter replacement) before resubmitting.
+  const [retroDuplicateConflicts, setRetroDuplicateConflicts] = useState<Record<string, { conflict_shift_id: string; conflict_reading: number }>>({})
+  const [retroDuplicateNotes, setRetroDuplicateNotes] = useState<Record<string, string>>({})
   const [retroFinancials, setRetroFinancials] = useState({ actual_cash: '', credit_sales: '', notes: '' })
   const [retroPosAmounts, setRetroPosAmounts] = useState<Record<string, string>>({})
   const [retroPosRefs, setRetroPosRefs] = useState<Record<string, string>>({})
@@ -632,6 +636,8 @@ export default function Shifts() {
     nozzleList.forEach((n: any) => { initReadings[n.nozzle_id] = initRow() })
     setRetroOpenings({ ...initReadings })
     setRetroClosings({ ...initReadings })
+    setRetroDuplicateConflicts({})
+    setRetroDuplicateNotes({})
     setRetroFinancials({ actual_cash: '', credit_sales: '', notes: '' })
     const initPosAmounts: Record<string, string> = {}
     posTypes.forEach(t => { initPosAmounts[t.type_id] = '' })
@@ -666,6 +672,7 @@ export default function Shifts() {
           nozzle_id,
           electronic_reading: parseFloat(v.electronic) || 0,
           mechanical_reading: parseFloat(v.mechanical) || 0,
+          ...(retroDuplicateNotes[nozzle_id] ? { duplicate_reading_note: retroDuplicateNotes[nozzle_id] } : {}),
         })),
         actual_cash: parseFloat(retroFinancials.actual_cash) || 0,
         pos_items: posTypes
@@ -685,7 +692,16 @@ export default function Shifts() {
 
       if (!res.ok) {
         const err = await res.json()
-        toast.error(err.detail || 'Failed to submit readings')
+        if (err.detail && typeof err.detail === 'object' && err.detail.error === 'duplicate_reading') {
+          const conflict = err.detail
+          setRetroDuplicateConflicts(prev => ({
+            ...prev,
+            [conflict.nozzle_id]: { conflict_shift_id: conflict.conflict_shift_id, conflict_reading: conflict.conflict_reading },
+          }))
+          toast.error(conflict.message || 'This reading was already recorded on another shift — explain below and resubmit.')
+          return
+        }
+        toast.error((typeof err.detail === 'string' ? err.detail : null) || 'Failed to submit readings')
         return
       }
 
@@ -1754,7 +1770,8 @@ export default function Shifts() {
                 </thead>
                 <tbody>
                   {retroModal.nozzleList.map((nozzle: any) => (
-                    <tr key={nozzle.nozzle_id} className="hover:bg-surface-bg/50">
+                    <Fragment key={nozzle.nozzle_id}>
+                    <tr className="hover:bg-surface-bg/50">
                       <td className="border border-surface-border px-3 py-2 font-medium text-content-primary whitespace-nowrap">
                         <span className={`inline-block w-2 h-2 rounded-full mr-2 ${nozzle.fuel_type === 'Petrol' ? 'bg-action-primary' : 'bg-category-c'}`} />
                         {nozzle.label}
@@ -1784,6 +1801,27 @@ export default function Shifts() {
                         ))
                       })}
                     </tr>
+                    {retroDuplicateConflicts[nozzle.nozzle_id] && (
+                      <tr>
+                        <td colSpan={5} className="border border-surface-border px-3 py-2" style={{ backgroundColor: 'rgba(239,83,80,0.05)' }}>
+                          <div className="flex items-start gap-3">
+                            <div className="text-xs font-semibold text-status-error whitespace-nowrap pt-1">
+                              Also on shift {retroDuplicateConflicts[nozzle.nozzle_id].conflict_shift_id} ({retroDuplicateConflicts[nozzle.nozzle_id].conflict_reading})
+                            </div>
+                            <input
+                              type="text"
+                              value={retroDuplicateNotes[nozzle.nozzle_id] ?? ''}
+                              onChange={e => setRetroDuplicateNotes(prev => ({ ...prev, [nozzle.nozzle_id]: e.target.value }))}
+                              placeholder="Explain why this reading is correct (e.g. meter replaced), required to resubmit"
+                              className={`flex-1 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-action-primary ${
+                                (retroDuplicateNotes[nozzle.nozzle_id] ?? '').trim() ? 'border-surface-border' : 'border-status-error'
+                              }`}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

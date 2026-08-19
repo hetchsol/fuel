@@ -1840,6 +1840,7 @@ class ManagerRetroNozzleInput(BaseModel):
     # silently make the full closing meter value look like that shift's sales.
     electronic_reading: Optional[float] = None
     mechanical_reading: float = 0.0
+    duplicate_reading_note: Optional[str] = None  # required override when the closing reading collides with another shift
 
 
 class ManagerRetroEntryInput(BaseModel):
@@ -1937,6 +1938,7 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
             closing_reading=closing_nr.electronic_reading,
             mechanical_opening=opening_nr.mechanical_reading,
             mechanical_closing=closing_nr.mechanical_reading,
+            duplicate_reading_note=closing_nr.duplicate_reading_note,
         ))
 
     if not nozzle_inputs:
