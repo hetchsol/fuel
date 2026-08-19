@@ -325,10 +325,11 @@ def reverse_handover_sales(station_id: str, handover: dict, performed_by: str = 
     `stock_snapshot` and applies each stock movement in reverse: forecourt
     stock decremented by a sale is credited back (`record_forecourt_return`),
     forecourt stock credited by an empty-cylinder return is debited back
-    (`record_sale`). Same idempotency guard, mirrored: only reverses once,
-    and only if `apply_handover_sales` actually ran.
+    (`record_sale`). Resets `stock_applied` back to False (rather than a
+    separate "reversed" flag) so `apply_handover_sales`'s own idempotency
+    guard can be reused as-is to re-apply cleanly if the void is undone.
     """
-    if not handover or not handover.get("stock_applied") or handover.get("stock_reversed"):
+    if not handover or not handover.get("stock_applied"):
         return {"reversed": False}
 
     snap = handover.get("stock_snapshot") or {}
@@ -360,7 +361,7 @@ def reverse_handover_sales(station_id: str, handover: dict, performed_by: str = 
                           if record_forecourt_return(station_id, k, q, performed_by, ref=f"void-{ref}") is not None)
     sales_applied = sum(1 for k, q in empties_in.items()
                         if record_sale(station_id, k, q, performed_by, ref=f"void-{ref}") is not None)
-    handover["stock_reversed"] = True
+    handover["stock_applied"] = False
     return {"reversed": True, "items_reversed": len(sold),
             "sales_applied": sales_applied, "returns_applied": returns_applied}
 

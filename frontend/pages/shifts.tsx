@@ -158,6 +158,64 @@ export default function Shifts() {
     }
   }
 
+  // Un-void: restore a mistakenly-voided entry (owner only)
+  const [unvoiding, setUnvoiding] = useState<string | null>(null)
+
+  const handleUnvoidEntry = async (target: { shift_id: string; attendant_id: string; attendant_name: string }) => {
+    if (!confirm(`Un-void ${target.attendant_name}'s entry? It will be restored to its status before voiding, and stock/credit effects re-applied if it was already approved.`)) return
+    setUnvoiding(target.attendant_id)
+    try {
+      const res = await authFetch(`${BASE}/handover/unvoid`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getHeaders() },
+        body: JSON.stringify({ shift_id: target.shift_id, attendant_id: target.attendant_id }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        toast.error(`Failed to un-void entry: ${error.detail || JSON.stringify(error)}`)
+        return
+      }
+      toast.success(`${target.attendant_name}'s entry restored.`)
+      fetchActiveShift()
+      fetchAllShifts()
+    } catch (err: any) {
+      toast.error(`Failed to un-void entry: ${err.message}`)
+    } finally {
+      setUnvoiding(null)
+    }
+  }
+
+  // Delete Permanently: irreversible removal of a voided entry (owner only)
+  const [deleteTarget, setDeleteTarget] = useState<{ shift_id: string; attendant_id: string; attendant_name: string } | null>(null)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDeleteVoidedEntry = async () => {
+    if (!deleteTarget || deleteConfirmText.trim() !== 'DELETE') return
+    setDeleting(true)
+    try {
+      const res = await authFetch(`${BASE}/handover/delete-voided`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getHeaders() },
+        body: JSON.stringify({ shift_id: deleteTarget.shift_id, attendant_id: deleteTarget.attendant_id }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        toast.error(`Failed to delete entry: ${error.detail || JSON.stringify(error)}`)
+        return
+      }
+      toast.success(`${deleteTarget.attendant_name}'s voided entry permanently deleted.`)
+      setDeleteTarget(null)
+      setDeleteConfirmText('')
+      fetchActiveShift()
+      fetchAllShifts()
+    } catch (err: any) {
+      toast.error(`Failed to delete entry: ${err.message}`)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const handleReactivateShift = async () => {
     if (!reactivateTarget) return
     setReactivating(true)
@@ -1021,12 +1079,27 @@ export default function Shifts() {
                       <div className="flex items-center justify-between mb-2">
                         <p className="font-medium text-content-primary">{assignment.attendant_name}</p>
                         {currentUser?.role === 'owner' && (
-                          <button
-                            onClick={() => setVoidTarget({ shift_id: activeShift.shift_id, attendant_id: assignment.attendant_id, attendant_name: assignment.attendant_name })}
-                            className="text-xs font-medium text-status-error hover:underline"
-                          >
-                            Void/Annul
-                          </button>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => setVoidTarget({ shift_id: activeShift.shift_id, attendant_id: assignment.attendant_id, attendant_name: assignment.attendant_name })}
+                              className="text-xs font-medium text-status-error hover:underline"
+                            >
+                              Void/Annul
+                            </button>
+                            <button
+                              disabled={unvoiding === assignment.attendant_id}
+                              onClick={() => handleUnvoidEntry({ shift_id: activeShift.shift_id, attendant_id: assignment.attendant_id, attendant_name: assignment.attendant_name })}
+                              className="text-xs font-medium text-status-warning hover:underline disabled:opacity-60"
+                            >
+                              {unvoiding === assignment.attendant_id ? 'Un-voiding...' : 'Un-void'}
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget({ shift_id: activeShift.shift_id, attendant_id: assignment.attendant_id, attendant_name: assignment.attendant_name })}
+                              className="text-xs font-medium text-content-secondary hover:underline"
+                            >
+                              Delete Permanently
+                            </button>
+                          </div>
                         )}
                       </div>
 
@@ -1475,12 +1548,27 @@ export default function Shifts() {
                                 {a.attendant_name}
                                 {shift.is_retrospective && <span className="ml-2 text-xs text-status-warning">(retrospective)</span>}
                               </span>
-                              <button
-                                onClick={() => setVoidTarget({ shift_id: shift.shift_id, attendant_id: a.attendant_id, attendant_name: a.attendant_name })}
-                                className="text-xs font-medium text-status-error hover:underline"
-                              >
-                                Void/Annul
-                              </button>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => setVoidTarget({ shift_id: shift.shift_id, attendant_id: a.attendant_id, attendant_name: a.attendant_name })}
+                                  className="text-xs font-medium text-status-error hover:underline"
+                                >
+                                  Void/Annul
+                                </button>
+                                <button
+                                  disabled={unvoiding === a.attendant_id}
+                                  onClick={() => handleUnvoidEntry({ shift_id: shift.shift_id, attendant_id: a.attendant_id, attendant_name: a.attendant_name })}
+                                  className="text-xs font-medium text-status-warning hover:underline disabled:opacity-60"
+                                >
+                                  {unvoiding === a.attendant_id ? 'Un-voiding...' : 'Un-void'}
+                                </button>
+                                <button
+                                  onClick={() => setDeleteTarget({ shift_id: shift.shift_id, attendant_id: a.attendant_id, attendant_name: a.attendant_name })}
+                                  className="text-xs font-medium text-content-secondary hover:underline"
+                                >
+                                  Delete Permanently
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1727,6 +1815,58 @@ export default function Shifts() {
                 className="px-5 py-2 text-sm bg-status-error hover:bg-status-error/90 text-white rounded-md font-medium disabled:opacity-60"
               >
                 {voiding ? 'Voiding...' : 'Void/Annul Entry'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Permanently Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-card rounded-lg p-6 max-w-md w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-content-primary">Delete Permanently</h2>
+              <button onClick={() => { setDeleteTarget(null); setDeleteConfirmText('') }} className="text-content-secondary hover:text-content-primary text-2xl">&times;</button>
+            </div>
+
+            <div className="mb-5 p-3 bg-status-error/10 border border-status-error rounded-lg">
+              <p className="text-sm font-semibold text-status-error mb-1">{deleteTarget.attendant_name}</p>
+              <p className="text-xs text-status-error">
+                This permanently removes the voided entry — the handover record,
+                its raw readings, and any credit-sale log entries — and cannot be
+                undone. Only the audit log will remember it existed. Only do this
+                once you're sure it was correctly voided; otherwise leave it
+                voided (which already has zero impact) or use Un-void.
+              </p>
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-content-primary mb-1">
+                Type DELETE to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={e => setDeleteConfirmText(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-surface-border rounded-md bg-surface-bg text-content-primary"
+                placeholder="DELETE"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setDeleteTarget(null); setDeleteConfirmText('') }}
+                className="px-4 py-2 text-sm border border-surface-border rounded-md text-content-secondary hover:bg-surface-bg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteVoidedEntry}
+                disabled={deleting || deleteConfirmText.trim() !== 'DELETE'}
+                className="px-5 py-2 text-sm bg-status-error hover:bg-status-error/90 text-white rounded-md font-medium disabled:opacity-60"
+              >
+                {deleting ? 'Deleting...' : 'Delete Permanently'}
               </button>
             </div>
           </div>

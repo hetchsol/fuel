@@ -187,6 +187,35 @@ def reverse_credit_sale(
         account[balance_field] = round(current_balance - amount, 2)
 
 
+def reapply_credit_sale(
+    accounts: Dict[str, Dict[str, Any]],
+    account_id: str,
+    amount: float,
+    balance_field: str = 'current_balance',
+) -> None:
+    """
+    Re-apply the balance side of `process_credit_sale` for a sale being
+    un-voided — the mirror of `reverse_credit_sale`. Deliberately skips the
+    ceiling/limit checks `process_credit_sale` enforces on a brand-new sale:
+    this is restoring a sale that already happened, not creating one, so it
+    must succeed even if the account is now closer to its limit than it was
+    at the time. Same overdraft caveat as `reverse_credit_sale` — the exact
+    balance/overdraft split from the original sale isn't reconstructed.
+    """
+    account = accounts.get(account_id)
+    if not account:
+        return
+    account_type = account.get('account_type', 'Post-Paid')
+    if account_type not in ('Pre-Paid', 'Post-Paid'):
+        account_type = 'Post-Paid'
+
+    current_balance = account.get(balance_field, 0.0)
+    if account_type == 'Pre-Paid':
+        account[balance_field] = round(current_balance - amount, 2)
+    else:
+        account[balance_field] = round(current_balance + amount, 2)
+
+
 def get_shift_sales(
     sales_log: List[Dict[str, Any]],
     shift_id: str,

@@ -17,7 +17,7 @@ from ...models.models import (
 )
 from ...config import resolve_fuel_price, resolve_fuel_price_for_shift, apply_due_price_changes
 from ...database.storage import get_nozzle, get_tank_id_for_nozzle, save_station_storage
-from ...services.inventory import process_credit_sale, reverse_credit_sale
+from ...services.inventory import process_credit_sale, reverse_credit_sale, reapply_credit_sale
 from .accounts import generate_client_code, generate_auth_reference
 from .auth import get_current_user, require_supervisor_or_owner, require_manager_or_owner, require_owner, get_station_context
 from ...services.audit_service import log_audit_event
@@ -3392,6 +3392,7 @@ async def void_handover(data: VoidHandoverInput, ctx: dict = Depends(get_station
                 reverse_credit_sale(accounts_data, sale.get("account_id", ""), sale.get("amount", 0) or 0)
                 sale["voided"] = True
 
+        handover["pre_void_review_status"] = handover.get("review_status", "submitted")
         handover["review_status"] = "voided"
         handover["voided_by"] = ctx["username"]
         handover["voided_at"] = datetime.now().isoformat()
@@ -3437,6 +3438,165 @@ async def void_handover(data: VoidHandoverInput, ctx: dict = Depends(get_station
         )
 
     return {"status": "success", "voided_handover_ids": voided_ids}
+
+
+class UnvoidHandoverInput(BaseModel):
+    shift_id: str
+    attendant_id: str
+
+
+@router.post("/unvoid", dependencies=[Depends(require_owner)])
+async def unvoid_handover(data: UnvoidHandoverInput, ctx: dict = Depends(get_station_context)):
+    """
+    Reverse a mistaken Void — restores the entry to whatever review status
+    it had before voiding, re-applying stock and credit-sale effects if it
+    had already been approved at the time it was voided. Owner only, same
+    gate as Void.
+    """
+    station_id = ctx["station_id"]
+    handovers = _load_handovers(station_id)
+    matches = [
+        (hid, h) for hid, h in handovers.items()
+        if h.get("shift_id") == data.shift_id and h.get("attendant_id") == data.attendant_id
+        and h.get("review_status") == "voided"
+    ]
+    if not matches:
+        raise HTTPException(status_code=404, detail="No voided entry found for this attendant on this shift.")
+
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
+
+    unvoided_ids = []
+    for handover_id, handover in matches:
+        if handover.get("date", "") in close_offs:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot un-void. Day {handover['date']} has been closed off — reopen the day first.",
+            )
+
+        restored_status = handover.get("pre_void_review_status", "submitted")
+        handover["review_status"] = restored_status
+
+        if restored_status == "approved":
+            if not handover.get("stock_applied"):
+                apply_handover_sales(station_id, handover, ctx["username"])
+
+            accounts_data = ctx["storage"].get("accounts", {})
+            credit_sales_data = ctx["storage"].get("credit_sales", [])
+            prefix = f"CS-HO-{handover_id}-"
+            for sale in credit_sales_data:
+                if sale.get("sale_id", "").startswith(prefix) and sale.get("voided"):
+                    reapply_credit_sale(accounts_data, sale.get("account_id", ""), sale.get("amount", 0) or 0)
+                    sale["voided"] = False
+
+        handover["unvoided_by"] = ctx["username"]
+        handover["unvoided_at"] = datetime.now().isoformat()
+        unvoided_ids.append(handover_id)
+
+    _save_handovers(handovers, station_id)
+    save_station_storage(station_id)
+
+    readings_db = _load_enter_readings(station_id)
+    changed = False
+    for key in (f"AR-{data.shift_id}-{data.attendant_id}-O", f"AR-{data.shift_id}-{data.attendant_id}-C"):
+        if key in readings_db and readings_db[key].get("voided"):
+            del readings_db[key]["voided"]
+            changed = True
+    if changed:
+        _save_enter_readings(readings_db, station_id)
+
+    for handover_id in unvoided_ids:
+        handover = handovers[handover_id]
+        log_audit_event(
+            station_id=station_id,
+            action="handover_unvoided",
+            performed_by=ctx["username"],
+            entity_type="handover",
+            entity_id=handover_id,
+            details={"shift_id": data.shift_id, "attendant_id": data.attendant_id,
+                     "restored_status": handover.get("review_status")},
+        )
+        create_notification(
+            station_id=station_id,
+            type="HANDOVER_UNVOIDED",
+            severity="info",
+            title="Handover Restored",
+            message=f"Handover {handover_id} un-voided by {ctx['full_name']}",
+            entity_type="handover",
+            entity_id=handover_id,
+            created_by=ctx["username"],
+        )
+        # A restored 'approved' handover may now let its shift complete.
+        if handover.get("review_status") == "approved":
+            advance_shift_on_approval(handover.get("shift_id", ""), station_id, ctx["storage"], ctx["username"])
+
+    return {
+        "status": "success",
+        "unvoided_handover_ids": unvoided_ids,
+        "restored_statuses": [handovers[hid].get("review_status") for hid in unvoided_ids],
+    }
+
+
+class DeleteVoidedHandoverInput(BaseModel):
+    shift_id: str
+    attendant_id: str
+
+
+@router.post("/delete-voided", dependencies=[Depends(require_owner)])
+async def delete_voided_handover(data: DeleteVoidedHandoverInput, ctx: dict = Depends(get_station_context)):
+    """
+    Permanently remove a voided entry — the handover record, its raw
+    reading records, and any credit-sale log entries it created. Only ever
+    operates on entries already in review_status 'voided' (void first,
+    then decide this one wasn't a mistake and doesn't need to be kept).
+    Irreversible — the audit log entry (which captures the full deleted
+    record) is the only trace left afterward.
+    """
+    station_id = ctx["station_id"]
+    handovers = _load_handovers(station_id)
+    matches = [
+        (hid, h) for hid, h in handovers.items()
+        if h.get("shift_id") == data.shift_id and h.get("attendant_id") == data.attendant_id
+        and h.get("review_status") == "voided"
+    ]
+    if not matches:
+        raise HTTPException(
+            status_code=404,
+            detail="No voided entry found for this attendant on this shift. "
+                   "Only a voided entry can be permanently deleted — void it first.",
+        )
+
+    deleted_ids = []
+    for handover_id, handover in matches:
+        prefix = f"CS-HO-{handover_id}-"
+        ctx["storage"]["credit_sales"] = [
+            s for s in ctx["storage"].get("credit_sales", [])
+            if not s.get("sale_id", "").startswith(prefix)
+        ]
+
+        log_audit_event(
+            station_id=station_id,
+            action="handover_deleted",
+            performed_by=ctx["username"],
+            entity_type="handover",
+            entity_id=handover_id,
+            details={"shift_id": data.shift_id, "attendant_id": data.attendant_id, "deleted_record": handover},
+        )
+        del handovers[handover_id]
+        deleted_ids.append(handover_id)
+
+    _save_handovers(handovers, station_id)
+    save_station_storage(station_id)
+
+    readings_db = _load_enter_readings(station_id)
+    changed = False
+    for key in (f"AR-{data.shift_id}-{data.attendant_id}-O", f"AR-{data.shift_id}-{data.attendant_id}-C"):
+        if key in readings_db:
+            del readings_db[key]
+            changed = True
+    if changed:
+        _save_enter_readings(readings_db, station_id)
+
+    return {"status": "success", "deleted_handover_ids": deleted_ids}
 
 
 class AdminOverrideCloseInput(BaseModel):
