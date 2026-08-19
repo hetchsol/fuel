@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Pagination from '../components/Pagination'
+import ReasonChips, { REASON_PRESETS } from '../components/ReasonChips'
 import { getHeaders, authFetch } from '../lib/api'
 import { formatDateToDisplay, formatDateTimeToDisplay } from '../lib/dateUtils'
 
@@ -121,6 +122,41 @@ export default function Shifts() {
 
   const [reactivateTarget, setReactivateTarget] = useState<any>(null)
   const [reactivating, setReactivating] = useState(false)
+
+  // Void/Annul attendant entry (owner only)
+  const [voidTarget, setVoidTarget] = useState<{ shift_id: string; attendant_id: string; attendant_name: string } | null>(null)
+  const [voidNote, setVoidNote] = useState('')
+  const [voiding, setVoiding] = useState(false)
+
+  const handleVoidEntry = async () => {
+    if (!voidTarget || !voidNote.trim()) return
+    setVoiding(true)
+    try {
+      const res = await authFetch(`${BASE}/handover/void`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getHeaders() },
+        body: JSON.stringify({
+          shift_id: voidTarget.shift_id,
+          attendant_id: voidTarget.attendant_id,
+          note: voidNote.trim(),
+        }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        toast.error(`Failed to void entry: ${error.detail || JSON.stringify(error)}`)
+        return
+      }
+      toast.success(`${voidTarget.attendant_name}'s entry voided — sales, stock, and credit impact reversed.`)
+      setVoidTarget(null)
+      setVoidNote('')
+      fetchActiveShift()
+      fetchAllShifts()
+    } catch (err: any) {
+      toast.error(`Failed to void entry: ${err.message}`)
+    } finally {
+      setVoiding(false)
+    }
+  }
 
   const handleReactivateShift = async () => {
     if (!reactivateTarget) return
@@ -966,7 +1002,17 @@ export default function Shifts() {
                       )
                   ).map((assignment: any) => (
                     <div key={assignment.attendant_id} className="p-4 bg-surface-card rounded-lg border border-surface-border">
-                      <p className="font-medium mb-2 text-content-primary">{assignment.attendant_name}</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="font-medium text-content-primary">{assignment.attendant_name}</p>
+                        {currentUser?.role === 'owner' && (
+                          <button
+                            onClick={() => setVoidTarget({ shift_id: activeShift.shift_id, attendant_id: assignment.attendant_id, attendant_name: assignment.attendant_name })}
+                            className="text-xs font-medium text-status-error hover:underline"
+                          >
+                            Void/Annul
+                          </button>
+                        )}
+                      </div>
 
                       {/* Product assignments */}
                       {(assignment.assigned_lpg || assignment.assigned_lubricants || assignment.assigned_accessories) && (
@@ -1405,6 +1451,23 @@ export default function Shifts() {
                             </div>
                           ))}
                         </div>
+                      ) : currentUser?.role === 'owner' ? (
+                        <div className="mt-2 space-y-1">
+                          {shift.assignments.map((a: any) => (
+                            <div key={a.attendant_id} className="flex items-center justify-between">
+                              <span className="text-sm text-content-secondary">
+                                {a.attendant_name}
+                                {shift.is_retrospective && <span className="ml-2 text-xs text-status-warning">(retrospective)</span>}
+                              </span>
+                              <button
+                                onClick={() => setVoidTarget({ shift_id: shift.shift_id, attendant_id: a.attendant_id, attendant_name: a.attendant_name })}
+                                className="text-xs font-medium text-status-error hover:underline"
+                              >
+                                Void/Annul
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       ) : (
                         <p className="mt-2 text-sm text-content-secondary">
                           Attendants: {shift.assignments.map((a: any) => a.attendant_name).join(', ')}
@@ -1581,6 +1644,73 @@ export default function Shifts() {
                 className="px-5 py-2 text-sm bg-status-warning hover:bg-status-warning/90 text-white rounded-md font-medium disabled:opacity-60"
               >
                 {reactivating ? 'Reactivating...' : 'Reactivate Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Void/Annul Entry Modal */}
+      {voidTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-card rounded-lg p-6 max-w-md w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-content-primary">Void/Annul Entry</h2>
+              <button onClick={() => { setVoidTarget(null); setVoidNote('') }} className="text-content-secondary hover:text-content-primary text-2xl">&times;</button>
+            </div>
+
+            <div className="mb-4 p-3 bg-status-error/10 border border-status-error rounded-lg">
+              <p className="text-sm font-semibold text-status-error mb-1">{voidTarget.attendant_name}</p>
+              <p className="text-xs text-status-error">
+                This voids every nozzle reading, cash handover, stock movement, and
+                credit sale recorded for this attendant on this shift — even if
+                already approved. Stock and credit-account balances are reversed
+                back to their pre-approval values. This cannot be undone from here.
+              </p>
+            </div>
+
+            <div className="mb-4 p-3 bg-status-warning/10 border border-status-warning rounded-lg">
+              <p className="text-xs text-status-warning">
+                Voiding corrects the data — sales figures, stock counts, credit
+                balances — but cannot undo real cash already deposited in the safe
+                or fuel already physically dispensed. Only void this if it's a
+                genuine duplicate/mistake shift with no separate real activity;
+                otherwise reconcile the physical side separately.
+              </p>
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-content-primary mb-1">
+                Reason (required)
+              </label>
+              <ReasonChips
+                presets={REASON_PRESETS.voidEntry}
+                value={voidNote}
+                onSelect={setVoidNote}
+                className="mb-2"
+              />
+              <textarea
+                value={voidNote}
+                onChange={e => setVoidNote(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 text-sm border border-surface-border rounded-md bg-surface-bg text-content-primary"
+                placeholder="Explain why this entry is being voided..."
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setVoidTarget(null); setVoidNote('') }}
+                className="px-4 py-2 text-sm border border-surface-border rounded-md text-content-secondary hover:bg-surface-bg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleVoidEntry}
+                disabled={voiding || !voidNote.trim()}
+                className="px-5 py-2 text-sm bg-status-error hover:bg-status-error/90 text-white rounded-md font-medium disabled:opacity-60"
+              >
+                {voiding ? 'Voiding...' : 'Void/Annul Entry'}
               </button>
             </div>
           </div>

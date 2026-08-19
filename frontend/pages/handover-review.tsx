@@ -53,6 +53,9 @@ interface HandoverEntry {
     post_change_price?: number | null
     pre_change_revenue?: number | null
     post_change_revenue?: number | null
+    duplicate_reading_flagged?: boolean | null
+    duplicate_reading_conflict_shift_id?: string | null
+    duplicate_reading_note?: string | null
   }[]
   fuel_revenue: number
   lpg_sales: number
@@ -105,6 +108,7 @@ const REVIEW_STATUS_STYLES: Record<string, { bg: string; color: string; label: s
   flagged: { bg: 'var(--color-status-error-light, #fde8e8)', color: 'var(--color-status-error)', label: 'Flagged' },
   approved: { bg: 'var(--color-status-success-light, #e6f9e6)', color: 'var(--color-status-success)', label: 'Approved' },
   returned: { bg: 'var(--color-status-warning-light, #fff8e1)', color: 'var(--color-status-warning)', label: 'Returned' },
+  voided: { bg: 'var(--color-surface-border, #eee)', color: 'var(--color-content-secondary)', label: 'Voided' },
 }
 
 const FLAG_LABELS: Record<string, string> = {
@@ -113,6 +117,7 @@ const FLAG_LABELS: Record<string, string> = {
   pos_terminal_variance: 'POS Terminal Variance',
   stock_variance_unexplained: 'Stock Variance',
   nozzle_loss_exceeded: 'Nozzle Loss Exceeded',
+  duplicate_meter_reading: 'Duplicate Meter Reading',
 }
 
 export default function HandoverReview() {
@@ -2181,6 +2186,16 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
                     K{ns.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
+                {ns.duplicate_reading_flagged && (
+                  <tr key={`${ns.nozzle_id}-duplicate`} style={{ backgroundColor: theme.cardBg }}>
+                    <td colSpan={8} className="px-4 py-1.5">
+                      <div className="text-xs" style={{ color: 'var(--color-status-error)' }}>
+                        Also recorded on shift {ns.duplicate_reading_conflict_shift_id}
+                        {ns.duplicate_reading_note ? ` — attendant note: "${ns.duplicate_reading_note}"` : ''}
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {ns.pre_change_revenue != null && ns.post_change_revenue != null && (
                   <tr key={`${ns.nozzle_id}-split`} style={{ backgroundColor: theme.cardBg }}>
                     <td colSpan={8} className="px-4 py-1.5">

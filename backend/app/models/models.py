@@ -856,6 +856,7 @@ class HandoverNozzleReadingInput(BaseModel):
     mechanical_opening: float = Field(default=0, ge=0)  # mechanical (totalizer) opening
     mechanical_closing: float = Field(default=0, ge=0)  # mechanical (totalizer) closing
     changeover_reading: Optional[float] = Field(default=None, ge=0)  # midnight reading for price change shifts
+    duplicate_reading_note: Optional[str] = None  # required override when the closing reading collides with another shift
 
 class HandoverNozzleReadingSummary(BaseModel):
     """Computed nozzle reading summary for handover output"""
@@ -881,6 +882,10 @@ class HandoverNozzleReadingSummary(BaseModel):
     post_change_price: Optional[float] = None
     pre_change_revenue: Optional[float] = None
     post_change_revenue: Optional[float] = None
+    # Cross-shift duplicate-reading gate (readings are monotonic per nozzle)
+    duplicate_reading_flagged: Optional[bool] = None
+    duplicate_reading_conflict_shift_id: Optional[str] = None
+    duplicate_reading_note: Optional[str] = None
 
 # ===== Shift-Level Stock Snapshot Models =====
 

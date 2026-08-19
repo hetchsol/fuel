@@ -150,6 +150,43 @@ def process_credit_sale(
     return sale_data
 
 
+def reverse_credit_sale(
+    accounts: Dict[str, Dict[str, Any]],
+    account_id: str,
+    amount: float,
+    balance_field: str = 'current_balance',
+) -> None:
+    """
+    Undo the balance side of `process_credit_sale` for a voided sale.
+
+    Post-Paid (amount owed increases with sales) is exactly reversible —
+    current_balance is a plain running total, never clamped, so subtracting
+    `amount` back out is correct regardless of how many other sales have
+    landed on the account since.
+
+    Pre-Paid is only exactly reversible when the original sale was fully
+    covered by the balance at the time (the common case: add `amount` back).
+    If the sale spilled into `approved_overdraft` (balance was clamped to
+    0.0 and overdraft partially consumed), the pre-sale split between
+    balance and overdraft isn't recoverable from the account's current
+    state alone — this best-effort reversal still credits `amount` back to
+    current_balance, but does not attempt to restore approved_overdraft.
+    That case needs manual owner reconciliation of the overdraft figure.
+    """
+    account = accounts.get(account_id)
+    if not account:
+        return
+    account_type = account.get('account_type', 'Post-Paid')
+    if account_type not in ('Pre-Paid', 'Post-Paid'):
+        account_type = 'Post-Paid'
+
+    current_balance = account.get(balance_field, 0.0)
+    if account_type == 'Pre-Paid':
+        account[balance_field] = round(current_balance + amount, 2)
+    else:
+        account[balance_field] = round(current_balance - amount, 2)
+
+
 def get_shift_sales(
     sales_log: List[Dict[str, Any]],
     shift_id: str,

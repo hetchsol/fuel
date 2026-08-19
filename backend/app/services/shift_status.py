@@ -61,20 +61,23 @@ def _shift_fully_approved(shift: dict, shift_id: str, station_id: str, storage: 
     shift_handovers = [h for h in handovers.values() if h.get("shift_id") == shift_id]
     if not shift_handovers:
         return False
-    # Any handover not yet approved (e.g. returned and being redone) blocks completion.
-    if any(h.get("review_status") != "approved" for h in shift_handovers):
+    # Any handover not resolved (approved, or voided out of the picture
+    # entirely) — e.g. returned and being redone — blocks completion.
+    resolved_statuses = ("approved", "voided")
+    if any(h.get("review_status") not in resolved_statuses for h in shift_handovers):
         return False
 
-    # Every assigned attendant must have an approved handover. Approving one
-    # attendant never completes the shift while a co-attendant is still working.
+    # Every assigned attendant must have a resolved handover (approved or
+    # voided). Approving/voiding one attendant never completes the shift
+    # while a co-attendant is still working.
     assigned_ids = {a.get("attendant_id") for a in (shift or {}).get("assignments", [])
                     if a.get("attendant_id")}
     if assigned_ids:
-        approved_ids = {h.get("attendant_id") for h in shift_handovers
-                        if h.get("review_status") == "approved"}
-        if not assigned_ids.issubset(approved_ids):
+        resolved_ids = {h.get("attendant_id") for h in shift_handovers
+                        if h.get("review_status") in resolved_statuses}
+        if not assigned_ids.issubset(resolved_ids):
             return False
-    # (Shift with no recorded assignments → fall back to "all handovers approved".)
+    # (Shift with no recorded assignments → fall back to "all handovers resolved".)
     return True
 
 

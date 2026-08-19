@@ -318,6 +318,53 @@ def apply_handover_sales(station_id: str, handover: dict, performed_by: str = "s
             "empty_returns_applied": returns_applied}
 
 
+def reverse_handover_sales(station_id: str, handover: dict, performed_by: str = "system") -> dict:
+    """
+    Undo `apply_handover_sales` for a handover being voided — recomputes the
+    same sold/empties_in quantities from the handover's stored
+    `stock_snapshot` and applies each stock movement in reverse: forecourt
+    stock decremented by a sale is credited back (`record_forecourt_return`),
+    forecourt stock credited by an empty-cylinder return is debited back
+    (`record_sale`). Same idempotency guard, mirrored: only reverses once,
+    and only if `apply_handover_sales` actually ran.
+    """
+    if not handover or not handover.get("stock_applied") or handover.get("stock_reversed"):
+        return {"reversed": False}
+
+    snap = handover.get("stock_snapshot") or {}
+    ref = handover.get("handover_id", "")
+    sold: dict = {}
+    empties_in: dict = {}
+
+    def _add(acc: dict, key: Optional[str], qty):
+        if key and qty:
+            acc[key] = acc.get(key, 0) + qty
+
+    for r in snap.get("lubricants", []) or []:
+        _add(sold, f"lubricant:{r.get('product_code')}", r.get("sold", 0) or 0)
+    for r in snap.get("accessories", []) or []:
+        _add(sold, f"lpg_accessory:{r.get('product_code')}", r.get("sold", 0) or 0)
+    for r in snap.get("lpg_cylinders", []) or []:
+        size = r.get("size_kg")
+        if size is None:
+            continue
+        total = r.get("total_sold")
+        if total is None:
+            total = (r.get("sold_refill", 0) or 0) + (r.get("sold_with_cylinder", 0) or 0)
+        _add(sold, f"cylinder_full:{size}kg", total or 0)
+        _add(empties_in, f"cylinder_empty:{size}kg", r.get("sold_refill", 0) or 0)
+
+    # Reverse of apply_handover_sales: what was sold (decremented) is credited
+    # back, what came back as empties (incremented) is debited back out.
+    returns_applied = sum(1 for k, q in sold.items()
+                          if record_forecourt_return(station_id, k, q, performed_by, ref=f"void-{ref}") is not None)
+    sales_applied = sum(1 for k, q in empties_in.items()
+                        if record_sale(station_id, k, q, performed_by, ref=f"void-{ref}") is not None)
+    handover["stock_reversed"] = True
+    return {"reversed": True, "items_reversed": len(sold),
+            "sales_applied": sales_applied, "returns_applied": returns_applied}
+
+
 # ── stock-take sessions ─────────────────────────────────────────────
 
 def load_takes(station_id: str) -> dict:

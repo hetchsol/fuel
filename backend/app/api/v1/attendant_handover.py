@@ -17,15 +17,15 @@ from ...models.models import (
 )
 from ...config import resolve_fuel_price, resolve_fuel_price_for_shift, apply_due_price_changes
 from ...database.storage import get_nozzle, get_tank_id_for_nozzle, save_station_storage
-from ...services.inventory import process_credit_sale
+from ...services.inventory import process_credit_sale, reverse_credit_sale
 from .accounts import generate_client_code, generate_auth_reference
 from .auth import get_current_user, require_supervisor_or_owner, require_manager_or_owner, require_owner, get_station_context
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
 from ...services.shift_status import assert_shift_editable, advance_shift_on_approval
-from ...services.stock_service import apply_handover_sales
+from ...services.stock_service import apply_handover_sales, reverse_handover_sales
 from ...database.station_files import load_station_json, save_station_json
-from .enter_readings import _load_readings as _load_enter_readings
+from .enter_readings import _load_readings as _load_enter_readings, _save_readings as _save_enter_readings
 from .lpg_daily import (
     load_lpg_pricing, LPG_SIZES, DEFAULT_LPG_ACCESSORIES,
     load_lpg_accessories, save_lpg_accessories,
@@ -165,6 +165,8 @@ def _find_previous_shift_readings(shift: dict, storage: dict, station_id: str) -
     for key, record in readings_db.items():
         if not (key.startswith(prefix) and key.endswith("-C")):
             continue
+        if record.get("voided"):
+            continue
         submitted_at = record.get("submitted_at", "")
         for nr in record.get("nozzle_readings", []):
             nid = nr["nozzle_id"]
@@ -184,6 +186,43 @@ def _find_previous_shift_readings(shift: dict, storage: dict, station_id: str) -
             }
             result_from[nid] = submitted_at
     return result
+
+
+def _find_conflicting_closing_reading(nozzle_id: str, new_electronic_reading: float,
+                                      this_shift_id: str, station_id: str, storage: dict):
+    """
+    Cross-shift duplicate/decreasing-reading check: nozzle totalizer readings
+    are monotonic (only ever increase), so a closing electronic reading that's
+    <= a closing reading already on record for the same nozzle under a
+    DIFFERENT shift is a strong signal of a duplicate/mistake shift.
+
+    Closing-vs-closing only, never opening — a shift's opening legitimately
+    equals the previous shift's closing by design (carry-forward chain), so
+    comparing openings would false-positive on every normal shift.
+
+    Returns {"shift_id", "reading"} for the highest conflicting reading found
+    across all other shifts, or None.
+    """
+    readings_db = _load_enter_readings(station_id)
+    worst = None
+    for sid in storage.get("shifts", {}):
+        if sid == this_shift_id:
+            continue
+        prefix = f"AR-{sid}-"
+        for key, record in readings_db.items():
+            if not (key.startswith(prefix) and key.endswith("-C")):
+                continue
+            if record.get("voided"):
+                continue
+            for nr in record.get("nozzle_readings", []):
+                if nr.get("nozzle_id") != nozzle_id:
+                    continue
+                existing = nr.get("electronic_reading")
+                if existing is None:
+                    continue
+                if new_electronic_reading <= existing and (worst is None or existing > worst["reading"]):
+                    worst = {"shift_id": sid, "reading": existing}
+    return worst
 
 
 def notify_stale_readings(station_id: str) -> int:
@@ -491,6 +530,36 @@ def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, use
         if volume < 0:
             raise HTTPException(status_code=400, detail=f"Closing reading for {reading.nozzle_id} is less than opening reading")
 
+        # Cross-shift duplicate/decreasing-reading gate — blocked by default,
+        # but the attendant can push through immediately by explaining why
+        # (e.g. a genuine meter replacement). The override still gets flagged
+        # for owner review, same as any other auto-flag.
+        duplicate_flagged = False
+        duplicate_conflict_shift_id = None
+        duplicate_note = None
+        conflict = _find_conflicting_closing_reading(reading.nozzle_id, closing_val, shift_id, station_id, storage)
+        if conflict:
+            if not (reading.duplicate_reading_note and reading.duplicate_reading_note.strip()):
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "duplicate_reading",
+                        "nozzle_id": reading.nozzle_id,
+                        "reading": closing_val,
+                        "conflict_shift_id": conflict["shift_id"],
+                        "conflict_reading": conflict["reading"],
+                        "message": (
+                            f"Closing reading for {reading.nozzle_id} ({closing_val}) was already "
+                            f"recorded for this nozzle on shift {conflict['shift_id']} "
+                            f"(reading {conflict['reading']}). If this is correct (e.g. the meter was "
+                            "replaced), provide a note explaining why and resubmit."
+                        ),
+                    },
+                )
+            duplicate_flagged = True
+            duplicate_conflict_shift_id = conflict["shift_id"]
+            duplicate_note = reading.duplicate_reading_note.strip()
+
         # Check for price change during this shift
         price_info = resolve_fuel_price_for_shift(fuel_type, shift_date or "", shift_type or "", storage)
 
@@ -597,6 +666,9 @@ def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, use
             post_change_price=post_change_price,
             pre_change_revenue=pre_change_revenue,
             post_change_revenue=post_change_revenue,
+            duplicate_reading_flagged=duplicate_flagged,
+            duplicate_reading_conflict_shift_id=duplicate_conflict_shift_id,
+            duplicate_reading_note=duplicate_note,
         ))
 
     return nozzle_summaries, round(fuel_revenue, 2)
@@ -845,7 +917,7 @@ def _process_credit_sales(credit_sale_items, storage, shift_id):
             "coupon_serial": item.coupon_serial,
         })
 
-    pre_existing = [s for s in credit_sales_data if s.get("shift_id") == shift_id]
+    pre_existing = [s for s in credit_sales_data if s.get("shift_id") == shift_id and not s.get("voided")]
     pre_existing_details = []
     for s in pre_existing:
         pre_existing_details.append({
@@ -943,6 +1015,8 @@ def _compute_auto_flags(difference, nozzle_summaries, stock_variance_flags, stor
     nozzle_loss_threshold = storage.get('fuel_settings', {}).get('nozzle_allowable_loss_liters', 0.8)
     if any(ns.meter_deviation_liters is not None and ns.meter_deviation_liters > nozzle_loss_threshold for ns in nozzle_summaries):
         auto_flag_reasons.append("nozzle_loss_exceeded")
+    if any(ns.duplicate_reading_flagged for ns in nozzle_summaries):
+        auto_flag_reasons.append("duplicate_meter_reading")
     if stock_variance_flags:
         auto_flag_reasons.append("stock_variance_unexplained")
     review_status = "flagged" if auto_flag_reasons else "submitted"
@@ -957,6 +1031,8 @@ def _compute_phase1_flags(nozzle_summaries, stock_variance_flags, storage):
     nozzle_loss_threshold = storage.get('fuel_settings', {}).get('nozzle_allowable_loss_liters', 0.8)
     if any(ns.meter_deviation_liters is not None and ns.meter_deviation_liters > nozzle_loss_threshold for ns in nozzle_summaries):
         flags.append("nozzle_loss_exceeded")
+    if any(ns.duplicate_reading_flagged for ns in nozzle_summaries):
+        flags.append("duplicate_meter_reading")
     if stock_variance_flags:
         flags.append("stock_variance_unexplained")
     return flags
@@ -3250,6 +3326,115 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
         )
 
     return {"status": "success", "review_status": handover["review_status"], "handover_id": data.handover_id}
+
+
+class VoidHandoverInput(BaseModel):
+    shift_id: str
+    attendant_id: str
+    note: str
+
+
+@router.post("/void", dependencies=[Depends(require_owner)])
+async def void_handover(data: VoidHandoverInput, ctx: dict = Depends(get_station_context)):
+    """
+    Void an attendant's entire entry for a shift — nozzle readings, cash
+    handover, stock movement, credit sales — with zero impact on sales
+    totals or stock levels once voided. Owner only: unlike Approve/Return,
+    this can reverse already-approved stock and credit-sale effects, so it
+    carries the strictest gate in the app.
+
+    Not a normal correction path — if the attendant never submitted
+    anything for this shift, there's nothing here to void; edit the
+    shift's assignments instead.
+    """
+    if not data.note or not data.note.strip():
+        raise HTTPException(status_code=400, detail="A reason is required to void an entry")
+
+    station_id = ctx["station_id"]
+    handovers = _load_handovers(station_id)
+    matches = [
+        (hid, h) for hid, h in handovers.items()
+        if h.get("shift_id") == data.shift_id and h.get("attendant_id") == data.attendant_id
+    ]
+    if not matches:
+        raise HTTPException(
+            status_code=404,
+            detail="No handover entry found for this attendant on this shift. "
+                   "If nothing was ever submitted, edit the shift's assignments instead.",
+        )
+
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
+
+    voided_ids = []
+    for handover_id, handover in matches:
+        if handover.get("review_status") == "voided":
+            continue
+        if handover.get("date", "") in close_offs:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot void. Day {handover['date']} has been closed off — reopen the day first.",
+            )
+
+        # Reverse already-applied stock effects, if any.
+        if handover.get("stock_applied"):
+            reverse_handover_sales(station_id, handover, ctx["username"])
+
+        # Reverse credit sales created by this specific handover — sale_id is
+        # prefixed CS-HO-{handover_id}-, so this never touches a co-attendant's
+        # credit sales on the same shift.
+        accounts_data = ctx["storage"].get("accounts", {})
+        credit_sales_data = ctx["storage"].get("credit_sales", [])
+        prefix = f"CS-HO-{handover_id}-"
+        for sale in credit_sales_data:
+            if sale.get("sale_id", "").startswith(prefix) and not sale.get("voided"):
+                reverse_credit_sale(accounts_data, sale.get("account_id", ""), sale.get("amount", 0) or 0)
+                sale["voided"] = True
+
+        handover["review_status"] = "voided"
+        handover["voided_by"] = ctx["username"]
+        handover["voided_at"] = datetime.now().isoformat()
+        handover["void_reason"] = data.note
+        voided_ids.append(handover_id)
+
+    if not voided_ids:
+        raise HTTPException(status_code=400, detail="This entry has already been voided")
+
+    _save_handovers(handovers, station_id)
+    save_station_storage(station_id)
+
+    # Tag the raw reading records too, so opening-reading carry-forward and the
+    # duplicate-reading gate both stop treating this shift's numbers as real
+    # history for other shifts.
+    readings_db = _load_enter_readings(station_id)
+    changed = False
+    for key in (f"AR-{data.shift_id}-{data.attendant_id}-O", f"AR-{data.shift_id}-{data.attendant_id}-C"):
+        if key in readings_db:
+            readings_db[key]["voided"] = True
+            changed = True
+    if changed:
+        _save_enter_readings(readings_db, station_id)
+
+    for handover_id in voided_ids:
+        log_audit_event(
+            station_id=station_id,
+            action="handover_voided",
+            performed_by=ctx["username"],
+            entity_type="handover",
+            entity_id=handover_id,
+            details={"shift_id": data.shift_id, "attendant_id": data.attendant_id, "note": data.note},
+        )
+        create_notification(
+            station_id=station_id,
+            type="HANDOVER_VOIDED",
+            severity="warning",
+            title="Handover Voided",
+            message=f"Handover {handover_id} voided by {ctx['full_name']}: {data.note}",
+            entity_type="handover",
+            entity_id=handover_id,
+            created_by=ctx["username"],
+        )
+
+    return {"status": "success", "voided_handover_ids": voided_ids}
 
 
 class AdminOverrideCloseInput(BaseModel):

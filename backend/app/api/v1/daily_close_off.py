@@ -209,7 +209,10 @@ async def close_day(
                 status_code=400,
                 detail=f"Cannot close day: {label} shift has not been recorded for {data.date}.",
             )
-        if entry[1].get("status") != "completed":
+        # 'inactive' (deactivated) satisfies this gate too — a mistake/duplicate
+        # shift that was deactivated (with nothing left to void) no longer needs
+        # to be completed for the day to close.
+        if entry[1].get("status") not in ("completed", "inactive"):
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot close day: {label} shift is not yet fully closed "
@@ -229,11 +232,11 @@ async def close_day(
     if not date_handovers:
         raise HTTPException(status_code=400, detail=f"No handovers found for {data.date}.")
 
-    # Verify all are approved
+    # Verify all are resolved — approved, or voided out of the picture entirely.
     unapproved = [
         h.get("handover_id", hid)
         for hid, h in date_handovers.items()
-        if h.get("review_status") != "approved"
+        if h.get("review_status") not in ("approved", "voided")
     ]
     if unapproved:
         raise HTTPException(
@@ -241,7 +244,9 @@ async def close_day(
             detail=f"Cannot close day. {len(unapproved)} handover(s) not yet approved: {', '.join(unapproved[:5])}"
         )
 
-    approved_list = list(date_handovers.values())
+    # Voided handovers are resolved but must never contribute to the banked
+    # total — only actually-approved ones feed the aggregate.
+    approved_list = [h for h in date_handovers.values() if h.get("review_status") == "approved"]
     totals = _aggregate_handovers(approved_list)
 
     # Compute deposit variance

@@ -51,6 +51,11 @@ export const REASON_PRESETS = {
     'Given as sample',
     'Damaged during shift',
   ],
+  voidEntry: [
+    'Duplicate shift — same activity already recorded elsewhere',
+    'Wrong attendant assigned to this shift',
+    'Shift created in error, never actually worked',
+  ],
 } as const
 
 export default function ReasonChips({ presets, value, onSelect, className }: ReasonChipsProps) {

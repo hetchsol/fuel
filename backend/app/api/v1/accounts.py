@@ -277,7 +277,7 @@ async def get_shift_credit_sales(shift_id: str, ctx: dict = Depends(get_station_
     credit_sales_data = storage.get('credit_sales', [])
     shift_sales = [
         CreditSale(**sale) for sale in credit_sales_data
-        if sale["shift_id"] == shift_id
+        if sale["shift_id"] == shift_id and not sale.get("voided")
     ]
     return shift_sales
 
@@ -291,7 +291,7 @@ async def get_account_sales(account_id: str, ctx: dict = Depends(get_station_con
     credit_sales_data = storage.get('credit_sales', [])
     account_sales = [
         CreditSale(**sale) for sale in credit_sales_data
-        if sale["account_id"] == account_id
+        if sale["account_id"] == account_id and not sale.get("voided")
     ]
     return account_sales
 
