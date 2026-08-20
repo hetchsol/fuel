@@ -429,7 +429,7 @@ export default function Accounts() {
   const isBlocked = (account: any): boolean => {
     if (account.is_suspended) return true
     const t = effectiveType(account)
-    if (t === 'Pre-Paid') return (account.current_balance ?? 0) <= 0 && (account.approved_overdraft ?? 0) <= 0
+    if (t === 'Pre-Paid') return (account.current_balance ?? 0) + (account.approved_overdraft ?? 0) <= 0
     return (account.credit_limit ?? 0) > 0 &&
       (account.current_balance ?? 0) >= (account.credit_limit ?? 0) + (account.approved_overdraft ?? 0)
   }
@@ -439,11 +439,11 @@ export default function Accounts() {
     if (t === 'Pre-Paid') {
       const opening = account.opening_balance || account.current_balance || 0
       if (opening <= 0) return 0
-      return Math.min(100, ((account.current_balance ?? 0) / opening) * 100)
+      return Math.max(0, Math.min(100, ((account.current_balance ?? 0) / opening) * 100))
     }
     const ceiling = (account.credit_limit ?? 0) + (account.approved_overdraft ?? 0)
     if (ceiling <= 0) return 0
-    return Math.min(100, ((account.current_balance ?? 0) / ceiling) * 100)
+    return Math.max(0, Math.min(100, ((account.current_balance ?? 0) / ceiling) * 100))
   }
 
   const getBarColor = (account: any): string => {

@@ -1430,7 +1430,7 @@ export default function MyShift() {
               if (a.is_suspended) return true
               const t = effectiveType(a)
               const overdraft = a.approved_overdraft ?? 0
-              if (t === 'Pre-Paid') return (a.current_balance ?? 0) <= 0 && overdraft <= 0
+              if (t === 'Pre-Paid') return (a.current_balance ?? 0) + overdraft <= 0
               return (a.credit_limit ?? 0) > 0 && (a.current_balance ?? 0) >= (a.credit_limit ?? 0) + overdraft
             })
             if (blockedAccounts.length === 0) return null

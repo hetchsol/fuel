@@ -102,7 +102,13 @@ def process_credit_sale(
     Post-Paid: current_balance = amount owed (increases with sales).
                Blocked when current_balance + sale.amount > credit_limit + approved_overdraft.
 
-    approved_overdraft is consumed incrementally and resets to 0 when exhausted.
+    approved_overdraft is a fixed extra allowance the owner sets via the
+    approve-overdraft endpoint — it is only ever changed by that manual
+    action, never consumed automatically here. (Auto-decrementing it per
+    sale used to double-count usage: the balance already reflects the
+    draw, so also shrinking the overdraft shrank the ceiling faster than
+    the balance grew, leaving accounts blocked while the UI still showed
+    unused overdraft remaining.)
     Unknown/legacy account_type values are treated as Post-Paid.
     """
     if account_id not in accounts:
@@ -123,12 +129,10 @@ def process_credit_sale(
                 status_code=400,
                 detail=f"Insufficient balance. Available: {available:.2f}, Requested: {amount:.2f}"
             )
-        if amount <= current_balance:
-            account['current_balance'] = round(current_balance - amount, 2)
-        else:
-            overdraft_used = round(amount - current_balance, 2)
-            account['current_balance'] = 0.0
-            account['approved_overdraft'] = round(approved_overdraft - overdraft_used, 2)
+        # current_balance can go negative here (drawing into the overdraft
+        # allowance) — approved_overdraft itself is untouched; it's a fixed
+        # ceiling addition the owner manages, not a per-sale wallet.
+        account['current_balance'] = round(current_balance - amount, 2)
     else:
         credit_limit = account.get('credit_limit', 0.0)
         effective_ceiling = round(credit_limit + approved_overdraft, 2)
@@ -137,14 +141,7 @@ def process_credit_sale(
                 status_code=400,
                 detail=f"Credit ceiling reached. Ceiling: {credit_limit:.2f}, Owed: {current_balance:.2f}, Requested: {amount:.2f}"
             )
-        new_balance = round(current_balance + amount, 2)
-        account['current_balance'] = new_balance
-        # Consume overdraft by the amount the new balance exceeds the credit limit
-        prev_over = max(0.0, current_balance - credit_limit)
-        new_over = max(0.0, new_balance - credit_limit)
-        overdraft_consumed = round(new_over - prev_over, 2)
-        if overdraft_consumed > 0:
-            account['approved_overdraft'] = round(approved_overdraft - overdraft_consumed, 2)
+        account['current_balance'] = round(current_balance + amount, 2)
 
     sales_log.append(sale_data)
     return sale_data
@@ -159,19 +156,11 @@ def reverse_credit_sale(
     """
     Undo the balance side of `process_credit_sale` for a voided sale.
 
-    Post-Paid (amount owed increases with sales) is exactly reversible —
-    current_balance is a plain running total, never clamped, so subtracting
-    `amount` back out is correct regardless of how many other sales have
-    landed on the account since.
-
-    Pre-Paid is only exactly reversible when the original sale was fully
-    covered by the balance at the time (the common case: add `amount` back).
-    If the sale spilled into `approved_overdraft` (balance was clamped to
-    0.0 and overdraft partially consumed), the pre-sale split between
-    balance and overdraft isn't recoverable from the account's current
-    state alone — this best-effort reversal still credits `amount` back to
-    current_balance, but does not attempt to restore approved_overdraft.
-    That case needs manual owner reconciliation of the overdraft figure.
+    current_balance is a plain running total in both directions — never
+    clamped, since approved_overdraft is a fixed ceiling addition rather
+    than a wallet process_credit_sale draws from — so this is exactly
+    reversible regardless of how many other sales have landed on the
+    account since.
     """
     account = accounts.get(account_id)
     if not account:
@@ -199,8 +188,7 @@ def reapply_credit_sale(
     ceiling/limit checks `process_credit_sale` enforces on a brand-new sale:
     this is restoring a sale that already happened, not creating one, so it
     must succeed even if the account is now closer to its limit than it was
-    at the time. Same overdraft caveat as `reverse_credit_sale` — the exact
-    balance/overdraft split from the original sale isn't reconstructed.
+    at the time.
     """
     account = accounts.get(account_id)
     if not account:
