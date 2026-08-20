@@ -73,6 +73,16 @@ export default function ThreeWayReconciliation() {
   const [role, setRole] = useState('')
   const [backfilling, setBackfilling] = useState(false)
 
+  // Drill-down filters for the "All Shifts" list below the daily summary
+  const [filterTank, setFilterTank] = useState('all')
+  const [filterShiftType, setFilterShiftType] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterOutlier, setFilterOutlier] = useState('all')
+
+  const resetFilters = () => {
+    setFilterTank('all'); setFilterShiftType('all'); setFilterStatus('all'); setFilterOutlier('all')
+  }
+
   useEffect(() => {
     const u = localStorage.getItem('user')
     if (u) setRole(JSON.parse(u).role || '')
@@ -131,6 +141,7 @@ export default function ThreeWayReconciliation() {
       if (response.ok) {
         const data = await response.json()
         setDailySummary(data)
+        resetFilters()
         if (data.all_shifts) {
           const tankIds = Array.from(new Set(data.all_shifts.map((s: any) => s.tank_id))) as string[]
           const trends: Record<string, any> = {}
@@ -233,6 +244,24 @@ export default function ThreeWayReconciliation() {
     }
   }
 
+  // Drill-down: tanks present in the currently loaded day, and the shift
+  // list narrowed by whichever filters are active. All client-side —
+  // everything needed is already in dailySummary.all_shifts.
+  const availableTanks = Array.from(new Set((dailySummary?.all_shifts || []).map((s: any) => s.tank_id))) as string[]
+
+  const filteredShifts = (dailySummary?.all_shifts || []).filter((s: any) => {
+    if (filterTank !== 'all' && s.tank_id !== filterTank) return false
+    if (filterShiftType !== 'all' && s.shift_type !== filterShiftType) return false
+    if (filterStatus !== 'all' && s.reconciliation.status !== filterStatus) return false
+    if (filterOutlier !== 'all') {
+      const outlier = s.reconciliation.root_cause_analysis?.outlier_source || 'NONE'
+      if (outlier !== filterOutlier) return false
+    }
+    return true
+  })
+
+  const filtersActive = filterTank !== 'all' || filterShiftType !== 'all' || filterStatus !== 'all' || filterOutlier !== 'all'
+
   const getExportConfig = useCallback((): ExportConfig | null => {
     if (!dailySummary?.all_shifts) return null
     return {
@@ -256,7 +285,7 @@ export default function ThreeWayReconciliation() {
         { header: 'Actual Cash', key: 'actual_cash', format: 'currency' },
         { header: 'Cash Variance', key: 'cash_variance', format: 'currency' },
       ],
-      data: dailySummary.all_shifts.map((s: any) => ({
+      data: filteredShifts.map((s: any) => ({
         shift_type: s.shift_type || s.shift_id,
         status: s.status || s.reconciliation_status || '',
         tank_movement: s.physical?.tank_movement_liters || s.tank_movement_liters || 0,
@@ -267,7 +296,7 @@ export default function ThreeWayReconciliation() {
         cash_variance: s.financial?.cash_variance || s.cash_variance || 0,
       })),
     }
-  }, [dailySummary])
+  }, [dailySummary, filterTank, filterShiftType, filterStatus, filterOutlier])
 
   return (
     <div className="min-h-screen bg-surface-bg p-6">
@@ -521,11 +550,68 @@ export default function ThreeWayReconciliation() {
             {/* All Shifts List */}
             <div className="bg-surface-card rounded-lg shadow">
               <div className="bg-surface-bg px-6 py-4 border-b">
-                <h2 className="text-lg font-semibold text-content-primary">All Shifts</h2>
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+                  <h2 className="text-lg font-semibold text-content-primary">All Shifts</h2>
+                  <span className="text-xs text-content-secondary">
+                    Showing {filteredShifts.length} of {dailySummary.all_shifts?.length || 0}
+                    {filtersActive && (
+                      <button onClick={resetFilters} className="ml-2 text-action-primary hover:underline">Clear filters</button>
+                    )}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <div>
+                    <label className="block text-[10px] font-medium text-content-secondary mb-0.5 uppercase tracking-wide">Tank</label>
+                    <select value={filterTank} onChange={e => setFilterTank(e.target.value)}
+                      className="px-2 py-1.5 border border-surface-border rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-action-primary">
+                      <option value="all">All Tanks</option>
+                      {availableTanks.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-medium text-content-secondary mb-0.5 uppercase tracking-wide">Shift Type</label>
+                    <select value={filterShiftType} onChange={e => setFilterShiftType(e.target.value)}
+                      className="px-2 py-1.5 border border-surface-border rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-action-primary">
+                      <option value="all">All</option>
+                      <option value="Day">Day</option>
+                      <option value="Night">Night</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-medium text-content-secondary mb-0.5 uppercase tracking-wide">Status</label>
+                    <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                      className="px-2 py-1.5 border border-surface-border rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-action-primary">
+                      <option value="all">All Statuses</option>
+                      <option value="BALANCED">Balanced</option>
+                      <option value="VARIANCE_MINOR">Variance Minor</option>
+                      <option value="VARIANCE_INVESTIGATION">Variance Investigation</option>
+                      <option value="DISCREPANCY_CRITICAL">Discrepancy Critical</option>
+                      <option value="INCOMPLETE_DATA">Incomplete Data</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-medium text-content-secondary mb-0.5 uppercase tracking-wide">Outlier Source</label>
+                    <select value={filterOutlier} onChange={e => setFilterOutlier(e.target.value)}
+                      className="px-2 py-1.5 border border-surface-border rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-action-primary">
+                      <option value="all">All</option>
+                      <option value="NONE">None (balanced)</option>
+                      <option value="PHYSICAL">Physical (tank)</option>
+                      <option value="OPERATIONAL">Operational (nozzle)</option>
+                      <option value="FINANCIAL">Financial (cash)</option>
+                      <option value="MULTIPLE">Multiple</option>
+                      <option value="UNKNOWN">Unknown</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               <div className="divide-y">
-                {dailySummary.all_shifts && dailySummary.all_shifts.map((shift: any, idx: number) => (
+                {filteredShifts.length === 0 && (
+                  <div className="p-12 text-center text-sm text-content-secondary">
+                    No shifts match the current filters.
+                  </div>
+                )}
+                {filteredShifts.map((shift: any, idx: number) => (
                   <div key={idx} className="p-6 hover:bg-surface-bg transition-colors">
                     <div className="flex items-start justify-between mb-4">
                       <div>
