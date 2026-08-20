@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { getHeaders, authFetch } from '../lib/api'
+import Pagination from '../components/Pagination'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
 import { formatDateToDisplay } from '../lib/dateUtils'
@@ -79,8 +80,12 @@ export default function ThreeWayReconciliation() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterOutlier, setFilterOutlier] = useState('all')
 
+  const SHIFTS_PAGE_SIZE = 10
+  const [shiftsPage, setShiftsPage] = useState(1)
+
   const resetFilters = () => {
     setFilterTank('all'); setFilterShiftType('all'); setFilterStatus('all'); setFilterOutlier('all')
+    setShiftsPage(1)
   }
 
   useEffect(() => {
@@ -562,7 +567,7 @@ export default function ThreeWayReconciliation() {
                 <div className="flex flex-wrap gap-3">
                   <div>
                     <label className="block text-[10px] font-medium text-content-secondary mb-0.5 uppercase tracking-wide">Tank</label>
-                    <select value={filterTank} onChange={e => setFilterTank(e.target.value)}
+                    <select value={filterTank} onChange={e => { setFilterTank(e.target.value); setShiftsPage(1) }}
                       className="px-2 py-1.5 border border-surface-border rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-action-primary">
                       <option value="all">All Tanks</option>
                       {availableTanks.map(t => <option key={t} value={t}>{t}</option>)}
@@ -570,7 +575,7 @@ export default function ThreeWayReconciliation() {
                   </div>
                   <div>
                     <label className="block text-[10px] font-medium text-content-secondary mb-0.5 uppercase tracking-wide">Shift Type</label>
-                    <select value={filterShiftType} onChange={e => setFilterShiftType(e.target.value)}
+                    <select value={filterShiftType} onChange={e => { setFilterShiftType(e.target.value); setShiftsPage(1) }}
                       className="px-2 py-1.5 border border-surface-border rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-action-primary">
                       <option value="all">All</option>
                       <option value="Day">Day</option>
@@ -579,7 +584,7 @@ export default function ThreeWayReconciliation() {
                   </div>
                   <div>
                     <label className="block text-[10px] font-medium text-content-secondary mb-0.5 uppercase tracking-wide">Status</label>
-                    <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                    <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setShiftsPage(1) }}
                       className="px-2 py-1.5 border border-surface-border rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-action-primary">
                       <option value="all">All Statuses</option>
                       <option value="BALANCED">Balanced</option>
@@ -591,7 +596,7 @@ export default function ThreeWayReconciliation() {
                   </div>
                   <div>
                     <label className="block text-[10px] font-medium text-content-secondary mb-0.5 uppercase tracking-wide">Outlier Source</label>
-                    <select value={filterOutlier} onChange={e => setFilterOutlier(e.target.value)}
+                    <select value={filterOutlier} onChange={e => { setFilterOutlier(e.target.value); setShiftsPage(1) }}
                       className="px-2 py-1.5 border border-surface-border rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-action-primary">
                       <option value="all">All</option>
                       <option value="NONE">None (balanced)</option>
@@ -611,7 +616,7 @@ export default function ThreeWayReconciliation() {
                     No shifts match the current filters.
                   </div>
                 )}
-                {filteredShifts.map((shift: any, idx: number) => (
+                {filteredShifts.slice((shiftsPage - 1) * SHIFTS_PAGE_SIZE, shiftsPage * SHIFTS_PAGE_SIZE).map((shift: any, idx: number) => (
                   <div key={idx} className="p-6 hover:bg-surface-bg transition-colors">
                     <div className="flex items-start justify-between mb-4">
                       <div>
@@ -668,6 +673,7 @@ export default function ThreeWayReconciliation() {
                   </div>
                 ))}
               </div>
+              <Pagination total={filteredShifts.length} pageSize={SHIFTS_PAGE_SIZE} page={shiftsPage} onPageChange={setShiftsPage} />
             </div>
           </>
         ) : (!isMultiDay || mode === 'shift') ? (

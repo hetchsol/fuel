@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import ExportButtons from '../components/ExportButtons'
+import Pagination from '../components/Pagination'
 import { ExportConfig } from '../lib/exportUtils'
 import { useTanks, tankLabel } from '../hooks/useTanks'
 import { formatDateToDisplay } from '../lib/dateUtils'
@@ -121,12 +122,16 @@ export default function TankReadingsReport() {
   const [error, setError] = useState('')
   const [selectedReading, setSelectedReading] = useState<TankReading | null>(null)
   const [user, setUser] = useState<any>(null)
+  const READINGS_PAGE_SIZE = 20
+  const [readingsPage, setReadingsPage] = useState(1)
 
   // Dip ledger state
   const [ledger, setLedger] = useState<LedgerRecord[]>([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
   const [ledgerTankFilter, setLedgerTankFilter] = useState('ALL')
   const [ledgerStatusFilter, setLedgerStatusFilter] = useState('ALL')
+  const LEDGER_PAGE_SIZE = 20
+  const [ledgerPage, setLedgerPage] = useState(1)
 
   useEffect(() => {
     const u = localStorage.getItem('user')
@@ -166,6 +171,7 @@ export default function TankReadingsReport() {
       )
       if (!res.ok) throw new Error('Failed to load readings')
       setReadings(await res.json())
+      setReadingsPage(1)
     } catch (err: any) {
       setError(err.message || 'Error loading readings')
     } finally {
@@ -180,7 +186,7 @@ export default function TankReadingsReport() {
         `${BASE}/tank-readings/dip-ledger?start_date=${startDate}&end_date=${endDate}`,
         { headers: getHeaders() }
       )
-      if (res.ok) setLedger(await res.json())
+      if (res.ok) { setLedger(await res.json()); setLedgerPage(1) }
     } catch {
       // silent — empty ledger shown
     } finally {
@@ -407,7 +413,7 @@ export default function TankReadingsReport() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-border">
-                      {readings.map(r => (
+                      {readings.slice((readingsPage - 1) * READINGS_PAGE_SIZE, readingsPage * READINGS_PAGE_SIZE).map(r => (
                         <tr key={r.reading_id} className="hover:bg-surface-bg transition-colors">
                           <td className="px-4 py-3">
                             <div className="text-sm font-medium text-content-primary">{formatDateToDisplay(r.date)}</div>
@@ -443,6 +449,7 @@ export default function TankReadingsReport() {
                     </tbody>
                   </table>
                 </div>
+                <Pagination total={readings.length} pageSize={READINGS_PAGE_SIZE} page={readingsPage} onPageChange={setReadingsPage} />
               </div>
             )}
           </>
@@ -477,7 +484,7 @@ export default function TankReadingsReport() {
                 <label className="block text-xs font-medium text-content-secondary mb-1">Tank</label>
                 <select
                   value={ledgerTankFilter}
-                  onChange={e => setLedgerTankFilter(e.target.value)}
+                  onChange={e => { setLedgerTankFilter(e.target.value); setLedgerPage(1) }}
                   className="px-3 py-2 bg-surface-bg border border-surface-border rounded-lg text-sm text-content-primary focus:outline-none focus:ring-1 focus:ring-action-primary"
                 >
                   <option value="ALL">All Tanks</option>
@@ -490,7 +497,7 @@ export default function TankReadingsReport() {
                 <label className="block text-xs font-medium text-content-secondary mb-1">Status</label>
                 <select
                   value={ledgerStatusFilter}
-                  onChange={e => setLedgerStatusFilter(e.target.value)}
+                  onChange={e => { setLedgerStatusFilter(e.target.value); setLedgerPage(1) }}
                   className="px-3 py-2 bg-surface-bg border border-surface-border rounded-lg text-sm text-content-primary focus:outline-none focus:ring-1 focus:ring-action-primary"
                 >
                   <option value="ALL">All Statuses</option>
@@ -525,7 +532,7 @@ export default function TankReadingsReport() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-border">
-                      {filteredLedger.map(r => {
+                      {filteredLedger.slice((ledgerPage - 1) * LEDGER_PAGE_SIZE, ledgerPage * LEDGER_PAGE_SIZE).map(r => {
                         const hasBoth = r.opening_dip_cm != null && r.closing_dip_cm != null
                         const hasNeither = r.opening_dip_cm == null && r.closing_dip_cm == null
                         const rowCls = hasBoth ? '' : hasNeither ? 'bg-status-error-light/30' : 'bg-status-pending-light/30'
@@ -564,6 +571,7 @@ export default function TankReadingsReport() {
                     </tbody>
                   </table>
                 </div>
+                <Pagination total={filteredLedger.length} pageSize={LEDGER_PAGE_SIZE} page={ledgerPage} onPageChange={setLedgerPage} />
               </div>
             )}
           </>

@@ -1,9 +1,10 @@
 import { authFetch, BASE, getHeaders, downloadExport } from '../lib/api'
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import DateRangePicker from '../components/DateRangePicker';
+import Pagination from '../components/Pagination'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
 import AdvancedReports from './advanced-reports'
@@ -78,6 +79,32 @@ function SalesReportsView() {
     const [error, setError] = useState('');
     const [selectedFilter, setSelectedFilter] = useState('');
 
+    // Daily Breakdown: pagination + per-row expand-for-detail (fetched on
+    // demand and cached per date so re-expanding doesn't re-fetch).
+    const DAILY_BREAKDOWN_PAGE_SIZE = 15;
+    const [dailyBreakdownPage, setDailyBreakdownPage] = useState(1);
+    const [expandedDay, setExpandedDay] = useState<string | null>(null);
+    const [dayDetailCache, setDayDetailCache] = useState<Record<string, DailySalesData>>({});
+    const [dayDetailLoading, setDayDetailLoading] = useState<string | null>(null);
+
+    const toggleDayExpand = async (date: string) => {
+        if (expandedDay === date) { setExpandedDay(null); return; }
+        setExpandedDay(date);
+        if (dayDetailCache[date]) return;
+        setDayDetailLoading(date);
+        try {
+            const res = await authFetch(`${BASE}/sales-reports/daily/${date}`, { headers: getHeaders() });
+            if (res.ok) {
+                const data = await res.json();
+                setDayDetailCache(prev => ({ ...prev, [date]: data }));
+            }
+        } catch {
+            // Detail is optional — row just stays expanded with no extra detail.
+        } finally {
+            setDayDetailLoading(null);
+        }
+    };
+
     // Check authorization on mount
     useEffect(() => {
         const userStr = localStorage.getItem('user');
@@ -132,6 +159,9 @@ function SalesReportsView() {
 
             const data = await response.json();
             setReportData(data);
+            setDailyBreakdownPage(1);
+            setExpandedDay(null);
+            setDayDetailCache({});
 
             // When single day selected, also fetch detailed daily breakdown
             if (startDate === endDate) {
@@ -300,23 +330,23 @@ function SalesReportsView() {
                                     {reportData.period.end_date}
                                 </p>
                             </div>
-                            <div className="bg-gradient-to-br from-action-primary to-action-primary p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300">
+                            <div className="bg-gradient-to-br from-action-primary to-action-primary p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 min-w-0">
                                 <p className="text-sm text-blue-100 mb-2 font-medium uppercase tracking-wide">Total Transactions</p>
-                                <p className="text-4xl font-bold text-white">
+                                <p className="text-2xl sm:text-3xl font-bold text-white break-words">
                                     {reportData.summary.total_transactions}
                                 </p>
                                 <p className="text-xs text-blue-200 mt-1">sales recorded</p>
                             </div>
-                            <div className="bg-gradient-to-br from-status-success to-emerald-600 p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300">
+                            <div className="bg-gradient-to-br from-status-success to-emerald-600 p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 min-w-0">
                                 <p className="text-sm text-green-100 mb-2 font-medium uppercase tracking-wide">Total Revenue</p>
-                                <p className="text-4xl font-bold text-white">
+                                <p className="text-2xl sm:text-3xl font-bold text-white break-words">
                                     {formatCurrency(reportData.summary.total_revenue)}
                                 </p>
                                 <p className="text-xs text-green-200 mt-1">total earnings</p>
                             </div>
-                            <div className="bg-gradient-to-br from-purple-500 to-indigo-600 p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300">
+                            <div className="bg-gradient-to-br from-purple-500 to-indigo-600 p-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 min-w-0">
                                 <p className="text-sm text-purple-100 mb-2 font-medium uppercase tracking-wide">Total Volume</p>
-                                <p className="text-4xl font-bold text-white">
+                                <p className="text-2xl sm:text-3xl font-bold text-white break-words">
                                     {formatNumber(reportData.summary.total_volume)}
                                 </p>
                                 <p className="text-xs text-purple-200 mt-1">liters sold</p>
@@ -423,30 +453,88 @@ function SalesReportsView() {
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                                                     Revenue
                                                 </th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider"></th>
                                             </tr>
                                         </thead>
                                         <tbody className="bg-surface-card divide-y divide-surface-border">
-                                            {reportData.daily_breakdown.map((day, index) => (
-                                                <tr key={index} className="hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 transform hover:scale-[1.01]">
-                                                    <td className="px-8 py-5 whitespace-nowrap font-bold text-content-primary text-lg">
-                                                        <div className="flex items-center">
-                                                            <div className="w-2 h-2 bg-indigo-500 rounded-full mr-3"></div>
-                                                            {formatDateToDisplay(day.date)}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-8 py-5 whitespace-nowrap">
-                                                        <span className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-full font-semibold">
-                                                            {day.transactions}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-8 py-5 whitespace-nowrap text-status-success font-bold text-lg">
-                                                        {formatCurrency(day.revenue)}
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                            {reportData.daily_breakdown
+                                                .slice((dailyBreakdownPage - 1) * DAILY_BREAKDOWN_PAGE_SIZE, dailyBreakdownPage * DAILY_BREAKDOWN_PAGE_SIZE)
+                                                .map((day, index) => {
+                                                    const isExpanded = expandedDay === day.date
+                                                    const detail = dayDetailCache[day.date]
+                                                    return (
+                                                    <Fragment key={index}>
+                                                    <tr
+                                                        onClick={() => toggleDayExpand(day.date)}
+                                                        className="cursor-pointer hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200">
+                                                        <td className="px-8 py-5 whitespace-nowrap font-bold text-content-primary text-lg">
+                                                            <div className="flex items-center">
+                                                                <div className="w-2 h-2 bg-indigo-500 rounded-full mr-3"></div>
+                                                                {formatDateToDisplay(day.date)}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-8 py-5 whitespace-nowrap">
+                                                            <span className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-full font-semibold">
+                                                                {day.transactions}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-8 py-5 whitespace-nowrap text-status-success font-bold text-lg">
+                                                            {formatCurrency(day.revenue)}
+                                                        </td>
+                                                        <td className="px-6 py-5 text-content-secondary text-sm whitespace-nowrap">
+                                                            {isExpanded ? '▲ Hide' : '▼ Details'}
+                                                        </td>
+                                                    </tr>
+                                                    {isExpanded && (
+                                                        <tr>
+                                                            <td colSpan={4} className="px-8 py-5 bg-surface-bg">
+                                                                {dayDetailLoading === day.date ? (
+                                                                    <p className="text-sm text-content-secondary">Loading details...</p>
+                                                                ) : !detail ? (
+                                                                    <p className="text-sm text-content-secondary">No further detail available for this date.</p>
+                                                                ) : (
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                                        {(['diesel', 'petrol'] as const).map(fuel => (
+                                                                            <div key={fuel} className="bg-surface-card rounded-lg border border-surface-border p-4">
+                                                                                <p className="text-xs font-semibold uppercase tracking-wide text-content-secondary mb-2">{fuel}</p>
+                                                                                <div className="flex justify-between text-sm mb-1">
+                                                                                    <span className="text-content-secondary">Volume</span>
+                                                                                    <span className="font-mono font-medium text-content-primary">{detail[fuel].total_volume.toLocaleString()} L</span>
+                                                                                </div>
+                                                                                <div className="flex justify-between text-sm mb-1">
+                                                                                    <span className="text-content-secondary">Revenue</span>
+                                                                                    <span className="font-mono font-medium text-status-success">{formatCurrency(detail[fuel].total_amount)}</span>
+                                                                                </div>
+                                                                                <div className="flex justify-between text-sm mb-2">
+                                                                                    <span className="text-content-secondary">Transactions</span>
+                                                                                    <span className="font-medium text-content-primary">{detail[fuel].sales_count}</span>
+                                                                                </div>
+                                                                                {detail[fuel].shifts.length > 0 && (
+                                                                                    <div className="flex flex-wrap gap-1.5">
+                                                                                        {detail[fuel].shifts.map((shift, idx) => (
+                                                                                            <span key={idx} className="px-2 py-0.5 text-xs rounded bg-surface-bg border border-surface-border text-content-secondary">{shift}</span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                    </Fragment>
+                                                    )
+                                                })}
                                         </tbody>
                                     </table>
                                 </div>
+                                <Pagination
+                                    total={reportData.daily_breakdown.length}
+                                    pageSize={DAILY_BREAKDOWN_PAGE_SIZE}
+                                    page={dailyBreakdownPage}
+                                    onPageChange={setDailyBreakdownPage}
+                                />
                             </div>
                         )}
 
@@ -661,10 +749,13 @@ function SalesConsolidationView() {
   const [fuelType, setFuelType] = useState('all')
   const [result, setResult] = useState<ConsolidationResult | null>(null)
   const [loading, setLoading] = useState(false)
+  const CONSOLIDATION_PAGE_SIZE = 20
+  const [consolidationPage, setConsolidationPage] = useState(1)
 
   const run = async () => {
     setLoading(true)
     setResult(null)
+    setConsolidationPage(1)
     try {
       const url = `${BASE}/reports/sales-consolidation?start_date=${startDate}&end_date=${endDate}&period=${period}&group_by=${groupBy}&fuel_type=${fuelType}`
       const res = await authFetch(url, { headers: getHeaders() })
@@ -676,6 +767,35 @@ function SalesConsolidationView() {
       setLoading(false)
     }
   }
+
+  const getExportConfig = useCallback((): ExportConfig | null => {
+    if (!result) return null
+    const dimLabel = result.group_by === 'attendant' ? 'Attendant' : result.group_by === 'nozzle' ? 'Nozzle' : result.group_by === 'island' ? 'Island' : result.group_by === 'tank' ? 'Tank' : null
+    return {
+      title: 'Sales Consolidation',
+      subtitle: `${result.period.start_date} to ${result.period.end_date} — by ${result.period_type}${dimLabel ? ` / ${dimLabel}` : ''}`,
+      filename: `sales_consolidation_${startDate}_${endDate}`,
+      summaryCards: [
+        { label: 'Total Revenue', value: fmt(result.totals.total_revenue) },
+        { label: 'Volume (L)', value: result.totals.volume.toLocaleString(undefined, { maximumFractionDigits: 0 }) },
+        { label: 'Cash', value: fmt(result.totals.cash) },
+        { label: 'POS', value: fmt(result.totals.pos) },
+        { label: 'Credit Pre-Paid', value: fmt(result.totals.credit_prepaid) },
+        { label: 'Credit Post-Paid', value: fmt(result.totals.credit_postpaid) },
+      ],
+      columns: [
+        { header: dimLabel ? 'Period' : 'Period', key: 'label' },
+        ...(dimLabel ? [{ header: dimLabel, key: 'sub_label' }] : []),
+        { header: 'Volume (L)', key: 'volume', format: 'number' as const },
+        { header: 'Total Revenue', key: 'total_revenue', format: 'currency' as const },
+        { header: 'Cash', key: 'cash', format: 'currency' as const },
+        { header: 'POS', key: 'pos', format: 'currency' as const },
+        { header: 'Credit Pre-Paid', key: 'credit_prepaid', format: 'currency' as const },
+        { header: 'Credit Post-Paid', key: 'credit_postpaid', format: 'currency' as const },
+      ],
+      data: result.rows,
+    }
+  }, [result, startDate, endDate])
 
   const segBtn = (val: string, cur: string, set: (v: string) => void, label: string) => (
     <button key={val} onClick={() => set(val)}
@@ -747,6 +867,9 @@ function SalesConsolidationView() {
       {/* Results */}
       {result && (
         <div className="space-y-4">
+          <div className="flex justify-end">
+            <ExportButtons getConfig={getExportConfig} />
+          </div>
           {/* Summary tiles */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
@@ -786,7 +909,7 @@ function SalesConsolidationView() {
                 </tr>
               </thead>
               <tbody>
-                {result.rows.map((row, i) => (
+                {result.rows.slice((consolidationPage - 1) * CONSOLIDATION_PAGE_SIZE, consolidationPage * CONSOLIDATION_PAGE_SIZE).map((row, i) => (
                   <tr key={i} className="border-t border-surface-border hover:bg-surface-bg">
                     <td className="px-4 py-2.5 text-content-primary font-medium whitespace-nowrap">
                       {row.label}
@@ -824,6 +947,7 @@ function SalesConsolidationView() {
             {result.rows.length === 0 && (
               <p className="text-sm text-content-secondary text-center py-8">No completed handovers found for this period.</p>
             )}
+            <Pagination total={result.rows.length} pageSize={CONSOLIDATION_PAGE_SIZE} page={consolidationPage} onPageChange={setConsolidationPage} />
           </div>
         </div>
       )}

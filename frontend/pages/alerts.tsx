@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import { getHeaders, BASE, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
+import Pagination from '../components/Pagination'
 import { ExportConfig } from '../lib/exportUtils'
 import NotificationsPage from './notifications'
 import { formatDateToDisplay } from '../lib/dateUtils'
@@ -48,6 +49,8 @@ function AnomalyAlertsView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [lookbackDays, setLookbackDays] = useState(7)
+  const ALERTS_PAGE_SIZE = 10
+  const [severityPage, setSeverityPage] = useState<Record<string, number>>({ CRITICAL: 1, WARNING: 1, INFO: 1 })
 
   const fetchAnomalies = async (days: number) => {
     setLoading(true)
@@ -59,6 +62,7 @@ function AnomalyAlertsView() {
       if (!res.ok) throw new Error('Failed to fetch anomaly data')
       const data: Anomaly[] = await res.json()
       setAnomalies(data)
+      setSeverityPage({ CRITICAL: 1, WARNING: 1, INFO: 1 })
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -177,7 +181,9 @@ function AnomalyAlertsView() {
                   {items.length} {style.badgeText} Alert{items.length !== 1 ? 's' : ''}
                 </h2>
                 <div className="space-y-3">
-                  {items.map((a, idx) => (
+                  {items
+                    .slice(((severityPage[severity] || 1) - 1) * ALERTS_PAGE_SIZE, (severityPage[severity] || 1) * ALERTS_PAGE_SIZE)
+                    .map((a, idx) => (
                     <div
                       key={`${severity}-${idx}`}
                       className={`bg-surface-card rounded-lg shadow p-4 ${style.border}`}
@@ -209,6 +215,12 @@ function AnomalyAlertsView() {
                     </div>
                   ))}
                 </div>
+                <Pagination
+                  total={items.length}
+                  pageSize={ALERTS_PAGE_SIZE}
+                  page={severityPage[severity] || 1}
+                  onPageChange={p => setSeverityPage(prev => ({ ...prev, [severity]: p }))}
+                />
               </div>
             )
           })}

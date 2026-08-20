@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { getStaffList, getNozzleList, getIslandList, getProductList, getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
+import Pagination from '../components/Pagination'
 import { ExportConfig } from '../lib/exportUtils'
 import { formatDateToDisplay } from '../lib/dateUtils'
 
@@ -13,6 +14,12 @@ export default function AdvancedReports() {
   const [reportData, setReportData] = useState<any>(null)
   const [drillDown, setDrillDown] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const TRANSACTIONS_PAGE_SIZE = 20
+  const [transactionsPage, setTransactionsPage] = useState(1)
+  const SHIFT_BREAKDOWN_PAGE_SIZE = 20
+  const [shiftBreakdownPage, setShiftBreakdownPage] = useState(1)
+  const DRILLDOWN_PAGE_SIZE = 20
+  const [drillDownPage, setDrillDownPage] = useState(1)
 
   // Filter states
   const [filters, setFilters] = useState({
@@ -216,6 +223,8 @@ export default function AdvancedReports() {
 
       const data = await response.json()
       setReportData(data)
+      setTransactionsPage(1)
+      setShiftBreakdownPage(1)
     } catch (err: any) {
       setError(err.message || 'Failed to generate report')
     } finally {
@@ -778,7 +787,7 @@ export default function AdvancedReports() {
                   return (
                     <div
                       key={key}
-                      onClick={() => isClickable && setDrillDown(drillDown === key ? null : key)}
+                      onClick={() => { if (isClickable) { setDrillDown(drillDown === key ? null : key); setDrillDownPage(1) } }}
                       className={`bg-action-primary-light rounded-lg p-4 border transition-all ${
                         drillDown === key ? 'border-action-primary ring-2 ring-action-primary/30' : 'border-action-primary'
                       } ${isClickable ? 'cursor-pointer hover:ring-2 hover:ring-action-primary/20' : ''}`}
@@ -829,7 +838,7 @@ export default function AdvancedReports() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-surface-border">
-                          {rows.map((row: any, i: number) => (
+                          {rows.slice((drillDownPage - 1) * DRILLDOWN_PAGE_SIZE, drillDownPage * DRILLDOWN_PAGE_SIZE).map((row: any, i: number) => (
                             <tr key={i} className="hover:bg-surface-card">
                               {displayKeys.map(k => (
                                 <td key={k} className="px-3 py-2 text-content-primary whitespace-nowrap font-mono">
@@ -840,6 +849,7 @@ export default function AdvancedReports() {
                           ))}
                         </tbody>
                       </table>
+                      <Pagination total={rows.length} pageSize={DRILLDOWN_PAGE_SIZE} page={drillDownPage} onPageChange={setDrillDownPage} />
                     </div>
                   </div>
                 )
@@ -927,7 +937,9 @@ export default function AdvancedReports() {
                         </tr>
                       </thead>
                       <tbody className="bg-surface-card divide-y divide-surface-border">
-                        {reportData.transactions.map((tx: any, i: number) => (
+                        {reportData.transactions
+                          .slice((transactionsPage - 1) * TRANSACTIONS_PAGE_SIZE, transactionsPage * TRANSACTIONS_PAGE_SIZE)
+                          .map((tx: any, i: number) => (
                           <tr key={i} className="hover:bg-surface-bg">
                             <td className="px-3 py-2 text-content-primary whitespace-nowrap">{formatDateToDisplay(tx.date)}</td>
                             <td className="px-3 py-2 text-content-secondary">{tx.shift_type}</td>
@@ -940,6 +952,7 @@ export default function AdvancedReports() {
                       </tbody>
                     </table>
                   </div>
+                  <Pagination total={reportData.transactions.length} pageSize={TRANSACTIONS_PAGE_SIZE} page={transactionsPage} onPageChange={setTransactionsPage} />
                 </>
               )}
             </div>
@@ -964,7 +977,9 @@ export default function AdvancedReports() {
                     </tr>
                   </thead>
                   <tbody className="bg-surface-card divide-y divide-surface-border">
-                    {reportData.shift_breakdown.map((row: any, i: number) => (
+                    {reportData.shift_breakdown
+                      .slice((shiftBreakdownPage - 1) * SHIFT_BREAKDOWN_PAGE_SIZE, shiftBreakdownPage * SHIFT_BREAKDOWN_PAGE_SIZE)
+                      .map((row: any, i: number) => (
                       <tr key={i} className={`hover:bg-surface-bg ${row.deviation_flagged ? 'bg-status-error-light' : ''}`}>
                         <td className="px-3 py-3 text-sm text-content-primary whitespace-nowrap">
                           {formatDateToDisplay(row.date)} {row.shift_type}
@@ -984,6 +999,7 @@ export default function AdvancedReports() {
                   </tbody>
                 </table>
               </div>
+              <Pagination total={reportData.shift_breakdown.length} pageSize={SHIFT_BREAKDOWN_PAGE_SIZE} page={shiftBreakdownPage} onPageChange={setShiftBreakdownPage} />
 
               {/* Period totals */}
               {reportData.summary?.overall_deviation !== undefined && (
