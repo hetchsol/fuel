@@ -532,8 +532,8 @@ export default function Accounts() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-content-primary">Account Holders & Credit Sales</h1>
-        <p className="mt-2 text-sm text-content-secondary">Manage institutional and corporate credit accounts</p>
+        <h1 className="text-3xl font-bold text-content-primary">Credit Account Management</h1>
+        <p className="mt-2 text-sm text-content-secondary">Create, suspend, top up, record payments and record credit sales for institutional and corporate accounts</p>
       </div>
 
       {/* Record Credit Sale Form */}
