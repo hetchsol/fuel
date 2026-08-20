@@ -169,6 +169,8 @@ def _find_previous_shift_readings(shift: dict, storage: dict, station_id: str) -
             continue
         submitted_at = record.get("submitted_at", "")
         for nr in record.get("nozzle_readings", []):
+            if nr.get("excluded_from_checks"):
+                continue
             nid = nr["nozzle_id"]
             if nid in result and submitted_at <= result_from.get(nid, ""):
                 # Two attendants both have a closing reading for this nozzle on the
@@ -216,6 +218,8 @@ def _find_conflicting_closing_reading(nozzle_id: str, new_electronic_reading: fl
                 continue
             for nr in record.get("nozzle_readings", []):
                 if nr.get("nozzle_id") != nozzle_id:
+                    continue
+                if nr.get("excluded_from_checks"):
                     continue
                 existing = nr.get("electronic_reading")
                 if existing is None:
@@ -560,6 +564,33 @@ def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, use
             duplicate_conflict_shift_id = conflict["shift_id"]
             duplicate_note = reading.duplicate_reading_note.strip()
 
+        # Plausibility gate — a single shift's volume sold shouldn't blow
+        # past a sane per-nozzle ceiling; this is usually a digit/decimal
+        # entry error, not a real sales event. Same hybrid pattern as the
+        # duplicate-reading gate: blocked unless explained, still flagged
+        # for owner review when overridden.
+        implausible_flagged = False
+        implausible_note = None
+        max_plausible_volume = storage.get('fuel_settings', {}).get('max_plausible_shift_volume_liters', 10000.0)
+        if volume > max_plausible_volume:
+            if not (reading.implausible_volume_note and reading.implausible_volume_note.strip()):
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "implausible_volume",
+                        "nozzle_id": reading.nozzle_id,
+                        "volume": round(volume, 3),
+                        "threshold": max_plausible_volume,
+                        "message": (
+                            f"Volume sold for {reading.nozzle_id} this shift ({round(volume, 3)}L) exceeds "
+                            f"the plausible single-shift limit ({max_plausible_volume}L) — likely a reading "
+                            "entry error. If this is correct, provide a note explaining why and resubmit."
+                        ),
+                    },
+                )
+            implausible_flagged = True
+            implausible_note = reading.implausible_volume_note.strip()
+
         # Check for price change during this shift
         price_info = resolve_fuel_price_for_shift(fuel_type, shift_date or "", shift_type or "", storage)
 
@@ -669,6 +700,8 @@ def _process_nozzle_readings(nozzle_readings, storage, station_id, shift_id, use
             duplicate_reading_flagged=duplicate_flagged,
             duplicate_reading_conflict_shift_id=duplicate_conflict_shift_id,
             duplicate_reading_note=duplicate_note,
+            implausible_volume_flagged=implausible_flagged,
+            implausible_volume_note=implausible_note,
         ))
 
     return nozzle_summaries, round(fuel_revenue, 2)
@@ -1017,6 +1050,8 @@ def _compute_auto_flags(difference, nozzle_summaries, stock_variance_flags, stor
         auto_flag_reasons.append("nozzle_loss_exceeded")
     if any(ns.duplicate_reading_flagged for ns in nozzle_summaries):
         auto_flag_reasons.append("duplicate_meter_reading")
+    if any(ns.implausible_volume_flagged for ns in nozzle_summaries):
+        auto_flag_reasons.append("implausible_volume")
     if stock_variance_flags:
         auto_flag_reasons.append("stock_variance_unexplained")
     review_status = "flagged" if auto_flag_reasons else "submitted"
@@ -1033,6 +1068,8 @@ def _compute_phase1_flags(nozzle_summaries, stock_variance_flags, storage):
         flags.append("nozzle_loss_exceeded")
     if any(ns.duplicate_reading_flagged for ns in nozzle_summaries):
         flags.append("duplicate_meter_reading")
+    if any(ns.implausible_volume_flagged for ns in nozzle_summaries):
+        flags.append("implausible_volume")
     if stock_variance_flags:
         flags.append("stock_variance_unexplained")
     return flags
@@ -1841,6 +1878,7 @@ class ManagerRetroNozzleInput(BaseModel):
     electronic_reading: Optional[float] = None
     mechanical_reading: float = 0.0
     duplicate_reading_note: Optional[str] = None  # required override when the closing reading collides with another shift
+    implausible_volume_note: Optional[str] = None  # required override when volume_sold exceeds the plausibility threshold
 
 
 class ManagerRetroEntryInput(BaseModel):
@@ -1939,6 +1977,7 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
             mechanical_opening=opening_nr.mechanical_reading,
             mechanical_closing=closing_nr.mechanical_reading,
             duplicate_reading_note=closing_nr.duplicate_reading_note,
+            implausible_volume_note=closing_nr.implausible_volume_note,
         ))
 
     if not nozzle_inputs:
@@ -3597,6 +3636,81 @@ async def delete_voided_handover(data: DeleteVoidedHandoverInput, ctx: dict = De
         _save_enter_readings(readings_db, station_id)
 
     return {"status": "success", "deleted_handover_ids": deleted_ids}
+
+
+class ExcludeReadingInput(BaseModel):
+    shift_id: str
+    attendant_id: str
+    nozzle_id: str
+    reason: str
+
+
+@router.post("/exclude-reading", dependencies=[Depends(require_owner)])
+async def exclude_reading(data: ExcludeReadingInput, ctx: dict = Depends(get_station_context)):
+    """
+    Mark one historical nozzle reading as bad data — excluded from future
+    duplicate/decreasing-reading checks and opening-reading carry-forward,
+    without touching that handover's review status, sales, or stock.
+
+    Deliberately the opposite of Void in scope: this never requires the
+    day to be reopened (there's nothing financial to protect), and works
+    on an already-approved, already-closed-off handover — the whole point
+    is defusing a stray bad number from a shift whose figures are
+    otherwise correct and already banked.
+    """
+    if not data.reason or not data.reason.strip():
+        raise HTTPException(status_code=400, detail="A reason is required to exclude a reading")
+
+    station_id = ctx["station_id"]
+    reason = data.reason.strip()
+    now_iso = datetime.now().isoformat()
+
+    readings_db = _load_enter_readings(station_id)
+    closing_key = f"AR-{data.shift_id}-{data.attendant_id}-C"
+    record = readings_db.get(closing_key)
+    if not record:
+        raise HTTPException(status_code=404, detail="No closing reading record found for this attendant on this shift.")
+
+    nozzle_reading = next(
+        (nr for nr in record.get("nozzle_readings", []) if nr.get("nozzle_id") == data.nozzle_id), None
+    )
+    if not nozzle_reading:
+        raise HTTPException(status_code=404, detail=f"No reading found for nozzle {data.nozzle_id} on this shift.")
+
+    nozzle_reading["excluded_from_checks"] = True
+    nozzle_reading["excluded_reason"] = reason
+    nozzle_reading["excluded_by"] = ctx["username"]
+    nozzle_reading["excluded_at"] = now_iso
+    _save_enter_readings(readings_db, station_id)
+
+    # Mirror onto the handover's own nozzle_summaries so Handover Review
+    # shows this was excluded when browsing that shift.
+    handovers = _load_handovers(station_id)
+    handover = next(
+        (h for h in handovers.values()
+         if h.get("shift_id") == data.shift_id and h.get("attendant_id") == data.attendant_id),
+        None,
+    )
+    if handover:
+        summary = next(
+            (ns for ns in handover.get("nozzle_summaries", []) if ns.get("nozzle_id") == data.nozzle_id), None
+        )
+        if summary:
+            summary["excluded_from_checks"] = True
+            summary["excluded_reason"] = reason
+            _save_handovers(handovers, station_id)
+
+    log_audit_event(
+        station_id=station_id,
+        action="reading_excluded_from_checks",
+        performed_by=ctx["username"],
+        entity_type="nozzle_reading",
+        entity_id=f"{data.shift_id}-{data.attendant_id}-{data.nozzle_id}",
+        details={"shift_id": data.shift_id, "attendant_id": data.attendant_id, "nozzle_id": data.nozzle_id,
+                 "excluded_reading": nozzle_reading.get("electronic_reading"), "reason": reason},
+    )
+
+    return {"status": "success", "excluded_reading": nozzle_reading.get("electronic_reading")}
 
 
 class AdminOverrideCloseInput(BaseModel):

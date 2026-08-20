@@ -92,6 +92,7 @@ class FuelSettings(BaseModel):
     petrol_allowable_loss_percent: float = Field(..., ge=0, le=5.0)  # e.g., 0.5%
     nozzle_allowable_loss_liters: float = Field(default=0.8, ge=0, le=50.0)  # per-nozzle loss threshold in liters
     cash_shortage_threshold: float = Field(default=500.0, ge=0, le=1_000_000)  # ZMW; |cash diff| beyond this flags the handover
+    max_plausible_shift_volume_liters: float = Field(default=10000.0, ge=0, le=1_000_000)  # per-nozzle single-shift volume ceiling; above this flags a likely reading entry error
 
 class ScheduledPriceChange(BaseModel):
     fuel_type: str                                       # "Diesel" or "Petrol"
@@ -857,6 +858,7 @@ class HandoverNozzleReadingInput(BaseModel):
     mechanical_closing: float = Field(default=0, ge=0)  # mechanical (totalizer) closing
     changeover_reading: Optional[float] = Field(default=None, ge=0)  # midnight reading for price change shifts
     duplicate_reading_note: Optional[str] = None  # required override when the closing reading collides with another shift
+    implausible_volume_note: Optional[str] = None  # required override when volume_sold exceeds the plausibility threshold
 
 class HandoverNozzleReadingSummary(BaseModel):
     """Computed nozzle reading summary for handover output"""
@@ -886,6 +888,13 @@ class HandoverNozzleReadingSummary(BaseModel):
     duplicate_reading_flagged: Optional[bool] = None
     duplicate_reading_conflict_shift_id: Optional[str] = None
     duplicate_reading_note: Optional[str] = None
+    # Implausible single-shift volume gate
+    implausible_volume_flagged: Optional[bool] = None
+    implausible_volume_note: Optional[str] = None
+    # Set when an owner excludes this historical reading from future
+    # duplicate/carry-forward comparisons (bad data, not a real reading)
+    excluded_from_checks: Optional[bool] = None
+    excluded_reason: Optional[str] = None
 
 # ===== Shift-Level Stock Snapshot Models =====
 

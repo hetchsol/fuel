@@ -40,6 +40,10 @@ interface NozzleRow {
   // attendant must explain (e.g. genuine meter replacement) before resubmitting.
   duplicate_reading_conflict?: { conflict_shift_id: string; conflict_reading: number } | null
   duplicate_reading_note: string
+  // Set from a 400 "implausible_volume" response — volume sold this shift
+  // exceeded the plausibility threshold; needs an explanation to resubmit.
+  implausible_volume_conflict?: { volume: number; threshold: number } | null
+  implausible_volume_note: string
   // Double-entry verification: true once the value has been blind-keyed twice
   // and the two entries matched 100%.
   closing_verified: boolean
@@ -305,6 +309,8 @@ export default function MyShift() {
             changeover_reading: '',
             duplicate_reading_conflict: null,
             duplicate_reading_note: '',
+            implausible_volume_conflict: null,
+            implausible_volume_note: '',
             closing_verified: false,
             mech_closing_verified: false,
           }))
@@ -689,6 +695,7 @@ export default function MyShift() {
             mechanical_closing: parseFloat(r.mechanical_closing) || 0,
             ...(r.changeover_reading ? { changeover_reading: parseFloat(r.changeover_reading) } : {}),
             ...(r.duplicate_reading_note ? { duplicate_reading_note: r.duplicate_reading_note } : {}),
+            ...(r.implausible_volume_note ? { implausible_volume_note: r.implausible_volume_note } : {}),
           })),
           notes: notes || null,
           stock_snapshot: stockSnapshot,
@@ -703,6 +710,13 @@ export default function MyShift() {
             ? { ...r, duplicate_reading_conflict: { conflict_shift_id: conflict.conflict_shift_id, conflict_reading: conflict.conflict_reading } }
             : r))
           throw new Error(conflict.message || 'This reading was already recorded on another shift — explain below and resubmit.')
+        }
+        if (err.detail && typeof err.detail === 'object' && err.detail.error === 'implausible_volume') {
+          const conflict = err.detail
+          setNozzleRows(prev => prev.map(r => r.nozzle_id === conflict.nozzle_id
+            ? { ...r, implausible_volume_conflict: { volume: conflict.volume, threshold: conflict.threshold } }
+            : r))
+          throw new Error(conflict.message || 'This shift\'s volume for this nozzle looks implausible — explain below and resubmit.')
         }
         throw new Error((typeof err.detail === 'string' ? err.detail : null) || 'Failed to submit readings')
       }
@@ -1820,6 +1834,18 @@ export default function MyShift() {
                           style={{ ...inputStyle, borderColor: row.duplicate_reading_note.trim() ? theme.border : 'var(--color-status-error)' }} />
                       </div>
                     )}
+                    {row.implausible_volume_conflict && (
+                      <div className="mt-2 p-2 rounded" style={{ backgroundColor: 'var(--color-status-error-light)' }}>
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: 'var(--color-status-error)' }}>
+                          Volume {row.implausible_volume_conflict.volume}L exceeds plausible limit ({row.implausible_volume_conflict.threshold}L)
+                        </label>
+                        <input type="text" value={row.implausible_volume_note}
+                          onChange={e => setNozzleRows(prev => prev.map(r => r.nozzle_id === row.nozzle_id ? { ...r, implausible_volume_note: e.target.value } : r))}
+                          placeholder="Explain why this reading is correct, required to resubmit"
+                          className="w-full px-2 py-1.5 rounded border text-xs"
+                          style={{ ...inputStyle, borderColor: row.implausible_volume_note.trim() ? theme.border : 'var(--color-status-error)' }} />
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -2024,6 +2050,30 @@ export default function MyShift() {
                                 style={{
                                   ...inputStyle,
                                   borderColor: row.duplicate_reading_note.trim() ? theme.border : 'var(--color-status-error)',
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {row.implausible_volume_conflict && (
+                      <tr style={{ backgroundColor: 'rgba(239,83,80,0.05)' }}>
+                        <td colSpan={priceChangeDetected ? 11 : 10} className="px-3 py-2">
+                          <div className="flex items-start gap-3">
+                            <div className="text-xs font-semibold text-status-error whitespace-nowrap pt-1">
+                              {row.implausible_volume_conflict.volume}L exceeds limit ({row.implausible_volume_conflict.threshold}L)
+                            </div>
+                            <div className="flex-1">
+                              <input
+                                type="text"
+                                value={row.implausible_volume_note}
+                                onChange={e => setNozzleRows(prev => prev.map(r => r.nozzle_id === row.nozzle_id ? { ...r, implausible_volume_note: e.target.value } : r))}
+                                placeholder="Explain why this reading is correct, required to resubmit"
+                                className="w-full px-2 py-1 rounded border text-xs"
+                                style={{
+                                  ...inputStyle,
+                                  borderColor: row.implausible_volume_note.trim() ? theme.border : 'var(--color-status-error)',
                                 }}
                               />
                             </div>

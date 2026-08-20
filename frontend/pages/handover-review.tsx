@@ -56,6 +56,10 @@ interface HandoverEntry {
     duplicate_reading_flagged?: boolean | null
     duplicate_reading_conflict_shift_id?: string | null
     duplicate_reading_note?: string | null
+    implausible_volume_flagged?: boolean | null
+    implausible_volume_note?: string | null
+    excluded_from_checks?: boolean | null
+    excluded_reason?: string | null
   }[]
   fuel_revenue: number
   lpg_sales: number
@@ -118,6 +122,7 @@ const FLAG_LABELS: Record<string, string> = {
   stock_variance_unexplained: 'Stock Variance',
   nozzle_loss_exceeded: 'Nozzle Loss Exceeded',
   duplicate_meter_reading: 'Duplicate Meter Reading',
+  implausible_volume: 'Implausible Volume',
 }
 
 export default function HandoverReview() {
@@ -2117,6 +2122,43 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
   const [showPOS, setShowPOS] = useState(false)
   const [showCredit, setShowCredit] = useState(false)
   const canEdit = h.review_status !== 'approved'
+
+  // Exclude a nozzle reading from future duplicate/carry-forward checks —
+  // pure historical-data correction, no impact on this handover's status,
+  // sales, or stock, and works even on an already-closed-off day.
+  const [excludeTarget, setExcludeTarget] = useState<string | null>(null)
+  const [excludeReason, setExcludeReason] = useState('')
+  const [excluding, setExcluding] = useState(false)
+
+  const handleExcludeReading = async () => {
+    if (!excludeTarget || !excludeReason.trim()) return
+    setExcluding(true)
+    try {
+      const res = await authFetch(`${BASE}/handover/exclude-reading`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          shift_id: h.shift_id,
+          attendant_id: h.attendant_id,
+          nozzle_id: excludeTarget,
+          reason: excludeReason.trim(),
+        }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        toast.error(`Failed to exclude reading: ${error.detail || JSON.stringify(error)}`)
+        return
+      }
+      toast.success('Reading excluded from future checks.')
+      setExcludeTarget(null)
+      setExcludeReason('')
+      onRefresh()
+    } catch (err: any) {
+      toast.error(`Failed to exclude reading: ${err.message}`)
+    } finally {
+      setExcluding(false)
+    }
+  }
   return (
     <div className="p-4 space-y-4">
       {/* Previous supervisor review */}
@@ -2151,6 +2193,7 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
                 { label: 'Mech. Vol', align: 'text-right' },
                 { label: 'Deviation', align: 'text-right' },
                 { label: 'Revenue', align: 'text-right' },
+                { label: '', align: 'text-right' },
               ].map(col => (
                 <th key={col.label} className={`px-2 py-1 ${col.align} font-medium uppercase`} style={{ color: theme.textSecondary }}>{col.label}</th>
               ))}
@@ -2185,10 +2228,25 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
                   <td className="px-2 py-1 text-right font-mono font-medium" style={{ color: theme.textPrimary }}>
                     K{ns.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
+                  <td className="px-2 py-1 text-right whitespace-nowrap">
+                    {currentUserRole === 'owner' && (
+                      ns.excluded_from_checks ? (
+                        <span className="text-xs" style={{ color: theme.textSecondary }}>Excluded</span>
+                      ) : (
+                        <button
+                          onClick={() => { setExcludeTarget(ns.nozzle_id); setExcludeReason('') }}
+                          className="text-xs font-medium hover:underline"
+                          style={{ color: 'var(--color-status-error)' }}
+                        >
+                          Exclude from checks
+                        </button>
+                      )
+                    )}
+                  </td>
                 </tr>
                 {ns.duplicate_reading_flagged && (
                   <tr key={`${ns.nozzle_id}-duplicate`} style={{ backgroundColor: theme.cardBg }}>
-                    <td colSpan={8} className="px-4 py-1.5">
+                    <td colSpan={9} className="px-4 py-1.5">
                       <div className="text-xs" style={{ color: 'var(--color-status-error)' }}>
                         Also recorded on shift {ns.duplicate_reading_conflict_shift_id}
                         {ns.duplicate_reading_note ? ` — attendant note: "${ns.duplicate_reading_note}"` : ''}
@@ -2196,9 +2254,28 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
                     </td>
                   </tr>
                 )}
+                {ns.implausible_volume_flagged && (
+                  <tr key={`${ns.nozzle_id}-implausible`} style={{ backgroundColor: theme.cardBg }}>
+                    <td colSpan={9} className="px-4 py-1.5">
+                      <div className="text-xs" style={{ color: 'var(--color-status-error)' }}>
+                        Implausible volume for this shift
+                        {ns.implausible_volume_note ? ` — attendant note: "${ns.implausible_volume_note}"` : ''}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {ns.excluded_from_checks && ns.excluded_reason && (
+                  <tr key={`${ns.nozzle_id}-excluded`} style={{ backgroundColor: theme.cardBg }}>
+                    <td colSpan={9} className="px-4 py-1.5">
+                      <div className="text-xs" style={{ color: theme.textSecondary }}>
+                        Excluded from future checks — reason: &ldquo;{ns.excluded_reason}&rdquo;
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {ns.pre_change_revenue != null && ns.post_change_revenue != null && (
                   <tr key={`${ns.nozzle_id}-split`} style={{ backgroundColor: theme.cardBg }}>
-                    <td colSpan={8} className="px-4 py-1.5">
+                    <td colSpan={9} className="px-4 py-1.5">
                       <div className="flex flex-wrap gap-4 text-xs" style={{ color: theme.textSecondary }}>
                         <span>
                           Price split{ns.changeover_estimated ? ' (estimated)' : ''}:
@@ -2235,6 +2312,57 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
         </table>
         </div>
       </div>
+
+      {/* Exclude from checks confirmation */}
+      {excludeTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="rounded-lg p-6 max-w-md w-full" style={{ backgroundColor: theme.cardBg }}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold" style={{ color: theme.textPrimary }}>Exclude Reading From Checks</h2>
+              <button onClick={() => { setExcludeTarget(null); setExcludeReason('') }} className="text-2xl" style={{ color: theme.textSecondary }}>&times;</button>
+            </div>
+            <div className="mb-4 p-3 rounded-lg" style={{ backgroundColor: 'var(--color-status-error-light)' }}>
+              <p className="text-sm" style={{ color: 'var(--color-status-error)' }}>
+                Marks nozzle {excludeTarget}&apos;s reading on this shift ({h.date}, {h.shift_type}) as bad
+                data — it will no longer be used as the comparison anchor for future
+                duplicate/decreasing-reading checks or opening-reading carry-forward.
+                This does not change this handover&apos;s approval status, sales
+                totals, or stock, and works even though this day may already be
+                closed off.
+              </p>
+            </div>
+            <div className="mb-5">
+              <label className="block text-sm font-medium mb-1" style={{ color: theme.textPrimary }}>Reason (required)</label>
+              <ReasonChips presets={REASON_PRESETS.excludeReading} value={excludeReason} onSelect={setExcludeReason} className="mb-2" />
+              <textarea
+                value={excludeReason}
+                onChange={e => setExcludeReason(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 text-sm border rounded-md"
+                style={{ borderColor: theme.border, backgroundColor: theme.background, color: theme.textPrimary }}
+                placeholder="Explain why this reading is bad data..."
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setExcludeTarget(null); setExcludeReason('') }}
+                className="px-4 py-2 text-sm border rounded-md"
+                style={{ borderColor: theme.border, color: theme.textSecondary }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExcludeReading}
+                disabled={excluding || !excludeReason.trim()}
+                className="px-5 py-2 text-sm text-white rounded-md font-medium disabled:opacity-60"
+                style={{ backgroundColor: 'var(--color-status-error)' }}
+              >
+                {excluding ? 'Excluding...' : 'Exclude From Checks'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Financial summary — hidden for enter-readings source rows */}
       {h.source !== 'readings' && <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

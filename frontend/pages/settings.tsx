@@ -16,6 +16,7 @@ export default function Settings() {
     petrol_allowable_loss_percent: 0.5,
     nozzle_allowable_loss_liters: 0.8,
     cash_shortage_threshold: 500.0,
+    max_plausible_shift_volume_liters: 10000.0,
   })
   const [scheduledPrices, setScheduledPrices] = useState<any[]>([])
   const [scheduleForm, setScheduleForm] = useState({ fuel_type: 'Diesel', new_price_per_liter: '', effective_date: '', effective_time: '00:00' })
@@ -1136,6 +1137,19 @@ export default function Settings() {
                     required
                   />
                   <p className="text-xs text-content-secondary mt-1">Default: 0.8L — losses above this per nozzle will be flagged during shift handover</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Max Plausible Volume Per Shift (Liters)</label>
+                  <input
+                    type="number"
+                    step="100"
+                    min="0"
+                    value={settings.max_plausible_shift_volume_liters}
+                    onChange={(e) => setSettings({ ...settings, max_plausible_shift_volume_liters: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary"
+                    required
+                  />
+                  <p className="text-xs text-content-secondary mt-1">Default: 10,000L — a single nozzle selling more than this in one shift is almost always a reading entry error, not real sales; attendants must explain before it's accepted</p>
                 </div>
               </div>
             </div>

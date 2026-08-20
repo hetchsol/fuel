@@ -56,6 +56,11 @@ export const REASON_PRESETS = {
     'Wrong attendant assigned to this shift',
     'Shift created in error, never actually worked',
   ],
+  excludeReading: [
+    'Reading entry error — implausible jump',
+    'Wrong field entered (mechanical vs electronic)',
+    'Historical data error, confirmed with attendant',
+  ],
 } as const
 
 export default function ReasonChips({ presets, value, onSelect, className }: ReasonChipsProps) {

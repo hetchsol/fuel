@@ -673,6 +673,9 @@ export default function Shifts() {
   // manager must explain (e.g. genuine meter replacement) before resubmitting.
   const [retroDuplicateConflicts, setRetroDuplicateConflicts] = useState<Record<string, { conflict_shift_id: string; conflict_reading: number }>>({})
   const [retroDuplicateNotes, setRetroDuplicateNotes] = useState<Record<string, string>>({})
+  // Set from a 400 "implausible_volume" response after a submit attempt.
+  const [retroImplausibleConflicts, setRetroImplausibleConflicts] = useState<Record<string, { volume: number; threshold: number }>>({})
+  const [retroImplausibleNotes, setRetroImplausibleNotes] = useState<Record<string, string>>({})
   const [retroFinancials, setRetroFinancials] = useState({ actual_cash: '', credit_sales: '', notes: '' })
   const [retroPosAmounts, setRetroPosAmounts] = useState<Record<string, string>>({})
   const [retroPosRefs, setRetroPosRefs] = useState<Record<string, string>>({})
@@ -696,6 +699,8 @@ export default function Shifts() {
     setRetroClosings({ ...initReadings })
     setRetroDuplicateConflicts({})
     setRetroDuplicateNotes({})
+    setRetroImplausibleConflicts({})
+    setRetroImplausibleNotes({})
     setRetroFinancials({ actual_cash: '', credit_sales: '', notes: '' })
     const initPosAmounts: Record<string, string> = {}
     posTypes.forEach(t => { initPosAmounts[t.type_id] = '' })
@@ -731,6 +736,7 @@ export default function Shifts() {
           electronic_reading: parseFloat(v.electronic) || 0,
           mechanical_reading: parseFloat(v.mechanical) || 0,
           ...(retroDuplicateNotes[nozzle_id] ? { duplicate_reading_note: retroDuplicateNotes[nozzle_id] } : {}),
+          ...(retroImplausibleNotes[nozzle_id] ? { implausible_volume_note: retroImplausibleNotes[nozzle_id] } : {}),
         })),
         actual_cash: parseFloat(retroFinancials.actual_cash) || 0,
         pos_items: posTypes
@@ -757,6 +763,15 @@ export default function Shifts() {
             [conflict.nozzle_id]: { conflict_shift_id: conflict.conflict_shift_id, conflict_reading: conflict.conflict_reading },
           }))
           toast.error(conflict.message || 'This reading was already recorded on another shift — explain below and resubmit.')
+          return
+        }
+        if (err.detail && typeof err.detail === 'object' && err.detail.error === 'implausible_volume') {
+          const conflict = err.detail
+          setRetroImplausibleConflicts(prev => ({
+            ...prev,
+            [conflict.nozzle_id]: { volume: conflict.volume, threshold: conflict.threshold },
+          }))
+          toast.error(conflict.message || "This shift's volume for this nozzle looks implausible — explain below and resubmit.")
           return
         }
         toast.error((typeof err.detail === 'string' ? err.detail : null) || 'Failed to submit readings')
@@ -1955,6 +1970,26 @@ export default function Shifts() {
                               placeholder="Explain why this reading is correct (e.g. meter replaced), required to resubmit"
                               className={`flex-1 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-action-primary ${
                                 (retroDuplicateNotes[nozzle.nozzle_id] ?? '').trim() ? 'border-surface-border' : 'border-status-error'
+                              }`}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {retroImplausibleConflicts[nozzle.nozzle_id] && (
+                      <tr>
+                        <td colSpan={5} className="border border-surface-border px-3 py-2" style={{ backgroundColor: 'rgba(239,83,80,0.05)' }}>
+                          <div className="flex items-start gap-3">
+                            <div className="text-xs font-semibold text-status-error whitespace-nowrap pt-1">
+                              {retroImplausibleConflicts[nozzle.nozzle_id].volume}L exceeds limit ({retroImplausibleConflicts[nozzle.nozzle_id].threshold}L)
+                            </div>
+                            <input
+                              type="text"
+                              value={retroImplausibleNotes[nozzle.nozzle_id] ?? ''}
+                              onChange={e => setRetroImplausibleNotes(prev => ({ ...prev, [nozzle.nozzle_id]: e.target.value }))}
+                              placeholder="Explain why this reading is correct, required to resubmit"
+                              className={`flex-1 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-action-primary ${
+                                (retroImplausibleNotes[nozzle.nozzle_id] ?? '').trim() ? 'border-surface-border' : 'border-status-error'
                               }`}
                             />
                           </div>
