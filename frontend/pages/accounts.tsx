@@ -40,8 +40,11 @@ export default function Accounts() {
   const canManage = ['manager', 'owner'].includes(userRole)
   const isOwner = userRole === 'owner'
 
-  // Account list filter
+  // Account list filter, selection and pagination
   const [accountSearch, setAccountSearch] = useState('')
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
+  const [accountPage, setAccountPage] = useState(1)
+  const ACCOUNTS_PAGE_SIZE = 10
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createForm, setCreateForm] = useState({
@@ -277,6 +280,7 @@ export default function Accounts() {
       })
       if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed to delete') }
       toast.success('Account deleted')
+      setSelectedAccountId(prev => prev === account.account_id ? null : prev)
       fetchAccounts()
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete account')
@@ -524,7 +528,6 @@ export default function Accounts() {
   // action inline (no modal needed to act on an account).
   const renderAccountCard = (account: any) => {
     const t = effectiveType(account)
-    const blocked = isBlocked(account)
     const barPct = getBarPercent(account)
     const barColor = getBarColor(account)
     const overdraft = account.approved_overdraft ?? 0
@@ -540,43 +543,15 @@ export default function Accounts() {
       : account.contact_person ? [{ name: account.contact_person, phone: account.phone }] : []
 
     return (
-      <div key={account.account_id}
-        className={`rounded-lg border p-4 ${
-          account.is_suspended ? 'border-status-error bg-status-error/5'
-            : blocked ? 'border-status-warning bg-status-warning/5'
-            : 'border-surface-border bg-surface-bg'
-        }`}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              {account.client_code && <span className="font-mono font-bold text-action-primary text-sm">{account.client_code}</span>}
-              <span className="font-semibold text-content-primary">{account.account_name}</span>
-              <span className={`px-2 py-0.5 text-xs font-semibold rounded border ${getAccountTypeColor(t)}`}>{t}</span>
-              {account.is_suspended && (
-                <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-error text-white">Suspended</span>
-              )}
-              {!account.is_suspended && blocked && (
-                <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-warning text-white">
-                  {t === 'Pre-Paid' ? 'No Balance' : 'At Limit'}
-                </span>
-              )}
-            </div>
-            {contacts.length > 0 && (
-              <p className="text-xs text-content-secondary mt-1">
-                {contacts.map((c: any) => c.phone ? `${c.name} — ${c.phone}` : c.name).filter(Boolean).join(' · ')}
-              </p>
-            )}
-          </div>
-          <div className="text-right shrink-0">
-            <p className="text-[10px] uppercase text-content-secondary">{t === 'Pre-Paid' ? 'Available' : 'Owed'}</p>
-            <p className={`text-lg font-bold ${t === 'Pre-Paid' && availableOrOwed <= 0 ? 'text-status-error' : 'text-content-primary'}`}>
-              {formatCurrency(availableOrOwed)}
-            </p>
-          </div>
-        </div>
+      <div key={account.account_id} className="rounded-lg">
+        {contacts.length > 0 && (
+          <p className="text-xs text-content-secondary mb-2">
+            {contacts.map((c: any) => c.phone ? `${c.name} — ${c.phone}` : c.name).filter(Boolean).join(' · ')}
+          </p>
+        )}
 
         {/* Ceiling + progress bar */}
-        <div className="mt-3">
+        <div>
           <div className="flex justify-between text-xs text-content-secondary mb-1">
             <span>
               {t === 'Pre-Paid'
@@ -669,34 +644,100 @@ export default function Accounts() {
 
         {loading && accounts.length === 0 ? (
           <LoadingSpinner text="Loading accounts..." />
-        ) : (
-          <>
-            <input
-              type="text"
-              value={accountSearch}
-              onChange={(e) => setAccountSearch(e.target.value)}
-              placeholder="Search accounts by name or code..."
-              className="w-full px-3 py-2.5 mb-3 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
-            />
-            <div className="space-y-3">
-              {accounts
-                .filter(a => {
-                  const q = accountSearch.toLowerCase()
-                  return !q
-                    || a.account_name?.toLowerCase().includes(q)
-                    || a.client_code?.toLowerCase().includes(q)
-                    || a.account_id?.toLowerCase().includes(q)
-                })
-                .map(renderAccountCard)}
-              {accounts.filter(a => {
-                const q = accountSearch.toLowerCase()
-                return !q || a.account_name?.toLowerCase().includes(q) || a.client_code?.toLowerCase().includes(q) || a.account_id?.toLowerCase().includes(q)
-              }).length === 0 && (
-                <p className="text-sm text-content-secondary py-4 text-center">No accounts match.</p>
+        ) : (() => {
+          const filtered = accounts.filter(a => {
+            const q = accountSearch.toLowerCase()
+            return !q
+              || a.account_name?.toLowerCase().includes(q)
+              || a.client_code?.toLowerCase().includes(q)
+              || a.account_id?.toLowerCase().includes(q)
+          })
+          const totalPages = Math.max(1, Math.ceil(filtered.length / ACCOUNTS_PAGE_SIZE))
+          const page = Math.min(accountPage, totalPages)
+          const pageAccounts = filtered.slice((page - 1) * ACCOUNTS_PAGE_SIZE, page * ACCOUNTS_PAGE_SIZE)
+
+          return (
+            <>
+              <input
+                type="text"
+                value={accountSearch}
+                onChange={(e) => { setAccountSearch(e.target.value); setAccountPage(1) }}
+                placeholder="Search accounts by name or code..."
+                className="w-full px-3 py-2.5 mb-3 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+              />
+              <div className="rounded-lg border border-surface-border divide-y divide-surface-border overflow-hidden">
+                {pageAccounts.map((account: any) => {
+                  const t = effectiveType(account)
+                  const blocked = isBlocked(account)
+                  const selected = selectedAccountId === account.account_id
+                  return (
+                    <div key={account.account_id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAccountId(selected ? null : account.account_id)}
+                        className={`w-full text-left px-4 py-3 flex items-center justify-between gap-3 hover:bg-action-primary-light transition-colors ${selected ? 'bg-action-primary-light' : 'bg-surface-bg'}`}
+                      >
+                        <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                          {account.client_code && <span className="font-mono font-bold text-action-primary text-sm shrink-0">{account.client_code}</span>}
+                          <span className="font-medium text-content-primary truncate">{account.account_name}</span>
+                          <span className={`px-2 py-0.5 text-xs font-semibold rounded border shrink-0 ${getAccountTypeColor(t)}`}>{t}</span>
+                          {account.is_suspended && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-error text-white shrink-0">Suspended</span>
+                          )}
+                          {!account.is_suspended && blocked && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-warning text-white shrink-0">
+                              {t === 'Pre-Paid' ? 'No Balance' : 'At Limit'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className={`text-sm font-bold ${t === 'Pre-Paid' && (account.current_balance ?? 0) <= 0 ? 'text-status-error' : 'text-content-primary'}`}>
+                            {formatCurrency(account.current_balance ?? 0)}
+                          </span>
+                          <span className="text-content-secondary text-xs">{selected ? '−' : '+'}</span>
+                        </div>
+                      </button>
+                      {selected && (
+                        <div className="p-3 bg-surface-card">
+                          {renderAccountCard(account)}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                {filtered.length === 0 && (
+                  <p className="text-sm text-content-secondary py-4 text-center bg-surface-bg">No accounts match.</p>
+                )}
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-3">
+                  <p className="text-xs text-content-secondary">
+                    Page {page} of {totalPages} · {filtered.length} account{filtered.length === 1 ? '' : 's'}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={page <= 1}
+                      onClick={() => setAccountPage(p => Math.max(1, p - 1))}
+                      className="px-3 py-1.5 text-xs rounded border border-surface-border text-content-secondary hover:bg-action-primary-light hover:text-action-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      disabled={page >= totalPages}
+                      onClick={() => setAccountPage(p => Math.min(totalPages, p + 1))}
+                      className="px-3 py-1.5 text-xs rounded border border-surface-border text-content-secondary hover:bg-action-primary-light hover:text-action-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
               )}
-            </div>
-          </>
-        )}
+            </>
+          )
+        })()}
 
         <div className="mt-5 rounded-lg border border-action-primary bg-action-primary-light p-4">
           <ul className="text-sm text-action-primary space-y-1">
