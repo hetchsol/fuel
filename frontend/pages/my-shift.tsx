@@ -158,7 +158,10 @@ export default function MyShift() {
   const [notes, setNotes] = useState('')
 
   // Credit sale line items
-  const [creditAccounts, setCreditAccounts] = useState<{account_id: string, account_name: string, account_type: string, default_price_per_liter: number|null}[]>([])
+  const [creditAccounts, setCreditAccounts] = useState<{
+    account_id: string, account_name: string, account_type: string, default_price_per_liter: number|null,
+    client_code?: string, current_balance?: number, credit_limit?: number, approved_overdraft?: number, is_suspended?: boolean,
+  }[]>([])
   const [fuelPrices, setFuelPrices] = useState<{Diesel: number, Petrol: number}>({Diesel: 0, Petrol: 0})
   const [creditItems, setCreditItems] = useState<{account_id: string, account_name: string, fuel_type: string, volume: string, price_per_liter: number, amount: number}[]>([])
 

@@ -1531,6 +1531,11 @@ async def get_credit_accounts(ctx: dict = Depends(get_station_context)):
             "account_name": acc["account_name"],
             "account_type": acc.get("account_type", ""),
             "default_price_per_liter": acc.get("default_price_per_liter"),
+            "client_code": acc.get("client_code"),
+            "current_balance": acc.get("current_balance", 0.0),
+            "credit_limit": acc.get("credit_limit", 0.0),
+            "approved_overdraft": acc.get("approved_overdraft", 0.0),
+            "is_suspended": acc.get("is_suspended", False),
         })
 
     fuel_prices = {
