@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
 import { getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
@@ -69,6 +70,38 @@ export default function ThreeWayReconciliation() {
   const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [varianceTrends, setVarianceTrends] = useState<Record<string, any>>({})
+  const [role, setRole] = useState('')
+  const [backfilling, setBackfilling] = useState(false)
+
+  useEffect(() => {
+    const u = localStorage.getItem('user')
+    if (u) setRole(JSON.parse(u).role || '')
+  }, [])
+
+  const handleBackfill = async () => {
+    if (!confirm('Backfill three-way reconciliation data for all historical shifts? Safe to re-run.')) return
+    setBackfilling(true)
+    try {
+      const res = await authFetch(`${BASE}/reconciliation/backfill-three-way`, {
+        method: 'POST',
+        headers: getHeaders(),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        toast.error(`Backfill failed: ${error.detail || JSON.stringify(error)}`)
+        return
+      }
+      const data = await res.json()
+      toast.success(
+        `Backfilled ${data.tanks_updated} tank(s) across ${data.shifts_processed} shift(s). ` +
+        `Skipped: ${data.skipped.incomplete} incomplete, ${data.skipped.no_dip} without a dip, ${data.skipped.no_nozzle_data} without nozzle data.`
+      )
+    } catch (err: any) {
+      toast.error(`Backfill failed: ${err.message}`)
+    } finally {
+      setBackfilling(false)
+    }
+  }
 
   // Accept date query parameter
   useEffect(() => {
@@ -246,7 +279,18 @@ export default function ThreeWayReconciliation() {
               <h1 className="text-3xl font-bold text-content-primary mb-2">Three-Way Reconciliation</h1>
               <p className="text-content-secondary">Tank Movement = Nozzle Sales = Cash in Hand</p>
             </div>
-            {dailySummary && <ExportButtons getConfig={getExportConfig} />}
+            <div className="flex items-center gap-3">
+              {role === 'owner' && (
+                <button
+                  onClick={handleBackfill}
+                  disabled={backfilling}
+                  className="px-3 py-2 text-sm font-medium rounded-md border border-surface-border text-content-secondary hover:bg-surface-bg disabled:opacity-60"
+                >
+                  {backfilling ? 'Backfilling...' : 'Backfill Historical Data'}
+                </button>
+              )}
+              {dailySummary && <ExportButtons getConfig={getExportConfig} />}
+            </div>
           </div>
         </div>
 

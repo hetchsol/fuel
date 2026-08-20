@@ -1110,24 +1110,40 @@ def _compute_tank_nozzle_variance(station_id: str, shift_id: str, storage: dict,
 
     # Gather every attendant's nozzle summaries, keyed by attendant so the
     # caller's own (possibly not-yet-saved) submission always wins over
-    # whatever is already on disk for that same attendant.
+    # whatever is already on disk for that same attendant. Also track each
+    # attendant's phase/actual_cash — needed below to know when a tank's
+    # cash figure is actually ready to persist (every contributing
+    # attendant financially closed, not just readings-submitted).
     handovers = _load_handovers(station_id)
     by_attendant: dict = {}
+    attendant_financials: dict = {}
     for ho in handovers.values():
         if ho.get("shift_id") == shift_id and ho.get("phase") in ("readings_verified", "completed"):
-            by_attendant[ho.get("attendant_id")] = ho.get("nozzle_summaries") or []
+            aid = ho.get("attendant_id")
+            by_attendant[aid] = ho.get("nozzle_summaries") or []
+            attendant_financials[aid] = {"phase": ho.get("phase"), "actual_cash": ho.get("actual_cash")}
     if current_attendant_id is not None:
         by_attendant[current_attendant_id] = current_nozzle_summaries or []
+        attendant_financials.setdefault(current_attendant_id, {"phase": None, "actual_cash": None})
 
     nozzle_volume_by_tank: dict = {}
-    for nozzle_summaries in by_attendant.values():
+    mechanical_volume_by_tank: dict = {}
+    attendants_by_tank: dict = {}
+    tank_price: dict = {}
+    for attendant_id, nozzle_summaries in by_attendant.items():
         for ns in nozzle_summaries:
             nid = _nozzle_summary_field(ns, "nozzle_id")
             vol = _nozzle_summary_field(ns, "volume_sold")
+            mech_vol = _nozzle_summary_field(ns, "mechanical_volume")
+            price = _nozzle_summary_field(ns, "price_per_liter")
             tank_id = get_tank_id_for_nozzle(nid, storage=storage)
             if not tank_id:
                 continue
             nozzle_volume_by_tank[tank_id] = nozzle_volume_by_tank.get(tank_id, 0.0) + (vol or 0.0)
+            mechanical_volume_by_tank[tank_id] = mechanical_volume_by_tank.get(tank_id, 0.0) + (mech_vol or 0.0)
+            attendants_by_tank.setdefault(tank_id, set()).add(attendant_id)
+            if price and tank_id not in tank_price:
+                tank_price[tank_id] = price
 
     if not nozzle_volume_by_tank:
         return [], {"status": "no_nozzle_data"}
@@ -1141,6 +1157,7 @@ def _compute_tank_nozzle_variance(station_id: str, shift_id: str, storage: dict,
 
     flags = set()
     per_tank = {}
+    tank_readings_changed = False
     for tank_id, nozzle_total in nozzle_volume_by_tank.items():
         dip_rec = next(
             (r for r in tank_readings_db.values()
@@ -1183,6 +1200,32 @@ def _compute_tank_nozzle_variance(station_id: str, shift_id: str, storage: dict,
         # so that gets its own flag above instead of a possibly-bogus variance.
         if status_label != "PASS" and cal_status not in ("stale", "no_calibration"):
             flags.add("tank_nozzle_variance")
+
+        # Persist onto the dip record so Three-Way Reconciliation (which
+        # reads tank_readings.json directly) has real numbers instead of
+        # the zeros it gets from the lightweight daily dip-capture flow.
+        dip_rec["tank_volume_movement"] = round(tank_movement, 3)
+        dip_rec["total_electronic_dispensed"] = round(nozzle_total, 3)
+        dip_rec["total_mechanical_dispensed"] = round(mechanical_volume_by_tank.get(tank_id, 0.0), 3)
+        if tank_id in tank_price:
+            dip_rec["price_per_liter"] = tank_price[tank_id]
+        tank_readings_changed = True
+
+        # Cash is only ready once every attendant feeding this tank has
+        # actually financially closed (not just submitted readings) —
+        # otherwise a partial cash figure would misrepresent the shift.
+        contributing = attendants_by_tank.get(tank_id, set())
+        if contributing and all(
+            attendant_financials.get(aid, {}).get("phase") == "completed"
+            and attendant_financials.get(aid, {}).get("actual_cash") is not None
+            for aid in contributing
+        ):
+            dip_rec["actual_cash_banked"] = round(
+                sum(attendant_financials[aid]["actual_cash"] for aid in contributing), 2
+            )
+
+    if tank_readings_changed:
+        save_station_json(station_id, 'tank_readings.json', tank_readings_db)
 
     return list(flags), {"status": "computed", "tanks": per_tank}
 

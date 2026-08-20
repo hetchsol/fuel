@@ -8,7 +8,7 @@ from typing import List
 from ...models.models import ShiftReconciliation, TankReconciliation
 from ...config import resolve_fuel_price
 from ...database.storage import get_nozzle, get_tank_id_for_nozzle
-from .auth import get_station_context
+from .auth import get_station_context, require_owner
 from ...database.station_files import load_station_json, save_station_json
 
 router = APIRouter()
@@ -604,6 +604,56 @@ def get_daily_three_way_summary(date: str, ctx: dict = Depends(get_station_conte
     summary['all_shifts'] = date_readings
 
     return summary
+
+
+@router.post("/backfill-three-way", dependencies=[Depends(require_owner)])
+def backfill_three_way(from_date: str = None, to_date: str = None, ctx: dict = Depends(get_station_context)):
+    """
+    Populate tank_volume_movement / total_electronic_dispensed / actual_cash_banked
+    on existing tank_readings.json records for past shifts, by re-running the
+    same real comparison the app already does live at handover review
+    (_compute_tank_nozzle_variance) against historical shifts. Owner only.
+
+    Safe to re-run — idempotent, just recomputes and overwrites with the
+    latest numbers each time. Shifts with no dip record, incomplete
+    submissions, or no nozzle data are skipped, not errored.
+    """
+    from .attendant_handover import _compute_tank_nozzle_variance
+
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+    shifts = storage.get("shifts", {})
+
+    processed = 0
+    updated_tanks = 0
+    skipped = {"incomplete": 0, "no_nozzle_data": 0, "unknown_shift": 0, "no_dip": 0}
+
+    for shift_id, shift in shifts.items():
+        date = shift.get("date", "")
+        if from_date and date < from_date:
+            continue
+        if to_date and date > to_date:
+            continue
+
+        processed += 1
+        _, details = _compute_tank_nozzle_variance(station_id, shift_id, storage)
+        status = details.get("status")
+        if status in ("incomplete", "no_nozzle_data", "unknown_shift"):
+            skipped[status] += 1
+            continue
+        if status == "computed":
+            for tank_result in details.get("tanks", {}).values():
+                if tank_result.get("status") == "no_dip":
+                    skipped["no_dip"] += 1
+                else:
+                    updated_tanks += 1
+
+    return {
+        "status": "success",
+        "shifts_processed": processed,
+        "tanks_updated": updated_tanks,
+        "skipped": skipped,
+    }
 
 
 @router.get("/three-way/patterns/{tank_id}")
