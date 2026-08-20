@@ -624,6 +624,21 @@ export default function MyShift() {
     setLubricantRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
   }
 
+  // Scroll to and focus an explanation field that just appeared below the fold,
+  // so the attendant sees where to act instead of just the error banner up top.
+  // Mobile and desktop layouts render the same field twice (one hidden by CSS
+  // depending on viewport) — pick whichever copy is actually visible.
+  const scrollToNoteField = (baseId: string) => {
+    setTimeout(() => {
+      const candidates = [`${baseId}-mobile`, `${baseId}-desktop`]
+        .map(id => document.getElementById(id) as HTMLInputElement | null)
+        .filter((el): el is HTMLInputElement => !!el)
+      const el = candidates.find(e => e.offsetParent !== null) || candidates[0]
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el?.focus()
+    }, 100)
+  }
+
   const handleSubmit = async () => {
     if (!shiftInfo) return
     setSubmitting(true)
@@ -712,6 +727,7 @@ export default function MyShift() {
           setNozzleRows(prev => prev.map(r => r.nozzle_id === conflict.nozzle_id
             ? { ...r, duplicate_reading_conflict: { conflict_shift_id: conflict.conflict_shift_id, conflict_reading: conflict.conflict_reading } }
             : r))
+          scrollToNoteField(`dup-note-${conflict.nozzle_id}`)
           throw new Error(conflict.message || 'This reading was already recorded on another shift — explain below and resubmit.')
         }
         if (err.detail && typeof err.detail === 'object' && err.detail.error === 'implausible_volume') {
@@ -719,6 +735,7 @@ export default function MyShift() {
           setNozzleRows(prev => prev.map(r => r.nozzle_id === conflict.nozzle_id
             ? { ...r, implausible_volume_conflict: { volume: conflict.volume, threshold: conflict.threshold } }
             : r))
+          scrollToNoteField(`implausible-note-${conflict.nozzle_id}`)
           throw new Error(conflict.message || 'This shift\'s volume for this nozzle looks implausible — explain below and resubmit.')
         }
         throw new Error((typeof err.detail === 'string' ? err.detail : null) || 'Failed to submit readings')
@@ -1830,7 +1847,7 @@ export default function MyShift() {
                         <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: 'var(--color-status-error)' }}>
                           Also recorded on shift {row.duplicate_reading_conflict.conflict_shift_id} (reading {row.duplicate_reading_conflict.conflict_reading})
                         </label>
-                        <input type="text" value={row.duplicate_reading_note}
+                        <input type="text" id={`dup-note-mobile-${row.nozzle_id}`} value={row.duplicate_reading_note}
                           onChange={e => setNozzleRows(prev => prev.map(r => r.nozzle_id === row.nozzle_id ? { ...r, duplicate_reading_note: e.target.value } : r))}
                           placeholder="Explain why this reading is correct (e.g. meter replaced), required to resubmit"
                           className="w-full px-2 py-1.5 rounded border text-xs"
@@ -1842,7 +1859,7 @@ export default function MyShift() {
                         <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: 'var(--color-status-error)' }}>
                           Volume {row.implausible_volume_conflict.volume}L exceeds plausible limit ({row.implausible_volume_conflict.threshold}L)
                         </label>
-                        <input type="text" value={row.implausible_volume_note}
+                        <input type="text" id={`implausible-note-mobile-${row.nozzle_id}`} value={row.implausible_volume_note}
                           onChange={e => setNozzleRows(prev => prev.map(r => r.nozzle_id === row.nozzle_id ? { ...r, implausible_volume_note: e.target.value } : r))}
                           placeholder="Explain why this reading is correct, required to resubmit"
                           className="w-full px-2 py-1.5 rounded border text-xs"
@@ -2046,6 +2063,7 @@ export default function MyShift() {
                             <div className="flex-1">
                               <input
                                 type="text"
+                                id={`dup-note-desktop-${row.nozzle_id}`}
                                 value={row.duplicate_reading_note}
                                 onChange={e => setNozzleRows(prev => prev.map(r => r.nozzle_id === row.nozzle_id ? { ...r, duplicate_reading_note: e.target.value } : r))}
                                 placeholder="Explain why this reading is correct (e.g. meter replaced), required to resubmit"
@@ -2070,6 +2088,7 @@ export default function MyShift() {
                             <div className="flex-1">
                               <input
                                 type="text"
+                                id={`implausible-note-desktop-${row.nozzle_id}`}
                                 value={row.implausible_volume_note}
                                 onChange={e => setNozzleRows(prev => prev.map(r => r.nozzle_id === row.nozzle_id ? { ...r, implausible_volume_note: e.target.value } : r))}
                                 placeholder="Explain why this reading is correct, required to resubmit"
