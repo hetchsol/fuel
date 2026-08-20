@@ -40,10 +40,8 @@ export default function Accounts() {
   const canManage = ['manager', 'owner'].includes(userRole)
   const isOwner = userRole === 'owner'
 
-  // Account picker + detail modal
+  // Account list filter
   const [accountSearch, setAccountSearch] = useState('')
-  const [showAccountDropdown, setShowAccountDropdown] = useState(false)
-  const [viewAccount, setViewAccount] = useState<any | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createForm, setCreateForm] = useState({
@@ -195,7 +193,6 @@ export default function Accounts() {
   }
 
   const openEdit = (account: any) => {
-    setViewAccount(null)
     setEditingAccount(account)
     const t = account.account_type === 'Pre-Paid' ? 'Pre-Paid' : 'Post-Paid'
     setEditForm({
@@ -280,7 +277,6 @@ export default function Accounts() {
       })
       if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed to delete') }
       toast.success('Account deleted')
-      setViewAccount(null)
       fetchAccounts()
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete account')
@@ -296,11 +292,6 @@ export default function Accounts() {
       if (res.ok) {
         const data = await res.json()
         setAccounts(data)
-        // Keep detail modal in sync if open
-        setViewAccount((prev: any) => prev
-          ? data.find((a: any) => a.account_id === prev.account_id) ?? null
-          : null
-        )
       }
     } catch (err: any) {
       setError('Failed to fetch accounts')
@@ -529,6 +520,131 @@ export default function Accounts() {
     finally { setPaymentSaving(false) }
   }
 
+  // One account's card — balance, ceiling/progress, and every management
+  // action inline (no modal needed to act on an account).
+  const renderAccountCard = (account: any) => {
+    const t = effectiveType(account)
+    const blocked = isBlocked(account)
+    const barPct = getBarPercent(account)
+    const barColor = getBarColor(account)
+    const overdraft = account.approved_overdraft ?? 0
+    const availableOrOwed = account.current_balance ?? 0
+    const ceiling = t === 'Pre-Paid'
+      ? (account.opening_balance || account.current_balance || 0)
+      : (account.credit_limit ?? 0)
+    const available = t === 'Pre-Paid'
+      ? availableOrOwed
+      : Math.max(0, ceiling - availableOrOwed)
+    const contacts = account.contacts?.length
+      ? account.contacts
+      : account.contact_person ? [{ name: account.contact_person, phone: account.phone }] : []
+
+    return (
+      <div key={account.account_id}
+        className={`rounded-lg border p-4 ${
+          account.is_suspended ? 'border-status-error bg-status-error/5'
+            : blocked ? 'border-status-warning bg-status-warning/5'
+            : 'border-surface-border bg-surface-bg'
+        }`}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              {account.client_code && <span className="font-mono font-bold text-action-primary text-sm">{account.client_code}</span>}
+              <span className="font-semibold text-content-primary">{account.account_name}</span>
+              <span className={`px-2 py-0.5 text-xs font-semibold rounded border ${getAccountTypeColor(t)}`}>{t}</span>
+              {account.is_suspended && (
+                <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-error text-white">Suspended</span>
+              )}
+              {!account.is_suspended && blocked && (
+                <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-warning text-white">
+                  {t === 'Pre-Paid' ? 'No Balance' : 'At Limit'}
+                </span>
+              )}
+            </div>
+            {contacts.length > 0 && (
+              <p className="text-xs text-content-secondary mt-1">
+                {contacts.map((c: any) => c.phone ? `${c.name} — ${c.phone}` : c.name).filter(Boolean).join(' · ')}
+              </p>
+            )}
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-[10px] uppercase text-content-secondary">{t === 'Pre-Paid' ? 'Available' : 'Owed'}</p>
+            <p className={`text-lg font-bold ${t === 'Pre-Paid' && availableOrOwed <= 0 ? 'text-status-error' : 'text-content-primary'}`}>
+              {formatCurrency(availableOrOwed)}
+            </p>
+          </div>
+        </div>
+
+        {/* Ceiling + progress bar */}
+        <div className="mt-3">
+          <div className="flex justify-between text-xs text-content-secondary mb-1">
+            <span>
+              {t === 'Pre-Paid'
+                ? `Opening deposit ${formatCurrency(ceiling)}`
+                : `Ceiling ${formatCurrency(ceiling)} · Available ${formatCurrency(available)}`}
+            </span>
+            <span className="font-semibold">{barPct.toFixed(1)}%</span>
+          </div>
+          <div className="w-full bg-surface-border rounded-full h-2 overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${barPct}%` }} />
+          </div>
+          {overdraft > 0 && (
+            <p className="text-xs text-status-warning font-medium mt-1">Owner approved extra: {formatCurrency(overdraft)}</p>
+          )}
+          {account.default_price_per_liter && (
+            <p className="text-xs text-content-secondary mt-1">Custom rate: ZMW {account.default_price_per_liter.toFixed(2)}/L</p>
+          )}
+        </div>
+
+        {/* Management actions — always visible, no modal needed */}
+        {(canManage || isOwner) && (
+          <div className="flex gap-2 flex-wrap mt-3 pt-3 border-t border-surface-border">
+            {canManage && (
+              <button onClick={() => openEdit(account)}
+                className="px-3 py-1.5 text-xs rounded border border-surface-border text-content-secondary hover:bg-action-primary-light hover:text-action-primary hover:border-action-primary transition-colors font-medium">
+                Edit
+              </button>
+            )}
+            {canManage && (
+              <button onClick={() => handleSuspend(account)}
+                className={`px-3 py-1.5 text-xs rounded border font-medium transition-colors ${
+                  account.is_suspended
+                    ? 'border-status-success text-status-success hover:bg-status-success hover:text-white'
+                    : 'border-status-warning text-status-warning hover:bg-status-warning hover:text-white'
+                }`}>
+                {account.is_suspended ? 'Reinstate' : 'Suspend'}
+              </button>
+            )}
+            {canManage && t === 'Post-Paid' && (
+              <button onClick={() => { setPaymentAccount(account); setPaymentAmount(''); setPaymentRef('') }}
+                className="px-3 py-1.5 text-xs rounded border border-status-success text-status-success hover:bg-status-success hover:text-white transition-colors font-medium">
+                Record Payment
+              </button>
+            )}
+            {isOwner && t === 'Pre-Paid' && (
+              <button onClick={() => { setTopUpAccount(account); setTopUpAmount(''); setTopUpRef('') }}
+                className="px-3 py-1.5 text-xs rounded border border-action-primary text-action-primary hover:bg-action-primary hover:text-white transition-colors font-medium">
+                Top Up
+              </button>
+            )}
+            {isOwner && (
+              <button onClick={() => { setOverdraftAccount(account); setOverdraftAmount(overdraft > 0 ? String(overdraft) : '') }}
+                className="px-3 py-1.5 text-xs rounded border border-status-warning text-status-warning hover:bg-status-warning hover:text-white transition-colors font-medium">
+                {overdraft > 0 ? 'Adjust Overdraft' : 'Approve Overdraft'}
+              </button>
+            )}
+            {isOwner && (
+              <button onClick={() => handleDelete(account)}
+                className="px-3 py-1.5 text-xs rounded border border-status-error text-status-error hover:bg-status-error hover:text-white transition-colors ml-auto font-medium">
+                Delete
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="mb-8">
@@ -536,9 +652,65 @@ export default function Accounts() {
         <p className="mt-2 text-sm text-content-secondary">Create, suspend, top up, record payments and record credit sales for institutional and corporate accounts</p>
       </div>
 
-      {/* Record Credit Sale Form */}
-      <div className="mb-8 bg-surface-card rounded-lg shadow-lg p-6">
-        <h2 className="text-xl font-bold text-content-primary mb-4">Record Credit Sale</h2>
+      {/* SECTION 1 — Manage Credit Accounts */}
+      <div className="mb-8 bg-surface-card rounded-lg shadow-lg border-l-4 border-action-primary p-6">
+        <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+          <h2 className="text-xl font-bold text-content-primary">Manage Credit Accounts</h2>
+          {canManage && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="px-3 py-2 text-sm font-semibold rounded-md bg-action-primary text-white hover:bg-action-primary-hover"
+            >
+              + Create Account
+            </button>
+          )}
+        </div>
+        <p className="text-sm text-content-secondary mb-4">Create, suspend, edit, top up, record payments and approve overdrafts.</p>
+
+        {loading && accounts.length === 0 ? (
+          <LoadingSpinner text="Loading accounts..." />
+        ) : (
+          <>
+            <input
+              type="text"
+              value={accountSearch}
+              onChange={(e) => setAccountSearch(e.target.value)}
+              placeholder="Search accounts by name or code..."
+              className="w-full px-3 py-2.5 mb-3 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
+            />
+            <div className="space-y-3">
+              {accounts
+                .filter(a => {
+                  const q = accountSearch.toLowerCase()
+                  return !q
+                    || a.account_name?.toLowerCase().includes(q)
+                    || a.client_code?.toLowerCase().includes(q)
+                    || a.account_id?.toLowerCase().includes(q)
+                })
+                .map(renderAccountCard)}
+              {accounts.filter(a => {
+                const q = accountSearch.toLowerCase()
+                return !q || a.account_name?.toLowerCase().includes(q) || a.client_code?.toLowerCase().includes(q) || a.account_id?.toLowerCase().includes(q)
+              }).length === 0 && (
+                <p className="text-sm text-content-secondary py-4 text-center">No accounts match.</p>
+              )}
+            </div>
+          </>
+        )}
+
+        <div className="mt-5 rounded-lg border border-action-primary bg-action-primary-light p-4">
+          <ul className="text-sm text-action-primary space-y-1">
+            <li>• <strong>Pre-Paid</strong> — Customer deposits funds upfront. Each sale reduces the balance. Owner tops up when funds run low.</li>
+            <li>• <strong>Post-Paid</strong> — Customer has a credit ceiling. Each sale increases what they owe. Owner records payment when they settle.</li>
+            <li>• <strong>Owner Overdraft Approval</strong> — Owner can approve extra capacity on either type, consumed by the next sale(s).</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* SECTION 2 — Record Credit Sales */}
+      <div className="mb-8 bg-surface-card rounded-lg shadow-lg border-l-4 border-status-success p-6">
+        <h2 className="text-xl font-bold text-content-primary mb-1">Record Credit Sales</h2>
+        <p className="text-sm text-content-secondary mb-4">Log a fuel sale against an account's credit balance. Deducted from Expected Cash in shift reconciliation.</p>
 
         {/* Last auth reference banner */}
         {lastAuthRef && (
@@ -733,273 +905,6 @@ export default function Accounts() {
             {loading ? 'Recording...' : 'Record Credit Sale'}
           </button>
         </form>
-      </div>
-
-      {/* Account Holders — searchable picker */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-content-primary">Account Holders</h2>
-          {canManage && (
-            <button
-              onClick={() => setShowCreate(true)}
-              className="px-3 py-2 text-sm font-semibold rounded-md bg-action-primary text-white hover:bg-action-primary-hover"
-            >
-              + Create Account
-            </button>
-          )}
-        </div>
-
-        {loading && accounts.length === 0 ? (
-          <LoadingSpinner text="Loading accounts..." />
-        ) : (
-          <div className="relative">
-            <input
-              type="text"
-              value={accountSearch}
-              onChange={(e) => { setAccountSearch(e.target.value); setShowAccountDropdown(true) }}
-              onFocus={() => setShowAccountDropdown(true)}
-              placeholder="Search accounts by name or code..."
-              className="w-full px-3 py-2.5 border border-surface-border rounded-md bg-surface-bg text-content-primary focus:outline-none focus:ring-action-primary focus:border-action-primary"
-            />
-            {showAccountDropdown && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowAccountDropdown(false)} />
-                <div className="absolute z-20 mt-1 w-full bg-surface-card border border-surface-border rounded-md shadow-lg max-h-64 overflow-y-auto">
-                  {accounts
-                    .filter(a => {
-                      const q = accountSearch.toLowerCase()
-                      return !q
-                        || a.account_name?.toLowerCase().includes(q)
-                        || a.client_code?.toLowerCase().includes(q)
-                        || a.account_id?.toLowerCase().includes(q)
-                    })
-                    .map((account: any) => {
-                      const t = effectiveType(account)
-                      const blocked = isBlocked(account)
-                      return (
-                        <button
-                          key={account.account_id}
-                          type="button"
-                          onClick={() => { setViewAccount(account); setShowAccountDropdown(false); setAccountSearch('') }}
-                          className="w-full text-left px-4 py-3 hover:bg-action-primary-light border-b border-surface-border last:border-0"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="font-medium text-content-primary truncate">{account.account_name}</p>
-                              <p className="text-xs text-content-secondary font-mono">{account.client_code || account.account_id}</p>
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {account.is_suspended && (
-                                <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-error text-white">Suspended</span>
-                              )}
-                              {!account.is_suspended && blocked && (
-                                <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-warning text-white">
-                                  {t === 'Pre-Paid' ? 'No Balance' : 'At Limit'}
-                                </span>
-                              )}
-                              <span className={`px-2 py-0.5 text-xs font-semibold rounded border ${getAccountTypeColor(t)}`}>{t}</span>
-                            </div>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  {accounts.filter(a => {
-                    const q = accountSearch.toLowerCase()
-                    return !q || a.account_name?.toLowerCase().includes(q) || a.client_code?.toLowerCase().includes(q) || a.account_id?.toLowerCase().includes(q)
-                  }).length === 0 && (
-                    <p className="px-4 py-3 text-sm text-content-secondary">No accounts match.</p>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Account Detail Modal */}
-      {viewAccount && (() => {
-        const account = accounts.find(a => a.account_id === viewAccount.account_id) || viewAccount
-        const t = effectiveType(account)
-        const blocked = isBlocked(account)
-        const barPct = getBarPercent(account)
-        const barColor = getBarColor(account)
-        const overdraft = account.approved_overdraft ?? 0
-        const availableOrOwed = account.current_balance ?? 0
-        const ceiling = t === 'Pre-Paid'
-          ? (account.opening_balance || account.current_balance || 0)
-          : (account.credit_limit ?? 0)
-        const available = t === 'Pre-Paid'
-          ? availableOrOwed
-          : Math.max(0, ceiling - availableOrOwed)
-        const contacts = account.contacts?.length
-          ? account.contacts
-          : account.contact_person ? [{ name: account.contact_person, phone: account.phone }] : []
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md rounded-lg shadow-lg bg-surface-card border border-surface-border overflow-hidden">
-              {/* Modal header */}
-              <div className={`px-6 py-4 border-b border-surface-border ${account.is_suspended ? 'bg-status-error/10' : blocked ? 'bg-status-warning/10' : ''}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-content-primary text-lg leading-tight">{account.account_name}</h3>
-                      {account.is_suspended && (
-                        <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-error text-white">Suspended</span>
-                      )}
-                      {!account.is_suspended && blocked && (
-                        <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-status-warning text-white">
-                          {t === 'Pre-Paid' ? 'No Balance' : 'At Limit'}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-content-secondary mt-0.5">
-                      {account.client_code && <span className="font-mono font-bold text-action-primary mr-2">{account.client_code}</span>}
-                      {account.account_id}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`px-2 py-1 text-xs font-semibold rounded border ${getAccountTypeColor(t)}`}>{t}</span>
-                    <button onClick={() => setViewAccount(null)}
-                      className="text-content-secondary hover:text-content-primary text-xl leading-none">&times;</button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-6 py-5 space-y-4">
-                {/* Primary balance */}
-                <div>
-                  <p className="text-xs text-content-secondary mb-0.5">
-                    {t === 'Pre-Paid' ? 'Available Balance' : 'Amount Owed'}
-                  </p>
-                  <p className={`text-3xl font-bold ${
-                    t === 'Pre-Paid'
-                      ? (availableOrOwed <= 0 ? 'text-status-error' : 'text-content-primary')
-                      : 'text-content-primary'
-                  }`}>
-                    {formatCurrency(availableOrOwed)}
-                  </p>
-                </div>
-
-                {/* Ceiling */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-content-secondary">{t === 'Pre-Paid' ? 'Opening Deposit' : 'Credit Ceiling'}</p>
-                    <p className="text-sm font-semibold text-content-primary">{formatCurrency(ceiling)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-content-secondary">{t === 'Pre-Paid' ? 'Balance' : 'Available Credit'}</p>
-                    <p className={`text-sm font-bold ${available <= 0 ? 'text-status-error' : 'text-status-success'}`}>
-                      {formatCurrency(available)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Progress bar */}
-                <div>
-                  <div className="flex justify-between text-xs text-content-secondary mb-1">
-                    <span>{t === 'Pre-Paid' ? 'Balance remaining' : 'Ceiling used'}</span>
-                    <span className="font-semibold">{barPct.toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full bg-surface-border rounded-full h-2.5 overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${barPct}%` }} />
-                  </div>
-                </div>
-
-                {/* Approved overdraft */}
-                {overdraft > 0 && (
-                  <div className="px-3 py-2 rounded bg-status-warning/10 border border-status-warning/30">
-                    <p className="text-xs text-status-warning font-medium">Owner approved extra: {formatCurrency(overdraft)}</p>
-                  </div>
-                )}
-
-                {/* Custom rate */}
-                {account.default_price_per_liter && (
-                  <div>
-                    <p className="text-xs text-content-secondary">Custom Rate</p>
-                    <p className="text-sm font-semibold text-content-primary">ZMW {account.default_price_per_liter.toFixed(2)}/L</p>
-                  </div>
-                )}
-
-                {/* Contacts */}
-                {contacts.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-content-secondary mb-1">{contacts.length === 1 ? 'Contact' : 'Contacts'}</p>
-                    <div className="space-y-0.5">
-                      {contacts.map((c: any, i: number) => (
-                        <p key={i} className="text-sm text-content-secondary">{c.name}{c.phone ? ` — ${c.phone}` : ''}</p>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Actions */}
-                {(canManage || isOwner) && (
-                  <div className="pt-3 border-t border-surface-border space-y-2">
-                    <div className="flex gap-2 flex-wrap">
-                      {canManage && t === 'Post-Paid' && (
-                        <button
-                          onClick={() => { setPaymentAccount(account); setPaymentAmount(''); setPaymentRef('') }}
-                          className="px-3 py-1.5 text-xs rounded border border-status-success text-status-success hover:bg-status-success hover:text-white transition-colors font-medium">
-                          Record Payment
-                        </button>
-                      )}
-                      {isOwner && t === 'Pre-Paid' && (
-                        <button
-                          onClick={() => { setTopUpAccount(account); setTopUpAmount(''); setTopUpRef('') }}
-                          className="px-3 py-1.5 text-xs rounded border border-action-primary text-action-primary hover:bg-action-primary hover:text-white transition-colors font-medium">
-                          Top Up
-                        </button>
-                      )}
-                      {isOwner && (
-                        <button
-                          onClick={() => { setOverdraftAccount(account); setOverdraftAmount(overdraft > 0 ? String(overdraft) : '') }}
-                          className="px-3 py-1.5 text-xs rounded border border-status-warning text-status-warning hover:bg-status-warning hover:text-white transition-colors font-medium">
-                          {overdraft > 0 ? 'Adjust Overdraft' : 'Approve Overdraft'}
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {canManage && (
-                        <button onClick={() => openEdit(account)}
-                          className="px-3 py-1.5 text-xs rounded border border-surface-border text-content-secondary hover:bg-action-primary-light hover:text-action-primary hover:border-action-primary transition-colors font-medium">
-                          Edit
-                        </button>
-                      )}
-                      {canManage && (
-                        <button onClick={() => handleSuspend(account)}
-                          className={`px-3 py-1.5 text-xs rounded border font-medium transition-colors ${
-                            account.is_suspended
-                              ? 'border-status-success text-status-success hover:bg-status-success hover:text-white'
-                              : 'border-status-warning text-status-warning hover:bg-status-warning hover:text-white'
-                          }`}>
-                          {account.is_suspended ? 'Reinstate' : 'Suspend'}
-                        </button>
-                      )}
-                      {isOwner && (
-                        <button onClick={() => handleDelete(account)}
-                          className="px-3 py-1.5 text-xs rounded border border-status-error text-status-error hover:bg-status-error hover:text-white transition-colors ml-auto font-medium">
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* Info Panel */}
-      <div className="bg-action-primary-light border border-action-primary rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-action-primary mb-2">Credit Account Management</h3>
-        <ul className="text-sm text-action-primary space-y-1">
-          <li>• <strong>Pre-Paid</strong> — Customer deposits funds upfront. Each sale reduces the balance. Owner tops up when funds run low.</li>
-          <li>• <strong>Post-Paid</strong> — Customer has a credit ceiling. Each sale increases what they owe. Owner records payment when they settle.</li>
-          <li>• <strong>Owner Overdraft Approval</strong> — Owner can approve extra capacity on either type, consumed by the next sale(s).</li>
-          <li>• <strong>Credit Sales</strong> are deducted from Expected Cash in shift reconciliation.</li>
-        </ul>
       </div>
 
       {/* Edit Account Modal */}
