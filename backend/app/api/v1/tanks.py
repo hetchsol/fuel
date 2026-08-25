@@ -7,7 +7,7 @@ from typing import List, Optional
 from ...models.models import FuelTankLevel, StockDelivery
 from ...config import get_allowable_loss_percent
 from .auth import get_station_context
-from .sales import load_sales
+from .tank_readings import load_tank_readings, load_tank_deliveries
 from ...services.notification_service import create_notification
 from ...services.dip_conversion import register_tank_calibration
 from ...services.naming_convention import compute_tank_display_name
@@ -315,12 +315,19 @@ def get_delivery_history(limit: int = 50, ctx: dict = Depends(get_station_contex
 @router.get("/{tank_id}/movements")
 def get_stock_movements(tank_id: str, date: Optional[str] = None, limit: int = 50, ctx: dict = Depends(get_station_context)):
     """
-    Get unified stock movements (deliveries + sales) for a tank on a given date.
-    Returns chronological list of all movements with summary totals.
+    Get unified stock movements (deliveries + dispensed volume) for a tank on
+    a given date. Returns chronological list of all movements with summary
+    totals.
+
+    Sourced from tank_deliveries.json and tank_readings.json — the stores
+    real dip/delivery entry (Tank Dips page, this page's own delivery form)
+    actually writes to. Previously read storage['delivery_history'] (never
+    written to anywhere in the backend) and sales.json (no frontend caller
+    ever posts to it) — both permanently empty, so this endpoint always
+    returned zero movements regardless of tank or date.
     """
     storage = ctx["storage"]
     tank_data = storage.get('tanks', {})
-    delivery_history = storage.get('delivery_history', [])
     station_id = ctx["station_id"]
 
     if tank_id not in tank_data:
@@ -332,47 +339,44 @@ def get_stock_movements(tank_id: str, date: Optional[str] = None, limit: int = 5
 
     movements = []
 
-    # 1. Gather deliveries for this tank on the target date
-    for delivery in delivery_history:
-        if delivery.get("tank_id") != tank_id:
+    # 1. Deliveries for this tank on the target date
+    deliveries_db = load_tank_deliveries(station_id)
+    for delivery in deliveries_db.values():
+        if delivery.get("tank_id") != tank_id or delivery.get("date") != target_date:
             continue
-        delivery_ts = delivery.get("timestamp", "")
-        if delivery_ts.startswith(target_date):
-            movements.append({
-                "timestamp": delivery_ts,
-                "type": "DELIVERY",
-                "volume": delivery.get("volume_delivered", 0),
-                "reference_id": delivery.get("delivery_id", ""),
-                "description": f"Delivery from {delivery.get('supplier', 'Unknown')}",
-                "supplier": delivery.get("supplier"),
-            })
-
-    # 2. Gather sales for this tank on the target date
-    #    Prefer tank_id match, fall back to fuel_type for old sales without tank_id
-    sales = load_sales(station_id)
-    for sale in sales:
-        if sale.get("date") != target_date:
-            continue
-        if sale.get("validation_status") != "PASS":
-            continue
-        sale_tank = sale.get("tank_id")
-        if sale_tank:
-            if sale_tank != tank_id:
-                continue
-        else:
-            if sale.get("fuel_type") != fuel_type:
-                continue
-
-        avg_vol = sale.get("average_volume", 0)
-        mech_vol = sale.get("mechanical_volume", 0)
-        elec_vol = sale.get("electronic_volume", 0)
         movements.append({
-            "timestamp": sale.get("created_at", ""),
+            "timestamp": delivery.get("created_at", "") or f"{target_date}T{delivery.get('time', '00:00')}",
+            "type": "DELIVERY",
+            "volume": delivery.get("actual_volume_delivered", 0) or 0,
+            "reference_id": delivery.get("delivery_id", ""),
+            "description": f"Delivery from {delivery.get('supplier', 'Unknown')}",
+            "supplier": delivery.get("supplier"),
+        })
+
+    # 2. Dispensed volume for this tank on the target date, from each dip/reading
+    #    record's opening->closing volume drop. Approximate when a delivery also
+    #    falls inside the same dip window (the drop is netted against the
+    #    delivery already listed above) — exact per-litre attribution would need
+    #    delivery-time dip splits this data doesn't reliably carry.
+    readings_db = load_tank_readings(station_id)
+    for reading in readings_db.values():
+        if reading.get("tank_id") != tank_id or reading.get("date") != target_date:
+            continue
+        opening = reading.get("opening_volume")
+        closing = reading.get("closing_volume")
+        if opening is None or closing is None:
+            continue
+        dispensed = opening - closing
+        if dispensed <= 0:
+            continue
+        shift_type = reading.get("shift_type", "")
+        movements.append({
+            "timestamp": reading.get("created_at", "") or reading.get("updated_at", ""),
             "type": "SALE",
-            "volume": -avg_vol,
-            "reference_id": sale.get("sale_id", ""),
-            "description": f"{sale.get('shift_id', '')} sale (electronic: {elec_vol:.0f}L, mechanical: {mech_vol:.0f}L)",
-            "shift_id": sale.get("shift_id"),
+            "volume": -dispensed,
+            "reference_id": reading.get("reading_id", ""),
+            "description": f"{shift_type} shift dispensed" if shift_type else "Dispensed",
+            "shift_id": None,
         })
 
     # Sort chronologically
