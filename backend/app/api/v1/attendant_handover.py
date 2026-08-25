@@ -30,6 +30,7 @@ from .lpg_daily import (
     load_lpg_pricing, LPG_SIZES, DEFAULT_LPG_ACCESSORIES,
     load_lpg_accessories, save_lpg_accessories,
     load_lpg_daily, save_lpg_daily,
+    load_accessories_catalog,
     get_pricing_for_size,
     process_cylinder_trades,
 )
@@ -904,7 +905,7 @@ def _ensure_client_code(account_id: str, storage: dict) -> str:
     return code
 
 
-def _process_credit_sales(credit_sale_items, storage, shift_id):
+def _process_credit_sales(credit_sale_items, storage, shift_id, station_id):
     """
     Process credit sale line items.
     Dedup key: (account_id, fuel_type) per shift — same account cannot buy the
@@ -913,6 +914,8 @@ def _process_credit_sales(credit_sale_items, storage, shift_id):
     """
     accounts_data = storage.get('accounts', {})
     credit_sales_data = storage.get('credit_sales', [])
+    lubricant_catalog = None
+    accessories_catalog = None
 
     enriched_items = []
     for item in credit_sale_items:
@@ -922,13 +925,23 @@ def _process_credit_sales(credit_sale_items, storage, shift_id):
                 status_code=400,
                 detail=f"Account '{item.account_name}' is suspended and cannot receive credit sales.",
             )
-        # An explicit client-supplied price wins — it's how a manager charges a
-        # negotiated credit rate that differs from the cash price, and it's also
-        # the only price source for a non-fuel product (lubricant/accessory),
-        # since resolve_fuel_price only knows Diesel/Petrol. Falls back to the
-        # account's standing override, then the live fuel price, in that order.
-        if item.price_per_liter and item.price_per_liter > 0:
-            price = item.price_per_liter
+        # Price is always resolved server-side — a client-supplied price_per_liter
+        # is never trusted, so it can't be used to under- or over-charge an
+        # account. Non-fuel rows (product_code set) always price from the
+        # lubricant/accessory catalog — an account's fuel default_price_per_liter
+        # must never leak into a lubricant/accessory price. Fuel rows use the
+        # account's negotiated rate when configured, else the live fuel price list.
+        if item.product_code:
+            if lubricant_catalog is None:
+                lubricant_catalog = load_lubricant_catalog(station_id)
+            match = next((p for p in lubricant_catalog if p.get('product_code') == item.product_code), None)
+            if not match:
+                if accessories_catalog is None:
+                    accessories_catalog = load_accessories_catalog(station_id)
+                match = next((p for p in accessories_catalog if p.get('product_code') == item.product_code), None)
+            if not match:
+                raise HTTPException(status_code=400, detail=f"Unknown product '{item.product_code}'.")
+            price = match.get('selling_price', 0)
         elif account and account.get("default_price_per_liter"):
             price = account["default_price_per_liter"]
         else:
@@ -937,9 +950,9 @@ def _process_credit_sales(credit_sale_items, storage, shift_id):
             except ValueError:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"No price available for '{item.fuel_type}'. Enter a price for this item.",
+                    detail=f"No price available for '{item.fuel_type}'.",
                 )
-        if price <= 0:
+        if not price or price <= 0:
             raise HTTPException(status_code=400, detail=f"Price for '{item.fuel_type}' must be greater than zero.")
         amount = round(item.volume * price, 2)
         enriched_items.append({
@@ -1348,6 +1361,116 @@ def _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift
     save_lubricant_daily(lub_daily_db, station_id)
 
 
+def _mark_daily_entries_stores_applied(station_id, handover, performed_by):
+    """
+    After apply_handover_sales() has actually moved Stores' bins for this
+    handover (called separately, at approval), stamp the same "sold + damaged"
+    / empties totals onto the matching Daily Entry record's `stores_applied`
+    field — the same records _feed_daily_entries writes/upserts at submission.
+
+    This is what lets a later manual correction on that Daily Entry (via the
+    LPG/Lubricants/Accessories Daily pages) compute the right incremental
+    delta instead of re-applying — and double-counting — what this shift's
+    approval already pushed to Stores. Mirrors apply_handover_sales's own
+    formula exactly. Best-effort: a bookkeeping-only side effect must not
+    block approval.
+
+    Known limitation: if a manual Daily Entry edit for the same date/shift
+    happens *between* shift submission and this shift's approval, the two
+    can still race — this only guards against double-counting once the
+    shift's own Stores application has actually happened.
+    """
+    try:
+        snap = handover.get("stock_snapshot") or {}
+        shift_date = handover.get("date", "")
+        shift_type = handover.get("shift_type", "")
+
+        lpg_totals: dict = {}
+        for r in (snap.get("lpg_cylinders") or []):
+            size = r.get("size_kg")
+            if size is None:
+                continue
+            total = r.get("total_sold")
+            if total is None:
+                total = (r.get("sold_refill", 0) or 0) + (r.get("sold_with_cylinder", 0) or 0)
+            total = round((total or 0) + (r.get("damaged", 0) or 0), 4)
+            if total:
+                lpg_totals[f"cylinder_full:{size}kg"] = total
+            if r.get("sold_refill"):
+                lpg_totals[f"cylinder_empty:{size}kg"] = -round(r.get("sold_refill") or 0, 4)
+        if lpg_totals:
+            lpg_db = load_lpg_daily(station_id)
+            for entry in lpg_db.values():
+                if entry.get("date") == shift_date and entry.get("shift_type") == shift_type:
+                    entry["stores_applied"] = lpg_totals
+                    save_lpg_daily(lpg_db, station_id)
+                    break
+
+        acc_totals = {}
+        for r in (snap.get("accessories") or []):
+            qty = round((r.get("sold", 0) or 0) + (r.get("damaged", 0) or 0), 4)
+            if qty:
+                acc_totals[f"lpg_accessory:{r.get('product_code')}"] = qty
+        if acc_totals:
+            acc_db = load_lpg_accessories(station_id)
+            for entry in acc_db.values():
+                if entry.get("date") == shift_date:
+                    entry["stores_applied"] = acc_totals
+                    save_lpg_accessories(acc_db, station_id)
+                    break
+
+        lub_totals = {}
+        for r in (snap.get("lubricants") or []):
+            qty = round((r.get("sold", 0) or 0) + (r.get("damaged", 0) or 0), 4)
+            if qty:
+                lub_totals[f"lubricant:{r.get('product_code')}"] = qty
+        if lub_totals:
+            lub_db = load_lubricant_daily(station_id)
+            for entry in lub_db.values():
+                if entry.get("date") == shift_date and entry.get("location") == "Island 3":
+                    entry["stores_applied"] = lub_totals
+                    save_lubricant_daily(lub_db, station_id)
+                    break
+    except Exception:
+        pass
+
+
+def _clear_daily_entries_stores_applied(station_id, handover):
+    """
+    Counterpart to _mark_daily_entries_stores_applied — called after
+    reverse_handover_sales credits this handover's quantities back to Stores,
+    so the matching Daily Entry record's `stores_applied` baseline drops back
+    to zero too. Without this, a later correction on that entry would compute
+    its delta against totals Stores no longer actually holds. Best-effort.
+    """
+    try:
+        shift_date = handover.get("date", "")
+        shift_type = handover.get("shift_type", "")
+
+        lpg_db = load_lpg_daily(station_id)
+        for entry in lpg_db.values():
+            if entry.get("date") == shift_date and entry.get("shift_type") == shift_type:
+                entry["stores_applied"] = {}
+                save_lpg_daily(lpg_db, station_id)
+                break
+
+        acc_db = load_lpg_accessories(station_id)
+        for entry in acc_db.values():
+            if entry.get("date") == shift_date:
+                entry["stores_applied"] = {}
+                save_lpg_accessories(acc_db, station_id)
+                break
+
+        lub_db = load_lubricant_daily(station_id)
+        for entry in lub_db.values():
+            if entry.get("date") == shift_date and entry.get("location") == "Island 3":
+                entry["stores_applied"] = {}
+                save_lubricant_daily(lub_db, station_id)
+                break
+    except Exception:
+        pass
+
+
 def _create_reconciliation(nozzle_summaries, lpg_sales, lubricant_sales, accessory_sales,
                            credit_sales, expected_cash, actual_cash, difference,
                            shift, user_id, user_name, station_id, storage, notes=None):
@@ -1439,6 +1562,7 @@ def admin_override_close(
 
         try:
             apply_handover_sales(station_id, handover, performed_by)
+            _mark_daily_entries_stores_applied(station_id, handover, performed_by)
         except Exception:
             pass  # Stock sync is best-effort — must not block the close itself.
 
@@ -1463,18 +1587,26 @@ def admin_override_close(
 
 
 def _update_nozzle_state(nozzle_readings, storage, shift_date=None, shift_type=None, attendant_name=None):
-    """Update nozzle electronic/mechanical readings in islands data."""
-    for reading in nozzle_readings:
-        nozzle = get_nozzle(reading.nozzle_id, storage=storage)
-        if nozzle:
-            nozzle["electronic_reading"] = reading.closing_reading
-            nozzle["mechanical_reading"] = reading.mechanical_closing
-            if shift_date:
-                nozzle["last_reading_shift_date"] = shift_date
-            if shift_type:
-                nozzle["last_reading_shift_type"] = shift_type
-            if attendant_name:
-                nozzle["last_reading_attendant"] = attendant_name
+    """Update nozzle electronic/mechanical readings in islands data.
+
+    Thin adapter over database.storage.sync_nozzle_state (the shared function
+    also used by tank_readings.py's Daily Shift Capture path) — normalizes
+    the attendant-submission shape into the generic dict shape that function
+    expects.
+    """
+    from ...database.storage import sync_nozzle_state
+    sync_nozzle_state(
+        [
+            {
+                "nozzle_id": reading.nozzle_id,
+                "electronic_closing": reading.closing_reading,
+                "mechanical_closing": reading.mechanical_closing,
+                "attendant_name": attendant_name,
+            }
+            for reading in nozzle_readings
+        ],
+        storage, shift_date=shift_date, shift_type=shift_type,
+    )
 
 
 def _create_credit_sale_records(new_items_to_create, handover_id, handover_output, shift, storage, station_id):
@@ -2558,7 +2690,7 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
 
     if data.credit_sale_items:
         credit_sales, credit_sale_details, new_items_to_create, _ = \
-            _process_credit_sales(data.credit_sale_items, storage, shift_id)
+            _process_credit_sales(data.credit_sale_items, storage, shift_id, station_id)
 
     # POS: if breakdown items provided, derive sum from them
     pos_breakdown = None
@@ -2765,7 +2897,7 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     new_items_to_create = []
     if data.credit_sale_items:
         data.credit_sales, credit_sale_details, new_items_to_create, _ = \
-            _process_credit_sales(data.credit_sale_items, storage, data.shift_id)
+            _process_credit_sales(data.credit_sale_items, storage, data.shift_id, station_id)
 
     expected_cash = round(total_expected - data.credit_sales, 2)
     difference = round(data.actual_cash - expected_cash, 2)
@@ -3123,7 +3255,7 @@ async def patch_credit_sales(
     shift = storage.get("shifts", {}).get(shift_id, {})
 
     credit_total, credit_sale_details, new_items_to_create, duplicates = \
-        _process_credit_sales(data.credit_items, storage, shift_id)
+        _process_credit_sales(data.credit_items, storage, shift_id, station_id)
 
     if duplicates and not new_items_to_create:
         raise HTTPException(
@@ -3364,6 +3496,7 @@ async def review_handover(data: HandoverReviewInput, ctx: dict = Depends(get_sta
         handover["supervisor_review"] = review_record
         # Update Stores forecourt stock from this shift's snapshot (once).
         apply_handover_sales(station_id, handover, ctx["username"])
+        _mark_daily_entries_stores_applied(station_id, handover, ctx["username"])
         _save_handovers(handovers, station_id)
 
         log_audit_event(
@@ -3467,6 +3600,7 @@ async def void_handover(data: VoidHandoverInput, ctx: dict = Depends(get_station
         # Reverse already-applied stock effects, if any.
         if handover.get("stock_applied"):
             reverse_handover_sales(station_id, handover, ctx["username"])
+            _clear_daily_entries_stores_applied(station_id, handover)
 
         # Reverse credit sales created by this specific handover — sale_id is
         # prefixed CS-HO-{handover_id}-, so this never touches a co-attendant's
@@ -3566,6 +3700,7 @@ async def unvoid_handover(data: UnvoidHandoverInput, ctx: dict = Depends(get_sta
         if restored_status == "approved":
             if not handover.get("stock_applied"):
                 apply_handover_sales(station_id, handover, ctx["username"])
+                _mark_daily_entries_stores_applied(station_id, handover, ctx["username"])
 
             accounts_data = ctx["storage"].get("accounts", {})
             credit_sales_data = ctx["storage"].get("credit_sales", [])
@@ -3837,6 +3972,7 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
 
         h["review_status"] = "approved"
         apply_handover_sales(station_id, h, ctx["username"])
+        _mark_daily_entries_stores_applied(station_id, h, ctx["username"])
         if h.get("shift_id"):
             affected_shift_ids.add(h["shift_id"])
         h["supervisor_review"] = {

@@ -273,6 +273,7 @@ export default function ShiftClosing() {
             account_id: i.account_id,
             account_name: i.account_name,
             fuel_type: i.fuel_type,
+            product_code: i.item_kind === 'other' ? i.product_code : undefined,
             volume: parseFloat(i.volume) || 0,
             price_per_liter: i.price_per_liter || 0,
           })),
@@ -787,13 +788,10 @@ export default function ShiftClosing() {
                       )}
 
                       <input type="number" min={0} step="0.01" value={item.price_per_liter || ''}
-                        title="Price — editable for a negotiated credit rate"
-                        placeholder="Price"
-                        onChange={e => {
-                          const price = parseFloat(e.target.value) || 0
-                          recomputeCreditRow(idx, price, item.volume, String(item.amount), item.entry_mode)
-                        }}
-                        className="w-16 px-2 py-1 rounded border text-right font-mono" style={inputStyle} />
+                        title="Price is set automatically from the account's rate or the current price list"
+                        readOnly
+                        disabled
+                        className="w-16 px-2 py-1 rounded border text-right font-mono opacity-70 cursor-not-allowed" style={inputStyle} />
 
                       <span className="w-20 text-right font-mono" style={{ color: theme.textPrimary }}
                         title={item.entry_mode === 'amount' ? `${item.volume} ${item.item_kind === 'fuel' ? 'L' : 'units'}` : undefined}>

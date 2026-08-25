@@ -184,6 +184,34 @@ def get_nozzle(nozzle_id: str, storage: Dict[str, Any] = None) -> Optional[Dict[
     return None
 
 
+def sync_nozzle_state(readings: List[Dict[str, Any]], storage: Dict[str, Any],
+                      shift_date: str = None, shift_type: str = None) -> None:
+    """
+    Update each nozzle's live electronic/mechanical reading + last-reading
+    metadata in the islands config, from a list of
+    {nozzle_id, electronic_closing, mechanical_closing, attendant_name?} dicts.
+
+    This is the single place that mutates a nozzle's "current reading" state —
+    shared by the attendant's own per-shift capture (attendant_handover.py)
+    and the Daily Shift Capture bulk-entry page (tank_readings.py), so
+    whichever path is used to submit a shift's nozzle readings, the next
+    shift's opening-reading carry-forward sees the correct value. The caller
+    is responsible for persisting `storage` afterward (save_station_storage).
+    """
+    for r in readings:
+        nozzle = get_nozzle(r["nozzle_id"], storage=storage)
+        if not nozzle:
+            continue
+        nozzle["electronic_reading"] = r["electronic_closing"]
+        nozzle["mechanical_reading"] = r.get("mechanical_closing", 0)
+        if shift_date:
+            nozzle["last_reading_shift_date"] = shift_date
+        if shift_type:
+            nozzle["last_reading_shift_type"] = shift_type
+        if r.get("attendant_name"):
+            nozzle["last_reading_attendant"] = r["attendant_name"]
+
+
 def nozzle_exists(nozzle_id: str) -> bool:
     """Check if a nozzle exists"""
     return get_nozzle(nozzle_id) is not None

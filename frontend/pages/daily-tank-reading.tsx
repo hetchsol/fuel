@@ -53,6 +53,11 @@ export default function DailyTankReading() {
     return getFuelColorSet(isDiesel ? 'diesel' : 'petrol').light
   }
 
+  // Neutral input styling — matches the convention used for nozzle/dip entry
+  // elsewhere (my-shift.tsx, tank-dips.tsx) rather than this page's full
+  // fuel-colored card styling.
+  const inputStyle = { backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }
+
   // Available attendants list — fetched from configured staff
   const [attendantsList, setAttendantsList] = useState<string[]>([])
 
@@ -1420,9 +1425,11 @@ export default function DailyTankReading() {
                 </div>
               )}
 
+              {/* Dip entry — neutral styling matching tank-dips.tsx's convention,
+                  rather than this section's former colored panels. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="rounded-lg p-4" style={{ backgroundColor: theme.primaryLight, borderColor: theme.primary, borderWidth: '1px' }}>
-                  <label className="block text-sm font-medium mb-2" style={{ color: theme.primary }}>
+                <div className="rounded-lg p-4" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+                  <label className="block text-xs font-medium mb-2" style={{ color: theme.textSecondary }}>
                     Opening Dip (cm)
                     <span className="text-xs ml-2 opacity-75">(auto - previous closing)</span>
                   </label>
@@ -1436,24 +1443,24 @@ export default function DailyTankReading() {
                         const vol = await dipToVolume(e.target.value)
                         if (vol) setFormData(prev => ({ ...prev, opening_volume: vol }))
                       }}
-                      className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2"
-                      style={{ borderColor: theme.primary + '80' }}
+                      className="w-full px-3 py-2 rounded border text-sm focus:ring-2"
+                      style={{ ...inputStyle }}
                       placeholder="e.g., 164.5"
                     />
                   ) : (
                     <div
-                      className="w-full px-4 py-3 border rounded-md text-lg font-mono"
-                      style={{ borderColor: theme.primary + '80', backgroundColor: theme.primaryLight, color: theme.textPrimary, opacity: 0.85 }}
+                      className="w-full px-3 py-2 rounded border text-sm font-mono"
+                      style={{ ...inputStyle, opacity: 0.85 }}
                       title="Auto-fetched from previous shift closing. Only the owner can edit this."
                     >
                       {formData.opening_dip_cm || <span className="text-status-warning text-sm">Fetching...</span>}
                     </div>
                   )}
-                  <p className="text-xs mt-1 opacity-75" style={{ color: theme.primary }}>Carried from previous shift closing dip</p>
+                  <p className="text-xs mt-1" style={{ color: theme.textSecondary }}>Carried from previous shift closing dip</p>
                 </div>
 
-                <div className="rounded-lg p-4" style={{ backgroundColor: theme.secondaryLight, borderColor: theme.secondary, borderWidth: '1px' }}>
-                  <label className="block text-sm font-medium mb-2" style={{ color: theme.secondary }}>
+                <div className="rounded-lg p-4" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
+                  <label className="block text-xs font-medium mb-2" style={{ color: theme.textSecondary }}>
                     Closing Dip (cm) <span className="text-status-error">*</span>
                   </label>
                   <input
@@ -1467,12 +1474,12 @@ export default function DailyTankReading() {
                       if (vol) setFormData(prev => ({ ...prev, closing_volume: vol }))
                     }}
                     disabled={isReadOnly}
-                    className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    style={{ borderColor: theme.secondary + '80' }}
+                    className="w-full px-3 py-2 rounded border text-sm focus:ring-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{ ...inputStyle }}
                     placeholder="e.g., 155.4"
                     required
                   />
-                  <p className="text-xs mt-1 opacity-75" style={{ color: theme.secondary }}>Physical measurement at end of shift - closing volume auto-fills</p>
+                  <p className="text-xs mt-1" style={{ color: theme.textSecondary }}>Physical measurement at end of shift - closing volume auto-fills</p>
                 </div>
 
                 {/* Tank Level Volumes (Columns AI, AL) */}
@@ -1682,58 +1689,59 @@ export default function DailyTankReading() {
                   const fuelColor = getFuelColor()
                   const fuelLightColor = getFuelLightColor()
 
+                  // Validity coloring matches my-shift.tsx's attendant nozzle-entry
+                  // convention: red once a closing reading is entered below opening.
+                  const elecClosingNum = parseFloat(nozzle.electronic_closing)
+                  const elecHasError = nozzle.electronic_closing !== '' && !isNaN(elecClosingNum) && elecClosingNum < parseFloat(nozzle.electronic_opening || '0')
+                  const mechClosingNum = parseFloat(nozzle.mechanical_closing)
+                  const mechHasError = nozzle.mechanical_closing !== '' && !isNaN(mechClosingNum) && mechClosingNum < parseFloat(nozzle.mechanical_opening || '0')
+
                   return (
                     <div
                       key={nozzle.nozzle_id}
-                      className="border-2 rounded-lg p-4 transition-all duration-300"
-                      style={{
-                        borderColor: fuelColor,
-                        backgroundColor: fuelLightColor
-                      }}
+                      className="rounded-lg p-4 transition-all duration-300"
+                      style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}
                     >
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-bold" style={{ color: fuelColor }}>
-                          {fuelPrefix} {nozzle.nozzle_id}
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-bold" style={{ color: theme.textPrimary }}>
+                            {fuelPrefix} {nozzle.nozzle_id}
+                          </h3>
+                          <span className="inline-block px-2 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: fuelLightColor, color: fuelColor }}>
+                            {isDiesel ? 'Diesel' : 'Petrol'}
+                          </span>
+                        </div>
                         {elecMovement > 0 && (
-                          <div className="text-sm font-bold px-3 py-1 rounded-full" style={{
-                            color: fuelColor,
-                            backgroundColor: theme.cardBg
-                          }}>
-                            ✓ Movement: {elecMovement.toFixed(3)}L
+                          <div className="text-xs font-mono" style={{ color: theme.textSecondary }}>
+                            Movement: <span className="font-semibold" style={{ color: theme.textPrimary }}>{elecMovement.toFixed(3)} L</span>
                           </div>
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        {/* Attendant */}
-                        <div className="md:col-span-3">
-                          <label className="block text-sm font-bold mb-1" style={{ color: fuelColor }}>
-                            Attendant Name <span className="text-status-error">*</span>
-                          </label>
-                          <select
-                            value={nozzle.attendant}
-                            onChange={(e) => updateNozzle(index, 'attendant', e.target.value)}
-                            disabled={isReadOnly}
-                            className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
-                            style={{
-                              borderColor: fuelColor,
-                              backgroundColor: theme.cardBg,
-                              color: theme.textPrimary
-                            }}
-                          >
-                            <option value="">-- Select Attendant --</option>
-                            {attendantsList.map((name) => (
-                              <option key={name} value={name}>{name}</option>
-                            ))}
-                          </select>
-                        </div>
+                      <div className="mb-3">
+                        <label className="block text-xs font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>
+                          Attendant <span className="text-status-error">*</span>
+                        </label>
+                        <select
+                          value={nozzle.attendant}
+                          onChange={(e) => updateNozzle(index, 'attendant', e.target.value)}
+                          disabled={isReadOnly}
+                          className="w-full px-3 py-2 rounded border focus:ring-2 transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                          style={{ ...inputStyle }}
+                        >
+                          <option value="">-- Select Attendant --</option>
+                          {attendantsList.map((name) => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                        </select>
+                      </div>
 
-                        {/* Electronic Readings */}
+                      {/* Electronic — same section convention as my-shift.tsx's nozzle cards */}
+                      <div className="text-[10px] uppercase font-semibold mb-1" style={{ color: theme.primary }}>Electronic</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                         <div>
-                          <label className="block text-sm font-bold mb-1" style={{ color: fuelColor }}>
-                            Electronic Opening
-                            <span className="ml-1 text-xs font-normal text-content-secondary">(auto - previous closing)</span>
+                          <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+                            Opening <span className="text-[10px] font-normal">(auto - previous closing)</span>
                           </label>
                           {user?.role === 'owner' ? (
                             <input
@@ -1741,14 +1749,14 @@ export default function DailyTankReading() {
                               step="0.001"
                               value={nozzle.electronic_opening}
                               onChange={(e) => updateNozzle(index, 'electronic_opening', e.target.value)}
-                              className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
-                              style={{ borderColor: fuelColor, backgroundColor: theme.cardBg, color: theme.textPrimary }}
+                              className="w-full px-3 py-2 rounded border text-right font-mono transition-colors duration-300"
+                              style={{ ...inputStyle }}
                               placeholder="609176.526"
                             />
                           ) : (
                             <div
-                              className="w-full px-3 py-2 border-2 rounded-md font-mono text-sm"
-                              style={{ borderColor: fuelColor, backgroundColor: fuelLightColor, color: theme.textPrimary, opacity: 0.85 }}
+                              className="w-full px-3 py-2 rounded border font-mono text-sm text-right"
+                              style={{ ...inputStyle, opacity: 0.85 }}
                               title="Auto-fetched from previous shift closing. Only the owner can edit this."
                             >
                               {nozzle.electronic_opening || <span className="text-status-warning">Fetching...</span>}
@@ -1757,43 +1765,36 @@ export default function DailyTankReading() {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-bold mb-1" style={{ color: fuelColor }}>
-                            Electronic Closing
-                          </label>
+                          <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Closing</label>
                           <input
                             type="number"
                             step="0.001"
                             value={nozzle.electronic_closing}
                             onChange={(e) => updateNozzle(index, 'electronic_closing', e.target.value)}
                             disabled={isReadOnly}
-                            className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
-                            style={{
-                              borderColor: fuelColor,
-                              backgroundColor: theme.cardBg,
-                              color: theme.textPrimary
-                            }}
+                            className="w-full px-3 py-2 rounded border text-right font-mono transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                            style={{ ...inputStyle, borderColor: elecHasError ? 'var(--color-status-error)' : inputStyle.borderColor }}
                             placeholder="609454.572"
                           />
+                          {elecHasError && (
+                            <div className="text-xs mt-0.5" style={{ color: 'var(--color-status-error)' }}>Must be &ge; opening</div>
+                          )}
                         </div>
 
                         <div>
-                          <label className="block text-sm font-bold mb-1" style={{ color: fuelColor }}>
-                            Electronic Movement
-                          </label>
-                          <div className="w-full px-3 py-2 border-2 rounded-md font-bold" style={{
-                            borderColor: fuelColor,
-                            backgroundColor: fuelLightColor,
-                            color: fuelColor
-                          }}>
+                          <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Movement</label>
+                          <div className="w-full px-3 py-2 rounded border text-right font-mono font-semibold" style={{ ...inputStyle }}>
                             {elecMovement.toFixed(3)} L
                           </div>
                         </div>
+                      </div>
 
-                        {/* Mechanical Readings */}
+                      {/* Mechanical — same section convention as my-shift.tsx's nozzle cards */}
+                      <div className="text-[10px] uppercase font-semibold mb-1" style={{ color: 'var(--color-status-warning)' }}>Mechanical</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
-                          <label className="block text-sm font-bold mb-1" style={{ color: fuelColor }}>
-                            Mechanical Opening
-                            <span className="ml-1 text-xs font-normal text-content-secondary">(auto - previous closing)</span>
+                          <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
+                            Opening <span className="text-[10px] font-normal">(auto - previous closing)</span>
                           </label>
                           {user?.role === 'owner' ? (
                             <input
@@ -1801,14 +1802,14 @@ export default function DailyTankReading() {
                               step="0.001"
                               value={nozzle.mechanical_opening}
                               onChange={(e) => updateNozzle(index, 'mechanical_opening', e.target.value)}
-                              className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300"
-                              style={{ borderColor: fuelColor, backgroundColor: theme.cardBg, color: theme.textPrimary }}
+                              className="w-full px-3 py-2 rounded border text-right font-mono transition-colors duration-300"
+                              style={{ ...inputStyle }}
                               placeholder="611984"
                             />
                           ) : (
                             <div
-                              className="w-full px-3 py-2 border-2 rounded-md font-mono text-sm"
-                              style={{ borderColor: fuelColor, backgroundColor: fuelLightColor, color: theme.textPrimary, opacity: 0.85 }}
+                              className="w-full px-3 py-2 rounded border font-mono text-sm text-right"
+                              style={{ ...inputStyle, opacity: 0.85 }}
                               title="Auto-fetched from previous shift closing. Only the owner can edit this."
                             >
                               {nozzle.mechanical_opening || <span className="text-status-warning">Fetching...</span>}
@@ -1817,34 +1818,25 @@ export default function DailyTankReading() {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-bold mb-1" style={{ color: fuelColor }}>
-                            Mechanical Closing
-                          </label>
+                          <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Closing</label>
                           <input
                             type="number"
                             step="0.001"
                             value={nozzle.mechanical_closing}
                             onChange={(e) => updateNozzle(index, 'mechanical_closing', e.target.value)}
                             disabled={isReadOnly}
-                            className="w-full px-3 py-2 border-2 rounded-md focus:ring-2 transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
-                            style={{
-                              borderColor: fuelColor,
-                              backgroundColor: theme.cardBg,
-                              color: theme.textPrimary
-                            }}
+                            className="w-full px-3 py-2 rounded border text-right font-mono transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                            style={{ ...inputStyle, borderColor: mechHasError ? 'var(--color-status-error)' : inputStyle.borderColor }}
                             placeholder="612262"
                           />
+                          {mechHasError && (
+                            <div className="text-xs mt-0.5" style={{ color: 'var(--color-status-error)' }}>Must be &ge; opening</div>
+                          )}
                         </div>
 
                         <div>
-                          <label className="block text-sm font-bold mb-1" style={{ color: fuelColor }}>
-                            Mechanical Movement
-                          </label>
-                          <div className="w-full px-3 py-2 border-2 rounded-md font-bold" style={{
-                            borderColor: fuelColor,
-                            backgroundColor: fuelLightColor,
-                            color: fuelColor
-                          }}>
+                          <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>Movement</label>
+                          <div className="w-full px-3 py-2 rounded border text-right font-mono font-semibold" style={{ ...inputStyle }}>
                             {mechMovement.toFixed(3)} L
                           </div>
                         </div>
@@ -1913,16 +1905,14 @@ export default function DailyTankReading() {
                   <input
                     type="number"
                     step="0.01"
-                    value={formData.price_per_liter}
-                    onChange={(e) => setFormData({ ...formData, price_per_liter: e.target.value })}
-                    disabled={isReadOnly}
-                    className="w-full px-4 py-3 border rounded-md text-lg focus:ring-2 transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                    value={(isDiesel ? fuelPrices.Diesel : fuelPrices.Petrol) || ''}
+                    readOnly
+                    disabled
+                    title="Set automatically from the current fuel price list"
+                    className="w-full px-4 py-3 border rounded-md text-lg transition-colors duration-300 opacity-70 cursor-not-allowed"
                     style={{ borderColor: theme.primary + '80', backgroundColor: theme.cardBg, color: theme.textPrimary }}
-                    placeholder={isDiesel
-                      ? (fuelPrices.Diesel ? fuelPrices.Diesel.toFixed(2) : '')
-                      : (fuelPrices.Petrol ? fuelPrices.Petrol.toFixed(2) : '')}
                   />
-                  <p className="text-xs mt-1 opacity-75" style={{ color: theme.primary }}>Current selling price per liter</p>
+                  <p className="text-xs mt-1 opacity-75" style={{ color: theme.primary }}>Current selling price per liter — set from fuel settings</p>
                 </div>
 
                 <div className="rounded-lg p-4" style={{ backgroundColor: theme.accentLight, borderColor: theme.accent, borderWidth: '1px' }}>

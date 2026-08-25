@@ -8,6 +8,7 @@ from typing import List
 from datetime import datetime
 from ...models.models import AccountHolder, CreditSale
 from ...services.inventory import process_credit_sale
+from ...config import resolve_fuel_price
 from ...services.relationship_validation import validate_create
 from ...services.audit_service import log_audit_event
 from ...database.storage import save_station_storage
@@ -243,6 +244,15 @@ async def record_credit_sale(sale: CreditSale, ctx: dict = Depends(get_station_c
 
     sale_dict = sale.dict()
 
+    # Price is always resolved server-side — never trust a client-supplied
+    # amount. The account's negotiated rate wins when configured, otherwise
+    # the current fuel price list applies. This form only sells fuel, so
+    # resolve_fuel_price (Diesel/Petrol) always applies.
+    price = account.get('default_price_per_liter') or resolve_fuel_price(sale.fuel_type, storage)
+    if not price or price <= 0:
+        raise HTTPException(status_code=400, detail=f"No price available for '{sale.fuel_type}'.")
+    sale_dict['amount'] = round(sale.volume * price, 2)
+
     # Generate auth reference when coupon details are present
     if sale.coupon_serial and sale.vehicle_reg:
         client_code = account.get('client_code') or ''
@@ -260,7 +270,7 @@ async def record_credit_sale(sale: CreditSale, ctx: dict = Depends(get_station_c
         accounts=accounts_data,
         sales_log=credit_sales_data,
         account_id=sale.account_id,
-        amount=sale.amount,
+        amount=sale_dict['amount'],
         sale_data=sale_dict,
     )
 

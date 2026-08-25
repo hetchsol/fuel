@@ -888,22 +888,17 @@ export default function Accounts() {
               <label className="block text-sm font-medium text-content-secondary mb-1">
                 Price / L
                 {saleForm.pricing_tier === 'custom' && (
-                  <span className="ml-1 text-xs text-status-warning">(custom)</span>
+                  <span className="ml-1 text-xs text-status-warning">(account rate)</span>
                 )}
               </label>
               <input
                 type="number"
                 step="0.01"
                 value={saleForm.price_per_liter}
-                onChange={(e) => {
-                  const price = e.target.value
-                  const amount = saleForm.volume && parseFloat(price) > 0
-                    ? (parseFloat(saleForm.volume) * parseFloat(price)).toFixed(2) : ''
-                  setSaleForm({ ...saleForm, price_per_liter: price, pricing_tier: 'custom', amount })
-                }}
-                className={`w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary font-semibold ${
-                  saleForm.pricing_tier === 'custom' ? 'bg-status-pending-light' : 'bg-surface-bg'
-                } text-content-primary`}
+                readOnly
+                disabled
+                title="Set automatically from the account's negotiated rate or the current price list"
+                className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg font-semibold text-content-primary cursor-not-allowed"
                 placeholder={fuelPrices[saleForm.fuel_type as 'Diesel' | 'Petrol']
                   ? fuelPrices[saleForm.fuel_type as 'Diesel' | 'Petrol'].toFixed(2) : '0.00'}
               />

@@ -271,13 +271,49 @@ def record_forecourt_return(station_id: str, item_key: str, qty, performed_by: s
     return item
 
 
+def sync_forecourt_deltas(station_id: str, previous: dict, current: dict,
+                          performed_by: str = "system", ref: str = "") -> dict:
+    """
+    Reconcile the forecourt bin to a NEW cumulative quantity-consumed total per
+    item, given the PREVIOUS cumulative total already applied for the same
+    entry (e.g. a Daily Entry record). Only the delta is applied — a resubmit
+    of an unchanged entry is a no-op, and a downward correction credits stock
+    back instead of ignoring the drop.
+
+    Used by every entry point that records lubricant/LPG/accessory sales
+    (manual Daily Entry pages, and the auto-feed from shift approval) so
+    re-editing a day's entry never double-counts what an earlier save of the
+    same entry already pushed to Stores.
+
+    previous / current: {item_key: cumulative_qty}, where a positive quantity
+    means "consumed from forecourt" (sold or damaged) and a negative quantity
+    means "returned to forecourt" (e.g. empties from LPG refills, tracked as
+    a negative running total so the same delta math applies uniformly).
+    Missing keys are treated as 0. Returns `current` unchanged, for the
+    caller to persist as the new baseline.
+    """
+    for key in set(previous) | set(current):
+        delta = round((current.get(key, 0) or 0) - (previous.get(key, 0) or 0), 4)
+        if delta > 0:
+            record_sale(station_id, key, delta, performed_by, ref=ref)
+        elif delta < 0:
+            record_forecourt_return(station_id, key, -delta, performed_by, ref=ref)
+    return current
+
+
 def apply_handover_sales(station_id: str, handover: dict, performed_by: str = "system") -> dict:
     """
     Apply ONE handover's stock snapshot to the forecourt bins — called when the
     handover is approved (per-shift, not at day close):
-      - decrement forecourt by quantity sold (lubricants, LPG accessories, full
-        cylinders = refills + with-cylinder sales);
+      - decrement forecourt by quantity sold + damaged (lubricants, LPG
+        accessories, full cylinders = refills + with-cylinder sales — damaged
+        stock leaves the sellable forecourt count the same as a sale);
       - return empties to forecourt for each refill (full→empty swap).
+
+    Uses the same "sold + damaged" formula as the manual Daily Entry endpoints
+    (lpg_daily.py / lubricants_daily.py) so every entry point that records
+    these sales has the same net effect on Stores, regardless of which one
+    is used.
 
     Idempotent: sets `handover["stock_applied"] = True` and returns early if it
     was already applied (the CALLER is responsible for persisting the handover so
@@ -296,9 +332,9 @@ def apply_handover_sales(station_id: str, handover: dict, performed_by: str = "s
             acc[key] = acc.get(key, 0) + qty
 
     for r in snap.get("lubricants", []) or []:
-        _add(sold, f"lubricant:{r.get('product_code')}", r.get("sold", 0) or 0)
+        _add(sold, f"lubricant:{r.get('product_code')}", (r.get("sold", 0) or 0) + (r.get("damaged", 0) or 0))
     for r in snap.get("accessories", []) or []:
-        _add(sold, f"lpg_accessory:{r.get('product_code')}", r.get("sold", 0) or 0)
+        _add(sold, f"lpg_accessory:{r.get('product_code')}", (r.get("sold", 0) or 0) + (r.get("damaged", 0) or 0))
     for r in snap.get("lpg_cylinders", []) or []:
         size = r.get("size_kg")
         if size is None:
@@ -306,7 +342,8 @@ def apply_handover_sales(station_id: str, handover: dict, performed_by: str = "s
         total = r.get("total_sold")
         if total is None:
             total = (r.get("sold_refill", 0) or 0) + (r.get("sold_with_cylinder", 0) or 0)
-        _add(sold, f"cylinder_full:{size}kg", total or 0)
+        total = (total or 0) + (r.get("damaged", 0) or 0)
+        _add(sold, f"cylinder_full:{size}kg", total)
         _add(empties_in, f"cylinder_empty:{size}kg", r.get("sold_refill", 0) or 0)
 
     sales_applied = sum(1 for k, q in sold.items()
@@ -342,9 +379,9 @@ def reverse_handover_sales(station_id: str, handover: dict, performed_by: str = 
             acc[key] = acc.get(key, 0) + qty
 
     for r in snap.get("lubricants", []) or []:
-        _add(sold, f"lubricant:{r.get('product_code')}", r.get("sold", 0) or 0)
+        _add(sold, f"lubricant:{r.get('product_code')}", (r.get("sold", 0) or 0) + (r.get("damaged", 0) or 0))
     for r in snap.get("accessories", []) or []:
-        _add(sold, f"lpg_accessory:{r.get('product_code')}", r.get("sold", 0) or 0)
+        _add(sold, f"lpg_accessory:{r.get('product_code')}", (r.get("sold", 0) or 0) + (r.get("damaged", 0) or 0))
     for r in snap.get("lpg_cylinders", []) or []:
         size = r.get("size_kg")
         if size is None:
@@ -352,11 +389,12 @@ def reverse_handover_sales(station_id: str, handover: dict, performed_by: str = 
         total = r.get("total_sold")
         if total is None:
             total = (r.get("sold_refill", 0) or 0) + (r.get("sold_with_cylinder", 0) or 0)
-        _add(sold, f"cylinder_full:{size}kg", total or 0)
+        total = (total or 0) + (r.get("damaged", 0) or 0)
+        _add(sold, f"cylinder_full:{size}kg", total)
         _add(empties_in, f"cylinder_empty:{size}kg", r.get("sold_refill", 0) or 0)
 
-    # Reverse of apply_handover_sales: what was sold (decremented) is credited
-    # back, what came back as empties (incremented) is debited back out.
+    # Reverse of apply_handover_sales: what was sold+damaged (decremented) is
+    # credited back, what came back as empties (incremented) is debited back out.
     returns_applied = sum(1 for k, q in sold.items()
                           if record_forecourt_return(station_id, k, q, performed_by, ref=f"void-{ref}") is not None)
     sales_applied = sum(1 for k, q in empties_in.items()

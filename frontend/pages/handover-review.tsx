@@ -556,6 +556,7 @@ export default function HandoverReview() {
             account_id: i.account_id,
             account_name: i.account_name,
             fuel_type: i.fuel_type,
+            product_code: i.item_kind === 'other' ? i.product_code : undefined,
             volume: parseFloat(i.volume) || 0,
             price_per_liter: i.price_per_liter || 0,
           })),
@@ -2025,13 +2026,10 @@ function ClosingForm({ h, theme, creditAccounts, otherProducts, onAccountCreated
               )}
 
               <input type="number" min={0} step="0.01" value={item.price_per_liter || ''}
-                title="Price — editable for a negotiated credit rate"
-                placeholder="Price"
-                onChange={e => {
-                  const price = parseFloat(e.target.value) || 0
-                  recomputeCreditRow(idx, price, item.volume, String(item.amount), item.entry_mode)
-                }}
-                className="w-16 px-2 py-1 rounded border text-right font-mono" style={inputStyle} />
+                title="Price is set automatically from the account's rate or the current price list"
+                readOnly
+                disabled
+                className="w-16 px-2 py-1 rounded border text-right font-mono opacity-70 cursor-not-allowed" style={inputStyle} />
 
               <span className="w-20 text-right font-mono" style={{ color: theme.textPrimary }} title={item.entry_mode === 'amount' ? `${item.volume} ${item.item_kind === 'fuel' ? 'L' : 'units'}` : undefined}>
                 {fmtK(item.amount || 0)}
@@ -2963,7 +2961,8 @@ function CreditPanel({ handoverId, existingDetails, theme, currentUserRole, onSa
     setDupWarning('')
     setItems(prev => [...prev, {
       account_id: acct.account_id, account_name: acct.account_name, item_kind: itemKind,
-      fuel_type: itemLabel, volume: vol, price_per_liter: price, amount: lineAmount,
+      fuel_type: itemLabel, product_code: itemKind === 'other' ? productCode : undefined,
+      volume: vol, price_per_liter: price, amount: lineAmount,
     }])
     setVolume('')
     setAmountInput('')
@@ -3152,9 +3151,10 @@ function CreditPanel({ handoverId, existingDetails, theme, currentUserRole, onSa
             <div>
               <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Price</div>
               <input type="number" min="0" step="0.01" placeholder="0.00" value={price || ''}
-                title="Price — editable for a negotiated credit rate"
-                onChange={e => { setPrice(parseFloat(e.target.value) || 0); setDupWarning('') }}
-                className="w-20 px-2 py-1.5 text-xs rounded border text-right font-mono" style={smallInputStyle} />
+                title="Price is set automatically from the account's rate or the current price list"
+                readOnly
+                disabled
+                className="w-20 px-2 py-1.5 text-xs rounded border text-right font-mono opacity-70 cursor-not-allowed" style={smallInputStyle} />
             </div>
             {vol > 0 && price > 0 && (
               <span className="text-xs self-end pb-2 font-semibold" style={{ color: 'var(--color-action-primary)' }}

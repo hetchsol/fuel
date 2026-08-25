@@ -26,6 +26,7 @@ from .auth import get_station_context
 from ...database.station_files import load_station_json, save_station_json
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
+from ...services import stock_service as svc
 
 router = APIRouter()
 
@@ -366,7 +367,30 @@ def submit_lpg_entry(
     if book_pop is not None and entry_input.actual_cylinder_population is not None:
         pop_diff = book_pop - entry_input.actual_cylinder_population
 
-    entry_id = f"LPG-{entry_input.date}-{entry_input.shift_type[0]}-{uuid.uuid4().hex[:8]}"
+    # Upsert by (date, shift_type) — matches the auto-feed from handover approval
+    # (_feed_daily_entries) so a manual entry never sits alongside an auto-generated
+    # one as a silent duplicate for the same shift.
+    entry_id = next(
+        (eid for eid, e in lpg_daily_db.items()
+         if e.get("date") == entry_input.date and e.get("shift_type") == entry_input.shift_type),
+        None,
+    ) or f"LPG-{entry_input.date}-{entry_input.shift_type[0]}-{uuid.uuid4().hex[:8]}"
+
+    # Sync Stores' forecourt bins to this entry's totals — only the delta since
+    # this same entry's last save is applied, so resubmitting a correction
+    # never double-counts what an earlier save already pushed.
+    previous_applied = (lpg_daily_db.get(entry_id) or {}).get("stores_applied", {})
+    current_applied: dict = {}
+    for row in calculated_rows:
+        consumed = round(row.sold_refill + row.sold_with_cylinder + row.damaged, 4)
+        if consumed:
+            current_applied[f"cylinder_full:{row.size_kg}kg"] = consumed
+        # Empties returned to forecourt on a refill — tracked as a negative
+        # "consumed" quantity so sync_forecourt_deltas' delta math applies uniformly.
+        if row.sold_refill:
+            current_applied[f"cylinder_empty:{row.size_kg}kg"] = -round(row.sold_refill, 4)
+    svc.sync_forecourt_deltas(station_id, previous_applied, current_applied,
+                              entry_input.recorded_by, ref=entry_id)
 
     output = LPGDailyEntryOutput(
         entry_id=entry_id,
@@ -385,6 +409,7 @@ def submit_lpg_entry(
         trades=processed_trades if processed_trades else None,
         total_trade_revenue=total_trade_revenue,
         warnings=warnings if warnings else None,
+        stores_applied=current_applied,
     )
 
     lpg_daily_db[entry_id] = output.model_dump(mode='json')
@@ -553,7 +578,23 @@ def submit_accessories_entry(
             except Exception:
                 pass
 
-    entry_id = f"LPGA-{entry_input.date}-{uuid.uuid4().hex[:8]}"
+    # Upsert by date — matches the auto-feed from handover approval (_feed_daily_entries)
+    # so a manual entry never sits alongside an auto-generated one as a silent duplicate.
+    entry_id = next(
+        (eid for eid, e in lpg_accessories_db.items() if e.get("date") == entry_input.date),
+        None,
+    ) or f"LPGA-{entry_input.date}-{uuid.uuid4().hex[:8]}"
+
+    # Sync Stores' forecourt bins to this entry's totals — see the equivalent
+    # comment in submit_lpg_entry above.
+    previous_applied = (lpg_accessories_db.get(entry_id) or {}).get("stores_applied", {})
+    current_applied: dict = {}
+    for row in calculated_rows:
+        consumed = round(row.sold + row.damaged, 4)
+        if consumed:
+            current_applied[f"lpg_accessory:{row.product_code}"] = consumed
+    svc.sync_forecourt_deltas(station_id, previous_applied, current_applied,
+                              entry_input.recorded_by, ref=entry_id)
 
     output = LPGAccessoriesDailyOutput(
         entry_id=entry_id,
@@ -564,6 +605,7 @@ def submit_accessories_entry(
         created_at=datetime.now().isoformat(),
         notes=entry_input.notes,
         damage_status="pending" if any_damage else "none",
+        stores_applied=current_applied,
     )
 
     lpg_accessories_db[entry_id] = output.model_dump(mode='json')

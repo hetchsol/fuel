@@ -23,6 +23,7 @@ from .auth import get_station_context
 from ...database.station_files import load_station_json, save_station_json
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
+from ...services import stock_service as svc
 
 router = APIRouter()
 
@@ -378,7 +379,28 @@ def submit_lubricant_entry(
                 pass
 
     loc_prefix = "LI3" if entry_input.location == "Island 3" else "LBF"
-    entry_id = f"LUB-{loc_prefix}-{entry_input.date}-{uuid.uuid4().hex[:8]}"
+    # Upsert by (date, location) — matches the auto-feed from handover approval
+    # (_feed_daily_entries) so a manual entry never sits alongside an auto-generated
+    # one as a silent duplicate for the same day/location.
+    entry_id = next(
+        (eid for eid, e in lubricant_daily_db.items()
+         if e.get("date") == entry_input.date and e.get("location") == entry_input.location),
+        None,
+    ) or f"LUB-{loc_prefix}-{entry_input.date}-{uuid.uuid4().hex[:8]}"
+
+    # Sync Stores' forecourt bins to this entry's totals — only the delta since
+    # this same entry's last save is applied, so resubmitting a correction never
+    # double-counts what an earlier save already pushed. Island 3 and Buffer
+    # entries for the same product both apply against the same shared
+    # lubricant:{code} bin, so a location split still nets to the true total.
+    previous_applied = (lubricant_daily_db.get(entry_id) or {}).get("stores_applied", {})
+    current_applied: dict = {}
+    for row in calculated_rows:
+        consumed = round(row.sold_or_drawn + row.damaged, 4)
+        if consumed:
+            current_applied[f"lubricant:{row.product_code}"] = consumed
+    svc.sync_forecourt_deltas(station_id, previous_applied, current_applied,
+                              entry_input.recorded_by, ref=entry_id)
 
     output = LubricantDailyEntryOutput(
         entry_id=entry_id,
@@ -391,6 +413,7 @@ def submit_lubricant_entry(
         created_at=datetime.now().isoformat(),
         notes=entry_input.notes,
         damage_status="pending" if any_damage else "none",
+        stores_applied=current_applied,
     )
 
     lubricant_daily_db[entry_id] = output.model_dump(mode='json')

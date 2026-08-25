@@ -23,7 +23,7 @@ export interface CreditItem {
   fuel_type: string        // "Diesel"/"Petrol" for fuel rows; product description for other rows
   product_code?: string    // client-only, lets the price re-fill if the product selection changes
   volume: string           // liters for fuel; unit quantity for other products
-  price_per_liter: number  // editable — defaults from account/fuel price or product catalog
+  price_per_liter: number  // read-only in the UI — set from account/fuel price or product catalog
   amount: number
   // Client-only — which of volume/amount the manager is directly typing into;
   // the other is derived from price_per_liter so the backend always gets volume.

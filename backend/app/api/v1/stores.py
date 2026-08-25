@@ -231,10 +231,13 @@ def seed_catalog(ctx: dict = Depends(get_station_context)):
     except Exception:
         pass
 
-    # LPG accessories
+    # LPG accessories — from the actual pricing catalog (falls back to the
+    # station's default accessory list when no catalog has been saved yet),
+    # not the daily-entry history, so a fresh station still seeds correctly.
     try:
-        accs = load_station_json(station_id, "lpg_accessories_daily.json", default=[])
-        for p in (accs.values() if isinstance(accs, dict) else accs):
+        from .lpg_daily import load_accessories_catalog
+        accs = load_accessories_catalog(station_id)
+        for p in accs:
             code = p.get("product_code")
             if code:
                 _upsert("lpg_accessory", code, p.get("description", code))

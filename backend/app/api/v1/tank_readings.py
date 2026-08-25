@@ -893,8 +893,13 @@ def submit_tank_reading(
     elif total_delivery_volume > 0:
         delivery_volume = total_delivery_volume
 
-    # Perform comprehensive Excel calculations
-    price = reading_input.price_per_liter or 0.0
+    # Perform comprehensive Excel calculations. Price is always resolved
+    # server-side from the current fuel price list — never trusted from the
+    # client — so this page's expected-cash/expected-revenue figures can't be
+    # skewed by whatever was typed into the form (same treatment as credit
+    # sale pricing; see accounts.py / attendant_handover.py).
+    from ...config import resolve_fuel_price
+    price = resolve_fuel_price(tank_config['fuel_type'], storage)
     calculations = comprehensive_daily_calculation(
         nozzle_readings=reading_input.nozzle_readings,
         tank_movement=tank_movement,
@@ -1095,6 +1100,25 @@ def submit_tank_reading(
     output_dict = output.model_dump(mode='json', exclude_unset=False, exclude_defaults=False, exclude_none=False)
     tank_readings_db[reading_id] = output_dict
     save_tank_readings(tank_readings_db, station_id)  # Persist to file
+
+    # Keep the live nozzle state — what the attendant's own next-shift entry
+    # (my-shift.tsx) carries forward from — in sync with whatever was just
+    # submitted here. Without this, a shift entered via Daily Shift Capture
+    # would never update the reading an attendant's next shift starts from.
+    from ...database.storage import sync_nozzle_state, save_station_storage
+    sync_nozzle_state(
+        [
+            {
+                "nozzle_id": nr.nozzle_id,
+                "electronic_closing": nr.electronic_closing,
+                "mechanical_closing": nr.mechanical_closing,
+                "attendant_name": nr.attendant,
+            }
+            for nr in reading_input.nozzle_readings
+        ],
+        storage, shift_date=reading_input.date, shift_type=reading_input.shift_type,
+    )
+    save_station_storage(station_id)
 
     # Update linked deliveries with reading_id (NEW FEATURE)
     for delivery in deliveries:

@@ -372,9 +372,13 @@ class HandoverCreditSaleItem(BaseModel):
     account_id: str
     account_name: str              # Denormalized for display
     fuel_type: str                 # "Diesel"/"Petrol", or a non-fuel product description
+    product_code: Optional[str] = None  # Lubricant/accessory catalog code; None for fuel rows.
+                                    # Server resolves price from this — the client can't set price.
     volume: float = Field(..., gt=0)  # Liters for fuel; unit quantity for other products
-    price_per_liter: float = 0     # Client override when > 0 (negotiated credit rate, or the
-                                    # only price source for a non-fuel item); otherwise server-resolved
+    price_per_liter: float = 0     # Ignored by the server — accepted only for backward compat with
+                                    # older clients. Price is always resolved server-side: account's
+                                    # default_price_per_liter, else the fuel price list (fuel rows) or
+                                    # the product catalog (product_code rows).
     amount: float = 0              # Server-calculated: volume × price_per_liter
     driver_name: Optional[str] = None
     vehicle_reg: Optional[str] = None
@@ -770,6 +774,10 @@ class LPGDailyEntryOutput(BaseModel):
     damage_authorised_at: Optional[str] = None
     trades: Optional[List[LPGCylinderTrade]] = None
     total_trade_revenue: float = 0.0
+    # Cumulative {item_key: qty} already pushed to the Stores forecourt bin for
+    # this entry — lets a resubmit (correction) apply only the delta instead of
+    # double-counting. See stock_service.sync_forecourt_deltas.
+    stores_applied: dict = {}
     warnings: Optional[List[str]] = None
 
 class LPGAccessoryDailyRow(BaseModel):
@@ -804,6 +812,8 @@ class LPGAccessoriesDailyOutput(BaseModel):
     damage_status: str = "none"
     damage_authorised_by: Optional[str] = None
     damage_authorised_at: Optional[str] = None
+    # See LPGDailyEntryOutput.stores_applied.
+    stores_applied: dict = {}
 
 
 # ===== Lubricants Daily Operations Models =====
@@ -845,6 +855,8 @@ class LubricantDailyEntryOutput(BaseModel):
     damage_status: str = "none"
     damage_authorised_by: Optional[str] = None
     damage_authorised_at: Optional[str] = None
+    # See LPGDailyEntryOutput.stores_applied.
+    stores_applied: dict = {}
 
 
 # ===== Attendant Shift Handover Models =====
