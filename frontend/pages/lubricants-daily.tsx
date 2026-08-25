@@ -5,6 +5,10 @@ import toast from 'react-hot-toast'
 
 const BASE = '/api/v1'
 
+// Fixed canonical location keys — must match backend CANONICAL_LOCATIONS.
+// Only the display label shown for them is customizable via the Rename modal.
+const CANONICAL_LOCATIONS = ['Island 3', 'Buffer'] as const
+
 interface ProductRow {
   product_code: string
   description: string
@@ -46,10 +50,54 @@ export default function LubricantsDaily() {
   const [pricingSaving, setPricingSaving] = useState(false)
   const [pricingSearch, setPricingSearch] = useState('')
 
+  // Location display labels — "Island 3" / "Buffer" are the fixed canonical
+  // keys the data is stored/matched against; only the label shown for them
+  // is customizable (same idea as a tank's custom display name).
+  const [locationLabels, setLocationLabels] = useState<Record<string, string>>({ 'Island 3': 'Island 3', 'Buffer': 'Buffer' })
+  const [showLocationRename, setShowLocationRename] = useState(false)
+  const [editLocationLabels, setEditLocationLabels] = useState<Record<string, string>>({ 'Island 3': '', 'Buffer': '' })
+  const [locationLabelsSaving, setLocationLabelsSaving] = useState(false)
+  const labelFor = useCallback((loc: string) => locationLabels[loc] || loc, [locationLabels])
+
   useEffect(() => {
     const ud = localStorage.getItem('user')
     if (ud) setUser(JSON.parse(ud))
   }, [])
+
+  const fetchLocationLabels = useCallback(() => {
+    authFetch(`${BASE}/lubricants-daily/locations`, { headers: getHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: { key: string; label: string }[]) => {
+        const map: Record<string, string> = {}
+        for (const row of rows || []) map[row.key] = row.label
+        setLocationLabels(prev => ({ ...prev, ...map }))
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => { fetchLocationLabels() }, [fetchLocationLabels])
+
+  const saveLocationLabels = async () => {
+    setLocationLabelsSaving(true)
+    try {
+      const res = await authFetch(`${BASE}/lubricants-daily/locations`, {
+        method: 'PUT',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(editLocationLabels),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || 'Failed to save location names')
+      }
+      await fetchLocationLabels()
+      toast.success('Location names updated')
+      setShowLocationRename(false)
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to save location names')
+    } finally {
+      setLocationLabelsSaving(false)
+    }
+  }
 
   const canEditPricing = ['supervisor', 'manager', 'owner'].includes(user?.role)
   const canManage = ['manager', 'owner'].includes(user?.role)
@@ -281,7 +329,7 @@ export default function LubricantsDaily() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-content-primary">Lubricants Daily</h1>
-        <p className="text-sm text-content-secondary mt-1">Daily stock movement — Island 3 (sales) and Buffer (warehouse)</p>
+        <p className="text-sm text-content-secondary mt-1">Daily stock movement — {labelFor('Island 3')} (sales) and {labelFor('Buffer')} (warehouse)</p>
       </div>
 
       {/* Controls */}
@@ -293,7 +341,14 @@ export default function LubricantsDaily() {
               className="w-full px-3 py-2 rounded border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:border-action-primary" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-content-secondary mb-1">Location</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-content-secondary">Location</label>
+              {canEditPricing && (
+                <button type="button"
+                  onClick={() => { setEditLocationLabels({ 'Island 3': locationLabels['Island 3'] || '', 'Buffer': locationLabels['Buffer'] || '' }); setShowLocationRename(true) }}
+                  className="text-[10px] text-action-primary hover:underline">Rename</button>
+              )}
+            </div>
             <div className="flex rounded-md overflow-hidden border border-surface-border">
               {(['Island 3', 'Buffer'] as const).map(loc => (
                 <button key={loc} onClick={() => setLocation(loc)}
@@ -302,7 +357,7 @@ export default function LubricantsDaily() {
                       ? 'bg-action-primary text-white'
                       : 'bg-surface-bg text-content-secondary hover:text-content-primary'
                   }`}>
-                  {loc}
+                  {labelFor(loc)}
                 </button>
               ))}
             </div>
@@ -334,7 +389,7 @@ export default function LubricantsDaily() {
           {location === 'Buffer' && (
             <button onClick={() => setShowTransfer(true)}
               className="px-3 py-2 text-sm rounded border border-action-primary text-action-primary hover:bg-action-primary hover:text-white transition-colors font-medium">
-              Transfer to Island 3
+              Transfer to {labelFor('Island 3')}
             </button>
           )}
         </div>
@@ -547,8 +602,8 @@ export default function LubricantsDaily() {
           <div className="w-full max-w-2xl rounded-lg shadow-lg bg-surface-card border border-surface-border overflow-hidden max-h-[90vh] flex flex-col">
             <div className="px-6 py-4 border-b border-surface-border flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-bold text-content-primary">Transfer to Island 3</h3>
-                <p className="text-xs text-content-secondary mt-0.5">Enter quantities to move from Buffer stock to Island 3</p>
+                <h3 className="text-lg font-bold text-content-primary">Transfer to {labelFor('Island 3')}</h3>
+                <p className="text-xs text-content-secondary mt-0.5">Enter quantities to move from {labelFor('Buffer')} stock to {labelFor('Island 3')}</p>
               </div>
               <button onClick={() => { setShowTransfer(false); setTransferItems({}) }}
                 className="text-content-secondary hover:text-content-primary text-xl leading-none">&times;</button>
@@ -587,6 +642,42 @@ export default function LubricantsDaily() {
               <button onClick={handleTransfer} disabled={transferSaving || transferCount === 0}
                 className="px-4 py-2 text-sm font-semibold rounded bg-action-primary text-white disabled:opacity-50">
                 {transferSaving ? 'Transferring...' : `Transfer ${transferCount > 0 ? `(${transferCount} products)` : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Location Rename Modal */}
+      {showLocationRename && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-lg shadow-lg bg-surface-card border border-surface-border overflow-hidden">
+            <div className="px-6 py-4 border-b border-surface-border flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-content-primary">Rename Locations</h3>
+                <p className="text-xs text-content-secondary mt-0.5">Display names only — leave blank to use the default</p>
+              </div>
+              <button onClick={() => setShowLocationRename(false)}
+                className="text-content-secondary hover:text-content-primary text-xl leading-none">&times;</button>
+            </div>
+            <div className="p-6 space-y-4">
+              {CANONICAL_LOCATIONS.map(loc => (
+                <div key={loc}>
+                  <label className="block text-xs font-medium text-content-secondary mb-1">{loc}</label>
+                  <input type="text"
+                    value={editLocationLabels[loc] || ''}
+                    onChange={e => setEditLocationLabels(prev => ({ ...prev, [loc]: e.target.value }))}
+                    placeholder={loc}
+                    className="w-full px-3 py-2 rounded border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:border-action-primary" />
+                </div>
+              ))}
+            </div>
+            <div className="px-6 py-4 border-t border-surface-border flex justify-end gap-2">
+              <button onClick={() => setShowLocationRename(false)}
+                className="px-4 py-2 text-sm rounded border border-surface-border text-content-secondary">Cancel</button>
+              <button onClick={saveLocationLabels} disabled={locationLabelsSaving}
+                className="px-4 py-2 text-sm font-semibold rounded bg-action-primary text-white disabled:opacity-50">
+                {locationLabelsSaving ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>

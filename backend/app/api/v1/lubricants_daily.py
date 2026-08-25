@@ -147,6 +147,22 @@ def save_product_catalog(station_id: str, catalog: list):
     save_station_json(station_id, 'lubricant_products.json', catalog)
 
 
+LOCATION_LABELS_FILE = 'lubricant_location_labels.json'
+# Fixed, canonical location keys — these are the values stored on every
+# lubricant_daily_entries.json record and never change. Only the label shown
+# for them in the UI is customizable (mirrors tanks' custom_name: tank_id
+# never changes, only its display name does).
+CANONICAL_LOCATIONS = ("Island 3", "Buffer")
+
+
+def load_location_labels(station_id: str) -> dict:
+    return load_station_json(station_id, LOCATION_LABELS_FILE, default={})
+
+
+def save_location_labels(station_id: str, labels: dict):
+    save_station_json(station_id, LOCATION_LABELS_FILE, labels)
+
+
 # ===== ENDPOINTS =====
 
 # These two literal /products/pricing routes must be registered before the
@@ -203,6 +219,49 @@ def update_product_pricing(items: List[dict], ctx: dict = Depends(get_station_co
 
     save_product_catalog(station_id, catalog)
     return {"status": "success", "message": "Product catalog updated", "count": len(by_code)}
+
+
+@router.get("/locations")
+def get_location_labels(ctx: dict = Depends(get_station_context)):
+    """
+    Canonical location keys with their current display label. A location
+    with no custom label set falls back to showing its canonical name.
+    """
+    labels = load_location_labels(ctx["station_id"])
+    return [
+        {"key": loc, "label": (labels.get(loc) or "").strip() or loc}
+        for loc in CANONICAL_LOCATIONS
+    ]
+
+
+@router.put("/locations", dependencies=[Depends(require_supervisor_or_owner)])
+def update_location_labels(labels: dict, ctx: dict = Depends(get_station_context)):
+    """
+    Rename the display label shown for Island 3 / Buffer. Keys must be the
+    canonical names; an empty or omitted value reverts that location back to
+    showing its canonical name. The canonical name itself never changes —
+    it's the key every lubricant_daily_entries.json record is stored and
+    matched against, so renaming never touches historical data.
+    Supervisor / owner only.
+    """
+    station_id = ctx["station_id"]
+    current = load_location_labels(station_id)
+    for key, value in labels.items():
+        if key not in CANONICAL_LOCATIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown location '{key}'. Must be one of {list(CANONICAL_LOCATIONS)}.",
+            )
+        value = (value or "").strip()
+        if value:
+            current[key] = value
+        else:
+            current.pop(key, None)
+    save_location_labels(station_id, current)
+    return [
+        {"key": loc, "label": current.get(loc) or loc}
+        for loc in CANONICAL_LOCATIONS
+    ]
 
 
 @router.get("/products/{location}")
