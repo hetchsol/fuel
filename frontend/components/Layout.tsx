@@ -410,7 +410,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/inventory', label: 'Stock Overview', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/stores', label: 'Stores / Stock', roles: ['manager', 'owner'] },
         { path: '/stock-takes', label: 'Stock Takes', roles: ['manager', 'owner'] },
-        { path: '/sales', label: 'Sales Records', roles: ['supervisor', 'manager', 'owner'] },
       ]
     },
     {
@@ -464,7 +463,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/stores', label: 'Stores / Stock', roles: ['manager'] },
         { path: '/stock-takes', label: 'Stock Takes', roles: ['manager'] },
         { path: '/inventory', label: 'Stock Overview', roles: ['manager'] },
-        { path: '/sales', label: 'Sales Records', roles: ['manager'] },
       ],
     },
     {

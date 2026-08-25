@@ -18,11 +18,32 @@ export default function Inventory() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Location display labels — "Island 3"/"Buffer" stay the canonical values
+  // used to filter `lubricants` below; only the shown badge text changes.
+  // Falls back to the canonical name if no custom label has been set.
+  const [locationLabels, setLocationLabels] = useState<Record<string, string>>({ 'Island 3': 'Island 3', 'Buffer': 'Buffer' })
+  const labelFor = (loc: string) => locationLabels[loc] || loc
+
   useEffect(() => {
     fetchTanks()
     fetchLPGAccessories()
     fetchLubricants()
+    fetchLocationLabels()
   }, [])
+
+  const fetchLocationLabels = async () => {
+    try {
+      const res = await authFetch(`${BASE}/lubricants-daily/locations`, { headers: getHeaders() })
+      if (res.ok) {
+        const rows: { key: string; label: string }[] = await res.json()
+        const map: Record<string, string> = {}
+        for (const row of rows || []) map[row.key] = row.label
+        setLocationLabels(prev => ({ ...prev, ...map }))
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch location labels:', err)
+    }
+  }
 
   const fetchTanks = async () => {
     try {
@@ -120,6 +141,11 @@ export default function Inventory() {
     }
     return null
   }, [activeTab, tanks, lpgAccessories, lubricants])
+
+  // Each lubricant product appears twice in `lubricants` (once per location),
+  // so de-dupe by product_code for an accurate catalog-wide count/category list.
+  const uniqueLubricantCodes = new Set(lubricants.map(l => l.product_code))
+  const lubricantCategories = Array.from(new Set(lubricants.map(l => l.category).filter(Boolean))).sort()
 
   return (
     <div>
@@ -320,7 +346,7 @@ export default function Inventory() {
           <div className="mt-8 bg-category-c-light border border-category-c-border rounded-lg p-4">
             <h3 className="text-sm font-semibold text-category-c mb-2">LPG Products Information</h3>
             <ul className="text-sm text-category-c space-y-1">
-              <li>• <strong>4 Accessory Products</strong>: 2 Plate Stoves (Swivel & Bullnose), Cadac Cooker Top, LPG Hose</li>
+              <li>• <strong>{lpgAccessories.length} Accessory Product{lpgAccessories.length !== 1 ? 's' : ''}</strong>{lpgAccessories.length > 0 ? `: ${lpgAccessories.map(a => a.description).join(', ')}` : ''}</li>
               <li>• <strong>LPG Gas Sales</strong> are tracked by weight (kg) separately</li>
               <li>• <strong>Stock Management</strong>: Automatic inventory updates when accessories are sold</li>
               <li>• <strong>Revenue Tracking</strong>: LPG Gas + Accessories combined for shift reconciliation</li>
@@ -340,7 +366,7 @@ export default function Inventory() {
           {/* Island 3 (Sales Location) */}
           <div className="mb-8">
             <h3 className="text-lg font-bold text-content-primary mb-4 flex items-center gap-2">
-              <span className="px-3 py-1 bg-action-primary-light text-action-primary rounded-full text-sm">Island 3</span>
+              <span className="px-3 py-1 bg-action-primary-light text-action-primary rounded-full text-sm">{labelFor('Island 3')}</span>
               Active Sales Location
             </h3>
 
@@ -405,7 +431,7 @@ export default function Inventory() {
           {/* Buffer Stock (Reserve) */}
           <div>
             <h3 className="text-lg font-bold text-content-primary mb-4 flex items-center gap-2">
-              <span className="px-3 py-1 bg-category-a-light text-category-a rounded-full text-sm">Buffer</span>
+              <span className="px-3 py-1 bg-category-a-light text-category-a rounded-full text-sm">{labelFor('Buffer')}</span>
               Reserve Stock
             </h3>
 
@@ -452,10 +478,10 @@ export default function Inventory() {
           <div className="mt-8 bg-status-success-light border border-status-success rounded-lg p-4">
             <h3 className="text-sm font-semibold text-status-success mb-2">Lubricants Inventory System</h3>
             <ul className="text-sm text-status-success space-y-1">
-              <li>• <strong>Two-Location System</strong>: Island 3 (Active Sales) + Buffer (Reserve Stock)</li>
-              <li>• <strong>8 Lubricant Products</strong>: Engine Oils (10W-30, 15W-40, 20W-50), ATF, Brake Fluid, Coolant</li>
-              <li>• <strong>Stock Transfer</strong>: Move inventory from Buffer to Island 3 when sales location runs low</li>
-              <li>• <strong>Categories</strong>: Engine Oil, Transmission Fluid, Brake Fluid, Coolant</li>
+              <li>• <strong>Two-Location System</strong>: {labelFor('Island 3')} (Active Sales) + {labelFor('Buffer')} (Reserve Stock)</li>
+              <li>• <strong>{uniqueLubricantCodes.size} Lubricant Products</strong>{lubricantCategories.length > 0 ? `: ${lubricantCategories.join(', ')}` : ''}</li>
+              <li>• <strong>Stock Transfer</strong>: Move inventory from {labelFor('Buffer')} to {labelFor('Island 3')} when sales location runs low</li>
+              <li>• <strong>Categories</strong>: {lubricantCategories.length > 0 ? lubricantCategories.join(', ') : 'None configured'}</li>
               <li>• <strong>Value Tracking</strong>: Real-time calculation of inventory value by location</li>
               <li>• <strong>Revenue Integration</strong>: Lubricants sales included in shift reconciliation</li>
             </ul>

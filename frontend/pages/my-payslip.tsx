@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { authFetch } from '../lib/api'
-import { PAYROLL, periodLabel } from '../lib/payroll'
+import { PAYROLL, periodLabel, MONTH_NAMES } from '../lib/payroll'
 
 interface MyPayslip {
   payslip_id: string
@@ -158,6 +158,12 @@ export default function MyPayslipPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Period filter — "All" (empty string) shows everything, same as before.
+  // Options are derived from the payslips actually on record, so the picker
+  // never offers a month/year with nothing to show.
+  const [filterYear, setFilterYear] = useState('')
+  const [filterMonth, setFilterMonth] = useState('')
+
   useEffect(() => {
     authFetch(PAYROLL.myPayslips())
       .then(r => r.ok ? r.json() : r.json().then((e: any) => Promise.reject(e.detail || 'Failed to load')))
@@ -167,6 +173,24 @@ export default function MyPayslipPage() {
 
   const userData = typeof window !== 'undefined' ? localStorage.getItem('user') : null
   const userId = userData ? JSON.parse(userData).user_id : ''
+
+  const availableYears = useMemo(
+    () => Array.from(new Set(payslips.map(s => s.period_year))).sort((a, b) => b - a),
+    [payslips]
+  )
+  const availableMonths = useMemo(
+    () => Array.from(new Set(
+      payslips
+        .filter(s => !filterYear || s.period_year === parseInt(filterYear, 10))
+        .map(s => s.period_month)
+    )).sort((a, b) => a - b),
+    [payslips, filterYear]
+  )
+
+  const filteredPayslips = payslips.filter(s =>
+    (!filterYear || s.period_year === parseInt(filterYear, 10)) &&
+    (!filterMonth || s.period_month === parseInt(filterMonth, 10))
+  )
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
@@ -192,15 +216,48 @@ export default function MyPayslipPage() {
       )}
 
       {!loading && !error && payslips.length > 0 && (
-        <div className="space-y-3">
-          {payslips.map(slip => (
-            <PayslipCard
-              key={slip.payslip_id}
-              slip={slip}
-              onPrint={() => window.open(`/payroll-print?run_id=${slip.run_id}&user_id=${userId}`, '_blank')}
-            />
-          ))}
-        </div>
+        <>
+          <div className="flex gap-2 mb-4">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-content-secondary mb-1">Year</label>
+              <select
+                value={filterYear}
+                onChange={e => { setFilterYear(e.target.value); setFilterMonth('') }}
+                className="w-full px-3 py-2 rounded border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:border-action-primary"
+              >
+                <option value="">All years</option>
+                {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-content-secondary mb-1">Month</label>
+              <select
+                value={filterMonth}
+                onChange={e => setFilterMonth(e.target.value)}
+                className="w-full px-3 py-2 rounded border border-surface-border bg-surface-bg text-content-primary text-sm focus:outline-none focus:border-action-primary"
+              >
+                <option value="">All months</option>
+                {availableMonths.map(m => <option key={m} value={m}>{MONTH_NAMES[m - 1]}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {filteredPayslips.length === 0 ? (
+            <div className="rounded-lg border border-surface-border bg-surface-card px-4 py-8 text-center text-sm text-content-secondary">
+              No payslip for that period.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredPayslips.map(slip => (
+                <PayslipCard
+                  key={slip.payslip_id}
+                  slip={slip}
+                  onPrint={() => window.open(`/payroll-print?run_id=${slip.run_id}&user_id=${userId}`, '_blank')}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
