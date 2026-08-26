@@ -7,10 +7,10 @@ from fastapi import APIRouter, Query, Depends, HTTPException
 from typing import Optional, List
 from ...services.reporting import ReportingService
 from ...services.relational_queries import RelationalQueryService
-from .auth import require_supervisor_or_owner, require_manager_or_owner, get_station_context
-from .reconciliation import _get_reconciliations
+from .auth import require_supervisor_or_owner, require_manager_or_owner, require_owner, get_station_context
+from .reconciliation import _get_reconciliations, _load_station_tank_readings
 from ...database.station_files import load_station_json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 router = APIRouter()
 
@@ -760,26 +760,21 @@ def get_monthly_summary(
 
 # ==================== SALES CONSOLIDATION ====================
 
-@router.get("/sales-consolidation", dependencies=[Depends(require_manager_or_owner)])
-def get_sales_consolidation(
-    start_date: str = Query(..., description="Start date YYYY-MM-DD"),
-    end_date: str = Query(..., description="End date YYYY-MM-DD"),
-    period: str = Query("day", description="shift|day|week|month"),
-    group_by: str = Query("none", description="none|attendant|nozzle|island|tank"),
-    fuel_type: str = Query("all", description="all|Diesel|Petrol"),
-    ctx: dict = Depends(get_station_context),
-):
+def _aggregate_handover_payments(
+    station_id: str, storage: dict, start_date: str, end_date: str,
+    period: str, group_by: str, fuel_type: str,
+) -> dict:
     """
-    Consolidated sales report with payment method breakdown.
-    Aggregates completed handovers by period and optional dimension,
-    splitting revenue into Cash / POS / Credit Pre-Paid / Credit Post-Paid.
+    Aggregate completed handovers by period and optional dimension, splitting
+    revenue into Cash / POS / Credit Pre-Paid / Credit Post-Paid. Shared by
+    /sales-consolidation and /analytics/trends — each row also carries the
+    raw period_key (not just its display label) so callers that need to
+    align rows across period boundaries (e.g. the trends endpoint) can do
+    so without re-deriving it from the label.
     """
     from ...services.handover_sales import iter_completed_handovers, build_nozzle_island_lookup
-    from datetime import datetime, timedelta
     from collections import defaultdict
 
-    station_id = ctx["station_id"]
-    storage = ctx["storage"]
     accounts_data = storage.get("accounts", {})
 
     # Build nozzle dimension lookups
@@ -808,7 +803,7 @@ def get_sales_consolidation(
         return (ym, ym, "")
 
     rows: dict = defaultdict(lambda: {
-        "label": "", "sub_label": "",
+        "label": "", "sub_label": "", "period_key": "",
         "total_revenue": 0.0, "volume": 0.0,
         "cash": 0.0, "pos": 0.0,
         "credit_prepaid": 0.0, "credit_postpaid": 0.0,
@@ -880,6 +875,7 @@ def get_sales_consolidation(
                 r = rows[key]
                 r["label"] = p_label
                 r["sub_label"] = dim
+                r["period_key"] = p_sort
                 r["_sort"] = f"{p_sort}|{dim}"
                 r["total_revenue"] += ns_rev
                 r["volume"] += ns_vol
@@ -893,6 +889,7 @@ def get_sales_consolidation(
             r = rows[key]
             r["label"] = p_label if group_by != "attendant" else attendant
             r["sub_label"] = attendant if group_by != "attendant" else p_label
+            r["period_key"] = p_sort
             r["_sort"] = f"{p_sort}|{dim}"
             r["total_revenue"] += filt_revenue
             r["volume"] += filt_volume
@@ -906,6 +903,7 @@ def get_sales_consolidation(
         out_rows.append({
             "label": r["label"],
             "sub_label": r["sub_label"],
+            "period_key": r["period_key"],
             "total_revenue": round(r["total_revenue"], 2),
             "volume": round(r["volume"], 2),
             "cash": round(r["cash"], 2),
@@ -931,6 +929,52 @@ def get_sales_consolidation(
         "group_by": group_by,
         "fuel_type": fuel_type,
     }
+
+
+@router.get("/sales-consolidation", dependencies=[Depends(require_manager_or_owner)])
+def get_sales_consolidation(
+    start_date: str = Query(..., description="Start date YYYY-MM-DD"),
+    end_date: str = Query(..., description="End date YYYY-MM-DD"),
+    period: str = Query("day", description="shift|day|week|month"),
+    group_by: str = Query("none", description="none|attendant|nozzle|island|tank"),
+    fuel_type: str = Query("all", description="all|Diesel|Petrol"),
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Consolidated sales report with payment method breakdown.
+    Aggregates completed handovers by period and optional dimension,
+    splitting revenue into Cash / POS / Credit Pre-Paid / Credit Post-Paid.
+    """
+    return _aggregate_handover_payments(
+        ctx["station_id"], ctx["storage"], start_date, end_date, period, group_by, fuel_type,
+    )
+
+
+@router.get("/analytics/trends", dependencies=[Depends(require_manager_or_owner)])
+def get_analytics_trends(
+    start_date: str = Query(..., description="Start date YYYY-MM-DD"),
+    end_date: str = Query(..., description="End date YYYY-MM-DD"),
+    period: str = Query("day", description="day|week|month"),
+    fuel_type: str = Query("all", description="all|Diesel|Petrol"),
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Revenue/volume trend over time, for charting. Same aggregation as
+    /sales-consolidation with group_by='none' (one row per period, no
+    sub-dimension split), with period-over-period revenue change added on
+    top so a trend line can show momentum, not just level.
+    """
+    result = _aggregate_handover_payments(
+        ctx["station_id"], ctx["storage"], start_date, end_date, period, "none", fuel_type,
+    )
+    prev_revenue = None
+    for row in result["rows"]:
+        row["revenue_change_pct"] = (
+            round((row["total_revenue"] - prev_revenue) / prev_revenue * 100, 1)
+            if prev_revenue else None
+        )
+        prev_revenue = row["total_revenue"]
+    return result
 
 
 # ==================== RELATIONSHIP ENDPOINTS ====================
