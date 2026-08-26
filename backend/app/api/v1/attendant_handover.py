@@ -3344,9 +3344,12 @@ async def get_review_queue(
     if date:
         results = [h for h in results if h.get("date") == date]
 
-    # Separate by review_status (only fully completed handovers)
+    # Separate by review_status (only fully completed handovers). A
+    # 'returned' handover still blocks its shift from completing (see
+    # _shift_fully_approved) — it must stay visible here too, or it becomes
+    # an invisible-but-blocking entry once the attendant fails to redo it.
     pending = [h for h in results
-               if h.get("review_status", "submitted") in ["submitted", "flagged"]
+               if h.get("review_status", "submitted") in ["submitted", "flagged", "returned"]
                and h.get("phase", "completed") == "completed"]
     approved_today = [
         h for h in results
@@ -3554,12 +3557,17 @@ class VoidHandoverInput(BaseModel):
     shift_id: str
     attendant_id: str
     note: str
+    # Optional: target exactly one handover record (e.g. one of several
+    # duplicate submissions for the same attendant+shift). When omitted,
+    # every non-voided handover for this attendant+shift is voided together
+    # — the original all-in-one behavior, preserved for existing callers.
+    handover_id: Optional[str] = None
 
 
 @router.post("/void", dependencies=[Depends(require_owner)])
 async def void_handover(data: VoidHandoverInput, ctx: dict = Depends(get_station_context)):
     """
-    Void an attendant's entire entry for a shift — nozzle readings, cash
+    Void an attendant's entry (or entries) for a shift — nozzle readings, cash
     handover, stock movement, credit sales — with zero impact on sales
     totals or stock levels once voided. Owner only: unlike Approve/Return,
     this can reverse already-approved stock and credit-sale effects, so it
@@ -3577,13 +3585,16 @@ async def void_handover(data: VoidHandoverInput, ctx: dict = Depends(get_station
     matches = [
         (hid, h) for hid, h in handovers.items()
         if h.get("shift_id") == data.shift_id and h.get("attendant_id") == data.attendant_id
+        and (data.handover_id is None or hid == data.handover_id)
     ]
     if not matches:
-        raise HTTPException(
-            status_code=404,
-            detail="No handover entry found for this attendant on this shift. "
-                   "If nothing was ever submitted, edit the shift's assignments instead.",
+        detail = (
+            f"Handover {data.handover_id} not found for this attendant on this shift."
+            if data.handover_id else
+            "No handover entry found for this attendant on this shift. "
+            "If nothing was ever submitted, edit the shift's assignments instead."
         )
+        raise HTTPException(status_code=404, detail=detail)
 
     close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
 
@@ -3658,12 +3669,21 @@ async def void_handover(data: VoidHandoverInput, ctx: dict = Depends(get_station
             created_by=ctx["username"],
         )
 
+    # A voided handover counts as resolved (see _shift_fully_approved) — this
+    # may be the last thing blocking the shift from completing, so re-check.
+    advance_shift_on_approval(data.shift_id, station_id, ctx["storage"], ctx["username"])
+
     return {"status": "success", "voided_handover_ids": voided_ids}
 
 
 class UnvoidHandoverInput(BaseModel):
     shift_id: str
     attendant_id: str
+    # Optional: restore exactly one voided handover record, leaving any other
+    # voided entries for this attendant+shift alone. When omitted, every
+    # voided handover for this attendant+shift is restored together — the
+    # original all-in-one behavior, preserved for existing callers.
+    handover_id: Optional[str] = None
 
 
 @router.post("/unvoid", dependencies=[Depends(require_owner)])
@@ -3680,9 +3700,15 @@ async def unvoid_handover(data: UnvoidHandoverInput, ctx: dict = Depends(get_sta
         (hid, h) for hid, h in handovers.items()
         if h.get("shift_id") == data.shift_id and h.get("attendant_id") == data.attendant_id
         and h.get("review_status") == "voided"
+        and (data.handover_id is None or hid == data.handover_id)
     ]
     if not matches:
-        raise HTTPException(status_code=404, detail="No voided entry found for this attendant on this shift.")
+        detail = (
+            f"Voided handover {data.handover_id} not found for this attendant on this shift."
+            if data.handover_id else
+            "No voided entry found for this attendant on this shift."
+        )
+        raise HTTPException(status_code=404, detail=detail)
 
     close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
 
@@ -3761,6 +3787,11 @@ async def unvoid_handover(data: UnvoidHandoverInput, ctx: dict = Depends(get_sta
 class DeleteVoidedHandoverInput(BaseModel):
     shift_id: str
     attendant_id: str
+    # Optional: delete exactly one voided handover record, leaving any other
+    # voided entries for this attendant+shift alone. When omitted, every
+    # voided handover for this attendant+shift is deleted together — the
+    # original all-in-one behavior, preserved for existing callers.
+    handover_id: Optional[str] = None
 
 
 @router.post("/delete-voided", dependencies=[Depends(require_owner)])
@@ -3779,13 +3810,16 @@ async def delete_voided_handover(data: DeleteVoidedHandoverInput, ctx: dict = De
         (hid, h) for hid, h in handovers.items()
         if h.get("shift_id") == data.shift_id and h.get("attendant_id") == data.attendant_id
         and h.get("review_status") == "voided"
+        and (data.handover_id is None or hid == data.handover_id)
     ]
     if not matches:
-        raise HTTPException(
-            status_code=404,
-            detail="No voided entry found for this attendant on this shift. "
-                   "Only a voided entry can be permanently deleted — void it first.",
+        detail = (
+            f"Voided handover {data.handover_id} not found for this attendant on this shift."
+            if data.handover_id else
+            "No voided entry found for this attendant on this shift. "
+            "Only a voided entry can be permanently deleted — void it first."
         )
+        raise HTTPException(status_code=404, detail=detail)
 
     deleted_ids = []
     for handover_id, handover in matches:

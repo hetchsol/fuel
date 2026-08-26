@@ -355,7 +355,11 @@ export default function HandoverReview() {
     if (statusTab === 'todo') {
       const flagged = handovers.filter(h => h.review_status === 'flagged')
       const submitted = handovers.filter(h => (h.review_status || 'submitted') === 'submitted')
-      list = [...flagged, ...submitted, ...awaitingClosing]
+      // Returned entries still block their shift from closing (see backend
+      // _shift_fully_approved) — they need to stay visible until the
+      // attendant redoes them or an owner voids a stuck duplicate below.
+      const returned = handovers.filter(h => h.review_status === 'returned')
+      list = [...flagged, ...submitted, ...returned, ...awaitingClosing]
     }
     else if (statusTab === 'pending') list = handovers.filter(h => (h.review_status || 'submitted') === 'submitted')
     else if (statusTab === 'flagged') list = handovers.filter(h => h.review_status === 'flagged')
@@ -2157,8 +2161,102 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
       setExcluding(false)
     }
   }
+
+  // Void this one specific entry — for a 'returned' handover that will never
+  // be resubmitted (e.g. a duplicate submission), so it stops silently
+  // blocking the shift from closing. Scoped to this handover_id only — a
+  // sibling handover the same attendant has for the same shift (e.g. an
+  // already-approved one) is never touched.
+  const [showVoidForm, setShowVoidForm] = useState(false)
+  const [voidNote, setVoidNote] = useState('')
+  const [voiding, setVoiding] = useState(false)
+
+  const handleVoidThisEntry = async () => {
+    if (!voidNote.trim()) return
+    setVoiding(true)
+    try {
+      const res = await authFetch(`${BASE}/handover/void`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          shift_id: h.shift_id,
+          attendant_id: h.attendant_id,
+          handover_id: h.handover_id,
+          note: voidNote.trim(),
+        }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        toast.error(`Failed to void entry: ${error.detail || JSON.stringify(error)}`)
+        return
+      }
+      toast.success('Entry voided.')
+      setShowVoidForm(false)
+      setVoidNote('')
+      onRefresh()
+    } catch (err: any) {
+      toast.error(`Failed to void entry: ${err.message}`)
+    } finally {
+      setVoiding(false)
+    }
+  }
+
   return (
     <div className="p-4 space-y-4">
+      {/* Returned entries never reappear on their own — this is the one place
+          an owner can either wait for the attendant to redo it, or discard it
+          if it was a mistaken/duplicate submission. */}
+      {h.review_status === 'returned' && currentUserRole === 'owner' && (
+        <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--color-status-warning-light, #fff8e1)', borderWidth: 1, borderColor: 'var(--color-status-warning)' }}>
+          <div className="text-xs font-medium uppercase mb-1" style={{ color: 'var(--color-status-warning)' }}>
+            Returned — awaiting attendant resubmission
+          </div>
+          <div className="text-sm mb-2" style={{ color: theme.textPrimary }}>
+            This shift can't close until this entry is resolved. If it will be redone, no action is
+            needed here. If it's a mistaken or duplicate submission that will never be resubmitted,
+            void just this entry — any other handover this attendant has for the same shift is untouched.
+          </div>
+          {!showVoidForm ? (
+            <button
+              onClick={() => setShowVoidForm(true)}
+              className="text-xs font-medium hover:underline"
+              style={{ color: 'var(--color-status-error)' }}
+            >
+              Void/Annul this entry
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <ReasonChips presets={REASON_PRESETS.voidEntry} value={voidNote} onSelect={setVoidNote} className="mb-1" />
+              <textarea
+                value={voidNote}
+                onChange={e => setVoidNote(e.target.value)}
+                rows={2}
+                placeholder="Reason for voiding this entry..."
+                className="w-full px-2 py-1 text-sm rounded"
+                style={{ borderWidth: 1, borderColor: theme.border, backgroundColor: theme.cardBg, color: theme.textPrimary }}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleVoidThisEntry}
+                  disabled={voiding || !voidNote.trim()}
+                  className="px-3 py-1 text-xs font-medium rounded text-white disabled:opacity-60"
+                  style={{ backgroundColor: 'var(--color-status-error)' }}
+                >
+                  {voiding ? 'Voiding...' : 'Confirm Void'}
+                </button>
+                <button
+                  onClick={() => { setShowVoidForm(false); setVoidNote('') }}
+                  className="px-3 py-1 text-xs font-medium rounded"
+                  style={{ borderWidth: 1, borderColor: theme.border, color: theme.textSecondary }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Previous supervisor review */}
       {h.supervisor_review && (
         <div className="p-3 rounded-lg" style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border }}>
