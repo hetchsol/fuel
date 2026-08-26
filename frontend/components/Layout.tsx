@@ -202,11 +202,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // Poll for stale awaiting-closing handovers — manager only. The count
   // (not the list) is enough here; handover-review is where they act on it.
+  //
+  // Also fires the on-demand /shifts/check-stale sweep first: the 12-hour
+  // handover auto-close (and the 20-hour shift auto-close it shares the
+  // endpoint with) otherwise only runs on server startup, which could be
+  // rare on a long-running deploy. Piggybacking it on this existing poll
+  // means it actually runs live while a manager has the app open, not just
+  // in theory. Awaited before the count re-check so a handover that just
+  // got auto-closed is reflected immediately, potentially lifting the block.
   useEffect(() => {
     if (router.pathname === '/login' || router.pathname === '/setup' || router.pathname === '/initializing') return
     if (!isManagerForClosureGate) return
     const checkStaleClosures = () => {
-      authFetch(`${BASE}/handover/review-queue`, { headers: getHeaders() })
+      authFetch(`${BASE}/shifts/check-stale`, { method: 'POST', headers: getHeaders() })
+        .catch(() => {})
+        .then(() => authFetch(`${BASE}/handover/review-queue`, { headers: getHeaders() }))
         .then(r => r.ok ? r.json() : null)
         .then(data => setStaleClosureCount(data?.stale_readings_count || 0))
         .catch(() => {})
@@ -922,7 +932,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </h2>
             <p className="text-sm mb-5 text-content-secondary">
               {staleClosureCount !== 1 ? 'These have' : 'This has'} been waiting over 4 hours for tank dips and cash
-              reconciliation. Close {staleClosureCount !== 1 ? 'them' : 'it'} before doing anything else.
+              reconciliation. Close {staleClosureCount !== 1 ? 'them' : 'it'} before doing anything else — left
+              unresolved for 12 hours total, {staleClosureCount !== 1 ? 'they get' : 'it gets'} automatically closed
+              using expected figures instead of a verified cash/dip count.
             </p>
             <Link
               href="/handover-review"

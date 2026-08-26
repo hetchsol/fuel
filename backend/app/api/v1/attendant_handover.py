@@ -46,6 +46,12 @@ router = APIRouter()
 # and escalated via a notification.
 STALE_READINGS_HOURS = 4
 
+# Past this many hours still awaiting closing, the handover is administratively
+# closed automatically (see auto_close_stale_handovers) — a last resort so a
+# shift's figures don't sit unresolved indefinitely when nobody acts on the
+# STALE_READINGS_HOURS warning above.
+HANDOVER_AUTO_CLOSE_HOURS = 12
+
 
 def _load_handovers(station_id: str) -> dict:
     return load_station_json(station_id, 'attendant_handovers.json', default={})
@@ -267,6 +273,61 @@ def notify_stale_readings(station_id: str) -> int:
     if notified:
         _save_handovers(handovers, station_id)
     return notified
+
+
+def auto_close_stale_handovers(station_id: str, storage: dict) -> list:
+    """
+    Administratively close (see admin_override_close) any Phase-1 handover
+    that's been awaiting closing for more than HANDOVER_AUTO_CLOSE_HOURS —
+    the last-resort fallback once the STALE_READINGS_HOURS warning above has
+    gone unactioned for a long time. Closes with carried-forward expected
+    figures, not a real cash/dip verification — exactly what a manual admin
+    override does, just triggered automatically instead of by an owner.
+
+    Fires one station-wide critical notification summarizing the whole batch
+    (visible to managers and owners alike — this app has no per-user-targeted
+    notifications) rather than one per handover, so a backlog doesn't spam
+    the feed.
+    """
+    handovers = _load_handovers(station_id)
+    cutoff = datetime.now().timestamp() - (HANDOVER_AUTO_CLOSE_HOURS * 3600)
+    stale_ids = []
+    for hid, h in handovers.items():
+        if h.get("phase") != "readings_verified":
+            continue
+        waited_since = datetime.fromisoformat(
+            h.get("phase_1_completed_at") or h.get("created_at", "2000-01-01")).timestamp()
+        if waited_since >= cutoff:
+            continue
+        stale_ids.append(hid)
+
+    if not stale_ids:
+        return []
+
+    reason = f"Automatically closed — awaiting closing for over {HANDOVER_AUTO_CLOSE_HOURS} hours with no action taken."
+    closed, _skipped = admin_override_close(
+        station_id, stale_ids, reason, "system", "System (auto-close)", storage,
+    )
+
+    if closed:
+        try:
+            create_notification(
+                station_id=station_id,
+                type="HANDOVER_AUTO_CLOSED",
+                severity="critical",
+                title="Handover(s) Auto-Closed — Unverified",
+                message=(
+                    f"{len(closed)} handover(s) sat awaiting closing for over {HANDOVER_AUTO_CLOSE_HOURS} hours "
+                    f"and were automatically closed using expected figures, not a verified cash/dip count. "
+                    f"Review: {', '.join(closed)}."
+                ),
+                entity_type="handover",
+                entity_id=closed[0],
+            )
+        except Exception:
+            pass
+
+    return closed
 
 
 def _build_er_review_item(

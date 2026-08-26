@@ -18,6 +18,16 @@ const PAGE_SIZE = 20
 
 const fmtK = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+// Matches backend HANDOVER_AUTO_CLOSE_HOURS (attendant_handover.py) — past
+// this many hours awaiting closing, the handover gets administratively
+// closed automatically using expected figures, not a verified cash/dip
+// count. Returns hours remaining (0 if already past), or null if unknown.
+const HANDOVER_AUTO_CLOSE_HOURS = 12
+function autoCloseHoursRemaining(hoursWaiting?: number): number | null {
+  if (hoursWaiting == null) return null
+  return Math.max(0, Math.round((HANDOVER_AUTO_CLOSE_HOURS - hoursWaiting) * 10) / 10)
+}
+
 const BASE = '/api/v1'
 
 function getAuthHeaders() {
@@ -793,6 +803,7 @@ export default function HandoverReview() {
       {staleReadingsCount > 0 && (
         <div className="rounded-lg p-3 text-sm" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)', borderWidth: 1, borderColor: 'var(--color-status-warning)' }}>
           <span className="font-semibold">{staleReadingsCount} entries</span> have been verified but the shift has not been completed (over 4 hours ago). Follow up in the office.
+          {' '}If still unresolved, these will be automatically closed using expected figures (not a verified cash/dip count) 12 hours after readings were verified.
         </div>
       )}
 
@@ -911,12 +922,26 @@ export default function HandoverReview() {
                       )}
                       <span className="font-semibold text-sm" style={{ color: theme.textPrimary }}>{h.attendant_name}</span>
                     </span>
-                    {h.is_stale && (
-                      <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold shrink-0"
-                        style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
-                        Stale
-                      </span>
-                    )}
+                    {(() => {
+                      const remaining = autoCloseHoursRemaining(h.hours_waiting)
+                      if (remaining != null && remaining <= 4) {
+                        return (
+                          <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold shrink-0"
+                            style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)' }}>
+                            Auto-closes in {remaining}h
+                          </span>
+                        )
+                      }
+                      if (h.is_stale) {
+                        return (
+                          <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold shrink-0"
+                            style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+                            Stale
+                          </span>
+                        )
+                      }
+                      return null
+                    })()}
                   </div>
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div>
@@ -975,12 +1000,26 @@ export default function HandoverReview() {
                       {h.hours_waiting != null ? `${h.hours_waiting}h` : '-'}
                     </td>
                     <td className="px-3 py-2">
-                      {h.is_stale && (
-                        <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold"
-                          style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
-                          Stale
-                        </span>
-                      )}
+                      {(() => {
+                        const remaining = autoCloseHoursRemaining(h.hours_waiting)
+                        if (remaining != null && remaining <= 4) {
+                          return (
+                            <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold"
+                              style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)' }}>
+                              Auto-closes in {remaining}h
+                            </span>
+                          )
+                        }
+                        if (h.is_stale) {
+                          return (
+                            <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold"
+                              style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+                              Stale
+                            </span>
+                          )
+                        }
+                        return null
+                      })()}
                     </td>
                     <td className="px-3 py-2">
                       <button onClick={() => { setStatusTab('todo'); openCloseAndApprove(h) }}
