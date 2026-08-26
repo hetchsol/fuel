@@ -762,7 +762,7 @@ def get_monthly_summary(
 
 def _aggregate_handover_payments(
     station_id: str, storage: dict, start_date: str, end_date: str,
-    period: str, group_by: str, fuel_type: str,
+    period: str, group_by: str, fuel_type: str, shift_type_filter: str = "all",
 ) -> dict:
     """
     Aggregate completed handovers by period and optional dimension, splitting
@@ -771,6 +771,11 @@ def _aggregate_handover_payments(
     raw period_key (not just its display label) so callers that need to
     align rows across period boundaries (e.g. the trends endpoint) can do
     so without re-deriving it from the label.
+
+    shift_type_filter restricts to one shift type (Day/Night); "all" (the
+    default) applies no filter. Named distinctly from the per-handover
+    `shift_type` local below (each handover's own value, used for period
+    bucketing) so the two are never confused.
     """
     from ...services.handover_sales import iter_completed_handovers, build_nozzle_island_lookup
     from collections import defaultdict
@@ -817,6 +822,8 @@ def _aggregate_handover_payments(
 
         shift_id = ho.get("shift_id", "")
         shift_type = ho.get("shift_type", "")
+        if shift_type_filter != "all" and shift_type != shift_type_filter:
+            continue
         attendant = ho.get("attendant_name", "Unknown")
 
         # Payment breakdown
@@ -956,6 +963,7 @@ def get_analytics_trends(
     end_date: str = Query(..., description="End date YYYY-MM-DD"),
     period: str = Query("day", description="day|week|month"),
     fuel_type: str = Query("all", description="all|Diesel|Petrol"),
+    shift_type: str = Query("all", description="all|Day|Night"),
     ctx: dict = Depends(get_station_context),
 ):
     """
@@ -965,7 +973,7 @@ def get_analytics_trends(
     top so a trend line can show momentum, not just level.
     """
     result = _aggregate_handover_payments(
-        ctx["station_id"], ctx["storage"], start_date, end_date, period, "none", fuel_type,
+        ctx["station_id"], ctx["storage"], start_date, end_date, period, "none", fuel_type, shift_type,
     )
     prev_revenue = None
     for row in result["rows"]:
@@ -981,6 +989,7 @@ def get_analytics_trends(
 def get_analytics_breakdown(
     start_date: str = Query(..., description="Start date YYYY-MM-DD"),
     end_date: str = Query(..., description="End date YYYY-MM-DD"),
+    shift_type: str = Query("all", description="all|Day|Night"),
     ctx: dict = Depends(get_station_context),
 ):
     """
@@ -990,9 +999,9 @@ def get_analytics_breakdown(
     aggregate `totals` from each call is used, not the per-period `rows`.
     """
     station_id, storage = ctx["station_id"], ctx["storage"]
-    all_totals = _aggregate_handover_payments(station_id, storage, start_date, end_date, "day", "none", "all")["totals"]
-    petrol_totals = _aggregate_handover_payments(station_id, storage, start_date, end_date, "day", "none", "Petrol")["totals"]
-    diesel_totals = _aggregate_handover_payments(station_id, storage, start_date, end_date, "day", "none", "Diesel")["totals"]
+    all_totals = _aggregate_handover_payments(station_id, storage, start_date, end_date, "day", "none", "all", shift_type)["totals"]
+    petrol_totals = _aggregate_handover_payments(station_id, storage, start_date, end_date, "day", "none", "Petrol", shift_type)["totals"]
+    diesel_totals = _aggregate_handover_payments(station_id, storage, start_date, end_date, "day", "none", "Diesel", shift_type)["totals"]
 
     return {
         "period": {"start_date": start_date, "end_date": end_date},

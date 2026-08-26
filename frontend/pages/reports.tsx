@@ -1322,20 +1322,21 @@ function AnalyticsTrendsView() {
   // two colored lines (green/purple — the same fuel-type identity used
   // everywhere else in the app, e.g. the delivery fuel-type picker).
   const [fuelType, setFuelType] = useState('all')
+  const [shiftType, setShiftType] = useState('all')
   const [chartType, setChartType] = useState<'line' | 'bar'>('line')
   const [series, setSeries] = useState<ChartSeries[] | null>(null)
   const [breakdown, setBreakdown] = useState<BreakdownResult | null>(null)
   const [loading, setLoading] = useState(false)
 
   const fetchTrend = async (fuel: string): Promise<TrendsResult> => {
-    const url = `${BASE}/reports/analytics/trends?start_date=${startDate}&end_date=${endDate}&period=${period}&fuel_type=${fuel}`
+    const url = `${BASE}/reports/analytics/trends?start_date=${startDate}&end_date=${endDate}&period=${period}&fuel_type=${fuel}&shift_type=${shiftType}`
     const res = await authFetch(url, { headers: getHeaders() })
     if (!res.ok) throw new Error((await res.json()).detail || 'Failed')
     return res.json()
   }
 
   const fetchBreakdown = async (): Promise<BreakdownResult> => {
-    const url = `${BASE}/reports/analytics/breakdown?start_date=${startDate}&end_date=${endDate}`
+    const url = `${BASE}/reports/analytics/breakdown?start_date=${startDate}&end_date=${endDate}&shift_type=${shiftType}`
     const res = await authFetch(url, { headers: getHeaders() })
     if (!res.ok) throw new Error((await res.json()).detail || 'Failed')
     return res.json()
@@ -1414,6 +1415,12 @@ function AnalyticsTrendsView() {
             <p className="text-xs font-medium text-content-secondary mb-1.5">Fuel</p>
             <div className="flex gap-1">
               {[['all', 'All'], ['Diesel', 'Diesel'], ['Petrol', 'Petrol'], ['compare', 'Petrol vs Diesel']].map(([v, l]) => segBtn(v, fuelType, setFuelType, l))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-content-secondary mb-1.5">Shift</p>
+            <div className="flex gap-1">
+              {[['all', 'All'], ['Day', 'Day Shift'], ['Night', 'Night Shift']].map(([v, l]) => segBtn(v, shiftType, setShiftType, l))}
             </div>
           </div>
         </div>
