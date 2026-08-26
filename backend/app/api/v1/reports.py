@@ -977,6 +977,39 @@ def get_analytics_trends(
     return result
 
 
+@router.get("/analytics/breakdown", dependencies=[Depends(require_manager_or_owner)])
+def get_analytics_breakdown(
+    start_date: str = Query(..., description="Start date YYYY-MM-DD"),
+    end_date: str = Query(..., description="End date YYYY-MM-DD"),
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Snapshot composition for the selected date range as a whole (not a time
+    series) — revenue split by fuel type, and payment-method mix. Backs the
+    Analytics pie charts. period/group_by are irrelevant here since only the
+    aggregate `totals` from each call is used, not the per-period `rows`.
+    """
+    station_id, storage = ctx["station_id"], ctx["storage"]
+    all_totals = _aggregate_handover_payments(station_id, storage, start_date, end_date, "day", "none", "all")["totals"]
+    petrol_totals = _aggregate_handover_payments(station_id, storage, start_date, end_date, "day", "none", "Petrol")["totals"]
+    diesel_totals = _aggregate_handover_payments(station_id, storage, start_date, end_date, "day", "none", "Diesel")["totals"]
+
+    return {
+        "period": {"start_date": start_date, "end_date": end_date},
+        "fuel_split": {
+            "Petrol": petrol_totals["total_revenue"],
+            "Diesel": diesel_totals["total_revenue"],
+        },
+        "payment_mix": {
+            "cash": all_totals["cash"],
+            "pos": all_totals["pos"],
+            "credit_prepaid": all_totals["credit_prepaid"],
+            "credit_postpaid": all_totals["credit_postpaid"],
+        },
+        "total_revenue": all_totals["total_revenue"],
+    }
+
+
 # ==================== RELATIONSHIP ENDPOINTS ====================
 
 @router.get("/relationships/{entity_type}/{entity_id}", dependencies=[Depends(require_supervisor_or_owner)])

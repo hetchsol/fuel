@@ -987,18 +987,29 @@ interface ChartSeries {
   points: TrendPoint[]
 }
 
-// A line chart: 2px lines, hairline gridlines, hover crosshair with a
-// tooltip. One shared value axis — never a dual axis, even with two series.
-// Single series: ~10% opacity area wash + an endpoint direct label, no
-// legend box (the card title above it already names what's plotted).
+// Rounded-top, square-baseline bar path — SVG <rect> only takes one radius
+// for all four corners, so a "4px rounded data-end, square at baseline" bar
+// needs its own path.
+function barPath(xLeft: number, yTop: number, width: number, yBottom: number, radius: number) {
+  const r = Math.max(0, Math.min(radius, width / 2, yBottom - yTop))
+  if (r <= 0) return `M ${xLeft},${yBottom} L ${xLeft},${yTop} L ${xLeft + width},${yTop} L ${xLeft + width},${yBottom} Z`
+  return `M ${xLeft},${yBottom} L ${xLeft},${yTop + r} Q ${xLeft},${yTop} ${xLeft + r},${yTop} ` +
+    `L ${xLeft + width - r},${yTop} Q ${xLeft + width},${yTop} ${xLeft + width},${yTop + r} L ${xLeft + width},${yBottom} Z`
+}
+
+// A line or grouped-bar chart: hairline gridlines, hover with a tooltip.
+// One shared value axis — never a dual axis, even with two series.
+// Single series (line): ~10% opacity area wash + an endpoint direct label,
+// no legend box (the card title above it already names what's plotted).
 // Two-plus series: no area wash (overlapping washes muddy the read), a
 // legend carries identity instead, and the tooltip lists every series at
-// the hovered period so the reader never has to land on a line to get a
+// the hovered period so the reader never has to land on a mark to get a
 // value — endpoint labels are dropped in favor of the legend + tooltip +
 // table to avoid two close values colliding.
-function LineTrendChart({ series, formatValue }: {
+function LineTrendChart({ series, formatValue, type = 'line' }: {
   series: ChartSeries[]
   formatValue: (v: number) => string
+  type?: 'line' | 'bar'
 }) {
   const [hover, setHover] = useState<number | null>(null)
   const W = 1000, H = 280
@@ -1047,6 +1058,14 @@ function LineTrendChart({ series, formatValue }: {
   const last = n - 1
   const hoverRow = hover !== null ? master[hover] : null
 
+  // Bar geometry: grouped bars per period, capped at 24px, 2px surface gap
+  // between bars in the same group.
+  const slotWidth = n > 0 ? innerW / n : innerW
+  const groupWidth = Math.min(slotWidth * 0.6, 24 * series.length + 2 * (series.length - 1))
+  const barGap = 2
+  const barWidth = Math.max(2, (groupWidth - barGap * (series.length - 1)) / series.length)
+  const barX = (i: number, si: number) => x(i) - groupWidth / 2 + si * (barWidth + barGap)
+
   return (
     <div className="relative">
       {multi && (
@@ -1077,8 +1096,28 @@ function LineTrendChart({ series, formatValue }: {
           ) : null
         ))}
 
+        {/* Hover indicator: a background band behind the hovered bar group,
+            or a dashed crosshair line for the line chart. */}
+        {hover !== null && type === 'bar' && (
+          <rect x={x(hover) - slotWidth / 2} y={pad.top} width={slotWidth} height={innerH}
+            fill="var(--color-border)" fillOpacity={0.35} />
+        )}
+        {hover !== null && type === 'line' && (
+          <line x1={x(hover)} x2={x(hover)} y1={pad.top} y2={pad.top + innerH}
+            stroke="var(--color-text-secondary)" strokeWidth={1} strokeDasharray="2,2" />
+        )}
+
         {aligned.map((pts, si) => {
           const color = series[si].color
+          if (type === 'bar') {
+            return (
+              <g key={series[si].key}>
+                {pts.map((p, i) => (
+                  <path key={i} d={barPath(barX(i, si), y(p.value), barWidth, pad.top + innerH, 4)} fill={color} />
+                ))}
+              </g>
+            )
+          }
           const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i)},${y(p.value)}`).join(' ')
           const areaPath = !multi && pts.length
             ? `M ${x(0)},${pad.top + innerH} ` + pts.map((p, i) => `L ${x(i)},${y(p.value)}`).join(' ') + ` L ${x(pts.length - 1)},${pad.top + innerH} Z`
@@ -1102,11 +1141,6 @@ function LineTrendChart({ series, formatValue }: {
           )
         })}
 
-        {hover !== null && (
-          <line x1={x(hover)} x2={x(hover)} y1={pad.top} y2={pad.top + innerH}
-            stroke="var(--color-text-secondary)" strokeWidth={1} strokeDasharray="2,2" />
-        )}
-
         {/* Hit targets: per-point focusable circles for keyboard, full-width rect for mouse */}
         {master.map((m, i) => (
           <circle key={i} cx={x(i)} cy={pad.top + innerH / 2} r={12} fill="transparent"
@@ -1122,7 +1156,9 @@ function LineTrendChart({ series, formatValue }: {
           style={{
             left: `${(x(hover) / W) * 100}%`,
             top: `${(Math.min(...aligned.map(pts => y(pts[hover!].value))) / H) * 100}%`,
-            transform: 'translate(-50%, -130%)',
+            // Center on the point, but swing to a left- or right-anchored
+            // box near the chart's edges so it never clips off the card.
+            transform: `translate(${hover / Math.max(1, n - 1) < 0.15 ? '0%' : hover / Math.max(1, n - 1) > 0.85 ? '-100%' : '-50%'}, -130%)`,
             whiteSpace: 'nowrap',
           }}
         >
@@ -1151,6 +1187,132 @@ function LineTrendChart({ series, formatValue }: {
 const toTrendPoints = (r: TrendsResult): TrendPoint[] =>
   r.rows.map(row => ({ key: row.period_key, label: row.label, value: row.total_revenue, changePct: row.revenue_change_pct }))
 
+// ── Breakdown pies ───────────────────────────────────────────────────────
+
+interface BreakdownResult {
+  period: { start_date: string; end_date: string }
+  fuel_split: Record<string, number>
+  payment_mix: Record<string, number>
+  total_revenue: number
+}
+
+interface PieSlice {
+  key: string
+  label: string
+  value: number
+  color: string
+}
+
+// A part-to-whole snapshot for one date range (not a time series) — a
+// donut so the total can sit in the center. Fixed slice order (never
+// sorted by value), so hue always maps to the same category and only
+// true ring-neighbors ever sit adjacent — the pairing the categorical
+// palette was validated against. Each slice is its own hit target (no
+// crosshair): hover pops the slice out a few px and shows a tooltip;
+// slices at >=8% of the total also get a direct percentage label so the
+// story doesn't depend on hovering. Legend always shown (2+ slices).
+function DonutChart({ slices, formatValue, centerLabel }: {
+  slices: PieSlice[]
+  formatValue: (v: number) => string
+  centerLabel: string
+}) {
+  const [hover, setHover] = useState<number | null>(null)
+  const total = slices.reduce((s, x) => s + x.value, 0)
+  const size = 220
+  const cx = size / 2, cy = size / 2
+  const rOuter = 88, rHover = 94, rInner = 54
+  const gapDeg = total > 0 && slices.length > 1 ? 1.5 : 0
+
+  const polar = (r: number, deg: number): [number, number] => {
+    const rad = (deg * Math.PI) / 180
+    return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)]
+  }
+  const ringPath = (rOut: number, start: number, end: number) => {
+    if (end <= start) return ''
+    const large = end - start > 180 ? 1 : 0
+    const [x1, y1] = polar(rOut, start)
+    const [x2, y2] = polar(rOut, end)
+    const [x3, y3] = polar(rInner, end)
+    const [x4, y4] = polar(rInner, start)
+    return `M ${x1},${y1} A ${rOut},${rOut} 0 ${large} 1 ${x2},${y2} L ${x3},${y3} A ${rInner},${rInner} 0 ${large} 0 ${x4},${y4} Z`
+  }
+
+  let angle = -90
+  const arcs = slices.map((s, i) => {
+    const frac = total > 0 ? s.value / total : 0
+    const sweep = frac * 360
+    const start = angle + (sweep > gapDeg ? gapDeg / 2 : 0)
+    const end = angle + sweep - (sweep > gapDeg ? gapDeg / 2 : 0)
+    angle += sweep
+    return { ...s, frac, start, end, mid: (start + end) / 2 }
+  })
+
+  const hoverArc = hover !== null ? arcs[hover] : null
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-6">
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${centerLabel} breakdown`}>
+          {arcs.map((a, i) => (
+            <path
+              key={a.key}
+              d={ringPath(hover === i ? rHover : rOuter, a.start, a.end)}
+              fill={a.color}
+              tabIndex={total > 0 ? 0 : -1}
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+              onFocus={() => setHover(i)}
+              onBlur={() => setHover(null)}
+              style={{ cursor: total > 0 ? 'pointer' : 'default', transition: 'd 120ms ease' }}
+            />
+          ))}
+          {arcs.map((a, i) => (
+            a.frac >= 0.08 ? (
+              <text key={`${a.key}-label`} x={polar((rOuter + rInner) / 2, a.mid)[0]} y={polar((rOuter + rInner) / 2, a.mid)[1]}
+                textAnchor="middle" dominantBaseline="middle" fontSize={12} fontWeight={600} fill="#fff" pointerEvents="none">
+                {Math.round(a.frac * 100)}%
+              </text>
+            ) : null
+          ))}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-4 text-center">
+          {hoverArc ? (
+            <>
+              <p className="text-xs text-content-secondary">{hoverArc.label}</p>
+              <p className="text-lg font-bold text-content-primary">{formatValue(hoverArc.value)}</p>
+              <p className="text-xs text-content-secondary">{Math.round(hoverArc.frac * 100)}%</p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-content-secondary">{centerLabel}</p>
+              <p className="text-lg font-bold text-content-primary">{formatValue(total)}</p>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Legend + table-equivalent — every value reachable without hovering */}
+      <div className="flex-1 w-full space-y-1.5">
+        {arcs.map((a, i) => (
+          <div key={a.key}
+            className="flex items-center justify-between gap-3 text-sm rounded px-1.5 py-1"
+            style={{ backgroundColor: hover === i ? 'var(--color-bg)' : 'transparent' }}
+            onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
+          >
+            <span className="flex items-center gap-2 text-content-secondary">
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: a.color }} />
+              {a.label}
+            </span>
+            <span className="font-mono text-content-primary">
+              {formatValue(a.value)} <span className="text-content-secondary">({Math.round(a.frac * 100)}%)</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function AnalyticsTrendsView() {
   const today = new Date().toISOString().split('T')[0]
   const [startDate, setStartDate] = useState(today)
@@ -1160,7 +1322,9 @@ function AnalyticsTrendsView() {
   // two colored lines (green/purple — the same fuel-type identity used
   // everywhere else in the app, e.g. the delivery fuel-type picker).
   const [fuelType, setFuelType] = useState('all')
+  const [chartType, setChartType] = useState<'line' | 'bar'>('line')
   const [series, setSeries] = useState<ChartSeries[] | null>(null)
+  const [breakdown, setBreakdown] = useState<BreakdownResult | null>(null)
   const [loading, setLoading] = useState(false)
 
   const fetchTrend = async (fuel: string): Promise<TrendsResult> => {
@@ -1170,10 +1334,19 @@ function AnalyticsTrendsView() {
     return res.json()
   }
 
+  const fetchBreakdown = async (): Promise<BreakdownResult> => {
+    const url = `${BASE}/reports/analytics/breakdown?start_date=${startDate}&end_date=${endDate}`
+    const res = await authFetch(url, { headers: getHeaders() })
+    if (!res.ok) throw new Error((await res.json()).detail || 'Failed')
+    return res.json()
+  }
+
   const run = async () => {
     setLoading(true)
     setSeries(null)
+    setBreakdown(null)
     try {
+      const breakdownPromise = fetchBreakdown()
       if (fuelType === 'compare') {
         const [petrol, diesel] = await Promise.all([fetchTrend('Petrol'), fetchTrend('Diesel')])
         setSeries([
@@ -1184,6 +1357,7 @@ function AnalyticsTrendsView() {
         const data = await fetchTrend(fuelType)
         setSeries([{ key: 'total', label: 'Total Revenue', color: 'var(--color-action-primary)', points: toTrendPoints(data) }])
       }
+      setBreakdown(await breakdownPromise)
     } catch (err: any) {
       toast(err.message, { icon: '✕' })
     } finally {
@@ -1278,9 +1452,16 @@ function AnalyticsTrendsView() {
           )}
 
           <div className="bg-surface-card border border-surface-border rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-content-primary mb-3">Total Revenue</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-content-primary">Total Revenue</h3>
+              {hasData && (
+                <div className="flex gap-1">
+                  {[['line', 'Line'], ['bar', 'Bar']].map(([v, l]) => segBtn(v, chartType, (val) => setChartType(val as 'line' | 'bar'), l))}
+                </div>
+              )}
+            </div>
             {hasData ? (
-              <LineTrendChart series={series} formatValue={fmt} />
+              <LineTrendChart series={series} formatValue={fmt} type={chartType} />
             ) : (
               <p className="text-sm text-content-secondary text-center py-8">No completed handovers found for this period.</p>
             )}
@@ -1321,6 +1502,38 @@ function AnalyticsTrendsView() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Breakdown pies — a snapshot of the whole selected range, not a
+              time series, so they sit alongside the trend rather than
+              inside it. */}
+          {breakdown && breakdown.total_revenue > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="bg-surface-card border border-surface-border rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-content-primary mb-3">Petrol vs Diesel Revenue Share</h3>
+                <DonutChart
+                  formatValue={fmt}
+                  centerLabel="Total Revenue"
+                  slices={[
+                    { key: 'petrol', label: 'Petrol', value: breakdown.fuel_split.Petrol || 0, color: 'var(--color-chart-petrol)' },
+                    { key: 'diesel', label: 'Diesel', value: breakdown.fuel_split.Diesel || 0, color: 'var(--color-chart-diesel)' },
+                  ]}
+                />
+              </div>
+              <div className="bg-surface-card border border-surface-border rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-content-primary mb-3">Payment Method Mix</h3>
+                <DonutChart
+                  formatValue={fmt}
+                  centerLabel="Total Revenue"
+                  slices={[
+                    { key: 'cash', label: 'Cash', value: breakdown.payment_mix.cash || 0, color: 'var(--color-chart-cat-1)' },
+                    { key: 'pos', label: 'POS', value: breakdown.payment_mix.pos || 0, color: 'var(--color-chart-cat-2)' },
+                    { key: 'credit_prepaid', label: 'Credit Pre-Paid', value: breakdown.payment_mix.credit_prepaid || 0, color: 'var(--color-chart-cat-3)' },
+                    { key: 'credit_postpaid', label: 'Credit Post-Paid', value: breakdown.payment_mix.credit_postpaid || 0, color: 'var(--color-chart-cat-4)' },
+                  ]}
+                />
+              </div>
             </div>
           )}
         </div>

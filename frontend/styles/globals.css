@@ -75,6 +75,16 @@
      reused so a fuel-type series always reads the same color everywhere. */
   --color-chart-petrol: #2E7D32;
   --color-chart-diesel: #7B1FA2;
+
+  /* Chart marks — generic 4-slot categorical set for breakdowns that are
+     NOT fuel type (e.g. payment-method mix), so they never collide with
+     the green/petrol or purple/diesel identity used elsewhere on the same
+     page. A contiguous prefix of the dataviz skill's validated 8-hue
+     order (blue, orange, aqua, yellow) — re-validated as its own 4-set. */
+  --color-chart-cat-1: #2a78d6;
+  --color-chart-cat-2: #eb6834;
+  --color-chart-cat-3: #1baf7a;
+  --color-chart-cat-4: #eda100;
 }
 
 /* ── Dark Mode (Deep Navy) ───────────────────────────────────── */
@@ -153,6 +163,14 @@
      surface) — validated with the dataviz skill's palette checker. */
   --color-chart-petrol: #2E7D32;
   --color-chart-diesel: #AB47BC;
+
+  /* Chart marks — generic 4-slot categorical set for non-fuel breakdowns
+     (see light-mode comment above). Same dark steps the skill validated
+     for this prefix. */
+  --color-chart-cat-1: #3987e5;
+  --color-chart-cat-2: #d95926;
+  --color-chart-cat-3: #199e70;
+  --color-chart-cat-4: #c98500;
 }
 
 /* ── Page Background ─────────────────────────────────────────── */
