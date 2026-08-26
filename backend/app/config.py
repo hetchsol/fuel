@@ -89,6 +89,11 @@ LOW_STOCK_THRESHOLD_PERCENT = 25.0
 # Critical stock threshold (percentage)
 CRITICAL_STOCK_THRESHOLD_PERCENT = 10.0
 
+# Water-in-tank alert threshold (cm at the tank bottom, read via water-finding
+# paste on the dip stick). Standard industry practice: ~2cm is the point where
+# water needs pumping out before continued dispensing.
+WATER_ALERT_THRESHOLD_CM = 2.0
+
 # ============================================================================
 # API CONFIGURATION
 # ============================================================================
@@ -462,8 +467,10 @@ def resolve_stock_thresholds(storage: dict = None) -> dict:
             return {
                 'low_stock_threshold_percent': float(sas.get('low_stock_threshold_percent', LOW_STOCK_THRESHOLD_PERCENT)),
                 'critical_stock_threshold_percent': float(sas.get('critical_stock_threshold_percent', CRITICAL_STOCK_THRESHOLD_PERCENT)),
+                'water_alert_threshold_cm': float(sas.get('water_alert_threshold_cm', WATER_ALERT_THRESHOLD_CM)),
             }
     return {
         'low_stock_threshold_percent': LOW_STOCK_THRESHOLD_PERCENT,
         'critical_stock_threshold_percent': CRITICAL_STOCK_THRESHOLD_PERCENT,
+        'water_alert_threshold_cm': WATER_ALERT_THRESHOLD_CM,
     }

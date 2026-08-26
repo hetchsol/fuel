@@ -77,6 +77,7 @@ def record_tank_dips(
     recorded_by: str,
     opening_dip_cm: Optional[float] = None,
     closing_dip_cm: Optional[float] = None,
+    water_dip_cm: Optional[float] = None,
     delivery_supplier: Optional[str] = None,
     delivery_invoice_number: Optional[str] = None,
     delivery_time: Optional[str] = None,
@@ -154,6 +155,14 @@ def record_tank_dips(
             detail="A delivery must be recorded when the closing dip exceeds the opening dip.",
         )
 
+    # Water-finding-paste reading at the tank bottom — same stick pull as the
+    # fuel dip. Flagged (not blocked) once it clears the alert threshold, so
+    # dispensing isn't halted automatically but the reading is visibly marked
+    # and notified for someone to act on.
+    from ...config import resolve_stock_thresholds
+    water_alert_threshold_cm = resolve_stock_thresholds(storage)["water_alert_threshold_cm"]
+    water_flagged = water_dip_cm is not None and water_dip_cm >= water_alert_threshold_cm
+
     now = datetime.utcnow().isoformat()
 
     if existing_id:
@@ -166,6 +175,9 @@ def record_tank_dips(
             rec["closing_dip_cm"] = closing_dip_cm
             rec["closing_volume"] = closing_volume
             rec["closing_calibration_version"] = closing_calibration_version
+        if water_dip_cm is not None:
+            rec["water_dip_cm"] = water_dip_cm
+            rec["water_flagged"] = water_flagged
         rec["recorded_by"] = recorded_by
         rec["updated_at"] = now
         reading_id = existing_id
@@ -182,6 +194,8 @@ def record_tank_dips(
             "closing_dip_cm": closing_dip_cm,
             "closing_volume": closing_volume,
             "closing_calibration_version": closing_calibration_version,
+            "water_dip_cm": water_dip_cm,
+            "water_flagged": water_flagged,
             "recorded_by": recorded_by,
             "created_at": now,
             "updated_at": now,
@@ -279,6 +293,22 @@ def record_tank_dips(
             created_by=ctx["username"],
         )
 
+    if water_flagged:
+        create_notification(
+            station_id=station_id,
+            type="TANK_WATER_ALERT",
+            severity="critical",
+            title="Water Detected in Tank",
+            message=(
+                f"Water-finding paste on tank {tank_id} read {water_dip_cm}cm on the {shift_type} shift "
+                f"dip for {date} — at or above the {water_alert_threshold_cm}cm alert threshold. "
+                f"Pump out and re-check before continuing to dispense from this tank."
+            ),
+            entity_type="tank_reading",
+            entity_id=reading_id,
+            created_by=ctx["username"],
+        )
+
     rec = tank_readings_db[reading_id]
     return {
         "reading_id": reading_id,
@@ -289,6 +319,8 @@ def record_tank_dips(
         "opening_volume": rec.get("opening_volume"),
         "closing_dip_cm": rec.get("closing_dip_cm"),
         "closing_volume": rec.get("closing_volume"),
+        "water_dip_cm": rec.get("water_dip_cm"),
+        "water_flagged": rec.get("water_flagged"),
         "delivery_id": delivery_id,
     }
 
@@ -304,7 +336,7 @@ def get_dips_for_date(
     for r in tank_readings_db.values():
         if r.get("date") != date:
             continue
-        if r.get("opening_dip_cm") is None and r.get("closing_dip_cm") is None:
+        if r.get("opening_dip_cm") is None and r.get("closing_dip_cm") is None and r.get("water_dip_cm") is None:
             continue
         tid = r.get("tank_id")
         existing = by_tank.get(tid)
@@ -315,6 +347,8 @@ def get_dips_for_date(
                 "shift_type": r.get("shift_type"),
                 "opening_dip_cm": r.get("opening_dip_cm"),
                 "closing_dip_cm": r.get("closing_dip_cm"),
+                "water_dip_cm": r.get("water_dip_cm"),
+                "water_flagged": r.get("water_flagged"),
                 "updated_at": r_time,
             }
     return list(by_tank.values())
@@ -337,6 +371,8 @@ def get_tank_dips(
             "opening_volume": r.get("opening_volume"),
             "closing_dip_cm": r.get("closing_dip_cm"),
             "closing_volume": r.get("closing_volume"),
+            "water_dip_cm": r.get("water_dip_cm"),
+            "water_flagged": r.get("water_flagged"),
             "recorded_by": r.get("recorded_by"),
             "updated_at": r.get("updated_at") or r.get("created_at"),
             "delivery_id": r.get("delivery_id"),
@@ -345,7 +381,7 @@ def get_tank_dips(
         }
         for r in tank_readings_db.values()
         if r.get("date") == date and r.get("shift_type", "").lower() == shift_type.lower()
-        and (r.get("opening_dip_cm") is not None or r.get("closing_dip_cm") is not None)
+        and (r.get("opening_dip_cm") is not None or r.get("closing_dip_cm") is not None or r.get("water_dip_cm") is not None)
     ]
     return results
 
@@ -373,6 +409,8 @@ def get_tank_dips_range(
             "opening_volume": r.get("opening_volume"),
             "closing_dip_cm": r.get("closing_dip_cm"),
             "closing_volume": r.get("closing_volume"),
+            "water_dip_cm": r.get("water_dip_cm"),
+            "water_flagged": r.get("water_flagged"),
             "recorded_by": r.get("recorded_by"),
             "updated_at": r.get("updated_at") or r.get("created_at"),
             "delivery_id": r.get("delivery_id"),
@@ -382,7 +420,7 @@ def get_tank_dips_range(
         for r in tank_readings_db.values()
         if start_date <= r.get("date", "") <= end_date
         and (shift_type is None or r.get("shift_type", "").lower() == shift_type.lower())
-        and (r.get("opening_dip_cm") is not None or r.get("closing_dip_cm") is not None)
+        and (r.get("opening_dip_cm") is not None or r.get("closing_dip_cm") is not None or r.get("water_dip_cm") is not None)
     ]
     results.sort(key=lambda r: (r["date"], r["shift_type"] or "", r["tank_id"] or ""))
     return results

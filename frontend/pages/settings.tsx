@@ -88,7 +88,7 @@ export default function Settings() {
   const [taxLevyMessage, setTaxLevyMessage] = useState('')
   const [taxLevyError, setTaxLevyError] = useState('')
 
-  const [stockAlerts, setStockAlerts] = useState({ low_stock_threshold_percent: 25.0, critical_stock_threshold_percent: 10.0 })
+  const [stockAlerts, setStockAlerts] = useState({ low_stock_threshold_percent: 25.0, critical_stock_threshold_percent: 10.0, water_alert_threshold_cm: 2.0 })
   const [stockAlertsLoading, setStockAlertsLoading] = useState(false)
   const [stockAlertsMessage, setStockAlertsMessage] = useState('')
   const [stockAlertsError, setStockAlertsError] = useState('')
@@ -1710,6 +1710,20 @@ export default function Settings() {
                 />
                 <p className="text-xs text-content-secondary mt-1">Red critical level (must be less than low stock)</p>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-content-secondary mb-1">Water Alert Threshold (cm)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={stockAlerts.water_alert_threshold_cm}
+                  onChange={(e) => setStockAlerts({ ...stockAlerts, water_alert_threshold_cm: parseFloat(e.target.value) })}
+                  className="w-full px-3 py-2 border border-status-error rounded-md focus:outline-none focus:ring-status-error focus:border-status-error"
+                  required
+                />
+                <p className="text-xs text-content-secondary mt-1">Water-finding paste reading at the tank bottom, in cm, at or above which a dip is flagged</p>
+              </div>
             </div>
 
             {stockAlertsMessage && (
@@ -1737,6 +1751,7 @@ export default function Settings() {
                 <li>Tanks below the low stock threshold will trigger a yellow warning</li>
                 <li>Tanks below the critical threshold will trigger a red critical alert</li>
                 <li>Critical threshold must be lower than the low stock threshold</li>
+                <li>A water dip reading at or above the water alert threshold flags the tank and notifies owners/managers</li>
               </ul>
             </div>
           </div>

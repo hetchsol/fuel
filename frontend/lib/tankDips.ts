@@ -18,6 +18,11 @@ export interface TankDipState {
   opening_resolved: boolean
   closing_dip_cm: string
   already_recorded: boolean
+  // Water-finding-paste reading at the tank bottom, same stick pull as the
+  // fuel dip. Optional — '' means not (re-)checked this time, distinct from
+  // an actual 0 (checked, dry).
+  water_dip_cm: string
+  water_flagged: boolean
 }
 
 export interface TankDipsLoadResult {
@@ -79,6 +84,8 @@ export async function loadTankDips(date: string, shiftType: string): Promise<Tan
       opening_resolved: openingResolved,
       closing_dip_cm: found?.closing_dip_cm != null ? String(found.closing_dip_cm) : '',
       already_recorded: found?.closing_dip_cm != null,
+      water_dip_cm: found?.water_dip_cm != null ? String(found.water_dip_cm) : '',
+      water_flagged: !!found?.water_flagged,
     }
   }))
   const allComplete = tanks.length === 0 || tanks.every(t => {
@@ -123,6 +130,7 @@ export async function saveTankDips(
       recorded_by: userId,
       closing_dip_cm: dip.closing_dip_cm,
       ...(openingDipCm ? { opening_dip_cm: openingDipCm } : {}),
+      ...(dip.water_dip_cm !== '' ? { water_dip_cm: dip.water_dip_cm } : {}),
       ...(delegateReason ? { delegate_reason: delegateReason } : {}),
       // Backend requires a delivery on the same request whenever closing > opening
       // — writes to tank_deliveries.json in that one call, same as the standalone

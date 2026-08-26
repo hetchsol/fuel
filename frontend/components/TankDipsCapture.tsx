@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from './LoadingSpinner'
 import { loadTankDips, saveTankDips, TankInfo, TankDipState, TankDeliveryInfo } from '../lib/tankDips'
+import { authFetch, getHeaders, BASE } from '../lib/api'
 
 interface TankDipsCaptureProps {
   date: string
@@ -28,6 +29,7 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
   const [deliveryAnswers, setDeliveryAnswers] = useState<Record<string, 'yes' | 'no'>>({})
   const [deliveryDetails, setDeliveryDetails] = useState<Record<string, TankDeliveryInfo>>({})
   const [deliveryModalTank, setDeliveryModalTank] = useState<string | null>(null)
+  const [waterAlertThresholdCm, setWaterAlertThresholdCm] = useState(2.0)
 
   // Snapshot of whether every tank already had both dips on file the moment
   // this modal opened — not recomputed from the live form state, so it can't
@@ -48,6 +50,13 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
     color: theme.textPrimary,
     borderColor: theme.border,
   }
+
+  useEffect(() => {
+    authFetch(`${BASE}/settings/stock-alerts`, { headers: getHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.water_alert_threshold_cm != null) setWaterAlertThresholdCm(data.water_alert_threshold_cm) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -130,8 +139,13 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
               <div key={tank.tank_id} className="flex items-center justify-between text-sm p-2 rounded"
                 style={{ backgroundColor: theme.background }}>
                 <span style={{ color: theme.textPrimary }}>{tank.display_name || tank.fuel_type}</span>
-                <span className="font-mono text-xs" style={{ color: theme.textSecondary }}>
+                <span className="font-mono text-xs flex items-center gap-2" style={{ color: theme.textSecondary }}>
                   Opening {dip?.opening_dip_cm} cm &rarr; Closing {dip?.closing_dip_cm} cm
+                  {dip?.water_dip_cm !== '' && dip?.water_dip_cm != null && (
+                    <span style={dip.water_flagged ? { color: 'var(--color-status-error)', fontWeight: 600 } : undefined}>
+                      | Water {dip.water_dip_cm}cm{dip.water_flagged ? ' (ALERT)' : ''}
+                    </span>
+                  )}
                 </span>
               </div>
             )
@@ -161,7 +175,7 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
       )}
       <div className="space-y-3">
         {tanks.map(tank => {
-          const dip = dips[tank.tank_id] || { opening_dip_cm: null, opening_resolved: false, closing_dip_cm: '', already_recorded: false }
+          const dip = dips[tank.tank_id] || { opening_dip_cm: null, opening_resolved: false, closing_dip_cm: '', already_recorded: false, water_dip_cm: '', water_flagged: false }
           const needsDelivery = requiresDelivery(tank.tank_id)
           const answer = deliveryAnswers[tank.tank_id]
           const delivery = deliveryDetails[tank.tank_id]
@@ -209,8 +223,39 @@ export default function TankDipsCapture({ date, shiftType, userRole, onSaved, co
                     />
                     <span className="text-xs" style={{ color: theme.textSecondary }}>cm</span>
                   </div>
+                  {(() => {
+                    const waterVal = parseFloat(dip.water_dip_cm)
+                    const overThreshold = dip.water_dip_cm !== '' && Number.isFinite(waterVal) && waterVal >= waterAlertThresholdCm
+                    return (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.1"
+                          value={dip.water_dip_cm}
+                          onChange={e => updateDip(tank.tank_id, { water_dip_cm: e.target.value })}
+                          placeholder="water cm"
+                          title="Water-finding paste reading at the tank bottom"
+                          className="w-24 px-2 py-1.5 rounded border text-sm text-right font-mono"
+                          style={overThreshold
+                            ? { backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)', borderColor: 'var(--color-status-error)' }
+                            : inputStyle}
+                        />
+                        <span className="text-xs" style={{ color: overThreshold ? 'var(--color-status-error)' : theme.textSecondary }}>
+                          cm water
+                        </span>
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
+
+              {dip.water_dip_cm !== '' && parseFloat(dip.water_dip_cm) >= waterAlertThresholdCm && (
+                <div className="mt-1.5 p-2.5 rounded text-xs font-medium" style={{ backgroundColor: 'var(--color-status-error-light)', color: 'var(--color-status-error)' }}>
+                  Water detected at {dip.water_dip_cm}cm — at or above the {waterAlertThresholdCm}cm alert threshold for {tank.display_name || tank.fuel_type}.
+                  Pump out and re-check before continuing to dispense from this tank.
+                </div>
+              )}
 
               {needsDelivery && !answer && (
                 <div className="mt-1.5 ml-0 p-2.5 rounded text-xs" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>

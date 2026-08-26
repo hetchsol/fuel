@@ -133,6 +133,7 @@ class TaxLevySettings(BaseModel):
 class StockAlertSettings(BaseModel):
     low_stock_threshold_percent: float = Field(default=25.0, ge=0, le=100.0)
     critical_stock_threshold_percent: float = Field(default=10.0, ge=0, le=100.0)
+    water_alert_threshold_cm: float = Field(default=2.0, ge=0, le=100.0)  # tank-bottom water dip beyond this flags contamination
 
 class VolumeTier(BaseModel):
     up_to_liters: float = Field(..., gt=0, le=1000000.0)   # Upper bound of this bracket (litres)

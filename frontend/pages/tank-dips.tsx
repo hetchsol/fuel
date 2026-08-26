@@ -21,6 +21,7 @@ interface DipRow {
   closing_dip_cm: string
   closing_volume: number | null
   closing_vol_error: boolean
+  water_dip_cm: string
   saving: boolean
   saved: boolean
   requires_delivery: boolean
@@ -41,6 +42,8 @@ interface HistoryRow {
   opening_volume: number | null
   closing_dip_cm: number | null
   closing_volume: number | null
+  water_dip_cm?: number | null
+  water_flagged?: boolean
   delivery_id?: string | null
   calibration_status?: 'current' | 'stale' | 'unknown' | 'no_calibration'
 }
@@ -98,6 +101,7 @@ export default function TankDips() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyPage, setHistoryPage] = useState(0)
   const HISTORY_PAGE_SIZE = 20
+  const [waterAlertThresholdCm, setWaterAlertThresholdCm] = useState(2.0)
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -106,6 +110,13 @@ export default function TankDips() {
     if (!isManagerOrAbove(user.role)) { router.replace('/'); return }
     setUserRole(user.role)
     setUserName(user.full_name || user.username || '')
+  }, [])
+
+  useEffect(() => {
+    authFetch(`${BASE}/settings/stock-alerts`, { headers: getHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.water_alert_threshold_cm != null) setWaterAlertThresholdCm(data.water_alert_threshold_cm) })
+      .catch(() => {})
   }, [])
 
   const fetchTanks = useCallback(async () => {
@@ -154,6 +165,7 @@ export default function TankDips() {
           closing_dip_cm: cur?.closing_dip_cm != null ? String(cur.closing_dip_cm) : '',
           closing_volume: closingVol,
           closing_vol_error: false,
+          water_dip_cm: cur?.water_dip_cm != null ? String(cur.water_dip_cm) : '',
           saving: false,
           saved: cur?.closing_dip_cm != null,
           requires_delivery: requiresDelivery,
@@ -208,6 +220,8 @@ export default function TankDips() {
             opening_volume: r.opening_volume ?? null,
             closing_dip_cm: r.closing_dip_cm ?? null,
             closing_volume: r.closing_volume ?? null,
+            water_dip_cm: r.water_dip_cm ?? null,
+            water_flagged: r.water_flagged ?? false,
             delivery_id: r.delivery_id ?? null,
             calibration_status: r.calibration_status ?? undefined,
           }
@@ -297,6 +311,10 @@ export default function TankDips() {
     setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
   }
 
+  const handleWaterDipChange = (idx: number, value: string) => {
+    setRows(prev => prev.map((r, i) => i === idx ? { ...r, water_dip_cm: value, saved: false } : r))
+  }
+
   const handleSave = async (idx: number) => {
     const row = rows[idx]
     if (!row.closing_dip_cm) {
@@ -317,6 +335,7 @@ export default function TankDips() {
       })
       if (row.opening_dip_cm != null) params.set('opening_dip_cm', String(row.opening_dip_cm))
       params.set('closing_dip_cm', row.closing_dip_cm)
+      if (row.water_dip_cm !== '') params.set('water_dip_cm', row.water_dip_cm)
       if (row.requires_delivery && !row.delivery_linked && row.delivery_supplier.trim()) {
         params.set('delivery_supplier', row.delivery_supplier.trim())
         if (row.delivery_invoice.trim()) params.set('delivery_invoice_number', row.delivery_invoice.trim())
@@ -467,7 +486,7 @@ export default function TankDips() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-border">
-                    {['Date', 'Shift', 'Tank', 'Fuel Type', 'Opening Dip (cm)', 'Opening Vol (L)', 'Closing Dip (cm)', 'Closing Vol (L)', 'Delivery', 'Calibration'].map(col => (
+                    {['Date', 'Shift', 'Tank', 'Fuel Type', 'Opening Dip (cm)', 'Opening Vol (L)', 'Closing Dip (cm)', 'Closing Vol (L)', 'Water (cm)', 'Delivery', 'Calibration'].map(col => (
                       <th key={col} className="px-4 py-3 text-left text-xs font-medium uppercase text-content-secondary whitespace-nowrap">
                         {col}
                       </th>
@@ -497,6 +516,9 @@ export default function TankDips() {
                         </td>
                         <td className="px-4 py-3 font-mono text-content-primary">
                           {r.closing_volume != null ? r.closing_volume.toLocaleString() : <span className="text-content-secondary">-</span>}
+                        </td>
+                        <td className={`px-4 py-3 font-mono ${r.water_flagged ? 'font-semibold text-status-error' : 'text-content-primary'}`}>
+                          {r.water_dip_cm != null ? `${r.water_dip_cm}${r.water_flagged ? ' (ALERT)' : ''}` : <span className="text-content-secondary">-</span>}
                         </td>
                         <td className="px-4 py-3">
                           {r.delivery_id
@@ -563,7 +585,7 @@ export default function TankDips() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
                     <div>
                       <label className="block text-xs font-medium text-content-secondary mb-1">
                         Opening Dip (cm)
@@ -606,7 +628,28 @@ export default function TankDips() {
                             : 'border-surface-border text-content-secondary'
                         }`} />
                     </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-content-secondary mb-1">Water (cm)</label>
+                      <input type="number" step="0.1" min="0"
+                        value={row.water_dip_cm}
+                        onChange={e => handleWaterDipChange(idx, e.target.value)}
+                        title="Water-finding paste reading at the tank bottom"
+                        className={`w-full px-3 py-2 border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary ${
+                          row.water_dip_cm !== '' && parseFloat(row.water_dip_cm) >= waterAlertThresholdCm
+                            ? 'border-status-error text-status-error bg-status-error-light'
+                            : 'border-surface-border'
+                        }`}
+                        placeholder="e.g. 0.5" />
+                    </div>
                   </div>
+
+                  {row.water_dip_cm !== '' && parseFloat(row.water_dip_cm) >= waterAlertThresholdCm && (
+                    <div className="mb-4 -mt-1 p-2.5 rounded text-xs font-medium bg-status-error-light text-status-error">
+                      Water detected at {row.water_dip_cm}cm — at or above the {waterAlertThresholdCm}cm alert threshold.
+                      Pump out and re-check before continuing to dispense from this tank.
+                    </div>
+                  )}
 
                   {row.requires_delivery && (
                     <div className="mt-2 mb-4 pt-4 border-t border-surface-border">

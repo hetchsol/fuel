@@ -537,6 +537,7 @@ def update_stock_alert_settings(settings: StockAlertSettings, ctx: dict = Depend
     storage['stock_alert_settings'] = {
         "low_stock_threshold_percent": settings.low_stock_threshold_percent,
         "critical_stock_threshold_percent": settings.critical_stock_threshold_percent,
+        "water_alert_threshold_cm": settings.water_alert_threshold_cm,
     }
 
     log_audit_event(
