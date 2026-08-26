@@ -70,6 +70,11 @@
   --color-category-d: #3949AB;
   --color-category-d-light: #E8EAF6;
   --color-category-d-border: #9FA8DA;
+
+  /* Chart marks — same brand identity as --color-fuel-diesel/petrol above,
+     reused so a fuel-type series always reads the same color everywhere. */
+  --color-chart-petrol: #2E7D32;
+  --color-chart-diesel: #7B1FA2;
 }
 
 /* ── Dark Mode (Deep Navy) ───────────────────────────────────── */
@@ -139,6 +144,15 @@
   --color-category-d: #7986CB;
   --color-category-d-light: #0E1230;
   --color-category-d-border: #3F51B5;
+
+  /* Chart marks — same brand identity as --color-fuel-diesel/petrol above,
+     reused so a fuel-type series always reads the same color everywhere.
+     Petrol's light-mode green also clears the dark chart surface as-is;
+     diesel's light-mode purple is re-stepped (not the dark badge purple
+     #CE93D8 above, which is too pale for a thin line/dot against a dark
+     surface) — validated with the dataviz skill's palette checker. */
+  --color-chart-petrol: #2E7D32;
+  --color-chart-diesel: #AB47BC;
 }
 
 /* ── Page Background ─────────────────────────────────────────── */

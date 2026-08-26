@@ -980,22 +980,47 @@ interface TrendPoint {
   changePct: number | null
 }
 
-// A single-series line chart: 2px line, ~10% opacity area wash, endpoint
-// marker + direct label at the end, hairline gridlines, hover crosshair with
-// a tooltip. One metric, one color — never a dual axis. A single series
-// carries no legend box; the card title above it already names what's plotted.
-function LineTrendChart({ points, formatValue, color = 'var(--color-action-primary)' }: {
+interface ChartSeries {
+  key: string
+  label: string
+  color: string
   points: TrendPoint[]
+}
+
+// A line chart: 2px lines, hairline gridlines, hover crosshair with a
+// tooltip. One shared value axis — never a dual axis, even with two series.
+// Single series: ~10% opacity area wash + an endpoint direct label, no
+// legend box (the card title above it already names what's plotted).
+// Two-plus series: no area wash (overlapping washes muddy the read), a
+// legend carries identity instead, and the tooltip lists every series at
+// the hovered period so the reader never has to land on a line to get a
+// value — endpoint labels are dropped in favor of the legend + tooltip +
+// table to avoid two close values colliding.
+function LineTrendChart({ series, formatValue }: {
+  series: ChartSeries[]
   formatValue: (v: number) => string
-  color?: string
 }) {
   const [hover, setHover] = useState<number | null>(null)
   const W = 1000, H = 280
   const pad = { top: 16, right: 16, bottom: 28, left: 56 }
   const innerW = W - pad.left - pad.right
   const innerH = H - pad.top - pad.bottom
+  const multi = series.length > 1
 
-  const maxVal = Math.max(1, ...points.map(p => p.value))
+  // Union + sort every period key across series, so two series that don't
+  // both have a value in every period (e.g. no Petrol handovers on a day
+  // that had Diesel ones) still align on one shared x-axis instead of
+  // silently going positional-index-only.
+  const keyToLabel = new Map<string, string>()
+  series.forEach(s => s.points.forEach(p => keyToLabel.set(p.key, p.label)))
+  const master = Array.from(keyToLabel.keys()).sort().map(k => ({ key: k, label: keyToLabel.get(k)! }))
+
+  const aligned = series.map(s => {
+    const byKey = new Map(s.points.map(p => [p.key, p]))
+    return master.map(m => byKey.get(m.key) || { key: m.key, label: m.label, value: 0, changePct: null })
+  })
+
+  const maxVal = Math.max(1, ...aligned.flat().map(p => p.value))
   const niceMax = (() => {
     const magnitude = Math.pow(10, Math.floor(Math.log10(maxVal || 1)))
     const norm = maxVal / magnitude
@@ -1003,33 +1028,37 @@ function LineTrendChart({ points, formatValue, color = 'var(--color-action-prima
     return step * magnitude
   })()
 
-  const x = (i: number) => (points.length <= 1 ? pad.left + innerW / 2 : pad.left + (innerW * i) / (points.length - 1))
+  const n = master.length
+  const x = (i: number) => (n <= 1 ? pad.left + innerW / 2 : pad.left + (innerW * i) / (n - 1))
   const y = (v: number) => pad.top + innerH - (v / niceMax) * innerH
-
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i)},${y(p.value)}`).join(' ')
-  const areaPath = points.length
-    ? `M ${x(0)},${pad.top + innerH} ` +
-      points.map((p, i) => `L ${x(i)},${y(p.value)}`).join(' ') +
-      ` L ${x(points.length - 1)},${pad.top + innerH} Z`
-    : ''
 
   const gridTicks = [0, 0.25, 0.5, 0.75, 1].map(f => niceMax * f)
   // Thin x-axis labels so they never collide — show at most ~8 across the width.
-  const labelEvery = Math.max(1, Math.ceil(points.length / 8))
+  const labelEvery = Math.max(1, Math.ceil(n / 8))
 
   const handleMove = (e: any) => {
-    if (!points.length) return
+    if (!n) return
     const rect = e.currentTarget.getBoundingClientRect()
     const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
-    const idx = points.length <= 1 ? 0 : Math.round(frac * (points.length - 1))
+    const idx = n <= 1 ? 0 : Math.round(frac * (n - 1))
     setHover(idx)
   }
 
-  const last = points.length - 1
-  const hoverPoint = hover !== null ? points[hover] : null
+  const last = n - 1
+  const hoverRow = hover !== null ? master[hover] : null
 
   return (
     <div className="relative">
+      {multi && (
+        <div className="flex flex-wrap gap-4 mb-3">
+          {series.map(s => (
+            <div key={s.key} className="flex items-center gap-1.5 text-xs text-content-secondary">
+              <span className="inline-block w-4 h-0.5 rounded-full" style={{ backgroundColor: s.color }} />
+              {s.label}
+            </div>
+          ))}
+        </div>
+      )}
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Revenue trend chart">
         {gridTicks.map((t, i) => (
           <g key={i}>
@@ -1040,83 +1069,121 @@ function LineTrendChart({ points, formatValue, color = 'var(--color-action-prima
           </g>
         ))}
 
-        {points.map((p, i) => (
+        {master.map((m, i) => (
           i % labelEvery === 0 ? (
             <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize={10} fill="var(--color-text-secondary)">
-              {p.label}
+              {m.label}
             </text>
           ) : null
         ))}
 
-        {points.length > 0 && <path d={areaPath} fill={color} fillOpacity={0.1} stroke="none" />}
-        {points.length > 0 && <path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
+        {aligned.map((pts, si) => {
+          const color = series[si].color
+          const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i)},${y(p.value)}`).join(' ')
+          const areaPath = !multi && pts.length
+            ? `M ${x(0)},${pad.top + innerH} ` + pts.map((p, i) => `L ${x(i)},${y(p.value)}`).join(' ') + ` L ${x(pts.length - 1)},${pad.top + innerH} Z`
+            : ''
+          return (
+            <g key={series[si].key}>
+              {!multi && pts.length > 0 && <path d={areaPath} fill={color} fillOpacity={0.1} stroke="none" />}
+              {pts.length > 0 && <path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
+              {pts.length > 0 && (
+                <circle cx={x(last)} cy={y(pts[last].value)} r={5} fill={color} stroke="var(--color-bg-card)" strokeWidth={2} />
+              )}
+              {!multi && pts.length > 0 && (
+                <text x={x(last)} y={y(pts[last].value) - 12} textAnchor="end" fontSize={11} fontWeight={600} fill="var(--color-text-primary)">
+                  {formatValue(pts[last].value)}
+                </text>
+              )}
+              {hover !== null && (
+                <circle cx={x(hover)} cy={y(pts[hover].value)} r={5} fill={color} stroke="var(--color-bg-card)" strokeWidth={2} />
+              )}
+            </g>
+          )
+        })}
 
-        {points.length > 0 && (
-          <>
-            <circle cx={x(last)} cy={y(points[last].value)} r={5} fill={color} stroke="var(--color-bg-card)" strokeWidth={2} />
-            <text x={x(last)} y={y(points[last].value) - 12} textAnchor="end" fontSize={11} fontWeight={600} fill="var(--color-text-primary)">
-              {formatValue(points[last].value)}
-            </text>
-          </>
-        )}
-
-        {hoverPoint && hover !== null && (
-          <g>
-            <line x1={x(hover)} x2={x(hover)} y1={pad.top} y2={pad.top + innerH}
-              stroke="var(--color-text-secondary)" strokeWidth={1} strokeDasharray="2,2" />
-            <circle cx={x(hover)} cy={y(hoverPoint.value)} r={5} fill={color} stroke="var(--color-bg-card)" strokeWidth={2} />
-          </g>
+        {hover !== null && (
+          <line x1={x(hover)} x2={x(hover)} y1={pad.top} y2={pad.top + innerH}
+            stroke="var(--color-text-secondary)" strokeWidth={1} strokeDasharray="2,2" />
         )}
 
         {/* Hit targets: per-point focusable circles for keyboard, full-width rect for mouse */}
-        {points.map((p, i) => (
-          <circle key={i} cx={x(i)} cy={y(p.value)} r={12} fill="transparent"
+        {master.map((m, i) => (
+          <circle key={i} cx={x(i)} cy={pad.top + innerH / 2} r={12} fill="transparent"
             tabIndex={0} onFocus={() => setHover(i)} onBlur={() => setHover(null)} onMouseEnter={() => setHover(i)} />
         ))}
         <rect x={pad.left} y={pad.top} width={innerW} height={innerH} fill="transparent"
           onMouseMove={handleMove} onMouseLeave={() => setHover(null)} />
       </svg>
 
-      {hoverPoint && hover !== null && (
+      {hoverRow && hover !== null && (
         <div
-          className="absolute pointer-events-none px-2.5 py-1.5 rounded-lg shadow-lg border border-surface-border bg-surface-card text-xs"
+          className="absolute pointer-events-none px-2.5 py-1.5 rounded-lg shadow-lg border border-surface-border bg-surface-card text-xs space-y-1"
           style={{
             left: `${(x(hover) / W) * 100}%`,
-            top: `${(y(hoverPoint.value) / H) * 100}%`,
+            top: `${(Math.min(...aligned.map(pts => y(pts[hover!].value))) / H) * 100}%`,
             transform: 'translate(-50%, -130%)',
             whiteSpace: 'nowrap',
           }}
         >
-          <div className="text-content-secondary">{hoverPoint.label}</div>
-          <div className="text-content-primary font-semibold">{formatValue(hoverPoint.value)}</div>
-          {hoverPoint.changePct !== null && (
-            <div className={hoverPoint.changePct >= 0 ? 'text-status-success' : 'text-status-error'}>
-              {hoverPoint.changePct >= 0 ? '+' : ''}{hoverPoint.changePct}% vs prior period
-            </div>
-          )}
+          <div className="text-content-secondary">{hoverRow.label}</div>
+          {aligned.map((pts, si) => {
+            const p = pts[hover]
+            return (
+              <div key={series[si].key} className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-0.5 rounded-full" style={{ backgroundColor: series[si].color }} />
+                <span className="text-content-primary font-semibold">{formatValue(p.value)}</span>
+                {multi && <span className="text-content-secondary">{series[si].label}</span>}
+                {p.changePct !== null && (
+                  <span className={p.changePct >= 0 ? 'text-status-success' : 'text-status-error'}>
+                    {p.changePct >= 0 ? '+' : ''}{p.changePct}%
+                  </span>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
+const toTrendPoints = (r: TrendsResult): TrendPoint[] =>
+  r.rows.map(row => ({ key: row.period_key, label: row.label, value: row.total_revenue, changePct: row.revenue_change_pct }))
+
 function AnalyticsTrendsView() {
   const today = new Date().toISOString().split('T')[0]
   const [startDate, setStartDate] = useState(today)
   const [endDate, setEndDate] = useState(today)
   const [period, setPeriod] = useState('day')
+  // 'all' | 'Diesel' | 'Petrol' -> one line. 'compare' -> Petrol + Diesel as
+  // two colored lines (green/purple — the same fuel-type identity used
+  // everywhere else in the app, e.g. the delivery fuel-type picker).
   const [fuelType, setFuelType] = useState('all')
-  const [result, setResult] = useState<TrendsResult | null>(null)
+  const [series, setSeries] = useState<ChartSeries[] | null>(null)
   const [loading, setLoading] = useState(false)
+
+  const fetchTrend = async (fuel: string): Promise<TrendsResult> => {
+    const url = `${BASE}/reports/analytics/trends?start_date=${startDate}&end_date=${endDate}&period=${period}&fuel_type=${fuel}`
+    const res = await authFetch(url, { headers: getHeaders() })
+    if (!res.ok) throw new Error((await res.json()).detail || 'Failed')
+    return res.json()
+  }
 
   const run = async () => {
     setLoading(true)
-    setResult(null)
+    setSeries(null)
     try {
-      const url = `${BASE}/reports/analytics/trends?start_date=${startDate}&end_date=${endDate}&period=${period}&fuel_type=${fuelType}`
-      const res = await authFetch(url, { headers: getHeaders() })
-      if (!res.ok) throw new Error((await res.json()).detail || 'Failed')
-      setResult(await res.json())
+      if (fuelType === 'compare') {
+        const [petrol, diesel] = await Promise.all([fetchTrend('Petrol'), fetchTrend('Diesel')])
+        setSeries([
+          { key: 'petrol', label: 'Petrol', color: 'var(--color-chart-petrol)', points: toTrendPoints(petrol) },
+          { key: 'diesel', label: 'Diesel', color: 'var(--color-chart-diesel)', points: toTrendPoints(diesel) },
+        ])
+      } else {
+        const data = await fetchTrend(fuelType)
+        setSeries([{ key: 'total', label: 'Total Revenue', color: 'var(--color-action-primary)', points: toTrendPoints(data) }])
+      }
     } catch (err: any) {
       toast(err.message, { icon: '✕' })
     } finally {
@@ -1124,10 +1191,21 @@ function AnalyticsTrendsView() {
     }
   }
 
-  const points: TrendPoint[] = (result?.rows || []).map(r => ({
-    key: r.period_key, label: r.label, value: r.total_revenue, changePct: r.revenue_change_pct,
-  }))
-  const latest = points.length ? points[points.length - 1] : null
+  const hasData = !!series && series.some(s => s.points.length > 0)
+
+  // One shared, sorted period axis across every series — same alignment the
+  // chart uses — so the table's rows always match what the chart plots even
+  // when one fuel has a period the other doesn't.
+  const tableRows = (() => {
+    if (!series) return []
+    const keyToLabel = new Map<string, string>()
+    series.forEach(s => s.points.forEach(p => keyToLabel.set(p.key, p.label)))
+    return Array.from(keyToLabel.keys()).sort().map(key => ({
+      key,
+      label: keyToLabel.get(key)!,
+      values: series.map(s => s.points.find(p => p.key === key) || null),
+    }))
+  })()
 
   return (
     <div className="p-4 sm:p-6 space-y-5 max-w-7xl mx-auto">
@@ -1161,7 +1239,7 @@ function AnalyticsTrendsView() {
           <div>
             <p className="text-xs font-medium text-content-secondary mb-1.5">Fuel</p>
             <div className="flex gap-1">
-              {[['all', 'All'], ['Diesel', 'Diesel'], ['Petrol', 'Petrol']].map(([v, l]) => segBtn(v, fuelType, setFuelType, l))}
+              {[['all', 'All'], ['Diesel', 'Diesel'], ['Petrol', 'Petrol'], ['compare', 'Petrol vs Diesel']].map(([v, l]) => segBtn(v, fuelType, setFuelType, l))}
             </div>
           </div>
         </div>
@@ -1172,52 +1250,73 @@ function AnalyticsTrendsView() {
         </button>
       </div>
 
-      {result && (
+      {series && (
         <div className="space-y-4">
-          {latest && (
-            <div className="bg-surface-card border border-surface-border rounded-lg p-4 inline-flex items-baseline gap-3">
-              <div>
-                <p className="text-xs text-content-secondary">Latest period revenue</p>
-                <p className="text-2xl font-bold text-content-primary">{fmt(latest.value)}</p>
-              </div>
-              {latest.changePct !== null && (
-                <span className={`text-sm font-semibold ${latest.changePct >= 0 ? 'text-status-success' : 'text-status-error'}`}>
-                  {latest.changePct >= 0 ? '+' : ''}{latest.changePct}% vs prior period
-                </span>
-              )}
+          {hasData && (
+            <div className="flex flex-wrap gap-3">
+              {series.map(s => {
+                const latest = s.points.length ? s.points[s.points.length - 1] : null
+                if (!latest) return null
+                return (
+                  <div key={s.key} className="bg-surface-card border border-surface-border rounded-lg p-4 inline-flex items-baseline gap-3">
+                    <div>
+                      <p className="text-xs text-content-secondary flex items-center gap-1.5">
+                        {series.length > 1 && <span className="inline-block w-3 h-0.5 rounded-full" style={{ backgroundColor: s.color }} />}
+                        Latest {series.length > 1 ? `${s.label.toLowerCase()} ` : ''}revenue
+                      </p>
+                      <p className="text-2xl font-bold text-content-primary">{fmt(latest.value)}</p>
+                    </div>
+                    {latest.changePct !== null && (
+                      <span className={`text-sm font-semibold ${latest.changePct >= 0 ? 'text-status-success' : 'text-status-error'}`}>
+                        {latest.changePct >= 0 ? '+' : ''}{latest.changePct}% vs prior period
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 
           <div className="bg-surface-card border border-surface-border rounded-lg p-4">
             <h3 className="text-sm font-semibold text-content-primary mb-3">Total Revenue</h3>
-            {points.length > 0 ? (
-              <LineTrendChart points={points} formatValue={fmt} />
+            {hasData ? (
+              <LineTrendChart series={series} formatValue={fmt} />
             ) : (
               <p className="text-sm text-content-secondary text-center py-8">No completed handovers found for this period.</p>
             )}
           </div>
 
           {/* Table view — every value the chart shows, reachable without hovering. */}
-          {points.length > 0 && (
+          {hasData && (
             <div className="bg-surface-card border border-surface-border rounded-lg overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-surface-bg border-b border-surface-border">
                     <th className="px-4 py-2.5 text-left text-xs font-medium uppercase text-content-secondary">Period</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium uppercase text-content-secondary">Revenue</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium uppercase text-content-secondary">Change</th>
+                    {series.map(s => (
+                      <th key={s.key} colSpan={2} className="px-4 py-2.5 text-right text-xs font-medium uppercase text-content-secondary">
+                        <span className="inline-flex items-center gap-1.5">
+                          {series.length > 1 && <span className="inline-block w-3 h-0.5 rounded-full" style={{ backgroundColor: s.color }} />}
+                          {series.length > 1 ? s.label : 'Revenue'}
+                        </span>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {points.map((p, i) => (
-                    <tr key={p.key || i} className="border-t border-surface-border hover:bg-surface-bg">
-                      <td className="px-4 py-2.5 text-content-primary font-medium whitespace-nowrap">{p.label}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-content-primary">{fmt(p.value)}</td>
-                      <td className={`px-4 py-2.5 text-right font-mono ${
-                        p.changePct === null ? 'text-content-secondary' : p.changePct >= 0 ? 'text-status-success' : 'text-status-error'
-                      }`}>
-                        {p.changePct === null ? '—' : `${p.changePct >= 0 ? '+' : ''}${p.changePct}%`}
-                      </td>
+                  {tableRows.map(row => (
+                    <tr key={row.key} className="border-t border-surface-border hover:bg-surface-bg">
+                      <td className="px-4 py-2.5 text-content-primary font-medium whitespace-nowrap">{row.label}</td>
+                      {row.values.map((p, i) => (
+                        <Fragment key={series[i].key}>
+                          <td className="px-4 py-2.5 text-right font-mono text-content-primary">{fmt(p?.value ?? 0)}</td>
+                          <td className={`px-4 py-2.5 text-right font-mono text-xs ${
+                            p?.changePct == null ? 'text-content-secondary' : p.changePct >= 0 ? 'text-status-success' : 'text-status-error'
+                          }`}>
+                            {p?.changePct == null ? '—' : `${p.changePct >= 0 ? '+' : ''}${p.changePct}%`}
+                          </td>
+                        </Fragment>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
