@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getHeaders, authFetch } from '../lib/api'
+import { formatDateTimeToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 const fmtZMW = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -816,7 +817,7 @@ function MovementsTab({ movements }: { movements: Movement[] }) {
             {visible.map((m, i) => (
               <tr key={i} className="border-t border-surface-border">
                 <td className="px-3 py-2 text-content-secondary whitespace-nowrap text-xs">
-                  {new Date(m.timestamp).toLocaleString()}
+                  {formatDateTimeToDisplay(m.timestamp)}
                 </td>
                 <td className={`px-3 py-2 font-medium capitalize ${TYPE_COLORS[m.type] || 'text-content-primary'}`}>{m.type}</td>
                 <td className="px-3 py-2 text-content-primary">{m.name}</td>

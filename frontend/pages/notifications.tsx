@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getHeaders, BASE, authFetch } from '../lib/api'
-import { formatDateToDisplay } from '../lib/dateUtils'
+import { formatDateToDisplay, formatDateTimeToDisplay } from '../lib/dateUtils'
 import Pagination from '../components/Pagination'
 
 const PAGE_SIZE = 25
@@ -292,7 +292,7 @@ export default function NotificationsPage() {
                   </div>
                   <div className="text-right text-sm shrink-0">
                     <p className="text-content-secondary text-xs">{formatRelativeTime(n.timestamp)}</p>
-                    <p className="text-[10px] text-content-secondary">{new Date(n.timestamp).toLocaleString()}</p>
+                    <p className="text-[10px] text-content-secondary">{formatDateTimeToDisplay(n.timestamp)}</p>
                   </div>
                 </div>
               </div>

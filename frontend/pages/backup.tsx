@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { authFetch, getHeaders } from '../lib/api'
+import { formatDateToDisplay, formatDateTimeToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -97,7 +98,7 @@ export default function BackupPage() {
       const disposition = res.headers.get('Content-Disposition') || ''
       const match = disposition.match(/filename=(.+)/)
       downloadBlob(blob, match ? match[1] : `fuel_backup_${snap.date}.json.gz`)
-      flash(`Downloaded snapshot for ${snap.date}.`)
+      flash(`Downloaded snapshot for ${formatDateToDisplay(snap.date)}.`)
     } catch (err: any) {
       flash(err.message || 'Snapshot download failed', true)
     } finally {
@@ -129,7 +130,7 @@ export default function BackupPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Restore failed')
-      flash(`Restore complete. Data restored from backup dated ${data.restored_from ? new Date(data.restored_from).toLocaleString() : 'unknown'}.`)
+      flash(`Restore complete. Data restored from backup dated ${data.restored_from ? formatDateTimeToDisplay(data.restored_from) : 'unknown'}.`)
       loadStatus()
     } catch (err: any) {
       flash(err.message || 'Restore failed', true)
@@ -199,8 +200,8 @@ export default function BackupPage() {
                 <tbody>
                   {status.snapshots.map((snap: Snapshot) => (
                     <tr key={snap.date} className="border-t border-surface-border hover:bg-surface-card/30">
-                      <td className="px-3 py-2 font-medium text-content-primary">{snap.date}</td>
-                      <td className="px-3 py-2 text-content-secondary">{snap.created_at ? new Date(snap.created_at).toLocaleString() : '-'}</td>
+                      <td className="px-3 py-2 font-medium text-content-primary">{formatDateToDisplay(snap.date)}</td>
+                      <td className="px-3 py-2 text-content-secondary">{snap.created_at ? formatDateTimeToDisplay(snap.created_at) : '-'}</td>
                       <td className="px-3 py-2 text-content-secondary">{snap.triggered_by || '-'}</td>
                       <td className="px-3 py-2 text-content-secondary">{fmtBytes(snap.size_bytes || 0)}</td>
                       <td className="px-3 py-2 text-right">

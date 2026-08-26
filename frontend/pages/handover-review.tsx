@@ -10,7 +10,7 @@ import { getHeaders, authFetch } from '../lib/api'
 import ExportButtons from '../components/ExportButtons'
 import Pagination from '../components/Pagination'
 import { ExportConfig } from '../lib/exportUtils'
-import { formatDateToDisplay } from '../lib/dateUtils'
+import { formatDateToDisplay, formatDateTimeToDisplay } from '../lib/dateUtils'
 import { CreditItem, OtherProduct, NewAccountModal, fetchOtherProducts } from '../components/CreditSaleShared'
 import toast from 'react-hot-toast'
 
@@ -2263,7 +2263,7 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
           <div className="text-xs font-medium uppercase mb-1" style={{ color: theme.textSecondary }}>Previous Review</div>
           <div className="text-sm" style={{ color: theme.textPrimary }}>
             <span className="font-medium">{h.supervisor_review.reviewed_by_name}</span>
-            {' '}({h.supervisor_review.action}) on {new Date(h.supervisor_review.reviewed_at).toLocaleString()}
+            {' '}({h.supervisor_review.action}) on {formatDateTimeToDisplay(h.supervisor_review.reviewed_at)}
           </div>
           {h.supervisor_review.note && (
             <div className="text-sm mt-1 italic" style={{ color: theme.textSecondary }}>
