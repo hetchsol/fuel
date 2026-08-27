@@ -1,6 +1,6 @@
 
 from fastapi import APIRouter
-from . import auth, attachments, readings, sales, reports, discrepancies, ocr_preview, tanks, settings, islands, shifts, accounts, reconciliation, lpg, lubricants, validated_readings, sales_reports, tank_readings, customers, lpg_daily, lubricants_daily, attendant_handover, enter_readings, stations, audit, exports, notifications, daily_close_off, safe_deposits, tank_calibrations, stores, payroll, backup
+from . import auth, attachments, readings, sales, reports, discrepancies, ocr_preview, tanks, settings, islands, shifts, accounts, reconciliation, validated_readings, sales_reports, tank_readings, customers, lpg_daily, lubricants_daily, attendant_handover, enter_readings, stations, audit, exports, notifications, daily_close_off, safe_deposits, tank_calibrations, stores, payroll, backup
 
 router = APIRouter()
 router.include_router(stations.router, prefix="/stations", tags=["stations"])
@@ -19,9 +19,6 @@ router.include_router(islands.router, prefix="/islands", tags=["islands"])
 router.include_router(shifts.router, prefix="/shifts", tags=["shifts"])
 router.include_router(accounts.router, prefix="/accounts", tags=["accounts"])
 router.include_router(reconciliation.router, prefix="/reconciliation", tags=["reconciliation"])
-# DEPRECATED: replaced by lpg_daily and lubricants_daily endpoints
-# router.include_router(lpg.router, prefix="/lpg", tags=["lpg"])
-# router.include_router(lubricants.router, prefix="/lubricants", tags=["lubricants"])
 router.include_router(validated_readings.router, tags=["validated-readings"])
 router.include_router(sales_reports.router, prefix="/sales-reports", tags=["sales-reports"])
 router.include_router(lpg_daily.router, prefix="/lpg-daily", tags=["lpg-daily"])

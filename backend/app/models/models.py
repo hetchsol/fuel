@@ -403,50 +403,6 @@ class DeliveryReference(BaseModel):
     before_delivery_dip_cm: Optional[float] = None  # Physical dip before delivery
     after_delivery_dip_cm: Optional[float] = None   # Physical dip after delivery
 
-# LPG Products
-class LPGSale(BaseModel):
-    sale_id: str
-    shift_id: str
-    cylinder_size: str  # 6kg, 9kg, 13kg, etc.
-    quantity_kg: float
-    price_per_kg: float
-    total_amount: float
-    customer_name: Optional[str] = None
-    sale_type: str  # Refill or New
-
-class LPGAccessory(BaseModel):
-    product_code: str
-    description: str
-    unit_price: float
-    opening_stock: int
-    current_stock: int
-
-class LPGAccessorySale(BaseModel):
-    sale_id: str
-    shift_id: str
-    product_code: str
-    quantity: int
-    unit_price: float
-    total_amount: float
-
-# Lubricants
-class Lubricant(BaseModel):
-    product_code: str
-    description: str
-    category: str  # Engine Oil, Transmission Fluid, Brake Fluid, etc.
-    unit_price: float
-    location: str  # Island 3 or Buffer
-    opening_stock: int
-    current_stock: int
-
-class LubricantSale(BaseModel):
-    sale_id: str
-    shift_id: str
-    product_code: str
-    quantity: int
-    unit_price: float
-    total_amount: float
-
 # Comprehensive Shift Reconciliation
 class ShiftReconciliation(BaseModel):
     shift_id: str
