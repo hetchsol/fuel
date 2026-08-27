@@ -77,6 +77,7 @@ export default function LPGDaily() {
 
   const canManageStock = ['supervisor', 'manager', 'owner'].includes(user?.role)
   const canManage = ['manager', 'owner'].includes(user?.role)
+  const isAttendant = user?.role === 'user'
   const lpgPricesConfigured = pricing.some(p => p.price_refill > 0 || p.price_with_cylinder > 0)
 
   useEffect(() => {
@@ -410,7 +411,7 @@ export default function LPGDaily() {
                         : <span className="text-sm text-content-secondary">{row.receipts}</span>)}
                       {field('Sold Refill', cellInput(row.sold_refill, v => updateCylinder(row.size_kg, 'sold_refill', v)))}
                       {field('Sold New', cellInput(row.sold_with_cylinder, v => updateCylinder(row.size_kg, 'sold_with_cylinder', v)))}
-                      {field('Damaged', canManage ? (
+                      {!isAttendant && field('Damaged', canManage ? (
                         <div>
                           {cellInput(row.damaged || 0, v => updateCylinder(row.size_kg, 'damaged', v),
                             row.damaged > 0 ? 'border-status-warning' : '')}
