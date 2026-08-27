@@ -23,7 +23,10 @@ from .auth import get_current_user, require_supervisor_or_owner, require_manager
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
 from ...services.shift_status import assert_shift_editable, advance_shift_on_approval
-from ...services.stock_service import apply_handover_sales, reverse_handover_sales
+from ...services.stock_service import (
+    apply_handover_sales, reverse_handover_sales,
+    load_items as load_stock_items, make_key as make_stock_key,
+)
 from ...database.station_files import load_station_json, save_station_json
 from .enter_readings import _load_readings as _load_enter_readings, _save_readings as _save_enter_readings
 from .lpg_daily import (
@@ -2401,7 +2404,10 @@ async def get_stock_opening(ctx: dict = Depends(get_station_context)):
     """
     Return consolidated opening stock for the current shift.
     Looks for the most recent handover with stock_snapshot at this station,
-    uses its closing values as opening. Falls back to catalog defaults.
+    uses its closing values as opening. Falls back to the Stores/forecourt
+    bin (the manager's live-issued stock, kept in sync by stock_service —
+    see apply_handover_sales), then to catalog defaults as a last resort for
+    stations that haven't adopted Stores yet.
     """
     station_id = ctx["station_id"]
     storage = ctx["storage"]
@@ -2420,6 +2426,13 @@ async def get_stock_opening(ctx: dict = Depends(get_station_context)):
                 prev_snapshot = h["stock_snapshot"]
                 break
 
+    # --- Stores/forecourt balances (authoritative live stock where adopted) ---
+    stock_items = load_stock_items(station_id)
+
+    def _forecourt(category: str, code: str) -> Optional[float]:
+        item = stock_items.get(make_stock_key(category, code))
+        return item.get("forecourt") if item else None
+
     # --- LPG pricing ---
     lpg_pricing_db = load_lpg_pricing(station_id)
 
@@ -2433,12 +2446,13 @@ async def get_stock_opening(ctx: dict = Depends(get_station_context)):
     for size in LPG_SIZES:
         pricing = get_pricing_for_size(size, lpg_pricing_db)
         prev = prev_lpg_map.get(size)
+        size_code = f"{size}kg"
         if prev:
             opening_full = prev.get("closing_full", 0)
             opening_empty = prev.get("closing_empty", 0)
         else:
-            opening_full = 0
-            opening_empty = 0
+            opening_full = _forecourt("cylinder_full", size_code) or 0
+            opening_empty = _forecourt("cylinder_empty", size_code) or 0
         lpg_cylinders.append({
             "size_kg": size,
             "opening_full": opening_full,
@@ -2459,7 +2473,11 @@ async def get_stock_opening(ctx: dict = Depends(get_station_context)):
     if acc_catalog:
         for code, item in acc_catalog.items():
             prev = prev_acc_map.get(code)
-            opening = prev.get("closing_stock", 0) if prev else item.get("current_stock", 0)
+            if prev:
+                opening = prev.get("closing_stock", 0)
+            else:
+                forecourt_qty = _forecourt("lpg_accessory", code)
+                opening = forecourt_qty if forecourt_qty is not None else item.get("current_stock", 0)
             accessories.append({
                 "product_code": code,
                 "description": item.get("description", ""),
@@ -2470,7 +2488,11 @@ async def get_stock_opening(ctx: dict = Depends(get_station_context)):
         for item in DEFAULT_LPG_ACCESSORIES:
             code = item["product_code"]
             prev = prev_acc_map.get(code)
-            opening = prev.get("closing_stock", 0) if prev else 0
+            if prev:
+                opening = prev.get("closing_stock", 0)
+            else:
+                forecourt_qty = _forecourt("lpg_accessory", code)
+                opening = forecourt_qty if forecourt_qty is not None else 0
             accessories.append({
                 "product_code": code,
                 "description": item["description"],
@@ -2504,7 +2526,8 @@ async def get_stock_opening(ctx: dict = Depends(get_station_context)):
         if prev:
             opening = prev.get("closing_stock", 0)
         else:
-            opening = lub_current_stock.get(code, 0)
+            forecourt_qty = _forecourt("lubricant", code)
+            opening = forecourt_qty if forecourt_qty is not None else lub_current_stock.get(code, 0)
         # Only include products with stock > 0 (or that had previous snapshot data)
         if opening > 0 or prev:
             lubricants.append({

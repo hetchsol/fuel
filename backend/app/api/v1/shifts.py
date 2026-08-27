@@ -522,10 +522,24 @@ def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_co
     if shift.assignments:
         shift.attendants = [a.attendant_name for a in shift.assignments]
 
-    # Update shift
-    shifts_data[shift_id] = shift.dict()
+    # Merge into the existing record rather than replacing it outright — this
+    # endpoint's payload (from the roster-edit form) only ever carries date,
+    # shift_type, attendants, assignments, and status. A wholesale
+    # `shifts_data[shift_id] = shift.dict()` would silently reset every other
+    # field (tank_dip_readings, created_at/by, auto_closed*, is_retrospective,
+    # start_time/end_time) to the Shift model's defaults on every edit, since
+    # the incoming request never carries them.
+    updated_shift = dict(shifts_data[shift_id])
+    updated_shift.update({
+        "date": shift.date,
+        "shift_type": shift.shift_type,
+        "attendants": shift.attendants,
+        "assignments": [a.dict() for a in shift.assignments] if shift.assignments else [],
+        "status": shift.status,
+    })
+    shifts_data[shift_id] = updated_shift
 
-    return shift
+    return Shift(**updated_shift)
 
 
 @router.post("/{shift_id}/tank-dip-reading", dependencies=[Depends(require_supervisor_or_owner)])
