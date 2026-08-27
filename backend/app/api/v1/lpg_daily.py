@@ -389,6 +389,18 @@ def submit_lpg_entry(
         # "consumed" quantity so sync_forecourt_deltas' delta math applies uniformly.
         if row.sold_refill:
             current_applied[f"cylinder_empty:{row.size_kg}kg"] = -round(row.sold_refill, 4)
+    # Trades: a filled cylinder of the new size leaves (same as a sale of
+    # to_size_kg); an empty of the old size comes back (same sign convention
+    # as a refill's returned empty above). Accumulate rather than overwrite —
+    # a size can be both a normal row and a trade's to/from size in one entry.
+    for size, qty in traded_out_map.items():
+        if qty:
+            key = f"cylinder_full:{size}kg"
+            current_applied[key] = current_applied.get(key, 0) + qty
+    for size, qty in traded_in_map.items():
+        if qty:
+            key = f"cylinder_empty:{size}kg"
+            current_applied[key] = current_applied.get(key, 0) - qty
     svc.sync_forecourt_deltas(station_id, previous_applied, current_applied,
                               entry_input.recorded_by, ref=entry_id)
 
