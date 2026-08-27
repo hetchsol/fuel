@@ -2170,12 +2170,14 @@ export default function MyShift() {
                           placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
                           style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
                       </div>
-                      <div>
-                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Damaged</label>
-                        <input type="number" min={0} step={1}
-                          value={row.damaged} onChange={e => updateLpgRow(idx, 'damaged', e.target.value)}
-                          placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
-                      </div>
+                      {!isAttendant && (
+                        <div>
+                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Damaged</label>
+                          <input type="number" min={0} step={1}
+                            value={row.damaged} onChange={e => updateLpgRow(idx, 'damaged', e.target.value)}
+                            placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
+                        </div>
+                      )}
                       <div>
                         <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Closing (Count)</label>
                         <input type="number" min={0} step={1}
@@ -2361,12 +2363,14 @@ export default function MyShift() {
                             placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
                             style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
                         </div>
-                        <div>
-                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Damaged</label>
-                          <input type="number" min={0} step={1}
-                            value={row.damaged} onChange={e => updateAccRow(idx, 'damaged', e.target.value)}
-                            placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
-                        </div>
+                        {!isAttendant && (
+                          <div>
+                            <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Damaged</label>
+                            <input type="number" min={0} step={1}
+                              value={row.damaged} onChange={e => updateAccRow(idx, 'damaged', e.target.value)}
+                              placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
+                          </div>
+                        )}
                         <div>
                           <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Stock on Hand</label>
                           <input type="number" min={0} step={1}
@@ -2468,12 +2472,14 @@ export default function MyShift() {
                             placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
                             style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
                         </div>
-                        <div>
-                          <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Damaged</label>
-                          <input type="number" min={0} step={1}
-                            value={row.damaged} onChange={e => updateLubRow(idx, 'damaged', e.target.value)}
-                            placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
-                        </div>
+                        {!isAttendant && (
+                          <div>
+                            <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Damaged</label>
+                            <input type="number" min={0} step={1}
+                              value={row.damaged} onChange={e => updateLubRow(idx, 'damaged', e.target.value)}
+                              placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
+                          </div>
+                        )}
                         <div>
                           <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Stock on Hand</label>
                           <input type="number" min={0} step={1}
