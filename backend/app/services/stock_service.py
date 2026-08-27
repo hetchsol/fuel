@@ -5,11 +5,12 @@ A two-bin inventory model that sits ABOVE the existing forecourt sales flows:
 each item has a `stores` (backroom) bin and a `forecourt` (sales floor) bin.
 Movements drive the bins and are ledgered for audit:
 
-  receive  : external  -> stores
-  issue    : stores    -> forecourt
-  damage   : bin       -> write-off
-  adjust   : set a bin to a counted value (physical-count correction)
-  sale     : forecourt -> out   (fed from daily reconciliation — Phase 3)
+  receive         : external  -> stores
+  issue           : stores    -> forecourt
+  return_to_store : forecourt -> stores   (reverse of issue)
+  damage          : bin       -> write-off
+  adjust          : set a bin to a counted value (physical-count correction)
+  sale            : forecourt -> out   (fed from daily reconciliation — Phase 3)
 
 Balances live on the item record (fast dashboard reads); `stock_movements.json`
 is the append-only history. Per-station, persisted via load/save_station_json.
@@ -168,6 +169,21 @@ def issue(station_id: str, item_key: str, qty, performed_by: str, note: str = ""
     save_items(station_id, items)
     _record_movement(station_id, "issue", item, qty, "stores", "forecourt", performed_by, note)
     _check_reorder(station_id, item)
+    return item
+
+
+def return_to_store(station_id: str, item_key: str, qty, performed_by: str, note: str = "") -> dict:
+    """Move stock back from the forecourt bin to stores (backroom) — the reverse of issue()."""
+    qty = _require_positive(qty)
+    items = load_items(station_id)
+    item = _require_item(items, item_key)
+    if qty > item["forecourt"]:
+        raise HTTPException(status_code=400,
+                            detail=f"Cannot return {qty}: only {item['forecourt']} on the forecourt.")
+    item["forecourt"] -= qty
+    item["stores"] += qty
+    save_items(station_id, items)
+    _record_movement(station_id, "return_to_store", item, qty, "forecourt", "stores", performed_by, note)
     return item
 
 

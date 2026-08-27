@@ -180,6 +180,11 @@ def issue(data: IssueInput, ctx: dict = Depends(get_station_context)):
     return svc.issue(ctx["station_id"], data.item_key, data.qty, ctx["username"], data.note)
 
 
+@router.post("/return-to-store", dependencies=[Depends(require_manager_or_owner)])
+def return_to_store(data: IssueInput, ctx: dict = Depends(get_station_context)):
+    return svc.return_to_store(ctx["station_id"], data.item_key, data.qty, ctx["username"], data.note)
+
+
 @router.post("/damage", dependencies=[Depends(require_manager_or_owner)])
 def damage(data: DamageInput, ctx: dict = Depends(get_station_context)):
     return svc.damage(ctx["station_id"], data.item_key, data.qty, data.bin,

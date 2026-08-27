@@ -9,7 +9,7 @@ const BASE = '/api/v1'
 const fmtZMW = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 type Tab = 'lubricants' | 'cylinders' | 'accessories' | 'movements'
-type StockAction = 'receive' | 'issue' | 'damage' | 'adjust'
+type StockAction = 'receive' | 'issue' | 'return_to_store' | 'damage' | 'adjust'
 type Bin = 'stores' | 'forecourt'
 
 interface StockItem {
@@ -768,8 +768,14 @@ function MovementsTab({ movements }: { movements: Movement[] }) {
 
   const TYPE_COLORS: Record<string, string> = {
     receive: 'text-status-success', issue: 'text-action-primary',
+    return_to_store: 'text-status-success',
     damage: 'text-status-error', adjust: 'text-status-warning',
     sale: 'text-content-secondary', return: 'text-content-secondary',
+  }
+
+  const TYPE_LABELS: Record<string, string> = {
+    receive: 'Receive', issue: 'Issue', return_to_store: 'Return to Store',
+    damage: 'Damage', adjust: 'Adjust', sale: 'Sale', return: 'Return',
   }
 
   return (
@@ -778,8 +784,8 @@ function MovementsTab({ movements }: { movements: Movement[] }) {
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
           className="px-3 py-1.5 text-sm rounded border border-surface-border bg-surface-bg text-content-primary">
           <option value="">All types</option>
-          {['receive', 'issue', 'damage', 'adjust', 'sale', 'return'].map(t => (
-            <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+          {['receive', 'issue', 'return_to_store', 'damage', 'adjust', 'sale', 'return'].map(t => (
+            <option key={t} value={t}>{TYPE_LABELS[t] || t}</option>
           ))}
         </select>
         <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
@@ -819,7 +825,7 @@ function MovementsTab({ movements }: { movements: Movement[] }) {
                 <td className="px-3 py-2 text-content-secondary whitespace-nowrap text-xs">
                   {formatDateTimeToDisplay(m.timestamp)}
                 </td>
-                <td className={`px-3 py-2 font-medium capitalize ${TYPE_COLORS[m.type] || 'text-content-primary'}`}>{m.type}</td>
+                <td className={`px-3 py-2 font-medium ${TYPE_COLORS[m.type] || 'text-content-primary'}`}>{TYPE_LABELS[m.type] || m.type}</td>
                 <td className="px-3 py-2 text-content-primary">{m.name}</td>
                 <td className="px-3 py-2 font-mono text-right text-content-primary">
                   {m.qty > 0 ? '+' : ''}{m.qty}
@@ -974,6 +980,7 @@ function StockActionModal({ item_key, name, stores, forecourt, onClose, onDone }
   const ACTIONS: [StockAction, string, string][] = [
     ['receive', 'Receive', 'Add stock to stores (backroom)'],
     ['issue', 'Issue', 'Move stock from stores to forecourt'],
+    ['return_to_store', 'Return', 'Move stock from forecourt back to stores'],
     ['damage', 'Damage', 'Write off damaged units'],
     ['adjust', 'Adjust', 'Set a bin to the physically counted qty'],
   ]
@@ -993,6 +1000,7 @@ function StockActionModal({ item_key, name, stores, forecourt, onClose, onDone }
       let path = '', body: any = {}
       if (action === 'receive') { path = '/stores/receive'; body = { item_key, qty: q, note: note.trim() } }
       else if (action === 'issue') { path = '/stores/issue'; body = { item_key, qty: q, note: note.trim() } }
+      else if (action === 'return_to_store') { path = '/stores/return-to-store'; body = { item_key, qty: q, note: note.trim() } }
       else if (action === 'damage') { path = '/stores/damage'; body = { item_key, qty: q, bin, note: note.trim() } }
       else { path = '/stores/adjust'; body = { item_key, bin, new_qty: q, reason: note.trim() } }
 
@@ -1003,7 +1011,7 @@ function StockActionModal({ item_key, name, stores, forecourt, onClose, onDone }
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Action failed')
-      toast.success(`${action.charAt(0).toUpperCase() + action.slice(1)} recorded.`)
+      toast.success(`${ACTIONS.find(([a]) => a === action)?.[1] || action} recorded.`)
       onDone()
     } catch (err: any) {
       toast.error(err.message)
@@ -1024,7 +1032,7 @@ function StockActionModal({ item_key, name, stores, forecourt, onClose, onDone }
         </p>
 
         {/* Action selector */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1 mb-4">
           {ACTIONS.map(([a, label]) => (
             <button key={a} type="button" onClick={() => { setAction(a); setQty(''); setNote('') }}
               className="py-1.5 text-xs font-medium rounded border text-center"
