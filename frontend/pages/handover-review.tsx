@@ -967,7 +967,7 @@ export default function HandoverReview() {
                 </div>
               ))}
             </div>
-            <div className="hidden md:block">
+            <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: theme.background }}>

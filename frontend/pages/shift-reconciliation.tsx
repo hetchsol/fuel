@@ -569,12 +569,12 @@ export default function ReconciliationHub() {
   return (
     <div>
       <div className="bg-surface-card border-b border-surface-border px-4">
-        <div className="max-w-7xl mx-auto flex gap-1">
+        <div className="max-w-7xl mx-auto flex gap-1 overflow-x-auto">
           {RECON_TABS.map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              className="px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0"
               style={{
                 borderColor: active === t.key ? 'var(--color-action-primary)' : 'transparent',
                 color: active === t.key ? 'var(--color-action-primary)' : 'var(--color-content-secondary)',

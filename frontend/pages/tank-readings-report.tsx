@@ -326,10 +326,10 @@ export default function TankReadingsReport() {
 
         {/* Tabs */}
         <div className="mb-6 border-b border-surface-border">
-          <nav className="-mb-px flex gap-6">
+          <nav className="-mb-px flex gap-6 overflow-x-auto">
             <button
               onClick={() => setActiveTab('readings')}
-              className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+              className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                 activeTab === 'readings'
                   ? 'border-action-primary text-action-primary'
                   : 'border-transparent text-content-secondary hover:text-content-primary'
@@ -340,7 +340,7 @@ export default function TankReadingsReport() {
             {canSeeLedger && (
               <button
                 onClick={() => setActiveTab('ledger')}
-                className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+                className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                   activeTab === 'ledger'
                     ? 'border-action-primary text-action-primary'
                     : 'border-transparent text-content-secondary hover:text-content-primary'

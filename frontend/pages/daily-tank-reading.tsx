@@ -2497,7 +2497,7 @@ export default function DailyTankReading() {
 
                         {/* Summary calculation */}
                         <div className="mt-6 pt-4 border-t-2" style={{ borderColor: theme.primary + '40' }}>
-                          <div className="grid grid-cols-3 sm:grid-cols-3 gap-4 text-center">
+                          <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
                             <div>
                               <p className="text-xs opacity-75 mb-1" style={{ color: theme.textSecondary }}>Opening</p>
                               <p className="text-lg font-bold text-status-success">{parseFloat(formData.opening_volume).toFixed(0)}L</p>
