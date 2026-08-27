@@ -91,6 +91,18 @@ export default function StationsPage() {
     } catch (err: any) { setError(err.message) }
   }
 
+  const handleToggleTestFlag = async (stationId: string) => {
+    setError('')
+    setSuccess('')
+    try {
+      const res = await authFetch(`${BASE}/stations/${stationId}/toggle-test-flag`, { method: 'PATCH' })
+      if (!res.ok) { const data = await res.json(); throw new Error(data.detail || 'Failed to toggle test station flag') }
+      const data = await res.json()
+      setSuccess(data.message)
+      loadStations()
+    } catch (err: any) { setError(err.message) }
+  }
+
   const handleDelete = async () => {
     if (!deleteTarget || deleteConfirmText !== deleteTarget.name) return
     setDeleting(true)
@@ -225,6 +237,7 @@ export default function StationsPage() {
                       <div className="flex items-center gap-1.5">
                         {isCurrent && <span className="px-2 py-1 text-xs font-medium rounded-full bg-status-success-light text-status-success">Current</span>}
                         {isDisabled && <span className="px-2 py-1 text-xs font-medium rounded-full bg-status-error-light text-status-error">Disabled</span>}
+                        {station.is_test_station && <span className="px-2 py-1 text-xs font-medium rounded-full bg-action-primary-light text-action-primary">Test Station</span>}
                         <button onClick={() => { setEditingStation(station.station_id); setEditForm({ name: station.name, location: station.location || '' }) }}
                           className="px-2 py-1 text-xs rounded hover:bg-surface-bg" style={{ color: theme.textSecondary }}>Edit</button>
                       </div>
@@ -255,6 +268,13 @@ export default function StationsPage() {
                         </button>
                       )}
                     </div>
+
+                    <button onClick={() => handleToggleTestFlag(station.station_id)}
+                      className={`w-full mt-2 px-3 py-2 rounded-md text-sm font-medium ${station.is_test_station ? 'bg-action-primary-light text-action-primary hover:bg-action-primary/20' : 'bg-surface-bg hover:bg-surface-border'}`}
+                      style={!station.is_test_station ? { color: theme.textSecondary } : undefined}
+                      title="Stations flagged here are accessible to every manager, in addition to their own station">
+                      {station.is_test_station ? 'Unflag as Test Station' : 'Flag as Test Station'}
+                    </button>
                   </>
                 )}
               </div>

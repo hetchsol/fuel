@@ -240,9 +240,32 @@ async def get_station_context(
     current_user: dict = Depends(get_current_user),
     x_station_id: Optional[str] = Header(None)
 ) -> dict:
-    """Resolve station from user token or X-Station-Id header."""
-    station_id = current_user.get("station_id") or x_station_id or DEFAULT_STATION_ID
-    if not current_user.get("station_id") and not x_station_id:
+    """
+    Resolve station from user token or X-Station-Id header.
+
+    A user with their own station_id set has it win outright by default —
+    the header is otherwise ignored, so a manager/supervisor/attendant can
+    never be pointed at someone else's station just by sending a header.
+    The one deliberate exception: a manager may additionally reach a
+    station explicitly flagged is_test_station (toggled via
+    PATCH /stations/{id}/toggle-test-flag, owner only) — never any other
+    station. Owners remain unrestricted, as before.
+    """
+    own_station_id = current_user.get("station_id")
+    role = current_user.get("role")
+    role_str = role.value if hasattr(role, "value") else str(role)
+
+    if own_station_id and role_str == "manager" and x_station_id and x_station_id != own_station_id:
+        from ...database.stations_registry import get_station as _get_station
+        target = _get_station(x_station_id)
+        if target and target.get("is_test_station") and target.get("status", "active") != "disabled":
+            station_id = x_station_id
+        else:
+            station_id = own_station_id
+    else:
+        station_id = own_station_id or x_station_id or DEFAULT_STATION_ID
+
+    if not own_station_id and not x_station_id:
         logger.warning(f"[auth] Using fallback station_id={DEFAULT_STATION_ID} for user {current_user.get('username')}")
     storage = get_station_storage(station_id)
     return {**current_user, "station_id": station_id, "storage": storage}

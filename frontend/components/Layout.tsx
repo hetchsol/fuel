@@ -140,7 +140,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (router.pathname === '/login' || router.pathname === '/setup') return
-    if (user && user.role === 'owner') {
+    if (user && (user.role === 'owner' || user.role === 'manager')) {
       authFetch(`${BASE}/stations/`)
         .then(r => r.ok ? r.json() : [])
         .then(data => setStations(data))
@@ -185,6 +185,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // final accountability and may need to handle other things regardless of
   // what's pending at one station; they still see the count via notifications.
   const isManagerForClosureGate = user && user.role === 'manager'
+
+  // Station switcher options: owners see every station; managers see only
+  // their own station plus any station flagged as the shared test station —
+  // never the full list. Actual access is enforced server-side in
+  // get_station_context(), this just keeps the dropdown honest about what a
+  // manager can actually reach.
+  const switchableStations = user?.role === 'owner'
+    ? stations
+    : user?.role === 'manager'
+      ? stations.filter((s: any) => s.station_id === user.station_id || s.is_test_station)
+      : []
 
   useEffect(() => {
     if (router.pathname === '/login' || router.pathname === '/setup') return
@@ -558,14 +569,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             {user && (
               <div className="flex items-center gap-3">
-                {/* Station Selector for owners */}
-                {user.role === 'owner' && stations.length > 0 && (
+                {/* Station Selector for owners (all stations) and managers (own + test station only) */}
+                {(user.role === 'owner' || user.role === 'manager') && switchableStations.length > 1 && (
                   <select
                     value={activeStationId}
                     onChange={(e) => handleStationChange(e.target.value)}
                     className="px-3 py-1.5 text-sm rounded-btn border bg-white/10 text-white border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 backdrop-blur-sm"
                   >
-                    {stations.map((s: any) => (
+                    {switchableStations.map((s: any) => (
                       <option key={s.station_id} value={s.station_id} className="bg-surface-card text-content-primary">
                         {s.name}
                       </option>
@@ -882,13 +893,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Drawer footer: station selector + dark mode + logout */}
             <div className="shrink-0 px-3 py-3 border-t border-surface-border space-y-2">
-              {user?.role === 'owner' && stations.length > 0 && (
+              {(user?.role === 'owner' || user?.role === 'manager') && switchableStations.length > 1 && (
                 <select
                   value={activeStationId}
                   onChange={(e) => handleStationChange(e.target.value)}
                   className="w-full px-3 py-2.5 text-sm rounded-btn border border-surface-border bg-surface-bg text-content-primary focus:outline-none focus:ring-2 focus:ring-action-primary"
                 >
-                  {stations.map((s: any) => (
+                  {switchableStations.map((s: any) => (
                     <option key={s.station_id} value={s.station_id}>{s.name}</option>
                   ))}
                 </select>

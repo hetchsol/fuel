@@ -17,6 +17,10 @@ class Station(BaseModel):
     status: Optional[str] = "active"
     created_by: Optional[str] = None
     created_at: Optional[str] = None
+    # A station flagged here is accessible to every manager, in addition to
+    # whichever single station they're actually configured on — see
+    # get_station_context() in auth.py for the access-control side of this.
+    is_test_station: Optional[bool] = False
 
 class UserLogin(BaseModel):
     username: str

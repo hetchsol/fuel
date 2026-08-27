@@ -64,6 +64,7 @@ def create_new_station(station: Station, current_user: dict = Depends(get_curren
         name=station.name,
         location=station.location or "",
         created_by=current_user["user_id"],
+        is_test_station=bool(station.is_test_station),
     )
 
     # Initialize empty storage for the station
@@ -86,6 +87,8 @@ def update_station(station_id: str, station: Station, current_user: dict = Depen
     stations_registry.STATIONS[station_id]["name"] = station.name
     if station.location is not None:
         stations_registry.STATIONS[station_id]["location"] = station.location
+    if station.is_test_station is not None:
+        stations_registry.STATIONS[station_id]["is_test_station"] = bool(station.is_test_station)
     save_stations()
 
     return Station(**stations_registry.STATIONS[station_id])
@@ -193,6 +196,31 @@ def toggle_station_status(station_id: str, current_user: dict = Depends(require_
         "message": f"Station {action}",
         "station": Station(**station),
         "staff_affected": staff_affected,
+    }
+
+
+@router.patch("/{station_id}/toggle-test-flag")
+def toggle_test_station_flag(station_id: str, current_user: dict = Depends(require_owner)):
+    """
+    Flag or unflag a station as the shared test station (owner only). A
+    flagged station becomes accessible to every manager, in addition to
+    whichever station they're actually configured on — see
+    get_station_context() in auth.py for the enforcement side.
+    """
+    if station_id not in stations_registry.STATIONS:
+        raise HTTPException(status_code=404, detail="Station not found")
+
+    station = stations_registry.STATIONS[station_id]
+    new_flag = not bool(station.get("is_test_station", False))
+    station["is_test_station"] = new_flag
+    save_stations()
+
+    logger.info(f"[stations] Station {station_id} {'flagged as' if new_flag else 'unflagged as'} test station by {current_user['username']}.")
+
+    return {
+        "status": "success",
+        "message": f"Station {'flagged as' if new_flag else 'unflagged as'} the shared test station",
+        "station": Station(**station),
     }
 
 

@@ -43,10 +43,12 @@ def load_stations():
         }
         save_stations()
 
-    # Backfill status for existing stations missing it
+    # Backfill fields for existing stations missing them
     for sid, sdata in STATIONS.items():
         if "status" not in sdata:
             sdata["status"] = "active"
+        if "is_test_station" not in sdata:
+            sdata["is_test_station"] = False
 
 
 def _load_from_file():
@@ -89,7 +91,7 @@ def list_stations() -> List[dict]:
     return list(STATIONS.values())
 
 
-def create_station(station_id: str, name: str, location: str = "", created_by: str = "system") -> dict:
+def create_station(station_id: str, name: str, location: str = "", created_by: str = "system", is_test_station: bool = False) -> dict:
     """Create and persist a new station"""
     station = {
         "station_id": station_id,
@@ -98,6 +100,7 @@ def create_station(station_id: str, name: str, location: str = "", created_by: s
         "status": "active",
         "created_by": created_by,
         "created_at": datetime.now().isoformat(),
+        "is_test_station": is_test_station,
     }
     STATIONS[station_id] = station
     save_stations()
