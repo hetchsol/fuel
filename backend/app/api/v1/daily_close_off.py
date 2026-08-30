@@ -16,6 +16,7 @@ from ...services.shift_status import (
     reconcile_shifts_for_date,
     unreconcile_shifts_for_date,
     _shift_fully_approved,
+    describe_unresolved_attendants,
 )
 
 router = APIRouter()
@@ -216,11 +217,14 @@ async def close_day(
         # shift that was deactivated (with nothing left to void) no longer needs
         # to be completed for the day to close.
         if entry[1].get("status") not in ("completed", "inactive"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot close day: {label} shift is not yet fully closed "
-                       f"(status: {entry[1].get('status', 'unknown')}).",
+            blockers = describe_unresolved_attendants(entry[1], entry[0], station_id, ctx["storage"])
+            detail = (
+                f"Cannot close day: {label} shift is not yet fully closed "
+                f"(status: {entry[1].get('status', 'unknown')})."
             )
+            if blockers:
+                detail += " Blocking: " + "; ".join(blockers) + "."
+            raise HTTPException(status_code=400, detail=detail)
     day_shift_id, night_shift_id = day_entry[0], night_entry[0]
 
     # Load handovers for the date — scoped to exactly the two verified shifts,

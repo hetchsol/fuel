@@ -4067,6 +4067,7 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
 
     approved_count = 0
     skipped_count = 0
+    skipped: list = []
     affected_shift_ids = set()
     now_iso = datetime.now().isoformat()
 
@@ -4074,18 +4075,26 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
         h = handovers.get(hid)
         if not h:
             skipped_count += 1
+            skipped.append({"handover_id": hid, "reason": "not_found"})
             continue
         # Block if the day has been closed off
         if h.get("date", "") in close_offs:
             skipped_count += 1
+            skipped.append({"handover_id": hid, "reason": "day_closed"})
             continue
         # Skip handovers where the attendant hasn't completed shift closing
         if h.get("phase", "completed") != "completed":
             skipped_count += 1
+            skipped.append({"handover_id": hid, "reason": "awaiting_closing"})
             continue
-        # Only batch-approve clean (submitted) handovers, skip flagged
+        # Only batch-approve clean (submitted) handovers, skip flagged — a
+        # flagged handover (cash shortage, meter deviation, unexplained
+        # variance) requires a mandatory note via the single-handover
+        # approve action, never a silent one-click batch approval.
         if h.get("review_status", "submitted") != "submitted":
             skipped_count += 1
+            skipped.append({"handover_id": hid, "reason": "flagged" if h.get("review_status") == "flagged"
+                            else h.get("review_status", "unresolved")})
             continue
 
         h["review_status"] = "approved"
@@ -4121,4 +4130,5 @@ async def batch_approve(data: dict, ctx: dict = Depends(get_station_context)):
         "status": "success",
         "approved": approved_count,
         "skipped": skipped_count,
+        "skipped_details": skipped,
     }

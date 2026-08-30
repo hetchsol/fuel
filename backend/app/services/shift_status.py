@@ -81,6 +81,56 @@ def _shift_fully_approved(shift: dict, shift_id: str, station_id: str, storage: 
     return True
 
 
+def describe_unresolved_attendants(shift: dict, shift_id: str, station_id: str, storage: dict) -> list:
+    """
+    Human-readable list of what's blocking a shift from completing — one
+    entry per assigned attendant without a resolved (approved/voided)
+    handover. Mirrors _shift_fully_approved's logic but explains *why*
+    instead of returning a bare bool, so a blocked day-close can name the
+    exact attendant/handover instead of just the shift's raw status —
+    "auto-closed" alone doesn't tell a manager what to go do next.
+    """
+    handovers = load_station_json(station_id, HANDOVERS_FILE, default={})
+    shift_handovers = [h for h in handovers.values() if h.get("shift_id") == shift_id]
+    by_attendant: dict = {}
+    for h in shift_handovers:
+        aid = h.get("attendant_id")
+        if aid:
+            by_attendant.setdefault(aid, []).append(h)
+
+    resolved_statuses = ("approved", "voided")
+    blockers = []
+    assignments = (shift or {}).get("assignments", [])
+    if assignments:
+        for a in assignments:
+            aid = a.get("attendant_id")
+            if not aid:
+                continue
+            name = a.get("attendant_name") or aid
+            hs = by_attendant.get(aid, [])
+            if not hs:
+                blockers.append(f"{name} — no handover submitted")
+                continue
+            h = max(hs, key=lambda x: x.get("created_at", ""))
+            rs = h.get("review_status", "submitted")
+            if rs in resolved_statuses:
+                continue
+            if h.get("phase") != "completed":
+                blockers.append(f"{name} — awaiting shift closing (cash not yet submitted)")
+            elif rs == "flagged":
+                blockers.append(f"{name} — handover flagged, needs manager approval with a note")
+            else:
+                blockers.append(f"{name} — handover awaiting review ({rs})")
+    else:
+        # No recorded assignments to check against — fall back to naming any
+        # unresolved handover directly.
+        for h in shift_handovers:
+            rs = h.get("review_status", "submitted")
+            if rs not in resolved_statuses:
+                blockers.append(f"{h.get('attendant_name', 'unknown')} — handover awaiting review ({rs})")
+    return blockers
+
+
 def advance_shift_on_approval(shift_id: str, station_id: str, storage: dict,
                               performed_by: str = "") -> bool:
     """

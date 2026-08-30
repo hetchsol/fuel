@@ -499,7 +499,6 @@ export default function HandoverReview() {
 
   const handleBatchApprove = async () => {
     if (selectedIds.size === 0) return
-    const count = selectedIds.size
     setActionLoading(true)
     try {
       const res = await authFetch(`${BASE}/handover/batch-approve`, {
@@ -507,13 +506,29 @@ export default function HandoverReview() {
         headers: getAuthHeaders(),
         body: JSON.stringify({ handover_ids: Array.from(selectedIds) }),
       })
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Batch approve failed' }))
-        throw new Error(err.detail)
+        throw new Error(data.detail || 'Batch approve failed')
       }
       setSelectedIds(new Set())
-      setError('')
-      setSuccessMsg(`${count} handover${count !== 1 ? 's' : ''} approved.`)
+      const approved = data.approved ?? 0
+      const skippedFlagged = (data.skipped_details || []).filter((s: any) => s.reason === 'flagged').length
+      const otherSkipped = (data.skipped ?? 0) - skippedFlagged
+      if (!data.skipped) {
+        setError('')
+        setSuccessMsg(`${approved} handover${approved !== 1 ? 's' : ''} approved.`)
+      } else {
+        // Report the real outcome, not the selection count — a flagged
+        // handover is deliberately skipped here (needs a note via the
+        // single-approve action) and silently leaving it unapproved is
+        // exactly what stalls the shift at "auto-closed" during day-close.
+        setError(
+          `${approved} approved` +
+          (skippedFlagged ? `, ${skippedFlagged} skipped (flagged — approve individually with a note)` : '') +
+          (otherSkipped ? `, ${otherSkipped} skipped (not eligible)` : '') + '.'
+        )
+        setSuccessMsg('')
+      }
       fetchQueue()
     } catch (err: any) {
       setSuccessMsg('')
