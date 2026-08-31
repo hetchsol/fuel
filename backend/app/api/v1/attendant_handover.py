@@ -1307,6 +1307,58 @@ def _compute_tank_nozzle_variance(station_id: str, shift_id: str, storage: dict,
     return list(flags), {"status": "computed", "tanks": per_tank}
 
 
+_SHIFT_TYPE_ORDER = {"Day": 0, "Night": 1}
+
+
+def _apply_shift_contribution(daily_entry: dict, shift_type: str, new_rows: list, sold_field: str) -> list:
+    """
+    Record one shift's per-product rows into a day-level daily entry shared
+    across every shift on the date (accessories/lubricants — unlike LPG
+    cylinders, which get their own row per shift_type and need none of this).
+
+    Keeps contributions keyed by shift_type on the entry itself
+    (`daily_entry["shift_contributions"]`) and REPLACES this shift_type's
+    entry outright on every call, rather than adding to whatever was there.
+    That matters because this function runs once per Phase-1 submission —
+    if an attendant uses Redo Readings and resubmits, this fires again for
+    the SAME shift with corrected numbers, and that correction must replace
+    the shift's own prior contribution, not stack on top of it. A different
+    shift_type's contribution is untouched and simply summed alongside it.
+
+    Per product, across all current contributions: opening_stock comes from
+    the earliest shift_type (Day before Night — the true start-of-day
+    figure); balance/closing comes from the latest shift_type present
+    (already the correct latest cumulative state, via each handover's own
+    opening carrying forward from the previous handover's closing — never
+    something to add to); additions/sold/sales_value are summed.
+
+    Returns the merged product_rows list; mutates daily_entry in place.
+    """
+    contributions = daily_entry.setdefault("shift_contributions", {})
+    contributions[shift_type] = new_rows
+
+    ordered_types = sorted(contributions.keys(), key=lambda t: _SHIFT_TYPE_ORDER.get(t, 99))
+    by_code: dict = {}
+    for st in ordered_types:
+        for row in contributions[st]:
+            code = row["product_code"]
+            if code not in by_code:
+                by_code[code] = dict(row)
+                by_code[code]["additions"] = row.get("additions", 0) or 0
+                by_code[code][sold_field] = row.get(sold_field, 0) or 0
+                by_code[code]["sales_value"] = row.get("sales_value", 0) or 0
+            else:
+                agg = by_code[code]
+                agg["additions"] = round(agg["additions"] + (row.get("additions", 0) or 0), 4)
+                agg[sold_field] = round(agg[sold_field] + (row.get(sold_field, 0) or 0), 4)
+                agg["sales_value"] = round(agg["sales_value"] + (row.get("sales_value", 0) or 0), 2)
+                # Later shift_type in the order — its balance/closing wins.
+                agg["balance"] = row.get("balance", agg.get("balance"))
+                agg["description"] = row.get("description", agg.get("description"))
+                agg["selling_price"] = row.get("selling_price", agg.get("selling_price"))
+    return list(by_code.values())
+
+
 def _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift, handover_id):
     """Populate daily entry files from enriched stock snapshot."""
     if not enriched_snapshot:
@@ -1358,7 +1410,10 @@ def _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift
     }
     save_lpg_daily(lpg_daily_db, station_id)
 
-    # 2) Accessories
+    # 2) Accessories — shared across every shift on the date (see
+    # _apply_shift_contribution): a different shift adds its numbers to the
+    # day's total; the SAME shift resubmitting (after Redo Readings) replaces
+    # only its own prior contribution instead of stacking on top of it.
     acc_daily_db = load_lpg_accessories(station_id)
     acc_entry_id = None
     for eid, entry in acc_daily_db.items():
@@ -1368,26 +1423,28 @@ def _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift
     if not acc_entry_id:
         import uuid
         acc_entry_id = f"LPGA-{shift_date}-{uuid.uuid4().hex[:8]}"
+    acc_entry = acc_daily_db.get(acc_entry_id) or {}
 
-    acc_rows = []
-    acc_total = 0.0
+    new_acc_rows = []
     for acc in enriched_snapshot["accessories"]:
-        sv = acc.get("sales_value", 0.0)
-        acc_total += sv
-        acc_rows.append({
+        new_acc_rows.append({
             "product_code": acc["product_code"], "description": acc["description"],
             "selling_price": acc.get("unit_price", 0), "opening_stock": acc["opening_stock"],
             "additions": acc["additions"], "sold": acc.get("sold", 0),
-            "balance": acc["closing_stock"], "sales_value": sv,
+            "balance": acc["closing_stock"], "sales_value": acc.get("sales_value", 0.0),
         })
-    acc_daily_db[acc_entry_id] = {
+    acc_rows = _apply_shift_contribution(acc_entry, shift_type, new_acc_rows, "sold")
+    acc_total = round(sum(r.get("sales_value", 0) or 0 for r in acc_rows), 2)
+    acc_entry.update({
         "entry_id": acc_entry_id, "date": shift_date, "product_rows": acc_rows,
-        "total_daily_sales_value": round(acc_total, 2), "recorded_by": user_id,
+        "total_daily_sales_value": acc_total, "recorded_by": user_id,
         "created_at": now_iso, "notes": f"Auto-generated from handover {handover_id}",
-    }
+    })
+    acc_daily_db[acc_entry_id] = acc_entry
     save_lpg_accessories(acc_daily_db, station_id)
 
-    # 3) Lubricants
+    # 3) Lubricants — shared across every shift on the date, same as
+    # accessories above.
     lub_daily_db = load_lubricant_daily(station_id)
     lub_entry_id = None
     for eid, entry in lub_daily_db.items():
@@ -1397,31 +1454,30 @@ def _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift
     if not lub_entry_id:
         import uuid
         lub_entry_id = f"LUB-LI3-{shift_date}-{uuid.uuid4().hex[:8]}"
+    lub_entry = lub_daily_db.get(lub_entry_id) or {}
 
-    lub_rows = []
-    lub_total = 0.0
-    lub_items_moved = 0
+    new_lub_rows = []
     lub_cat = load_lubricant_catalog(station_id)
     lub_cat_map = {p["product_code"]: p for p in lub_cat}
     for lub in enriched_snapshot["lubricants"]:
-        sv = lub.get("sales_value", 0.0)
-        sold = lub.get("sold", 0)
-        lub_total += sv
-        lub_items_moved += sold
         cat_item = lub_cat_map.get(lub["product_code"], {})
-        lub_rows.append({
+        new_lub_rows.append({
             "product_code": lub["product_code"], "description": lub["description"],
             "category": cat_item.get("category", ""), "unit_size": cat_item.get("unit_size", ""),
             "selling_price": lub.get("unit_price", 0), "opening_stock": lub["opening_stock"],
-            "additions": lub["additions"], "sold_or_drawn": sold,
-            "balance": lub["closing_stock"], "sales_value": sv,
+            "additions": lub["additions"], "sold_or_drawn": lub.get("sold", 0),
+            "balance": lub["closing_stock"], "sales_value": lub.get("sales_value", 0.0),
         })
-    lub_daily_db[lub_entry_id] = {
+    lub_rows = _apply_shift_contribution(lub_entry, shift_type, new_lub_rows, "sold_or_drawn")
+    lub_total = round(sum(r.get("sales_value", 0) or 0 for r in lub_rows), 2)
+    lub_items_moved = sum(r.get("sold_or_drawn", 0) or 0 for r in lub_rows)
+    lub_entry.update({
         "entry_id": lub_entry_id, "date": shift_date, "location": "Island 3",
-        "product_rows": lub_rows, "total_daily_sales_value": round(lub_total, 2),
+        "product_rows": lub_rows, "total_daily_sales_value": lub_total,
         "total_items_moved": lub_items_moved, "recorded_by": user_id,
         "created_at": now_iso, "notes": f"Auto-generated from handover {handover_id}",
-    }
+    })
+    lub_daily_db[lub_entry_id] = lub_entry
     save_lubricant_daily(lub_daily_db, station_id)
 
 
