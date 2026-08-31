@@ -94,6 +94,30 @@ export function formatDateTimeToDisplay(datetimeStr: string | null | undefined):
 }
 
 /**
+ * Convert ISO datetime to a time-only display ("14:30" or "14:30:05" with
+ * seconds), fixed 24-hour — never toLocaleTimeString(), which formats
+ * according to the viewer's browser locale (12-hour AM/PM for some, 24-hour
+ * for others) instead of this app's fixed convention.
+ */
+export function formatTimeToDisplay(datetimeStr: string | null | undefined, opts?: { seconds?: boolean }): string {
+  if (!datetimeStr) return ''
+
+  try {
+    const date = new Date(datetimeStr)
+    if (isNaN(date.getTime())) return ''
+
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    if (!opts?.seconds) return `${hours}:${minutes}`
+
+    const seconds = String(date.getSeconds()).padStart(2, '0')
+    return `${hours}:${minutes}:${seconds}`
+  } catch (error) {
+    return ''
+  }
+}
+
+/**
  * Get today's date in display format ("10 August 2026")
  */
 export function getTodayDisplay(): string {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useWorkingDay } from '../contexts/WorkingDayContext'
 import { getHeaders, authFetch } from '../lib/api'
+import { formatTimeToDisplay } from '../lib/dateUtils'
 import toast from 'react-hot-toast'
 
 const BASE = '/api/v1'
@@ -569,7 +570,7 @@ export default function LubricantsDaily() {
                       <td className="px-4 py-2 font-semibold text-action-primary">{fmt(e.total_daily_sales_value || 0)}</td>
                       <td className="px-4 py-2 text-content-primary">{e.total_items_moved || 0}</td>
                       <td className="px-4 py-2 text-xs text-content-secondary">
-                        {e.created_at ? new Date(e.created_at).toLocaleTimeString() : '-'}
+                        {e.created_at ? formatTimeToDisplay(e.created_at) : '-'}
                       </td>
                       <td className="px-4 py-2">
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium capitalize ${

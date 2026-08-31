@@ -1,4 +1,5 @@
 import { authFetch, BASE, getHeaders } from '../lib/api'
+import { formatTimeToDisplay } from '../lib/dateUtils'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
@@ -550,7 +551,7 @@ export default function DailyTankReading() {
         }
         return { ...prev, nozzles: updatedNozzles }
       })
-      setErPulledAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      setErPulledAt(formatTimeToDisplay(new Date().toISOString()))
       setErPulled(true)
     } catch (err: any) {
       if (!auto) setErPullError(err.message || 'Failed to pull readings')

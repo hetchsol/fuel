@@ -6,7 +6,7 @@ import { getHeaders, authFetch } from '../lib/api'
 import { useTanks, tankLabel } from '../hooks/useTanks'
 import ExportButtons from '../components/ExportButtons'
 import { ExportConfig } from '../lib/exportUtils'
-import { formatDateToDisplay } from '../lib/dateUtils'
+import { formatDateToDisplay, formatTimeToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -584,7 +584,7 @@ export default function FuelOperations() {
                             return (
                               <tr key={idx} className="hover:bg-surface-bg">
                                 <td className="px-4 py-2.5 text-xs font-mono text-content-secondary">
-                                  {m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : '-'}
+                                  {m.timestamp ? formatTimeToDisplay(m.timestamp) : '-'}
                                 </td>
                                 <td className="px-4 py-2.5">
                                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${
@@ -1134,7 +1134,7 @@ export default function FuelOperations() {
                                 return (
                                   <tr key={idx} className="hover:bg-surface-bg">
                                     <td className="px-4 py-2.5 text-xs font-mono text-content-secondary">
-                                      {m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : '-'}
+                                      {m.timestamp ? formatTimeToDisplay(m.timestamp) : '-'}
                                     </td>
                                     <td className="px-4 py-2.5">
                                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${

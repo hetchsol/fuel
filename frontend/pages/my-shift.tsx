@@ -6,7 +6,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import DoubleEntryModal from '../components/DoubleEntryModal'
 import Pagination from '../components/Pagination'
 import { getHeaders, authFetch } from '../lib/api'
-import { formatDateToDisplay } from '../lib/dateUtils'
+import { formatDateToDisplay, formatTimeToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -1212,7 +1212,7 @@ export default function MyShift() {
                       </div>
                       {attDeposits?.last_deposit_time && (
                         <div className="text-xs mt-1" style={{ color: theme.textSecondary }}>
-                          Last deposit: {attDeposits.deposits?.[attDeposits.deposits.length - 1]?.time || new Date(attDeposits.last_deposit_time).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                          Last deposit: {attDeposits.deposits?.[attDeposits.deposits.length - 1]?.time || formatTimeToDisplay(attDeposits.last_deposit_time)}
                         </div>
                       )}
                     </div>
@@ -1372,7 +1372,7 @@ export default function MyShift() {
                     <div key={d.deposit_id} className="flex justify-between items-center text-xs p-1.5 rounded"
                       style={{ backgroundColor: theme.background }}>
                       <span style={{ color: theme.textSecondary }}>
-                        {d.time || new Date(d.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})} {d.note && `— ${d.note}`}
+                        {d.time || formatTimeToDisplay(d.timestamp)} {d.note && `— ${d.note}`}
                       </span>
                       <span className="font-semibold" style={{ color: theme.textPrimary }}>K{d.amount.toLocaleString()}</span>
                     </div>
@@ -3306,7 +3306,7 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
                                   <div key={d.deposit_id} className="flex justify-between text-xs p-1.5 rounded"
                                     style={{ backgroundColor: theme.cardBg }}>
                                     <span style={{ color: theme.textSecondary }}>
-                                      {d.time || new Date(d.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})} {d.note && `— ${d.note}`}
+                                      {d.time || formatTimeToDisplay(d.timestamp)} {d.note && `— ${d.note}`}
                                     </span>
                                     <span className="font-semibold" style={{ color: theme.textPrimary }}>K{d.amount.toLocaleString()}</span>
                                   </div>

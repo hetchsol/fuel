@@ -4,7 +4,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import Pagination from '../components/Pagination'
 import ReasonChips, { REASON_PRESETS } from '../components/ReasonChips'
 import { getHeaders, authFetch } from '../lib/api'
-import { formatDateToDisplay, formatDateTimeToDisplay } from '../lib/dateUtils'
+import { formatDateToDisplay, formatDateTimeToDisplay, formatTimeToDisplay } from '../lib/dateUtils'
 
 const HISTORY_PAGE_SIZE = 20
 
@@ -2627,7 +2627,7 @@ function ShiftDepositOverview({ shiftId }: { shiftId: string }) {
             </div>
             {att.last_deposit_time && (
               <div className="text-xs text-content-secondary mt-1">
-                Last: {new Date(att.last_deposit_time).toLocaleTimeString()}
+                Last: {formatTimeToDisplay(att.last_deposit_time)}
               </div>
             )}
           </div>

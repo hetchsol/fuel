@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { authFetch } from '../lib/api'
+import { formatTimeToDisplay } from '../lib/dateUtils'
 import LoadingSpinner from './LoadingSpinner'
 
 interface TankCardProps {
@@ -198,7 +199,7 @@ const TankCard = ({
               Capacity: {tank.capacity.toLocaleString()} L
             </p>
             <p className={`text-xs ${colors.lightestText}`}>
-              {new Date(tank.last_updated).toLocaleTimeString()}
+              {formatTimeToDisplay(tank.last_updated)}
             </p>
           </div>
 
