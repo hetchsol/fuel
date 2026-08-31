@@ -288,8 +288,11 @@ export default function DailyCloseOff() {
               onClick={fetchDiagnostic}
               disabled={diagnosticLoading}
               title="Show every shift record and handover for this date, unsummarized"
-              className="px-3 py-2 text-sm font-medium rounded-btn border border-surface-border text-content-secondary hover:bg-white/[0.03] transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-btn border border-action-primary text-action-primary bg-action-primary/10 hover:bg-action-primary/20 transition-colors disabled:opacity-50"
             >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-4.35-4.35" />
+              </svg>
               {diagnosticLoading ? 'Checking...' : 'Diagnose'}
             </button>
 
