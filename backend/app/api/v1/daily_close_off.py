@@ -80,6 +80,81 @@ def _aggregate_handovers(handovers: list) -> dict:
     }
 
 
+# ── GET /diagnose ─────────────────────────────────────────────
+@router.get("/diagnose", dependencies=[Depends(require_manager_or_owner)])
+async def diagnose_close_off(
+    date: str = Query(..., description="Date in YYYY-MM-DD format"),
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Raw, unsummarized dump of everything relevant to closing this date —
+    every shift record matching the date (any type, any status, including
+    duplicates the close flow would otherwise silently pick between) and
+    every handover referencing each one (any phase/status, including
+    superseded). No interpretation beyond flagging what's resolved, so
+    nothing gets silently filtered out the way a targeted check could miss
+    an unanticipated case. Meant to make "why can't I close this day"
+    answerable by looking, not by guessing from the error message.
+    """
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+
+    shifts_for_date = [
+        (sid, s) for sid, s in storage.get("shifts", {}).items()
+        if s.get("date") == date
+    ]
+    all_handovers = _load_handovers(station_id)
+    resolved_statuses = ("approved", "voided")
+
+    shift_type_counts: dict = {}
+    shifts_out = []
+    for sid, s in shifts_for_date:
+        shift_type = s.get("shift_type", "unknown")
+        shift_type_counts[shift_type] = shift_type_counts.get(shift_type, 0) + 1
+
+        assignments = s.get("assignments", [])
+        shift_handovers = [h for h in all_handovers.values() if h.get("shift_id") == sid]
+        assigned_ids = {a.get("attendant_id") for a in assignments if a.get("attendant_id")}
+        resolved_ids = {h.get("attendant_id") for h in shift_handovers
+                        if h.get("review_status") in resolved_statuses
+                        and h.get("phase") != "readings_superseded"}
+
+        shifts_out.append({
+            "shift_id": sid,
+            "shift_type": shift_type,
+            "status": s.get("status"),
+            "created_at": s.get("created_at"),
+            "assignments": [
+                {"attendant_id": a.get("attendant_id"), "attendant_name": a.get("attendant_name")}
+                for a in assignments
+            ],
+            "fully_approved": bool(assigned_ids) and assigned_ids.issubset(resolved_ids),
+            "handovers": [
+                {
+                    "handover_id": hid,
+                    "attendant_id": h.get("attendant_id"),
+                    "attendant_name": h.get("attendant_name"),
+                    "phase": h.get("phase"),
+                    "review_status": h.get("review_status"),
+                    "created_at": h.get("created_at"),
+                    "resolved": h.get("review_status") in resolved_statuses,
+                    "superseded": h.get("phase") == "readings_superseded",
+                }
+                for hid, h in all_handovers.items() if h.get("shift_id") == sid
+            ],
+        })
+
+    duplicate_types = [t for t, count in shift_type_counts.items() if count > 1]
+
+    return {
+        "date": date,
+        "already_closed": date in _load_close_offs(station_id),
+        "shift_type_counts": shift_type_counts,
+        "duplicate_shift_types": duplicate_types,
+        "shifts": shifts_out,
+    }
+
+
 # ── GET /summary ──────────────────────────────────────────────
 @router.get("/summary", dependencies=[Depends(require_manager_or_owner)])
 async def get_close_off_summary(

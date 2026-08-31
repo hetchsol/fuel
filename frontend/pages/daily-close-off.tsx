@@ -38,6 +38,32 @@ export default function DailyCloseOff() {
   const [reopenReason, setReopenReason] = useState('')
   const [reopenLoading, setReopenLoading] = useState(false)
 
+  // Raw diagnostic dump — every shift record + handover for the date, no
+  // summarizing. Surfaced automatically when Close Day fails, since /summary
+  // above is handover-only and doesn't see the shift-record-level checks
+  // /close actually enforces (status, duplicate date+type records) — a day
+  // can look fully approved here and still be rejected at close time.
+  const [diagnostic, setDiagnostic] = useState<any>(null)
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false)
+  const [showDiagnostic, setShowDiagnostic] = useState(false)
+
+  const fetchDiagnostic = useCallback(async () => {
+    setDiagnosticLoading(true)
+    try {
+      const res = await authFetch(`${BASE}/daily-close-off/diagnose?date=${selectedDate}`, {
+        headers: getHeaders(),
+      })
+      if (res.ok) {
+        setDiagnostic(await res.json())
+        setShowDiagnostic(true)
+      }
+    } catch {
+      // silent — this is a diagnostic aid, never block the page on it
+    } finally {
+      setDiagnosticLoading(false)
+    }
+  }, [selectedDate])
+
   // Auth check — owner only
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -86,6 +112,8 @@ export default function DailyCloseOff() {
 
   useEffect(() => {
     if (userRole === 'owner' || userRole === 'manager') fetchSummary()
+    setDiagnostic(null)
+    setShowDiagnostic(false)
   }, [fetchSummary, userRole])
 
   // Fetch history
@@ -137,10 +165,13 @@ export default function DailyCloseOff() {
         throw new Error(err.detail || 'Failed to close day')
       }
       toast.success(`Day ${formatDateToDisplay(selectedDate)} closed successfully`)
+      setDiagnostic(null)
+      setShowDiagnostic(false)
       fetchSummary()
       if (showHistory) fetchHistory()
     } catch (err: any) {
       toast.error(err.message)
+      fetchDiagnostic()
     } finally {
       setClosing(false)
     }
@@ -253,6 +284,14 @@ export default function DailyCloseOff() {
               onChange={(e) => setSelectedDate(e.target.value)}
               className="px-3 py-2 border border-surface-border rounded-input text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
             />
+            <button
+              onClick={fetchDiagnostic}
+              disabled={diagnosticLoading}
+              title="Show every shift record and handover for this date, unsummarized"
+              className="px-3 py-2 text-sm font-medium rounded-btn border border-surface-border text-content-secondary hover:bg-white/[0.03] transition-colors disabled:opacity-50"
+            >
+              {diagnosticLoading ? 'Checking...' : 'Diagnose'}
+            </button>
 
             {/* Status badge */}
             {summary && (
@@ -586,6 +625,80 @@ export default function DailyCloseOff() {
               {hasUnapproved && (
                 <p className="text-xs text-status-error mt-2">Cannot close — {summary.unapproved_handovers.length} unapproved handover(s) remaining</p>
               )}
+            </div>
+          )}
+
+          {/* Diagnostic panel — raw shift/handover breakdown for the date, no
+              summarizing, so a stuck close-off is answerable by looking instead
+              of guessing from the error message. */}
+          {showDiagnostic && diagnostic && (
+            <div className="glass-card p-6 mb-6 border-l-4 border-status-warning animate-fade-in-up-1">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-content-primary">
+                  Diagnostic — {formatDateToDisplay(diagnostic.date)}
+                </h3>
+                <button onClick={() => setShowDiagnostic(false)} className="text-xs text-content-secondary hover:text-content-primary underline">
+                  Hide
+                </button>
+              </div>
+
+              {diagnostic.duplicate_shift_types?.length > 0 && (
+                <div className="p-3 rounded-xl mb-4 bg-status-error/10 border border-status-error/30 text-sm text-status-error">
+                  Found more than one shift record for the same type on this date: {diagnostic.duplicate_shift_types.join(', ')}.
+                  This is almost always the cause — close-off can't tell which is the real one.
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {diagnostic.shifts.map((s: any) => (
+                  <div key={s.shift_id} className="p-4 rounded-xl border border-surface-border bg-white/[0.02]">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-content-primary">{s.shift_type} shift</span>
+                        <span className="font-mono text-xs text-content-secondary">{s.shift_id}</span>
+                        <span className={`px-2 py-0.5 rounded-badge text-[10px] font-semibold uppercase ${
+                          s.status === 'completed' || s.status === 'inactive'
+                            ? 'bg-status-success/15 text-status-success'
+                            : 'bg-status-warning/15 text-status-warning'
+                        }`}>
+                          {s.status}
+                        </span>
+                        {s.fully_approved && (
+                          <span className="px-2 py-0.5 rounded-badge text-[10px] font-semibold bg-status-success/15 text-status-success">
+                            All attendants resolved
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-content-secondary">created {formatDateTimeToDisplay(s.created_at)}</span>
+                    </div>
+
+                    <p className="text-xs text-content-secondary mb-2">
+                      Assigned: {s.assignments.length === 0 ? 'none recorded' : s.assignments.map((a: any) => a.attendant_name || a.attendant_id).join(', ')}
+                    </p>
+
+                    {s.handovers.length === 0 ? (
+                      <p className="text-xs text-status-error">No handovers reference this shift record.</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {s.handovers.map((h: any) => (
+                          <div key={h.handover_id} className="flex flex-wrap items-center gap-2 text-xs">
+                            <span className="font-mono text-content-secondary">{h.handover_id}</span>
+                            <span className="text-content-primary">{h.attendant_name}</span>
+                            <span className="text-content-secondary">phase: {h.phase}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                              h.resolved ? 'bg-status-success/15 text-status-success'
+                              : h.superseded ? 'bg-content-secondary/15 text-content-secondary'
+                              : 'bg-status-warning/15 text-status-warning'
+                            }`}>
+                              {h.superseded ? 'superseded' : h.review_status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
