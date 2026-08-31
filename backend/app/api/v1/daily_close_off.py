@@ -17,6 +17,7 @@ from ...services.shift_status import (
     unreconcile_shifts_for_date,
     _shift_fully_approved,
     describe_unresolved_attendants,
+    advance_shift_on_approval,
 )
 
 router = APIRouter()
@@ -152,6 +153,56 @@ async def diagnose_close_off(
         "shift_type_counts": shift_type_counts,
         "duplicate_shift_types": duplicate_types,
         "shifts": shifts_out,
+    }
+
+
+# ── POST /recompute-shift ────────────────────────────────────
+class RecomputeShiftInput(BaseModel):
+    shift_id: str
+
+
+@router.post("/recompute-shift", dependencies=[Depends(require_manager_or_owner)])
+async def recompute_shift(data: RecomputeShiftInput, ctx: dict = Depends(get_station_context)):
+    """
+    Re-run the completion check for one shift against its CURRENT data,
+    without requiring a fresh approval/void to trigger it.
+
+    advance_shift_on_approval only ever fires reactively, at the moment a
+    handover gets approved or voided. If a shift's underlying data changes
+    afterward in a way that would newly satisfy completion (e.g. its
+    assignments list was corrected or cleared out-of-band, after every
+    handover was already approved), nothing re-triggers the check — the
+    shift can sit at 'auto-closed' forever even though _shift_fully_approved
+    would already return True if asked. This is that ask, on demand.
+
+    A no-op (returns advanced: false) if the shift isn't actually fully
+    approved yet, or is already past the pre-completion states — never
+    forces a transition that wouldn't happen naturally.
+    """
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+    shifts_data = storage.get("shifts", {})
+    shift = shifts_data.get(data.shift_id)
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    before_status = shift.get("status")
+    advanced = advance_shift_on_approval(data.shift_id, station_id, storage, ctx["username"])
+
+    if advanced:
+        log_audit_event(
+            station_id=station_id,
+            action="shift_recomputed",
+            performed_by=ctx["username"],
+            entity_type="shift",
+            entity_id=data.shift_id,
+            details={"previous_status": before_status, "new_status": shift.get("status")},
+        )
+
+    return {
+        "advanced": advanced,
+        "status": shift.get("status"),
+        "blockers": describe_unresolved_attendants(shift, data.shift_id, station_id, storage) if not advanced else [],
     }
 
 

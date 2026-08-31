@@ -64,6 +64,40 @@ export default function DailyCloseOff() {
     }
   }, [selectedDate])
 
+  // Re-check one shift's completion status against its current data. Needed
+  // because advance_shift_on_approval only fires reactively at the moment a
+  // handover is approved/voided — if a shift's data changes afterward in a
+  // way that would now satisfy completion (e.g. a bad assignments list gets
+  // corrected after every handover was already approved), nothing re-checks
+  // it on its own. Surfaced as a per-shift action right in the diagnostic.
+  const [recomputingShiftId, setRecomputingShiftId] = useState<string | null>(null)
+
+  const handleRecompute = async (shiftId: string) => {
+    setRecomputingShiftId(shiftId)
+    try {
+      const res = await authFetch(`${BASE}/daily-close-off/recompute-shift`, {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shift_id: shiftId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.detail || 'Failed to recompute shift')
+      if (data.advanced) {
+        toast.success(`Shift advanced to "${data.status}".`)
+      } else if (data.blockers?.length) {
+        toast.error(`Still blocked: ${data.blockers.join('; ')}`)
+      } else {
+        toast('No change — already resolved or not yet in a completable state.')
+      }
+      fetchDiagnostic()
+      fetchSummary()
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setRecomputingShiftId(null)
+    }
+  }
+
   // Auth check — owner only
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -672,7 +706,19 @@ export default function DailyCloseOff() {
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-content-secondary">created {formatDateTimeToDisplay(s.created_at)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-content-secondary">created {formatDateTimeToDisplay(s.created_at)}</span>
+                        {(s.status === 'active' || s.status === 'auto-closed') && (
+                          <button
+                            onClick={() => handleRecompute(s.shift_id)}
+                            disabled={recomputingShiftId === s.shift_id}
+                            title="Re-check this shift's completion status against its current data — fixes a shift stuck after data was corrected but nothing re-triggered the check"
+                            className="px-2 py-1 text-[10px] font-semibold rounded border border-action-primary text-action-primary hover:bg-action-primary/10 transition-colors disabled:opacity-50"
+                          >
+                            {recomputingShiftId === s.shift_id ? 'Checking...' : 'Recompute'}
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <p className="text-xs text-content-secondary mb-2">
