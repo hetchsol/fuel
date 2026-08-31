@@ -201,12 +201,33 @@ async def close_day(
         (sid, s) for sid, s in ctx["storage"].get("shifts", {}).items()
         if s.get("date") == data.date
     ]
-    day_entry = next(
-        (pair for pair in shifts_for_date if pair[1].get("shift_type", "").lower() == "day"), None
-    )
-    night_entry = next(
-        (pair for pair in shifts_for_date if pair[1].get("shift_type", "").lower() == "night"), None
-    )
+
+    def _matches(shift_type_label: str):
+        return [pair for pair in shifts_for_date if pair[1].get("shift_type", "").lower() == shift_type_label]
+
+    for label, matches_key in (("Day", "day"), ("Night", "night")):
+        matches = _matches(matches_key)
+        # More than one shift record for the same date+type is never valid —
+        # picking "the first one" (previous behavior) risks silently operating
+        # on a stray/empty duplicate while the real shift (with all the actual
+        # assignments and approved handovers) sits at a different shift_id,
+        # both blocking the status gate below AND excluding the real handovers
+        # from the banked total if it somehow got past that gate.
+        if len(matches) > 1:
+            descriptions = [
+                f"{sid} (status: {s.get('status', 'unknown')}, "
+                f"{len(s.get('assignments', []))} assignment(s))"
+                for sid, s in matches
+            ]
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot close day: found {len(matches)} {label} shift records for "
+                       f"{data.date}, not 1 — {'; '.join(descriptions)}. Deactivate the stray "
+                       "one (reactivate first if it's auto-closed) before closing the day.",
+            )
+
+    day_entry = next(iter(_matches("day")), None)
+    night_entry = next(iter(_matches("night")), None)
     for label, entry in (("Day", day_entry), ("Night", night_entry)):
         if entry is None:
             raise HTTPException(

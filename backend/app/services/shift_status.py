@@ -112,6 +112,28 @@ def describe_unresolved_attendants(shift: dict, shift_id: str, station_id: str, 
     resolved_statuses = ("approved", "voided")
     blockers = []
     assignments = (shift or {}).get("assignments", [])
+
+    # Nothing recorded at all — the shift this status check is looking at
+    # has no assignments and no handovers, yet isn't 'completed'/'inactive'
+    # either (that's the only reason this function gets called). This is
+    # never a real "everything's fine, nothing to report" case: it almost
+    # always means there's a second, empty/stray shift record for the same
+    # date+type, and close_day picked that one instead of the real shift
+    # where the actual work and approvals happened.
+    if not assignments and not shift_handovers:
+        return [
+            f"This {shift.get('shift_type', 'shift')} shift record ({shift_id}) has no "
+            "attendants assigned and no handovers submitted — check for a duplicate shift "
+            "record on this date; the real one may be a different shift_id."
+        ]
+
+    if assignments and all(not a.get("attendant_id") for a in assignments):
+        return [
+            "This shift's assignment records are missing attendant IDs — the completeness "
+            "check can't match them to handovers. This looks like malformed shift data "
+            "rather than an unapproved handover."
+        ]
+
     if assignments:
         for a in assignments:
             aid = a.get("attendant_id")
