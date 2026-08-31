@@ -58,7 +58,15 @@ def _shift_fully_approved(shift: dict, shift_id: str, station_id: str, storage: 
     handover exists for it and none are unapproved.
     """
     handovers = load_station_json(station_id, HANDOVERS_FILE, default={})
-    shift_handovers = [h for h in handovers.values() if h.get("shift_id") == shift_id]
+    # Exclude superseded handovers (redo-readings) — the old record is left
+    # in place with whatever review_status it had before being replaced
+    # (never resolved to approved/voided), so without this filter it stays
+    # a phantom permanent blocker even after the attendant's real, current
+    # handover gets fully approved.
+    shift_handovers = [
+        h for h in handovers.values()
+        if h.get("shift_id") == shift_id and h.get("phase") != "readings_superseded"
+    ]
     if not shift_handovers:
         return False
     # Any handover not resolved (approved, or voided out of the picture
@@ -91,7 +99,10 @@ def describe_unresolved_attendants(shift: dict, shift_id: str, station_id: str, 
     "auto-closed" alone doesn't tell a manager what to go do next.
     """
     handovers = load_station_json(station_id, HANDOVERS_FILE, default={})
-    shift_handovers = [h for h in handovers.values() if h.get("shift_id") == shift_id]
+    shift_handovers = [
+        h for h in handovers.values()
+        if h.get("shift_id") == shift_id and h.get("phase") != "readings_superseded"
+    ]
     by_attendant: dict = {}
     for h in shift_handovers:
         aid = h.get("attendant_id")
@@ -160,7 +171,10 @@ def advance_shift_on_approval(shift_id: str, station_id: str, storage: dict,
         return False
 
     handovers = load_station_json(station_id, HANDOVERS_FILE, default={})
-    shift_handovers = [h for h in handovers.values() if h.get("shift_id") == shift_id]
+    shift_handovers = [
+        h for h in handovers.values()
+        if h.get("shift_id") == shift_id and h.get("phase") != "readings_superseded"
+    ]
     assigned_ids = {a.get("attendant_id") for a in shift.get("assignments", [])
                     if a.get("attendant_id")}
 
