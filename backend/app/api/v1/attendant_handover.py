@@ -2468,9 +2468,16 @@ async def get_stock_opening(ctx: dict = Depends(get_station_context)):
     station_id = ctx["station_id"]
     storage = ctx["storage"]
 
-    # --- Find previous handover with stock_snapshot ---
+    # --- Find each category's most recent handover with data for it ---
+    # A single "most recent handover with any stock_snapshot" pointer would
+    # skip a category's true last closing if a more recent handover only
+    # covered a different category (e.g. one attendant assigned solely to
+    # LPG, the next solely to Accessories) - so each category is resolved
+    # independently against its own most recent contributing handover.
     handovers = _load_handovers(station_id)
-    prev_snapshot = None
+    prev_lpg_snapshot = None
+    prev_acc_snapshot = None
+    prev_lub_snapshot = None
     if handovers:
         sorted_handovers = sorted(
             handovers.values(),
@@ -2478,8 +2485,16 @@ async def get_stock_opening(ctx: dict = Depends(get_station_context)):
             reverse=True,
         )
         for h in sorted_handovers:
-            if h.get("stock_snapshot"):
-                prev_snapshot = h["stock_snapshot"]
+            snap = h.get("stock_snapshot")
+            if not snap:
+                continue
+            if prev_lpg_snapshot is None and snap.get("lpg_cylinders"):
+                prev_lpg_snapshot = snap
+            if prev_acc_snapshot is None and snap.get("accessories"):
+                prev_acc_snapshot = snap
+            if prev_lub_snapshot is None and snap.get("lubricants"):
+                prev_lub_snapshot = snap
+            if prev_lpg_snapshot and prev_acc_snapshot and prev_lub_snapshot:
                 break
 
     # --- Stores/forecourt balances (authoritative live stock where adopted) ---
@@ -2495,8 +2510,8 @@ async def get_stock_opening(ctx: dict = Depends(get_station_context)):
     # --- LPG Cylinders ---
     lpg_cylinders = []
     prev_lpg_map = {}
-    if prev_snapshot:
-        for row in prev_snapshot.get("lpg_cylinders", []):
+    if prev_lpg_snapshot:
+        for row in prev_lpg_snapshot.get("lpg_cylinders", []):
             prev_lpg_map[row["size_kg"]] = row
 
     for size in LPG_SIZES:
@@ -2520,8 +2535,8 @@ async def get_stock_opening(ctx: dict = Depends(get_station_context)):
     # --- LPG Accessories ---
     accessories = []
     prev_acc_map = {}
-    if prev_snapshot:
-        for row in prev_snapshot.get("accessories", []):
+    if prev_acc_snapshot:
+        for row in prev_acc_snapshot.get("accessories", []):
             prev_acc_map[row["product_code"]] = row
 
     # Use in-memory catalog first, fall back to defaults
@@ -2559,8 +2574,8 @@ async def get_stock_opening(ctx: dict = Depends(get_station_context)):
     # --- Lubricants (Island 3 only) ---
     lubricants = []
     prev_lub_map = {}
-    if prev_snapshot:
-        for row in prev_snapshot.get("lubricants", []):
+    if prev_lub_snapshot:
+        for row in prev_lub_snapshot.get("lubricants", []):
             prev_lub_map[row["product_code"]] = row
 
     lub_catalog = load_lubricant_catalog(station_id)
