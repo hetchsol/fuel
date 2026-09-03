@@ -35,13 +35,26 @@ def test_day_dip_does_not_satisfy_night_check_same_date(monkeypatch):
 def test_missing_tank_dips_is_shift_type_scoped(monkeypatch):
     tank_readings = {
         "R1": {"tank_id": "TANK1", "date": "2026-08-05", "shift_type": "Day",
-               "opening_dip_cm": 100.0, "closing_dip_cm": 90.0},
+               "opening_dip_cm": 100.0, "closing_dip_cm": 90.0, "water_dip_cm": 0.0},
     }
     monkeypatch.setattr(ah, "load_station_json", lambda sid, fn, default=None: tank_readings)
     storage = {"tanks": {"TANK1": {"fuel_type": "Diesel"}}}
 
     assert ah._missing_tank_dips("ST001", "2026-08-05", "Day", storage) == []
     assert ah._missing_tank_dips("ST001", "2026-08-05", "Night", storage) == ["TANK1"]
+
+
+def test_missing_tank_dips_flags_closing_without_water(monkeypatch):
+    # Opening + closing recorded, water never entered — the shift-close gate
+    # (unlike the Phase-1 attendant-submission gate) must still block on this.
+    tank_readings = {
+        "R1": {"tank_id": "TANK1", "date": "2026-08-05", "shift_type": "Day",
+               "opening_dip_cm": 100.0, "closing_dip_cm": 90.0},
+    }
+    monkeypatch.setattr(ah, "load_station_json", lambda sid, fn, default=None: tank_readings)
+    storage = {"tanks": {"TANK1": {"fuel_type": "Diesel"}}}
+
+    assert ah._missing_tank_dips("ST001", "2026-08-05", "Day", storage) == ["TANK1"]
 
 
 def test_require_dips_complete_raises_with_shift_type_in_message(monkeypatch):
@@ -55,6 +68,7 @@ def test_require_dips_complete_raises_with_shift_type_in_message(monkeypatch):
         assert exc.status_code == 409  # distinguishes "missing dips" from other 400s at the call sites
         assert "Night" in exc.detail
         assert "Diesel" in exc.detail
+        assert "water" in exc.detail
 
 
 def test_missing_dips_for_tanks_only_checks_requested_tanks(monkeypatch):

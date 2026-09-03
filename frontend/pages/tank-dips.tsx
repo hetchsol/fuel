@@ -321,6 +321,10 @@ export default function TankDips() {
       toast.error('Enter the closing dip reading before saving.')
       return
     }
+    if (row.water_dip_cm === '') {
+      toast.error('Enter the water dip reading before saving.')
+      return
+    }
     if (row.requires_delivery && !row.delivery_linked && !row.delivery_supplier.trim()) {
       toast.error('Enter the supplier name to record the delivery.')
       return
@@ -694,7 +698,7 @@ export default function TankDips() {
                   )}
 
                   <button onClick={() => handleSave(idx)}
-                    disabled={row.saving || !row.closing_dip_cm}
+                    disabled={row.saving || !row.closing_dip_cm || row.water_dip_cm === ''}
                     className="px-4 py-2 bg-action-primary text-white text-sm font-medium rounded-btn hover:bg-action-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">
                     {row.saving ? 'Saving...' : 'Save'}
                   </button>

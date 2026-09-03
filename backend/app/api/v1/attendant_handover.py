@@ -66,7 +66,7 @@ def _save_handovers(data: dict, station_id: str):
 
 def _missing_dips_for_tanks(
     station_id: str, shift_date: str, shift_type: str, tank_ids, storage: dict,
-    require_opening: bool = True,
+    require_opening: bool = True, require_water: bool = False,
 ) -> list:
     """Return tank_ids (restricted to `tank_ids`) that lack a dip reading for
     this exact shift_date + shift_type.
@@ -85,18 +85,21 @@ def _missing_dips_for_tanks(
             continue
         if require_opening and r.get("opening_dip_cm") is None:
             continue
+        if require_water and r.get("water_dip_cm") is None:
+            continue
         have_dip.add(r.get("tank_id"))
     return [t for t in tank_ids if t not in have_dip]
 
 
 def _missing_tank_dips(station_id: str, shift_date: str, shift_type: str, storage: dict) -> list:
-    """Return tank_ids that lack a COMPLETE (opening + closing) dip for this
-    exact shift_date + shift_type.
+    """Return tank_ids that lack a COMPLETE (opening + closing + water) dip
+    for this exact shift_date + shift_type.
     """
     tanks_data = storage.get("tanks", {})
     if not tanks_data:
         return []
-    return _missing_dips_for_tanks(station_id, shift_date, shift_type, list(tanks_data), storage)
+    return _missing_dips_for_tanks(station_id, shift_date, shift_type, list(tanks_data), storage,
+                                    require_water=True)
 
 
 def _require_dips_complete(station_id: str, shift_date: str, shift_type: str, storage: dict):
@@ -115,8 +118,8 @@ def _require_dips_complete(station_id: str, shift_date: str, shift_type: str, st
         ]
         raise HTTPException(
             status_code=409,
-            detail=f"Tank dips for {shift_date} ({shift_type}) have not been fully recorded (opening and "
-                   f"closing) for all tanks ({', '.join(missing_labels)}). Record dips before closing this shift.",
+            detail=f"Tank dips for {shift_date} ({shift_type}) have not been fully recorded (opening, "
+                   f"closing, and water) for all tanks ({', '.join(missing_labels)}). Record dips before closing this shift.",
         )
 
 
