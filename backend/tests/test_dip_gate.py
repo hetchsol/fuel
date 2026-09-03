@@ -67,8 +67,29 @@ def test_require_dips_complete_raises_with_shift_type_in_message(monkeypatch):
     except Exception as exc:
         assert exc.status_code == 409  # distinguishes "missing dips" from other 400s at the call sites
         assert "Night" in exc.detail
-        assert "Diesel" in exc.detail
-        assert "water" in exc.detail
+        # No record at all for this tank/shift — every field is missing.
+        assert "Diesel (missing opening, closing and water)" in exc.detail
+
+
+def test_require_dips_complete_names_only_the_fields_actually_missing_per_tank(monkeypatch):
+    # TANK1 has everything but water; TANK2 has nothing at all — the message
+    # must call out each tank's own gap, not a blanket list of all three.
+    tank_readings = {
+        "R1": {"tank_id": "TANK1", "date": "2026-08-05", "shift_type": "Day",
+               "opening_dip_cm": 100.0, "closing_dip_cm": 90.0},
+    }
+    monkeypatch.setattr(ah, "load_station_json", lambda sid, fn, default=None: tank_readings)
+    storage = {"tanks": {
+        "TANK1": {"fuel_type": "Diesel"},
+        "TANK2": {"fuel_type": "Petrol"},
+    }}
+
+    try:
+        ah._require_dips_complete("ST001", "2026-08-05", "Day", storage)
+        assert False, "expected HTTPException"
+    except Exception as exc:
+        assert "Diesel (missing water)" in exc.detail
+        assert "Petrol (missing opening, closing and water)" in exc.detail
 
 
 def test_missing_dips_for_tanks_only_checks_requested_tanks(monkeypatch):

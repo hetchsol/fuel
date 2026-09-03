@@ -112,14 +112,31 @@ def _require_dips_complete(station_id: str, shift_date: str, shift_type: str, st
     missing = _missing_tank_dips(station_id, shift_date, shift_type, storage)
     if missing:
         tanks_data = storage.get("tanks", {})
-        missing_labels = [
-            tanks_data[t].get("fuel_type") or tanks_data[t].get("name") or t
+        tank_readings = load_station_json(station_id, 'tank_readings.json', default={})
+        readings_by_tank = {
+            r.get("tank_id"): r
+            for r in tank_readings.values()
+            if r.get("date") == shift_date and r.get("shift_type") == shift_type
+        }
+
+        def _fields_missing(tank_id: str) -> str:
+            rec = readings_by_tank.get(tank_id, {})
+            fields = [
+                name for name, key in
+                (("opening", "opening_dip_cm"), ("closing", "closing_dip_cm"), ("water", "water_dip_cm"))
+                if rec.get(key) is None
+            ]
+            return fields[0] if len(fields) == 1 else f"{', '.join(fields[:-1])} and {fields[-1]}"
+
+        missing_parts = [
+            f"{tanks_data.get(t, {}).get('fuel_type') or tanks_data.get(t, {}).get('name') or t} "
+            f"(missing {_fields_missing(t)})"
             for t in missing
         ]
         raise HTTPException(
             status_code=409,
-            detail=f"Tank dips for {shift_date} ({shift_type}) have not been fully recorded (opening, "
-                   f"closing, and water) for all tanks ({', '.join(missing_labels)}). Record dips before closing this shift.",
+            detail=f"Tank dips for {shift_date} ({shift_type}) are incomplete: {'; '.join(missing_parts)}. "
+                   f"Record dips before closing this shift.",
         )
 
 
