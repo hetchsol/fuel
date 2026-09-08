@@ -818,14 +818,16 @@ export default function Shifts() {
     }))
 
     if (editingShiftId) {
-      // Edit mode — PUT to update existing shift (must include full shift object)
+      // Edit mode — PUT to update existing shift's roster. Status is
+      // intentionally omitted: the backend ignores it on this endpoint (a
+      // roster edit must never change lifecycle state), and this form has
+      // no way to know the shift's real current status anyway.
       const payload = {
         shift_id: editingShiftId,
         date: shiftForm.date,
         shift_type: shiftForm.shift_type,
         attendants: selectedAttendants.map(a => a.full_name),
         assignments,
-        status: 'active'
       }
 
       try {
@@ -985,14 +987,21 @@ export default function Shifts() {
                   {selectedShiftId && (() => {
                     const shift = allShifts.find(s => s.shift_id === selectedShiftId)
                     if (!shift) return null
+                    // Matches the backend's assert_shift_editable lock: reconciled and
+                    // inactive shifts can't be edited (reconciled is locked after Daily
+                    // Close-Off; inactive needs Reactivate first). Active/completed/
+                    // auto-closed remain editable, same as the backend allows.
+                    const editLocked = shift.status === 'reconciled' || shift.status === 'inactive'
                     return (
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => { openEditModal(shift); setShowManageDropdown(false) }}
-                          className="px-4 py-2 bg-action-primary hover:bg-action-primary-hover text-white rounded-md text-sm font-medium"
-                        >
-                          Edit Shift
-                        </button>
+                        {!editLocked && (
+                          <button
+                            onClick={() => { openEditModal(shift); setShowManageDropdown(false) }}
+                            className="px-4 py-2 bg-action-primary hover:bg-action-primary-hover text-white rounded-md text-sm font-medium"
+                          >
+                            Edit Shift
+                          </button>
+                        )}
                         {shift.status === 'active' && (
                           <button
                             onClick={() => { handleDeactivateShift(shift.shift_id); setSelectedShiftId('') }}

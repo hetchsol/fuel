@@ -501,9 +501,11 @@ def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_co
     if shift_id not in shifts_data:
         raise HTTPException(status_code=404, detail="Shift not found")
 
-    # Reject updates to inactive shifts
-    if shifts_data[shift_id].get("status") == "inactive":
-        raise HTTPException(status_code=400, detail="Cannot update an inactive shift")
+    # Reject updates to a locked shift (reconciled/inactive) — was previously
+    # checking only "inactive", which let a roster edit silently reach a
+    # reconciled shift and (see below) reset it back to "active" via the
+    # form's hardcoded status field, undoing Daily Close-Off's lock.
+    assert_shift_editable(shifts_data[shift_id])
 
     # Validate assignments if present
     if shift.assignments:
@@ -524,20 +526,25 @@ def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_co
 
     # Merge into the existing record rather than replacing it outright — this
     # endpoint's payload (from the roster-edit form) only ever carries date,
-    # shift_type, attendants, assignments, and status. A wholesale
+    # shift_type, attendants, and assignments. A wholesale
     # `shifts_data[shift_id] = shift.dict()` would silently reset every other
     # field (tank_dip_readings, created_at/by, auto_closed*, is_retrospective,
     # start_time/end_time) to the Shift model's defaults on every edit, since
-    # the incoming request never carries them.
+    # the incoming request never carries them. Status is deliberately excluded
+    # from this merge — it's not a roster-edit concern, and the form has
+    # always sent a hardcoded "active" regardless of the shift's real status,
+    # which would silently un-reconcile or un-complete a shift on every save.
+    # Status changes only ever happen through the dedicated complete/
+    # reconcile/deactivate/reactivate endpoints, which validate the transition.
     updated_shift = dict(shifts_data[shift_id])
     updated_shift.update({
         "date": shift.date,
         "shift_type": shift.shift_type,
         "attendants": shift.attendants,
         "assignments": [a.dict() for a in shift.assignments] if shift.assignments else [],
-        "status": shift.status,
     })
     shifts_data[shift_id] = updated_shift
+    save_station_storage(ctx["station_id"])
 
     return Shift(**updated_shift)
 
