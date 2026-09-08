@@ -64,6 +64,17 @@ def check_and_close_stale_shifts(storage: dict, station_id: str) -> list:
         print(f"[auto-close] {station_id}/{shift_id}: active for {age}, auto-closed"
               f"{' (missing dips: ' + ', '.join(missing_tanks) + ')' if missing_tanks else ''}")
 
+    # Persist immediately — this runs at server startup, before any request
+    # or graceful shutdown would otherwise flush storage. Without this, a
+    # restart shortly after startup (idle spin-down, a redeploy, a crash)
+    # loses the in-memory status change entirely: the next startup reads the
+    # shift back as still 'active' and re-closes + re-logs it, producing
+    # duplicate audit entries with an ever-growing "hours active" figure for
+    # the same shift instead of a single, durable close.
+    if closed_ids:
+        from ..database.storage import save_station_storage
+        save_station_storage(station_id)
+
     # Audit logging (graceful if Phase 2 not present)
     if closed_ids:
         try:
