@@ -262,6 +262,7 @@ async def get_close_off_summary(
                 h.get("expected_cash", 0) - h.get("actual_cash", 0) - h.get("pos_receipts", 0), 2
             ),
             "auto_flag_reasons": h.get("auto_flag_reasons", []),
+            "reconciliation_adjustments": h.get("reconciliation_adjustments", []),
         })
 
     unapproved_summaries = []

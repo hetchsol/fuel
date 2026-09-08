@@ -106,6 +106,15 @@ interface HandoverEntry {
     note?: string
   } | null
   auto_flag_reasons?: string[] | null
+  reconciliation_adjustments?: {
+    type: 'pos_receipt' | 'credit_sale'
+    description: string
+    amount: number
+    difference_before: number
+    difference_after: number
+    performed_by: string
+    performed_at: string
+  }[]
   admin_override?: { reason: string; overridden_by_name: string; overridden_at: string } | null
   notes?: string | null
   created_at: string
@@ -2141,6 +2150,25 @@ function ClosingForm({ h, theme, creditAccounts, otherProducts, onAccountCreated
               {difference >= 0 ? '+' : ''}{fmtK(difference)}
             </span>
           </div>
+        </div>
+      )}
+
+      {h.reconciliation_adjustments && h.reconciliation_adjustments.length > 0 && (
+        <div className="rounded-lg p-3 text-xs"
+          style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border }}>
+          <div className="font-medium mb-1.5" style={{ color: theme.textSecondary }}>
+            Adjusted after submission
+          </div>
+          {h.reconciliation_adjustments.map((adj, i) => (
+            <div key={i} className="flex justify-between mb-1 last:mb-0">
+              <span style={{ color: theme.textSecondary }}>
+                {adj.description} by {adj.performed_by}
+              </span>
+              <span className="font-mono" style={{ color: theme.textPrimary }}>
+                {fmtK(adj.difference_before)} to {fmtK(adj.difference_after)}
+              </span>
+            </div>
+          ))}
         </div>
       )}
 

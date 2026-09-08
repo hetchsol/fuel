@@ -487,6 +487,16 @@ export default function DailyCloseOff() {
                           <td className="py-2.5 px-3 text-right text-content-secondary">{h.pos_receipts > 0 ? fmt(h.pos_receipts) : '—'}</td>
                           <td className={`py-2.5 px-3 text-right font-bold ${h.difference <= 0 ? 'text-status-success' : 'text-status-error'}`}>
                             {fmt(h.difference)}
+                            {h.reconciliation_adjustments?.length > 0 && (
+                              <span
+                                className="ml-1 font-normal text-content-secondary"
+                                title={h.reconciliation_adjustments
+                                  .map((a: any) => `${a.description} by ${a.performed_by}: ${fmt(a.difference_before)} to ${fmt(a.difference_after)}`)
+                                  .join('; ')}
+                              >
+                                *
+                              </span>
+                            )}
                           </td>
                         </tr>
                       )

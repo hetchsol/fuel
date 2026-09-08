@@ -1104,6 +1104,36 @@ def _cash_shortage_threshold(storage: dict) -> float:
     return storage.get('fuel_settings', {}).get('cash_shortage_threshold', 500)
 
 
+def _record_reconciliation_adjustment(
+    handover: dict, adjustment_type: str, description: str, amount: float,
+    difference_before: float, performed_by: str,
+) -> None:
+    """
+    Log a post-submission change to a handover's cash reconciliation — a POS
+    receipt or credit sale added via the review screen after Phase 2, which
+    recomputes `difference` from the *same* actual_cash the attendant/manager
+    already entered. Without this, a manager can watch the difference move
+    on the review screen and have no record afterward of why: the number
+    just looks different from what he keyed in, even though his own entry
+    never changed.
+
+    Kept on the handover itself (surfaced in the review queue and Daily
+    Close-Off) rather than only in the audit log, since the audit log's
+    pos_receipts_updated/credit_sales_updated entries record the resulting
+    difference but not what it moved *from* — this pairs before and after
+    on one record, from Daily Close-Off backward to the moment it changed.
+    """
+    handover.setdefault("reconciliation_adjustments", []).append({
+        "type": adjustment_type,
+        "description": description,
+        "amount": round(amount, 2),
+        "difference_before": round(difference_before, 2),
+        "difference_after": round(handover.get("difference", 0), 2),
+        "performed_by": performed_by,
+        "performed_at": datetime.now().isoformat(),
+    })
+
+
 def _recalculate_reconciliation(handover: dict, storage: dict) -> None:
     """
     Recompute expected_cash, total_accounted, and difference from the current
@@ -3367,11 +3397,18 @@ async def patch_pos_receipts(
     new_items = [item.model_dump() for item in accepted]
     merged = existing + new_items
     pos_total = round(sum(e["amount"] for e in merged), 2)
+    added_total = round(sum(e["amount"] for e in new_items), 2)
+    difference_before = handover.get("difference", 0)
 
     handover["pos_breakdown"] = merged
     handover["pos_receipts"] = pos_total
     storage = ctx["storage"]
     _recalculate_reconciliation(handover, storage)
+    if new_items:
+        _record_reconciliation_adjustment(
+            handover, "pos_receipt", f"{len(new_items)} POS receipt(s) added",
+            added_total, difference_before, ctx["username"],
+        )
     _save_handovers(handovers, station_id)
 
     log_audit_event(
@@ -3467,9 +3504,17 @@ async def patch_credit_sales(
         except HTTPException:
             item["over_limit"] = True
 
+    difference_before = handover.get("difference", 0)
+    added_total = round(sum(item["amount"] for item in new_items_to_create), 2)
+
     handover["credit_sale_details"] = credit_sale_details
     handover["credit_sales"] = credit_total
     _recalculate_reconciliation(handover, storage)
+    if new_items_to_create:
+        _record_reconciliation_adjustment(
+            handover, "credit_sale", f"{len(new_items_to_create)} credit sale(s) added",
+            added_total, difference_before, ctx["username"],
+        )
     _save_handovers(handovers, station_id)
     save_station_storage(station_id)
 
