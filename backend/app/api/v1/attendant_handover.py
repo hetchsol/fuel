@@ -23,6 +23,7 @@ from .auth import get_current_user, require_supervisor_or_owner, require_manager
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
 from ...services.shift_status import assert_shift_editable, advance_shift_on_approval
+from ...services.business_hours import business_hours_elapsed
 from ...services.stock_service import (
     apply_handover_sales, reverse_handover_sales,
     load_items as load_stock_items, make_key as make_stock_key,
@@ -45,14 +46,20 @@ from .lubricants_daily import (
 router = APIRouter()
 
 # A Phase-1 handover (readings verified) that hasn't been closed (Phase 2)
-# within this many hours is considered "stale" — surfaced in the review queue
-# and escalated via a notification.
+# within this many wall-clock hours is considered "stale" — surfaced in the
+# review queue and escalated via a notification. Left as wall-clock (not
+# business-hours) since this only ever produces a notification, not a
+# fabricated close — a quick nudge regardless of time of day is fine.
 STALE_READINGS_HOURS = 4
 
-# Past this many hours still awaiting closing, the handover is administratively
-# closed automatically (see auto_close_stale_handovers) — a last resort so a
-# shift's figures don't sit unresolved indefinitely when nobody acts on the
-# STALE_READINGS_HOURS warning above.
+# Past this many business hours (see business_hours.py) still awaiting
+# closing, the handover is administratively closed automatically (see
+# auto_close_stale_handovers) — a last resort so a shift's figures don't sit
+# unresolved indefinitely when nobody acts on the STALE_READINGS_HOURS
+# warning above. Business-hours-based because this one fabricates a
+# zero-variance close rather than a real reconciliation, so it must not fire
+# just because a Day shift's Phase 1 finished after the office closed for
+# the day.
 HANDOVER_AUTO_CLOSE_HOURS = 12
 
 
@@ -301,11 +308,12 @@ def notify_stale_readings(station_id: str) -> int:
 def auto_close_stale_handovers(station_id: str, storage: dict) -> list:
     """
     Administratively close (see admin_override_close) any Phase-1 handover
-    that's been awaiting closing for more than HANDOVER_AUTO_CLOSE_HOURS —
-    the last-resort fallback once the STALE_READINGS_HOURS warning above has
-    gone unactioned for a long time. Closes with carried-forward expected
-    figures, not a real cash/dip verification — exactly what a manual admin
-    override does, just triggered automatically instead of by an owner.
+    that's been awaiting closing for more than HANDOVER_AUTO_CLOSE_HOURS of
+    business hours (see business_hours.py) — the last-resort fallback once
+    the STALE_READINGS_HOURS warning above has gone unactioned for a long
+    time. Closes with carried-forward expected figures, not a real cash/dip
+    verification — exactly what a manual admin override does, just
+    triggered automatically instead of by an owner.
 
     Fires one station-wide critical notification summarizing the whole batch
     (visible to managers and owners alike — this app has no per-user-targeted
@@ -313,21 +321,25 @@ def auto_close_stale_handovers(station_id: str, storage: dict) -> list:
     the feed.
     """
     handovers = _load_handovers(station_id)
-    cutoff = datetime.now().timestamp() - (HANDOVER_AUTO_CLOSE_HOURS * 3600)
+    now = datetime.now()
     stale_ids = []
     for hid, h in handovers.items():
         if h.get("phase") != "readings_verified":
             continue
         waited_since = datetime.fromisoformat(
-            h.get("phase_1_completed_at") or h.get("created_at", "2000-01-01")).timestamp()
-        if waited_since >= cutoff:
+            h.get("phase_1_completed_at") or h.get("created_at", "2000-01-01"))
+        # Business-hours elapsed, not wall-clock — a Day shift's Phase 1
+        # completing at 18:00 and sitting until the office reopens the next
+        # working day doesn't accrue stale-hours for that overnight/Sunday
+        # gap, since nobody could have closed it out anyway.
+        if business_hours_elapsed(waited_since, now) < HANDOVER_AUTO_CLOSE_HOURS:
             continue
         stale_ids.append(hid)
 
     if not stale_ids:
         return []
 
-    reason = f"Automatically closed — awaiting closing for over {HANDOVER_AUTO_CLOSE_HOURS} hours with no action taken."
+    reason = f"Automatically closed — awaiting closing for over {HANDOVER_AUTO_CLOSE_HOURS} business hours with no action taken."
     closed, _skipped = admin_override_close(
         station_id, stale_ids, reason, "system", "System (auto-close)", storage,
     )
@@ -340,7 +352,7 @@ def auto_close_stale_handovers(station_id: str, storage: dict) -> list:
                 severity="critical",
                 title="Handover(s) Auto-Closed — Unverified",
                 message=(
-                    f"{len(closed)} handover(s) sat awaiting closing for over {HANDOVER_AUTO_CLOSE_HOURS} hours "
+                    f"{len(closed)} handover(s) sat awaiting closing for over {HANDOVER_AUTO_CLOSE_HOURS} business hours "
                     f"and were automatically closed using expected figures, not a verified cash/dip count. "
                     f"Review: {', '.join(closed)}."
                 ),

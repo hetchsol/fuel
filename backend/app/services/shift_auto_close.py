@@ -1,9 +1,11 @@
 """
 Shift Auto-Close Service
-Finds shifts that have been active for more than STALE_HOURS and marks
-them as 'auto-closed' with a reason and timestamp.
+Finds shifts that have been active for more than STALE_HOURS of business
+hours and marks them as 'auto-closed' with a reason and timestamp.
 """
-from datetime import datetime, timedelta
+from datetime import datetime
+
+from .business_hours import business_hours_elapsed
 
 STALE_HOURS = 20
 
@@ -35,15 +37,18 @@ def check_and_close_stale_shifts(storage: dict, station_id: str) -> list:
         if shift_start is None:
             continue
 
-        age = now - shift_start
-        if age <= timedelta(hours=STALE_HOURS):
+        # Business-hours elapsed, not wall-clock — a Day shift sitting
+        # unactioned overnight or over a Sunday accrues zero stale-hours for
+        # that stretch, since nobody could have closed it out anyway.
+        stale_hours = business_hours_elapsed(shift_start, now)
+        if stale_hours <= STALE_HOURS:
             continue
 
         # Mark as auto-closed
         shift["status"] = "auto-closed"
         shift["auto_closed"] = True
         shift["auto_close_reason"] = (
-            f"Shift was active for {age.total_seconds() / 3600:.1f} hours "
+            f"Shift was active for {stale_hours:.1f} business hours "
             f"(threshold: {STALE_HOURS}h). Auto-closed on server startup."
         )
         shift["auto_closed_at"] = now.isoformat()
@@ -61,7 +66,7 @@ def check_and_close_stale_shifts(storage: dict, station_id: str) -> list:
             shift.pop("dip_review_required", None)
             shift.pop("dip_review_missing_tanks", None)
 
-        print(f"[auto-close] {station_id}/{shift_id}: active for {age}, auto-closed"
+        print(f"[auto-close] {station_id}/{shift_id}: active for {stale_hours:.1f} business hours, auto-closed"
               f"{' (missing dips: ' + ', '.join(missing_tanks) + ')' if missing_tanks else ''}")
 
     # Persist immediately — this runs at server startup, before any request
@@ -114,7 +119,7 @@ def check_and_close_stale_shifts(storage: dict, station_id: str) -> list:
                         type="SHIFT_AUTO_CLOSED",
                         severity="critical",
                         title="Shift Auto-Closed",
-                        message=f"Shift {sid} was active for over {STALE_HOURS} hours and was automatically closed",
+                        message=f"Shift {sid} was active for over {STALE_HOURS} business hours and was automatically closed",
                         entity_type="shift",
                         entity_id=sid,
                     )

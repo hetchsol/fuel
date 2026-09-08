@@ -1,9 +1,18 @@
 """
-Regression test for the 12-hour handover auto-close fallback
+Regression test for the 12-business-hour handover auto-close fallback
 (auto_close_stale_handovers): a Phase-1 handover left "awaiting closing"
-past HANDOVER_AUTO_CLOSE_HOURS gets administratively closed (expected
-figures carried forward, not a real cash/dip verification) exactly like a
-manual admin override would, and fires one station-wide notification.
+past HANDOVER_AUTO_CLOSE_HOURS of business hours gets administratively
+closed (expected figures carried forward, not a real cash/dip verification)
+exactly like a manual admin override would, and fires one station-wide
+notification.
+
+Business hours (see business_hours.py) means a handover's Phase 1 finishing
+at end-of-day and sitting through the night/a Sunday accrues no stale-hours
+for that stretch, so a plain "N wall-clock hours ago" offset is no longer a
+reliable way to land on either side of the threshold — it depends on what
+time of day/week the suite happens to run. Using several real days back for
+the "stale" case and a few real minutes back for the "fresh" case keeps
+both outcomes true regardless of when the test runs.
 
 Side-effecting collaborators (stock sync, reconciliation record, shift
 advance, audit log) are stubbed so the test stays isolated — same style as
@@ -37,8 +46,12 @@ def _isolate(monkeypatch, handovers):
 
 def test_auto_closes_only_past_the_12h_threshold(monkeypatch):
     handovers = {
-        "HO-A": _rv(13, "S1", "A"),   # past 12h -> auto-closed
-        "HO-B": _rv(1, "S2", "B"),    # fresh -> untouched
+        # 4 real days back guarantees several full business days have
+        # elapsed (at most one intervening Sunday), well past 12 business
+        # hours, regardless of what day/time the suite runs.
+        "HO-A": _rv(24 * 4, "S1", "A"),
+        # A few minutes back can never accumulate 12 business hours.
+        "HO-B": _rv(0.05, "S2", "B"),
         "HO-C": {"phase": "completed", "review_status": "approved"},  # not phase-1
     }
     notes = []
@@ -52,7 +65,7 @@ def test_auto_closes_only_past_the_12h_threshold(monkeypatch):
     assert handovers["HO-A"]["review_status"] == "approved"
     assert handovers["HO-A"]["difference"] == 0
     assert handovers["HO-A"]["admin_override"]["overridden_by"] == "system"
-    assert "over 12 hours" in handovers["HO-A"]["admin_override"]["reason"]
+    assert "over 12 business hours" in handovers["HO-A"]["admin_override"]["reason"]
     # Untouched — still mid-window, no notification-worthy action taken on it.
     assert handovers["HO-B"]["phase"] == "readings_verified"
 
@@ -63,7 +76,7 @@ def test_auto_closes_only_past_the_12h_threshold(monkeypatch):
 
 
 def test_nothing_past_threshold_closes_nothing_and_stays_silent(monkeypatch):
-    handovers = {"HO-B": _rv(1, "S2", "B")}
+    handovers = {"HO-B": _rv(0.05, "S2", "B")}
     notes = []
     _isolate(monkeypatch, handovers)
     monkeypatch.setattr(ah, "create_notification", lambda **k: notes.append(k))
