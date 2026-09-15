@@ -8,6 +8,7 @@ from typing import List, Optional
 from datetime import datetime
 import json
 import os
+import uuid
 from ...models.models import (
     HandoverInput, HandoverOutput, HandoverReviewInput,
     ReadingsVerificationInput, ShiftClosingInput,
@@ -1803,6 +1804,10 @@ def _create_credit_sale_records(new_items_to_create, handover_id, handover_outpu
         auth_reference, slip_number = _build_credit_ref(client_code, item, shift_date, storage)
         item["auth_reference"] = auth_reference
         item["slip_number"] = slip_number
+        # Carried onto the handover's own credit_sale_details (not just the
+        # ledger record) so a wrongly entered line can be found and reversed
+        # individually later — see delete_credit_sale_item.
+        item["sale_id"] = sale_id
         sale_data = {
             "sale_id": sale_id, "account_id": item["account_id"],
             "shift_id": shift.get("shift_id", ""), "date": shift_date,
@@ -2909,10 +2914,12 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
         credit_sales, credit_sale_details, new_items_to_create, _ = \
             _process_credit_sales(data.credit_sale_items, storage, shift_id, station_id)
 
-    # POS: if breakdown items provided, derive sum from them
+    # POS: if breakdown items provided, derive sum from them. Each item gets
+    # a server-generated id so a wrongly entered one can be removed later
+    # without touching the rest — see delete_pos_receipt_item.
     pos_breakdown = None
     if data.pos_items:
-        pos_breakdown = [item.model_dump() for item in data.pos_items]
+        pos_breakdown = [{**item.model_dump(), "id": str(uuid.uuid4())} for item in data.pos_items]
         pos_total = round(sum(item.amount for item in data.pos_items), 2)
     else:
         pos_total = data.pos_receipts
@@ -3406,7 +3413,9 @@ async def patch_pos_receipts(
             detail={"message": "All submitted items are duplicates.", "duplicates": duplicates},
         )
 
-    new_items = [item.model_dump() for item in accepted]
+    # Each item gets a server-generated id so a wrongly entered one can be
+    # removed later without touching the rest — see delete_pos_receipt_item.
+    new_items = [{**item.model_dump(), "id": str(uuid.uuid4())} for item in accepted]
     merged = existing + new_items
     pos_total = round(sum(e["amount"] for e in merged), 2)
     added_total = round(sum(e["amount"] for e in new_items), 2)
@@ -3438,6 +3447,75 @@ async def patch_pos_receipts(
         "pos_receipts": pos_total,
         "added": len(new_items),
         "duplicates": duplicates,
+        "expected_cash": handover["expected_cash"],
+        "total_accounted": handover["total_accounted"],
+        "difference": handover["difference"],
+    }
+
+
+@router.delete("/{handover_id}/pos-receipts/{item_id}", dependencies=[Depends(require_manager_or_owner)])
+async def delete_pos_receipt_item(
+    handover_id: str,
+    item_id: str,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Remove a single POS receipt entry from a handover (manager/owner only).
+
+    Before this, the only way to react to a wrongly entered POS item was to
+    add another one via patch_pos_receipts — which never removed the
+    mistake, just added a second amount on top of it (both counted toward
+    pos_receipts). This targets one item by its server-generated id instead,
+    and recomputes the reconciliation from what's left. Items created before
+    this feature shipped have no id and can't be targeted this way.
+    """
+    station_id = ctx["station_id"]
+    handovers = _load_handovers(station_id)
+
+    if handover_id not in handovers:
+        raise HTTPException(status_code=404, detail="Handover not found")
+
+    handover = handovers[handover_id]
+
+    if handover.get("review_status") == "approved":
+        raise HTTPException(status_code=400, detail="Cannot modify an approved handover")
+
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
+    if handover.get("date", "") in close_offs:
+        raise HTTPException(status_code=400, detail=f"Cannot modify handover. Day {handover['date']} has been closed off.")
+
+    existing = handover.get("pos_breakdown") or []
+    removed = next((e for e in existing if e.get("id") == item_id), None)
+    if removed is None:
+        raise HTTPException(status_code=404, detail="POS receipt item not found on this handover")
+
+    remaining = [e for e in existing if e.get("id") != item_id]
+    pos_total = round(sum(e["amount"] for e in remaining), 2)
+    difference_before = handover.get("difference", 0)
+
+    handover["pos_breakdown"] = remaining
+    handover["pos_receipts"] = pos_total
+    storage = ctx["storage"]
+    _recalculate_reconciliation(handover, storage)
+    _record_reconciliation_adjustment(
+        handover, "pos_receipt_removed", f"POS receipt removed ({removed.get('type_name', 'item')})",
+        -removed.get("amount", 0), difference_before, ctx["username"],
+    )
+    _save_handovers(handovers, station_id)
+
+    log_audit_event(
+        station_id=station_id, action="pos_receipt_removed",
+        performed_by=ctx["username"], entity_type="handover", entity_id=handover_id,
+        details={
+            "removed_item": removed, "pos_total": pos_total,
+            "difference": handover["difference"], "expected_cash": handover["expected_cash"],
+        },
+    )
+
+    return {
+        "handover_id": handover_id,
+        "pos_breakdown": remaining,
+        "pos_receipts": pos_total,
         "expected_cash": handover["expected_cash"],
         "total_accounted": handover["total_accounted"],
         "difference": handover["difference"],
@@ -3497,6 +3575,7 @@ async def patch_credit_sales(
         auth_reference, slip_number = _build_credit_ref(client_code, item, shift_date, storage)
         item["auth_reference"] = auth_reference
         item["slip_number"] = slip_number
+        item["sale_id"] = sale_id
         sale_data = {
             "sale_id": sale_id, "account_id": item["account_id"],
             "shift_id": shift_id, "date": shift_date,
@@ -3545,6 +3624,87 @@ async def patch_credit_sales(
         "credit_sale_details": credit_sale_details,
         "added": len(new_items_to_create),
         "duplicates": duplicates,
+        "expected_cash": handover["expected_cash"],
+        "total_accounted": handover["total_accounted"],
+        "difference": handover["difference"],
+    }
+
+
+@router.delete("/{handover_id}/credit-sales/{sale_id}", dependencies=[Depends(require_manager_or_owner)])
+async def delete_credit_sale_item(
+    handover_id: str,
+    sale_id: str,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Remove a single credit sale from a handover and reverse its effect on
+    the customer's account balance (manager/owner only).
+
+    Before this, the only way to react to a wrongly entered credit sale was
+    to add another one via patch_credit_sales — which never removed the
+    mistake, it charged the customer's account a second time on top of it.
+    This targets one sale by its id, reverses the account balance the same
+    way voiding a whole handover already does, and recomputes the
+    reconciliation from what's left. Sales created before this feature
+    shipped have no id and can't be targeted this way.
+    """
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+    handovers = _load_handovers(station_id)
+
+    if handover_id not in handovers:
+        raise HTTPException(status_code=404, detail="Handover not found")
+
+    handover = handovers[handover_id]
+
+    if handover.get("review_status") == "approved":
+        raise HTTPException(status_code=400, detail="Cannot modify an approved handover")
+
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
+    if handover.get("date", "") in close_offs:
+        raise HTTPException(status_code=400, detail=f"Cannot modify handover. Day {handover['date']} has been closed off.")
+
+    details = handover.get("credit_sale_details") or []
+    removed = next((d for d in details if d.get("sale_id") == sale_id), None)
+    if removed is None:
+        raise HTTPException(status_code=404, detail="Credit sale not found on this handover")
+
+    credit_sales_data = storage.get('credit_sales', [])
+    ledger_sale = next((s for s in credit_sales_data if s.get("sale_id") == sale_id and not s.get("voided")), None)
+    if ledger_sale is None:
+        raise HTTPException(status_code=404, detail="Credit sale ledger record not found or already reversed")
+
+    accounts_data = storage.get('accounts', {})
+    reverse_credit_sale(accounts_data, ledger_sale.get("account_id", ""), ledger_sale.get("amount", 0) or 0)
+    ledger_sale["voided"] = True
+
+    remaining_details = [d for d in details if d.get("sale_id") != sale_id]
+    credit_total = round(sum(d.get("amount", 0) for d in remaining_details), 2)
+    difference_before = handover.get("difference", 0)
+
+    handover["credit_sale_details"] = remaining_details
+    handover["credit_sales"] = credit_total
+    _recalculate_reconciliation(handover, storage)
+    _record_reconciliation_adjustment(
+        handover, "credit_sale_removed", f"Credit sale removed ({removed.get('account_name', 'account')})",
+        -removed.get("amount", 0), difference_before, ctx["username"],
+    )
+    _save_handovers(handovers, station_id)
+    save_station_storage(station_id)
+
+    log_audit_event(
+        station_id=station_id, action="credit_sale_removed",
+        performed_by=ctx["username"], entity_type="handover", entity_id=handover_id,
+        details={
+            "removed_sale": removed, "credit_total": credit_total,
+            "difference": handover["difference"], "expected_cash": handover["expected_cash"],
+        },
+    )
+
+    return {
+        "handover_id": handover_id,
+        "credit_sales": credit_total,
+        "credit_sale_details": remaining_details,
         "expected_cash": handover["expected_cash"],
         "total_accounted": handover["total_accounted"],
         "difference": handover["difference"],

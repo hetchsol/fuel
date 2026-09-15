@@ -13,9 +13,13 @@ from app.services.shift_auto_close import check_and_close_stale_shifts
 
 
 def test_persists_immediately_when_a_shift_is_closed(monkeypatch):
-    # 2 days back guarantees the estimated 06:00 Day-shift start is well past
-    # the 20h threshold regardless of what time of day the test itself runs.
-    stale_start = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d")
+    # Staleness is measured in business hours (see business_hours.py), not
+    # wall-clock, so a short offset isn't reliably safe — e.g. "2 days back"
+    # can land on a Sunday, which contributes zero business hours and can
+    # leave the total under the 20h threshold depending on what day the
+    # suite happens to run. 10 days back guarantees several full working
+    # days (at most 2 Sundays skipped) regardless of calendar alignment.
+    stale_start = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d")
     storage = {
         "shifts": {
             "S1": {"status": "active", "date": stale_start, "shift_type": "Day"},

@@ -86,11 +86,12 @@ interface HandoverEntry {
     amount: number
     source: string
     over_limit?: boolean
+    sale_id?: string  // absent on items created before removal support shipped
   }[] | null
   expected_cash: number
   actual_cash: number
   pos_receipts?: number
-  pos_breakdown?: { type_id: string; type_name: string; amount: number; reference?: string }[] | null
+  pos_breakdown?: { id?: string; type_id: string; type_name: string; amount: number; reference?: string }[] | null
   pos_terminal_batch_total?: number | null
   pos_terminal_variance?: number | null
   total_accounted?: number
@@ -107,7 +108,7 @@ interface HandoverEntry {
   } | null
   auto_flag_reasons?: string[] | null
   reconciliation_adjustments?: {
-    type: 'pos_receipt' | 'credit_sale'
+    type: 'pos_receipt' | 'credit_sale' | 'pos_receipt_removed' | 'credit_sale_removed'
     description: string
     amount: number
     difference_before: number
@@ -2244,6 +2245,56 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
     }
   }
 
+  // Remove a single POS receipt or credit sale entered by mistake.
+  // Previously the only recourse was adding a corrected entry alongside the
+  // wrong one — both counted, silently inflating the reconciliation (and,
+  // for credit sales, charging the customer's account twice). This targets
+  // one item by its server-generated id instead of touching the rest.
+  const [removingPosId, setRemovingPosId] = useState<string | null>(null)
+  const [removingSaleId, setRemovingSaleId] = useState<string | null>(null)
+
+  const removePosItem = async (itemId: string) => {
+    setRemovingPosId(itemId)
+    try {
+      const res = await authFetch(`${BASE}/handover/${h.handover_id}/pos-receipts/${itemId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        toast.error(`Failed to remove POS receipt: ${error.detail || 'unknown error'}`)
+        return
+      }
+      toast.success('POS receipt removed.')
+      onRefresh()
+    } catch (err: any) {
+      toast.error(`Failed to remove POS receipt: ${err.message}`)
+    } finally {
+      setRemovingPosId(null)
+    }
+  }
+
+  const removeCreditSale = async (saleId: string) => {
+    setRemovingSaleId(saleId)
+    try {
+      const res = await authFetch(`${BASE}/handover/${h.handover_id}/credit-sales/${saleId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        toast.error(`Failed to remove credit sale: ${error.detail || 'unknown error'}`)
+        return
+      }
+      toast.success('Credit sale removed and account balance reversed.')
+      onRefresh()
+    } catch (err: any) {
+      toast.error(`Failed to remove credit sale: ${err.message}`)
+    } finally {
+      setRemovingSaleId(null)
+    }
+  }
+
   // Void this one specific entry — for a 'returned' handover that will never
   // be resubmitted (e.g. a duplicate submission), so it stops silently
   // blocking the shift from closing. Scoped to this handover_id only — a
@@ -2617,6 +2668,13 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
                   K{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
                 {item.reference && <span style={{ color: theme.textSecondary }}>· {item.reference}</span>}
+                {canEdit && item.id && (
+                  <button onClick={() => removePosItem(item.id!)} disabled={removingPosId === item.id}
+                    className="text-[10px] font-semibold disabled:opacity-50"
+                    style={{ color: 'var(--color-status-error)' }}>
+                    {removingPosId === item.id ? 'Removing...' : 'Remove'}
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -2746,6 +2804,7 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
                   { label: 'Price', align: 'text-right' },
                   { label: 'Amount', align: 'text-right' },
                   { label: 'Source', align: 'text-left' },
+                  ...(canEdit ? [{ label: 'Actions', align: 'text-left' }] : []),
                 ].map(col => (
                   <th key={col.label} className={`px-2 py-1 ${col.align} font-medium uppercase`} style={{ color: theme.textSecondary }}>{col.label}</th>
                 ))}
@@ -2785,6 +2844,17 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
                       </span>
                     )}
                   </td>
+                  {canEdit && (
+                    <td className="px-2 py-1">
+                      {d.sale_id && (
+                        <button onClick={() => removeCreditSale(d.sale_id!)} disabled={removingSaleId === d.sale_id}
+                          className="text-[10px] font-semibold disabled:opacity-50"
+                          style={{ color: 'var(--color-status-error)' }}>
+                          {removingSaleId === d.sale_id ? 'Removing...' : 'Remove'}
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -2981,6 +3051,12 @@ function POSPanel({ handoverId, existingBreakdown, theme, onSaved }: {
   return (
     <div className="mt-3" style={{ borderRadius: 8, padding: '0 0 0 3px', background: 'var(--color-action-primary)' }}>
     <div className="p-3 space-y-3" style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 6 }}>
+      {existingBreakdown.length > 0 && (
+        <p className="text-xs px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+          This handover already has {existingBreakdown.length} POS receipt(s) recorded (K{existingBreakdown.reduce((s, e) => s + e.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} total).
+          Adding here adds to that total, it does not replace it. To fix a wrong entry, remove it from the POS Breakdown list above first.
+        </p>
+      )}
       <div className="flex flex-wrap gap-3 items-end">
         <div>
           <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Payment Type</div>
@@ -3193,6 +3269,13 @@ function CreditPanel({ handoverId, existingDetails, theme, currentUserRole, onSa
   return (
     <div className="mt-3" style={{ borderRadius: 8, padding: '0 0 0 3px', background: 'var(--color-action-primary)' }}>
     <div className="p-3 space-y-3" style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 6 }}>
+
+      {existingDetails.length > 0 && (
+        <p className="text-xs px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
+          This handover already has {existingDetails.length} credit sale(s) recorded (K{existingDetails.reduce((s, e) => s + (e.amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} total).
+          Adding here adds to that total and charges the account again — it does not replace a wrong entry. To fix a mistake, remove it from the Credit Sale Items list above first.
+        </p>
+      )}
 
       {confirmedItems.length > 0 ? (
         <div className="space-y-2">
