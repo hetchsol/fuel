@@ -439,6 +439,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       children: [
         { path: '/accounts', label: 'Credit Accounts', roles: ['manager', 'owner'] },
         { path: '/credit-lookup', label: 'Credit Lookup', roles: ['user', 'supervisor', 'manager', 'owner'] },
+        { path: '/credit-sales', label: 'Credit Sales', roles: ['manager', 'owner'] },
       ]
     },
     // Consolidated analytical clusters (each is a single tabbed page).
@@ -492,6 +493,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       children: [
         { path: '/accounts', label: 'Credit Accounts', roles: ['manager'] },
         { path: '/credit-lookup', label: 'Credit Lookup', roles: ['manager'] },
+        { path: '/credit-sales', label: 'Credit Sales', roles: ['manager'] },
       ],
     },
     // Same consolidated clusters as every other role.

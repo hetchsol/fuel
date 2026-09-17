@@ -4,7 +4,7 @@ Tracks credit customers and their transactions
 """
 import re
 from fastapi import APIRouter, HTTPException, Depends
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from ...models.models import AccountHolder, CreditSale
 from ...services.inventory import process_credit_sale
@@ -72,6 +72,84 @@ async def get_all_accounts(ctx: dict = Depends(get_station_context)):
     storage = ctx["storage"]
     accounts_data = storage.get('accounts', {})
     return [AccountHolder(**a) for a in accounts_data.values()]
+
+
+@router.get("/sales")
+async def search_credit_sales(
+    account_id: Optional[str] = None,
+    date: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    shift_type: Optional[str] = None,
+    attendant_id: Optional[str] = None,
+    fuel_type: Optional[str] = None,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Search credit sales across every account with optional filters, instead
+    of only being able to pull one account's entire history via
+    /sales/account/{account_id}: date (exact, or a from_date/to_date range),
+    shift_type, attendant_id, and fuel_type.
+
+    Credit sale records don't carry attendant_id or shift_type directly, so
+    each result is enriched by looking up the handover that created it —
+    parsed from invoice_number's "Handover {handover_id}" tag — for
+    attendant_id/attendant_name and shift_type. A sale with no resolvable
+    handover (e.g. very old data, or a non-standard invoice_number) still
+    appears, just with those fields blank, and is excluded only by filters
+    that don't apply to it (attendant_id/shift_type filters simply won't
+    match it, same as any other non-matching sale).
+
+    Declared here, before GET /{account_id}, deliberately — that catch-all
+    single-segment route would otherwise swallow "GET /sales" by matching
+    "sales" as an account_id, since FastAPI matches routes in declaration
+    order and both are exactly one path segment.
+    """
+    from .attendant_handover import _load_handovers
+
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+    accounts_data = storage.get('accounts', {})
+    credit_sales_data = storage.get('credit_sales', [])
+    handovers = _load_handovers(station_id)
+
+    results = []
+    for sale in credit_sales_data:
+        if sale.get("voided"):
+            continue
+        if account_id and sale.get("account_id") != account_id:
+            continue
+        sale_date = sale.get("date", "")
+        if date and sale_date != date:
+            continue
+        if from_date and sale_date < from_date:
+            continue
+        if to_date and sale_date > to_date:
+            continue
+        if fuel_type and (sale.get("fuel_type") or "").lower() != fuel_type.lower():
+            continue
+
+        invoice_number = sale.get("invoice_number") or ""
+        handover_id = invoice_number[len("Handover "):] if invoice_number.startswith("Handover ") else None
+        handover = handovers.get(handover_id, {}) if handover_id else {}
+
+        sale_shift_type = handover.get("shift_type", "")
+        if shift_type and sale_shift_type.lower() != shift_type.lower():
+            continue
+        sale_attendant_id = handover.get("attendant_id", "")
+        if attendant_id and sale_attendant_id != attendant_id:
+            continue
+
+        results.append({
+            **{k: v for k, v in sale.items() if k != "voided"},
+            "account_name": accounts_data.get(sale.get("account_id", ""), {}).get("account_name", sale.get("account_id", "")),
+            "attendant_id": sale_attendant_id,
+            "attendant_name": handover.get("attendant_name", ""),
+            "shift_type": sale_shift_type,
+        })
+
+    results.sort(key=lambda s: (s.get("date", ""), s.get("sale_id", "")), reverse=True)
+    return results
 
 
 @router.get("/{account_id}", response_model=AccountHolder)
