@@ -260,8 +260,12 @@ async def investigate_handover(handover_id: str, ctx: dict = Depends(get_station
 
     # Tank-vs-nozzle variance, per tank — reuses the same live calculation
     # the system runs at submission time rather than trusting a stored copy.
+    # persist=False: this is a read-only lookup, not a real submission event —
+    # it must not write derived figures back onto tank_readings.json, which
+    # would otherwise happen on every click, including for an already
+    # closed/reconciled day.
     from .attendant_handover import _compute_tank_nozzle_variance
-    _tank_flags, tank_details = _compute_tank_nozzle_variance(station_id, shift_id, storage)
+    _tank_flags, tank_details = _compute_tank_nozzle_variance(station_id, shift_id, storage, persist=False)
     per_tank = tank_details.get("tanks", {}) if isinstance(tank_details, dict) else {}
     for tank_id, t in per_tank.items():
         status_label = t.get("status")

@@ -1221,7 +1221,8 @@ def _nozzle_summary_field(ns, field):
 
 
 def _compute_tank_nozzle_variance(station_id: str, shift_id: str, storage: dict,
-                                   current_attendant_id: str = None, current_nozzle_summaries=None):
+                                   current_attendant_id: str = None, current_nozzle_summaries=None,
+                                   persist: bool = True):
     """
     Shift-wide check: sum electronic nozzle volume sold per tank across every
     attendant assigned to the shift, and compare it to that tank's dip-derived
@@ -1231,6 +1232,17 @@ def _compute_tank_nozzle_variance(station_id: str, shift_id: str, storage: dict,
     summing a partial shift would misrepresent it, not just under-report it.
     `current_attendant_id`/`current_nozzle_summaries` let a caller include its
     own in-flight submission before it's been persisted.
+
+    `persist` (default True) controls whether the derived per-tank figures
+    get written back onto the dip record in tank_readings.json — real
+    submission-time callers (Phase 1/2, retro-entry) need this, since
+    Three-Way Reconciliation reads those persisted values directly. A
+    caller that's just displaying the numbers (e.g. a diagnostic view)
+    should pass persist=False: the returned (flags, details) are built from
+    independent local variables either way, so this only stops the write,
+    it never changes what's returned — and it means a read-only lookup
+    can't bypass the reconciled-day lock by silently rewriting historical
+    tank data every time someone looks.
 
     Returns (flags, details):
       flags   - auto_flag_reasons to merge in (e.g. "tank_nozzle_variance",
@@ -1364,7 +1376,7 @@ def _compute_tank_nozzle_variance(station_id: str, shift_id: str, storage: dict,
                 sum(attendant_financials[aid]["actual_cash"] for aid in contributing), 2
             )
 
-    if tank_readings_changed:
+    if persist and tank_readings_changed:
         save_station_json(station_id, 'tank_readings.json', tank_readings_db)
 
     return list(flags), {"status": "computed", "tanks": per_tank}
