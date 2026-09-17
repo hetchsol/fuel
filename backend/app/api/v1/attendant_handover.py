@@ -1002,6 +1002,39 @@ def _ensure_client_code(account_id: str, storage: dict) -> str:
     return code
 
 
+def _resolve_credit_sale_price(product_code, fuel_type, account, storage, station_id):
+    """
+    Resolve the price for one credit-sale line item — server-side always, a
+    client-supplied price_per_liter is never trusted, so it can't be used to
+    under- or over-charge an account. Non-fuel rows (product_code set) always
+    price from the lubricant/accessory catalog — an account's fuel
+    default_price_per_liter must never leak into a lubricant/accessory
+    price. Fuel rows use the account's negotiated rate when configured, else
+    the live fuel price list. Shared by both new-sale processing and editing
+    an existing sale, so a correction is priced exactly the same way a fresh
+    sale would be.
+    """
+    if product_code:
+        lubricant_catalog = load_lubricant_catalog(station_id)
+        match = next((p for p in lubricant_catalog if p.get('product_code') == product_code), None)
+        if not match:
+            accessories_catalog = load_accessories_catalog(station_id)
+            match = next((p for p in accessories_catalog if p.get('product_code') == product_code), None)
+        if not match:
+            raise HTTPException(status_code=400, detail=f"Unknown product '{product_code}'.")
+        price = match.get('selling_price', 0)
+    elif account and account.get("default_price_per_liter"):
+        price = account["default_price_per_liter"]
+    else:
+        try:
+            price = resolve_fuel_price(fuel_type, storage)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"No price available for '{fuel_type}'.")
+    if not price or price <= 0:
+        raise HTTPException(status_code=400, detail=f"Price for '{fuel_type}' must be greater than zero.")
+    return price
+
+
 def _process_credit_sales(credit_sale_items, storage, shift_id, station_id):
     """
     Process credit sale line items.
@@ -1011,8 +1044,6 @@ def _process_credit_sales(credit_sale_items, storage, shift_id, station_id):
     """
     accounts_data = storage.get('accounts', {})
     credit_sales_data = storage.get('credit_sales', [])
-    lubricant_catalog = None
-    accessories_catalog = None
 
     enriched_items = []
     for item in credit_sale_items:
@@ -1022,35 +1053,7 @@ def _process_credit_sales(credit_sale_items, storage, shift_id, station_id):
                 status_code=400,
                 detail=f"Account '{item.account_name}' is suspended and cannot receive credit sales.",
             )
-        # Price is always resolved server-side — a client-supplied price_per_liter
-        # is never trusted, so it can't be used to under- or over-charge an
-        # account. Non-fuel rows (product_code set) always price from the
-        # lubricant/accessory catalog — an account's fuel default_price_per_liter
-        # must never leak into a lubricant/accessory price. Fuel rows use the
-        # account's negotiated rate when configured, else the live fuel price list.
-        if item.product_code:
-            if lubricant_catalog is None:
-                lubricant_catalog = load_lubricant_catalog(station_id)
-            match = next((p for p in lubricant_catalog if p.get('product_code') == item.product_code), None)
-            if not match:
-                if accessories_catalog is None:
-                    accessories_catalog = load_accessories_catalog(station_id)
-                match = next((p for p in accessories_catalog if p.get('product_code') == item.product_code), None)
-            if not match:
-                raise HTTPException(status_code=400, detail=f"Unknown product '{item.product_code}'.")
-            price = match.get('selling_price', 0)
-        elif account and account.get("default_price_per_liter"):
-            price = account["default_price_per_liter"]
-        else:
-            try:
-                price = resolve_fuel_price(item.fuel_type, storage)
-            except ValueError:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"No price available for '{item.fuel_type}'.",
-                )
-        if not price or price <= 0:
-            raise HTTPException(status_code=400, detail=f"Price for '{item.fuel_type}' must be greater than zero.")
+        price = _resolve_credit_sale_price(item.product_code, item.fuel_type, account, storage, station_id)
         amount = round(item.volume * price, 2)
         enriched_items.append({
             "account_id": item.account_id, "account_name": item.account_name,
@@ -3534,6 +3537,78 @@ async def delete_pos_receipt_item(
     }
 
 
+@router.patch("/{handover_id}/pos-receipts/{item_id}", dependencies=[Depends(require_manager_or_owner)])
+async def edit_pos_receipt_item(
+    handover_id: str,
+    item_id: str,
+    data: POSReceiptItem,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Correct a single POS receipt entry already on a handover in place —
+    type, amount, and/or reference — rather than removing it and adding a
+    fresh one. Recomputes pos_receipts/reconciliation from the edited total
+    and records the before/after difference the same way an addition or
+    removal already does.
+    """
+    station_id = ctx["station_id"]
+    handovers = _load_handovers(station_id)
+
+    if handover_id not in handovers:
+        raise HTTPException(status_code=404, detail="Handover not found")
+
+    handover = handovers[handover_id]
+
+    if handover.get("review_status") == "approved":
+        raise HTTPException(status_code=400, detail="Cannot modify an approved handover")
+
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
+    if handover.get("date", "") in close_offs:
+        raise HTTPException(status_code=400, detail=f"Cannot modify handover. Day {handover['date']} has been closed off.")
+
+    existing = handover.get("pos_breakdown") or []
+    target = next((e for e in existing if e.get("id") == item_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail="POS receipt item not found on this handover")
+
+    old_amount = target.get("amount", 0)
+    difference_before = handover.get("difference", 0)
+
+    target.update({
+        "type_id": data.type_id, "type_name": data.type_name,
+        "amount": data.amount, "reference": data.reference,
+    })
+    pos_total = round(sum(e["amount"] for e in existing), 2)
+
+    handover["pos_breakdown"] = existing
+    handover["pos_receipts"] = pos_total
+    storage = ctx["storage"]
+    _recalculate_reconciliation(handover, storage)
+    _record_reconciliation_adjustment(
+        handover, "pos_receipt_edited", f"POS receipt edited ({data.type_name})",
+        round(data.amount - old_amount, 2), difference_before, ctx["username"],
+    )
+    _save_handovers(handovers, station_id)
+
+    log_audit_event(
+        station_id=station_id, action="pos_receipt_edited",
+        performed_by=ctx["username"], entity_type="handover", entity_id=handover_id,
+        details={
+            "item_id": item_id, "old_amount": old_amount, "new_amount": data.amount,
+            "difference": handover["difference"], "expected_cash": handover["expected_cash"],
+        },
+    )
+
+    return {
+        "handover_id": handover_id,
+        "pos_breakdown": existing,
+        "pos_receipts": pos_total,
+        "expected_cash": handover["expected_cash"],
+        "total_accounted": handover["total_accounted"],
+        "difference": handover["difference"],
+    }
+
+
 class CreditSalesInput(BaseModel):
     credit_items: List[HandoverCreditSaleItem]
 
@@ -3717,6 +3792,121 @@ async def delete_credit_sale_item(
         "handover_id": handover_id,
         "credit_sales": credit_total,
         "credit_sale_details": remaining_details,
+        "expected_cash": handover["expected_cash"],
+        "total_accounted": handover["total_accounted"],
+        "difference": handover["difference"],
+    }
+
+
+@router.patch("/{handover_id}/credit-sales/{sale_id}", dependencies=[Depends(require_manager_or_owner)])
+async def edit_credit_sale_item(
+    handover_id: str,
+    sale_id: str,
+    data: HandoverCreditSaleItem,
+    ctx: dict = Depends(get_station_context),
+):
+    """
+    Correct a single credit sale already on a handover in place — account,
+    fuel/product, volume, or reference fields — rather than removing it and
+    adding a fresh one.
+
+    Reverses the old amount from its (possibly different) account first,
+    then resolves a fresh price for the edited details exactly the way a
+    brand-new sale would (never trusts a client-supplied price), and
+    applies that to the target account through the same suspension/ceiling
+    checks a new sale goes through — reusing process_credit_sale itself
+    (with a scratch sales_log, since the real ledger row is updated in
+    place below rather than appended twice). If the new charge is
+    rejected, the old reversal is undone so the account isn't left short
+    its original charge.
+    """
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+    handovers = _load_handovers(station_id)
+
+    if handover_id not in handovers:
+        raise HTTPException(status_code=404, detail="Handover not found")
+
+    handover = handovers[handover_id]
+
+    if handover.get("review_status") == "approved":
+        raise HTTPException(status_code=400, detail="Cannot modify an approved handover")
+
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
+    if handover.get("date", "") in close_offs:
+        raise HTTPException(status_code=400, detail=f"Cannot modify handover. Day {handover['date']} has been closed off.")
+
+    details = handover.get("credit_sale_details") or []
+    old_detail = next((d for d in details if d.get("sale_id") == sale_id), None)
+    if old_detail is None:
+        raise HTTPException(status_code=404, detail="Credit sale not found on this handover")
+
+    credit_sales_data = storage.get('credit_sales', [])
+    ledger_sale = next((s for s in credit_sales_data if s.get("sale_id") == sale_id and not s.get("voided")), None)
+    if ledger_sale is None:
+        raise HTTPException(status_code=404, detail="Credit sale ledger record not found or already reversed")
+
+    accounts_data = storage.get('accounts', {})
+    new_account = accounts_data.get(data.account_id)
+    if not new_account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if new_account.get("is_suspended"):
+        raise HTTPException(status_code=400, detail=f"Account '{data.account_name}' is suspended and cannot receive credit sales.")
+
+    price = _resolve_credit_sale_price(data.product_code, data.fuel_type, new_account, storage, station_id)
+    new_amount = round(data.volume * price, 2)
+
+    old_account_id = ledger_sale.get("account_id", "")
+    old_amount = ledger_sale.get("amount", 0) or 0
+    difference_before = handover.get("difference", 0)
+
+    reverse_credit_sale(accounts_data, old_account_id, old_amount)
+    try:
+        process_credit_sale(
+            accounts=accounts_data, sales_log=[], account_id=data.account_id,
+            amount=new_amount, sale_data={},
+        )
+    except HTTPException:
+        reapply_credit_sale(accounts_data, old_account_id, old_amount)
+        raise
+
+    ledger_sale.update({
+        "account_id": data.account_id, "fuel_type": data.fuel_type, "volume": data.volume,
+        "amount": new_amount, "driver_name": data.driver_name, "vehicle_reg": data.vehicle_reg,
+        "coupon_serial": data.coupon_serial,
+    })
+    old_detail.update({
+        "account_id": data.account_id, "account_name": data.account_name,
+        "fuel_type": data.fuel_type, "volume": data.volume, "price_per_liter": price,
+        "amount": new_amount, "driver_name": data.driver_name, "vehicle_reg": data.vehicle_reg,
+        "coupon_serial": data.coupon_serial, "over_limit": False,
+    })
+
+    credit_total = round(sum(d.get("amount", 0) for d in details), 2)
+    handover["credit_sale_details"] = details
+    handover["credit_sales"] = credit_total
+    _recalculate_reconciliation(handover, storage)
+    _record_reconciliation_adjustment(
+        handover, "credit_sale_edited", f"Credit sale edited ({data.account_name})",
+        round(new_amount - old_amount, 2), difference_before, ctx["username"],
+    )
+    _save_handovers(handovers, station_id)
+    save_station_storage(station_id)
+
+    log_audit_event(
+        station_id=station_id, action="credit_sale_edited",
+        performed_by=ctx["username"], entity_type="handover", entity_id=handover_id,
+        details={
+            "sale_id": sale_id, "old_amount": old_amount, "new_amount": new_amount,
+            "old_account_id": old_account_id, "new_account_id": data.account_id,
+            "difference": handover["difference"], "expected_cash": handover["expected_cash"],
+        },
+    )
+
+    return {
+        "handover_id": handover_id,
+        "credit_sales": credit_total,
+        "credit_sale_details": details,
         "expected_cash": handover["expected_cash"],
         "total_accounted": handover["total_accounted"],
         "difference": handover["difference"],

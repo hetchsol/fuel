@@ -2295,6 +2295,103 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
     }
   }
 
+  // Correct a POS receipt or credit sale already on the handover in place,
+  // rather than removing it and adding a fresh one.
+  const [editingPosId, setEditingPosId] = useState<string | null>(null)
+  const [editPosForm, setEditPosForm] = useState({ amount: '', reference: '' })
+  const [savingPosEdit, setSavingPosEdit] = useState(false)
+
+  const startEditPos = (item: any) => {
+    setEditingPosId(item.id)
+    setEditPosForm({ amount: String(item.amount ?? ''), reference: item.reference || '' })
+  }
+
+  const saveEditPos = async (item: any) => {
+    const amt = parseFloat(editPosForm.amount)
+    if (!amt || amt <= 0) { toast.error('Enter a valid amount.'); return }
+    setSavingPosEdit(true)
+    try {
+      const res = await authFetch(`${BASE}/handover/${h.handover_id}/pos-receipts/${item.id}`, {
+        method: 'PATCH',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type_id: item.type_id, type_name: item.type_name,
+          amount: amt, reference: editPosForm.reference.trim() || null,
+        }),
+      })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        toast.error(`Failed to update POS receipt: ${error.detail || 'unknown error'}`)
+        return
+      }
+      toast.success('POS receipt updated.')
+      setEditingPosId(null)
+      onRefresh()
+    } catch (err: any) {
+      toast.error(`Failed to update POS receipt: ${err.message}`)
+    } finally {
+      setSavingPosEdit(false)
+    }
+  }
+
+  const [accountsList, setAccountsList] = useState<any[]>([])
+  const [editingSaleId, setEditingSaleId] = useState<string | null>(null)
+  const [editSaleForm, setEditSaleForm] = useState({
+    account_id: '', account_name: '', fuel_type: '', volume: '',
+    driver_name: '', vehicle_reg: '', coupon_serial: '',
+  })
+  const [savingSaleEdit, setSavingSaleEdit] = useState(false)
+
+  const startEditSale = (d: any) => {
+    if (accountsList.length === 0) {
+      authFetch(`${BASE}/accounts/`, { headers: getAuthHeaders() })
+        .then(r => r.ok ? r.json() : [])
+        .then(list => setAccountsList(Array.isArray(list) ? list : []))
+        .catch(() => {})
+    }
+    setEditingSaleId(d.sale_id)
+    setEditSaleForm({
+      account_id: d.account_id || '', account_name: d.account_name || '',
+      fuel_type: d.fuel_type || '', volume: String(d.volume ?? ''),
+      driver_name: d.driver_name || '', vehicle_reg: d.vehicle_reg || '',
+      coupon_serial: d.coupon_serial || '',
+    })
+  }
+
+  const saveEditSale = async (saleId: string) => {
+    const vol = parseFloat(editSaleForm.volume)
+    if (!editSaleForm.account_id || !vol || vol <= 0) {
+      toast.error('Select an account and enter a valid volume/quantity.')
+      return
+    }
+    setSavingSaleEdit(true)
+    try {
+      const res = await authFetch(`${BASE}/handover/${h.handover_id}/credit-sales/${saleId}`, {
+        method: 'PATCH',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          account_id: editSaleForm.account_id, account_name: editSaleForm.account_name,
+          fuel_type: editSaleForm.fuel_type, volume: vol, price_per_liter: 0, amount: 0,
+          driver_name: editSaleForm.driver_name.trim() || null,
+          vehicle_reg: editSaleForm.vehicle_reg.trim() || null,
+          coupon_serial: editSaleForm.coupon_serial.trim() || null,
+        }),
+      })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        toast.error(`Failed to update credit sale: ${error.detail || 'unknown error'}`)
+        return
+      }
+      toast.success('Credit sale updated.')
+      setEditingSaleId(null)
+      onRefresh()
+    } catch (err: any) {
+      toast.error(`Failed to update credit sale: ${err.message}`)
+    } finally {
+      setSavingSaleEdit(false)
+    }
+  }
+
   // Void this one specific entry — for a 'returned' handover that will never
   // be resubmitted (e.g. a duplicate submission), so it stops silently
   // blocking the shift from closing. Scoped to this handover_id only — a
@@ -2661,21 +2758,51 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
           <div className="text-xs font-medium uppercase mb-2" style={{ color: theme.textSecondary }}>POS Breakdown</div>
           <div className="flex flex-wrap gap-2">
             {h.pos_breakdown.map((item, i) => (
-              <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
-                style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border }}>
-                <span style={{ color: theme.textSecondary }}>{item.type_name}</span>
-                <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>
-                  K{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </span>
-                {item.reference && <span style={{ color: theme.textSecondary }}>· {item.reference}</span>}
-                {canEdit && item.id && (
-                  <button onClick={() => removePosItem(item.id!)} disabled={removingPosId === item.id}
-                    className="text-[10px] font-semibold disabled:opacity-50"
-                    style={{ color: 'var(--color-status-error)' }}>
-                    {removingPosId === item.id ? 'Removing...' : 'Remove'}
+              editingPosId === item.id ? (
+                <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs"
+                  style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: 'var(--color-action-primary)' }}>
+                  <span style={{ color: theme.textSecondary }}>{item.type_name}</span>
+                  <span style={{ color: theme.textSecondary }}>K</span>
+                  <input type="number" min="0" step="0.01" value={editPosForm.amount}
+                    onChange={e => setEditPosForm(f => ({ ...f, amount: e.target.value }))}
+                    className="w-20 px-1.5 py-1 rounded border font-mono"
+                    style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
+                  <input type="text" placeholder="Reference" value={editPosForm.reference}
+                    onChange={e => setEditPosForm(f => ({ ...f, reference: e.target.value }))}
+                    className="w-24 px-1.5 py-1 rounded border"
+                    style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
+                  <button onClick={() => saveEditPos(item)} disabled={savingPosEdit}
+                    className="font-semibold disabled:opacity-50" style={{ color: 'var(--color-status-success)' }}>
+                    {savingPosEdit ? 'Saving...' : 'Save'}
                   </button>
-                )}
-              </div>
+                  <button onClick={() => setEditingPosId(null)} disabled={savingPosEdit}
+                    style={{ color: theme.textSecondary }}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
+                  style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border }}>
+                  <span style={{ color: theme.textSecondary }}>{item.type_name}</span>
+                  <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>
+                    K{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                  {item.reference && <span style={{ color: theme.textSecondary }}>· {item.reference}</span>}
+                  {canEdit && item.id && (
+                    <>
+                      <button onClick={() => startEditPos(item)}
+                        className="text-[10px] font-semibold" style={{ color: 'var(--color-action-primary)' }}>
+                        Edit
+                      </button>
+                      <button onClick={() => removePosItem(item.id!)} disabled={removingPosId === item.id}
+                        className="text-[10px] font-semibold disabled:opacity-50"
+                        style={{ color: 'var(--color-status-error)' }}>
+                        {removingPosId === item.id ? 'Removing...' : 'Remove'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )
             ))}
           </div>
         </div>
@@ -2845,19 +2972,95 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
                     )}
                   </td>
                   {canEdit && (
-                    <td className="px-2 py-1">
+                    <td className="px-2 py-1 whitespace-nowrap">
                       {d.sale_id && (
-                        <button onClick={() => removeCreditSale(d.sale_id!)} disabled={removingSaleId === d.sale_id}
-                          className="text-[10px] font-semibold disabled:opacity-50"
-                          style={{ color: 'var(--color-status-error)' }}>
-                          {removingSaleId === d.sale_id ? 'Removing...' : 'Remove'}
-                        </button>
+                        <>
+                          <button onClick={() => startEditSale(d)}
+                            className="text-[10px] font-semibold mr-2" style={{ color: 'var(--color-action-primary)' }}>
+                            Edit
+                          </button>
+                          <button onClick={() => removeCreditSale(d.sale_id!)} disabled={removingSaleId === d.sale_id}
+                            className="text-[10px] font-semibold disabled:opacity-50"
+                            style={{ color: 'var(--color-status-error)' }}>
+                            {removingSaleId === d.sale_id ? 'Removing...' : 'Remove'}
+                          </button>
+                        </>
                       )}
                     </td>
                   )}
                 </tr>
-              ))}
-            </tbody>
+                ))}
+                {h.credit_sale_details.map((d, idx) => editingSaleId === d.sale_id && (
+                  <tr key={`edit-${idx}`} style={{ borderTopWidth: 1, borderTopColor: theme.border }}>
+                    <td colSpan={canEdit ? 7 : 6} className="px-2 py-2" style={{ backgroundColor: theme.background }}>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div>
+                          <div className="text-[10px] uppercase mb-0.5" style={{ color: theme.textSecondary }}>Account</div>
+                          <select value={editSaleForm.account_id}
+                            onChange={e => {
+                              const acc = accountsList.find((a: any) => a.account_id === e.target.value)
+                              setEditSaleForm(f => ({ ...f, account_id: e.target.value, account_name: acc?.account_name || f.account_name }))
+                            }}
+                            className="px-2 py-1 rounded border text-xs"
+                            style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }}>
+                            <option value={editSaleForm.account_id}>{editSaleForm.account_name}</option>
+                            {accountsList.filter((a: any) => a.account_id !== editSaleForm.account_id).map((a: any) => (
+                              <option key={a.account_id} value={a.account_id}>{a.account_name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase mb-0.5" style={{ color: theme.textSecondary }}>Fuel / Product</div>
+                          <input type="text" value={editSaleForm.fuel_type}
+                            onChange={e => setEditSaleForm(f => ({ ...f, fuel_type: e.target.value }))}
+                            className="w-28 px-2 py-1 rounded border text-xs"
+                            style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }} />
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase mb-0.5" style={{ color: theme.textSecondary }}>Qty</div>
+                          <input type="number" min="0" step="0.01" value={editSaleForm.volume}
+                            onChange={e => setEditSaleForm(f => ({ ...f, volume: e.target.value }))}
+                            className="w-20 px-2 py-1 rounded border text-xs font-mono"
+                            style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }} />
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase mb-0.5" style={{ color: theme.textSecondary }}>Driver</div>
+                          <input type="text" value={editSaleForm.driver_name}
+                            onChange={e => setEditSaleForm(f => ({ ...f, driver_name: e.target.value }))}
+                            className="w-24 px-2 py-1 rounded border text-xs"
+                            style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }} />
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase mb-0.5" style={{ color: theme.textSecondary }}>Vehicle</div>
+                          <input type="text" value={editSaleForm.vehicle_reg}
+                            onChange={e => setEditSaleForm(f => ({ ...f, vehicle_reg: e.target.value }))}
+                            className="w-20 px-2 py-1 rounded border text-xs"
+                            style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }} />
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase mb-0.5" style={{ color: theme.textSecondary }}>Coupon</div>
+                          <input type="text" value={editSaleForm.coupon_serial}
+                            onChange={e => setEditSaleForm(f => ({ ...f, coupon_serial: e.target.value }))}
+                            className="w-24 px-2 py-1 rounded border text-xs"
+                            style={{ backgroundColor: theme.cardBg, color: theme.textPrimary, borderColor: theme.border }} />
+                        </div>
+                        <button onClick={() => saveEditSale(d.sale_id!)} disabled={savingSaleEdit}
+                          className="px-2 py-1 text-xs font-semibold rounded disabled:opacity-50"
+                          style={{ color: 'var(--color-status-success)' }}>
+                          {savingSaleEdit ? 'Saving...' : 'Save'}
+                        </button>
+                        <button onClick={() => setEditingSaleId(null)} disabled={savingSaleEdit}
+                          className="px-2 py-1 text-xs" style={{ color: theme.textSecondary }}>
+                          Cancel
+                        </button>
+                      </div>
+                      <p className="text-[10px] mt-1.5" style={{ color: theme.textSecondary }}>
+                        Price is resolved fresh from the account/fuel/product settings when saved — it is never entered directly.
+                      </p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
           </table>
           </div>
         </div>
