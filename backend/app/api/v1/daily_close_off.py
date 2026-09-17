@@ -156,6 +156,191 @@ async def diagnose_close_off(
     }
 
 
+# ── GET /investigate/{handover_id} ──────────────────────────────
+_FLAG_EXPLANATIONS = {
+    "cash_shortage": "Cash + POS + credit total differs from expected by more than the station's shortage threshold.",
+    "meter_deviation": "One or more nozzles' electronic and mechanical readings deviate beyond the allowed threshold.",
+    "nozzle_loss_exceeded": "One or more nozzles show a loss (electronic below mechanical) beyond the allowed threshold.",
+    "duplicate_meter_reading": "One or more nozzle closing readings were flagged as possible duplicates of a prior shift — see nozzle detail below.",
+    "pos_terminal_variance": "The POS terminal's own batch total doesn't match the entered POS breakdown.",
+    "tank_calibration_stale": "One or more tanks' dip-to-volume calibration chart is stale — tank variance figures below may be unreliable.",
+    "tank_no_calibration": "One or more tanks have no calibration chart at all — tank variance can't be computed reliably.",
+}
+
+
+@router.get("/investigate/{handover_id}", dependencies=[Depends(require_manager_or_owner)])
+async def investigate_handover(handover_id: str, ctx: dict = Depends(get_station_context)):
+    """
+    Pull together every signal that can explain why this one handover's cash
+    reconciliation looks the way it does. Deliberately duplicates data already
+    visible elsewhere (nozzle summaries, tank-vs-nozzle variance, POS/credit
+    breakdowns, reconciliation adjustments) — the point is gathering it into
+    one place instead of the five different screens a manager currently has
+    to cross-reference to answer "why is this number wrong", plus a
+    synthesized plain-language list of the specific things that actually
+    apply to this handover rather than a generic list of possibilities.
+    """
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+    handovers = _load_handovers(station_id)
+    if handover_id not in handovers:
+        raise HTTPException(status_code=404, detail="Handover not found")
+    handover = handovers[handover_id]
+    shift_id = handover.get("shift_id", "")
+
+    causes: list = []
+
+    total_expected = handover.get("total_expected", 0) or 0
+    fuel_revenue = handover.get("fuel_revenue", 0) or 0
+    actual_cash = handover.get("actual_cash", 0) or 0
+    pos_receipts = handover.get("pos_receipts", 0) or 0
+    credit_sales = handover.get("credit_sales", 0) or 0
+    expected_cash = handover.get("expected_cash", 0) or 0
+    difference = handover.get("difference", 0) or 0
+
+    # Nozzle-level detail, including the duplicate/implausible override
+    # context and any mid-shift price changeover — a nozzle's revenue split
+    # across a pre/post-change price is the usual explanation for fuel
+    # revenue not matching a naive volume-times-single-price calculation.
+    nozzle_summaries = handover.get("nozzle_summaries") or []
+    nozzle_revenue_sum = round(sum((ns.get("revenue") or 0) for ns in nozzle_summaries), 2)
+    nozzle_detail = []
+    for ns in nozzle_summaries:
+        entry = {
+            "nozzle_id": ns.get("nozzle_id"),
+            "fuel_type": ns.get("fuel_type"),
+            "volume_sold": ns.get("volume_sold"),
+            "revenue": ns.get("revenue"),
+            "price_per_liter": ns.get("price_per_liter"),
+            "meter_deviation_flagged": ns.get("meter_deviation_flagged"),
+            "meter_deviation_percent": ns.get("meter_deviation_percent"),
+            "duplicate_reading_flagged": ns.get("duplicate_reading_flagged", False),
+            "duplicate_reading_conflict_shift_id": ns.get("duplicate_reading_conflict_shift_id"),
+            "duplicate_reading_note": ns.get("duplicate_reading_note"),
+            "implausible_volume_flagged": ns.get("implausible_volume_flagged", False),
+            "implausible_volume_note": ns.get("implausible_volume_note"),
+            "changeover_reading": ns.get("changeover_reading"),
+            "changeover_estimated": ns.get("changeover_estimated"),
+            "pre_change_volume": ns.get("pre_change_volume"),
+            "pre_change_price": ns.get("pre_change_price"),
+            "pre_change_revenue": ns.get("pre_change_revenue"),
+            "post_change_volume": ns.get("post_change_volume"),
+            "post_change_price": ns.get("post_change_price"),
+            "post_change_revenue": ns.get("post_change_revenue"),
+        }
+        nozzle_detail.append(entry)
+
+        if entry["duplicate_reading_flagged"]:
+            causes.append(
+                f"Nozzle {entry['nozzle_id']}'s closing reading was flagged as a possible duplicate against "
+                f"shift {entry['duplicate_reading_conflict_shift_id']}"
+                + (f" — override note: \"{entry['duplicate_reading_note']}\"" if entry["duplicate_reading_note"] else " — no override note recorded")
+            )
+        if entry["implausible_volume_flagged"]:
+            causes.append(
+                f"Nozzle {entry['nozzle_id']}'s volume sold was flagged as implausible"
+                + (f" — override note: \"{entry['implausible_volume_note']}\"" if entry["implausible_volume_note"] else " — no override note recorded")
+            )
+        if entry["changeover_reading"] is not None:
+            causes.append(
+                f"Nozzle {entry['nozzle_id']} had a price change mid-shift at reading {entry['changeover_reading']}"
+                f"{' (estimated)' if entry['changeover_estimated'] else ''}: "
+                f"{entry['pre_change_volume']}L at K{entry['pre_change_price']} "
+                f"(K{entry['pre_change_revenue']}), then {entry['post_change_volume']}L at K{entry['post_change_price']} "
+                f"(K{entry['post_change_revenue']})."
+            )
+
+    revenue_gap = round(fuel_revenue - nozzle_revenue_sum, 2)
+    if abs(revenue_gap) > 0.01:
+        causes.append(
+            f"Fuel revenue on this handover (K{fuel_revenue:,.2f}) doesn't match the sum of its own nozzle "
+            f"readings (K{nozzle_revenue_sum:,.2f}) — a gap of K{revenue_gap:,.2f}. Check the nozzle detail "
+            f"above for a price changeover, or for a damages/discount adjustment applied separately."
+        )
+
+    # Tank-vs-nozzle variance, per tank — reuses the same live calculation
+    # the system runs at submission time rather than trusting a stored copy.
+    from .attendant_handover import _compute_tank_nozzle_variance
+    _tank_flags, tank_details = _compute_tank_nozzle_variance(station_id, shift_id, storage)
+    per_tank = tank_details.get("tanks", {}) if isinstance(tank_details, dict) else {}
+    for tank_id, t in per_tank.items():
+        status_label = t.get("status")
+        if status_label in ("WARNING", "FAIL"):
+            cal_note = ""
+            if t.get("calibration_status") in ("stale", "no_calibration"):
+                cal_note = f" — calibration is {t['calibration_status']}, treat this variance with caution"
+            causes.append(
+                f"Tank {tank_id}: nozzle sales ({t.get('nozzle_total')}L) vs dip-derived movement "
+                f"({t.get('tank_movement')}L) differ by {t.get('variance_percent')}% (status: {status_label}){cal_note}"
+            )
+
+    flags_out = [
+        {"flag": f, "explanation": _FLAG_EXPLANATIONS.get(f, f)}
+        for f in (handover.get("auto_flag_reasons") or [])
+    ]
+
+    # Reconciliation adjustments — POS/credit changes made after initial
+    # submission (see _record_reconciliation_adjustment) are usually the
+    # answer when someone insists their own entry was correct but the
+    # difference shown later doesn't match.
+    adjustments = handover.get("reconciliation_adjustments") or []
+    for adj in adjustments:
+        when = (adj.get("performed_at") or "")[:16].replace("T", " ")
+        causes.append(
+            f"{adj.get('description')} by {adj.get('performed_by')} on {when} — difference moved from "
+            f"K{adj.get('difference_before', 0):,.2f} to K{adj.get('difference_after', 0):,.2f}."
+        )
+
+    credit_detail = handover.get("credit_sale_details") or []
+    for d in credit_detail:
+        if d.get("over_limit"):
+            causes.append(f"Credit sale to {d.get('account_name')} (K{d.get('amount', 0):,.2f}) exceeded the account's credit limit.")
+        if d.get("source") == "skipped_duplicate":
+            causes.append(f"A credit sale to {d.get('account_name')} was skipped as a duplicate for this shift.")
+
+    if handover.get("pos_terminal_variance") is not None and abs(handover["pos_terminal_variance"]) > 0.01:
+        causes.append(
+            f"POS terminal batch total differs from the entered POS breakdown by "
+            f"K{handover['pos_terminal_variance']:,.2f}."
+        )
+
+    if not causes:
+        causes.append(
+            "No specific cause identified from available signals — if a difference remains, it may be a "
+            "genuine cash-handling variance rather than a data or timing issue."
+        )
+
+    return {
+        "handover_id": handover_id,
+        "attendant_name": handover.get("attendant_name"),
+        "date": handover.get("date"),
+        "shift_type": handover.get("shift_type"),
+        "review_status": handover.get("review_status"),
+        "figures": {
+            "total_expected": total_expected,
+            "fuel_revenue": fuel_revenue,
+            "nozzle_revenue_sum": nozzle_revenue_sum,
+            "lpg_sales": handover.get("lpg_sales", 0),
+            "lubricant_sales": handover.get("lubricant_sales", 0),
+            "accessory_sales": handover.get("accessory_sales", 0),
+            "expected_cash": expected_cash,
+            "actual_cash": actual_cash,
+            "pos_receipts": pos_receipts,
+            "credit_sales": credit_sales,
+            "difference": difference,
+        },
+        "flags": flags_out,
+        "reconciliation_adjustments": adjustments,
+        "nozzle_detail": nozzle_detail,
+        "tank_variance": per_tank,
+        "credit_sale_detail": credit_detail,
+        "pos_breakdown": handover.get("pos_breakdown") or [],
+        "pos_terminal_batch_total": handover.get("pos_terminal_batch_total"),
+        "pos_terminal_variance": handover.get("pos_terminal_variance"),
+        "possible_causes": causes,
+    }
+
+
 # ── POST /recompute-shift ────────────────────────────────────
 class RecomputeShiftInput(BaseModel):
     shift_id: str

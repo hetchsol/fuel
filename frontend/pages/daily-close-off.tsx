@@ -64,6 +64,30 @@ export default function DailyCloseOff() {
     }
   }, [selectedDate])
 
+  // Per-handover cash-variance investigator — gathers nozzle/tank/POS/credit
+  // detail and a synthesized plain-language list of causes for one row's
+  // difference, instead of a manager cross-referencing several screens.
+  const [investigateData, setInvestigateData] = useState<any>(null)
+  const [investigateLoading, setInvestigateLoading] = useState<string | null>(null)
+  const [showInvestigate, setShowInvestigate] = useState(false)
+
+  const fetchInvestigate = async (handoverId: string) => {
+    setInvestigateLoading(handoverId)
+    try {
+      const res = await authFetch(`${BASE}/daily-close-off/investigate/${handoverId}`, {
+        headers: getHeaders(),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.detail || 'Failed to investigate handover')
+      setInvestigateData(data)
+      setShowInvestigate(true)
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setInvestigateLoading(null)
+    }
+  }
+
   // Re-check one shift's completion status against its current data. Needed
   // because advance_shift_on_approval only fires reactively at the moment a
   // handover is approved/voided — if a shift's data changes afterward in a
@@ -464,6 +488,7 @@ export default function DailyCloseOff() {
                       <th className="text-right py-2 px-3 text-xs font-semibold text-content-secondary">Actual</th>
                       <th className="text-right py-2 px-3 text-xs font-semibold text-content-secondary">POS</th>
                       <th className="text-right py-2 px-3 text-xs font-semibold text-content-secondary">Diff</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-content-secondary">Investigate</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -497,6 +522,13 @@ export default function DailyCloseOff() {
                                 *
                               </span>
                             )}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <button onClick={() => fetchInvestigate(h.handover_id)}
+                              disabled={investigateLoading === h.handover_id}
+                              className="text-xs font-medium text-action-primary hover:underline disabled:opacity-50">
+                              {investigateLoading === h.handover_id ? 'Loading...' : 'Investigate'}
+                            </button>
                           </td>
                         </tr>
                       )
@@ -758,6 +790,124 @@ export default function DailyCloseOff() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Investigate panel — every signal (nozzle detail, tank-vs-nozzle
+              variance, POS/credit breakdown, reconciliation adjustments) that
+              can explain one handover's cash difference, plus a synthesized
+              plain-language list of the causes that actually apply to it. */}
+          {showInvestigate && investigateData && (
+            <div className="glass-card p-6 mb-6 border-l-4 border-action-primary animate-fade-in-up-1">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-content-primary">
+                  Investigate — {investigateData.attendant_name} ({investigateData.shift_type}, {formatDateToDisplay(investigateData.date)})
+                </h3>
+                <button onClick={() => setShowInvestigate(false)} className="text-xs text-content-secondary hover:text-content-primary underline">
+                  Hide
+                </button>
+              </div>
+
+              <div className="p-3 rounded-xl mb-4 bg-action-primary/10 border border-action-primary/30">
+                <p className="text-xs font-semibold uppercase text-content-secondary mb-2">Possible causes</p>
+                <ul className="space-y-1.5">
+                  {investigateData.possible_causes.map((c: string, i: number) => (
+                    <li key={i} className="text-sm text-content-primary">- {c}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                {[
+                  { label: 'Expected Cash', value: investigateData.figures.expected_cash },
+                  { label: 'Actual Cash', value: investigateData.figures.actual_cash },
+                  { label: 'POS', value: investigateData.figures.pos_receipts },
+                  { label: 'Credit Sales', value: investigateData.figures.credit_sales },
+                  { label: 'Fuel Revenue', value: investigateData.figures.fuel_revenue },
+                  { label: 'Nozzle Revenue Sum', value: investigateData.figures.nozzle_revenue_sum },
+                  { label: 'Total Expected', value: investigateData.figures.total_expected },
+                  { label: 'Difference', value: investigateData.figures.difference },
+                ].map(f => (
+                  <div key={f.label} className="p-2.5 rounded-lg bg-white/[0.02] border border-surface-border">
+                    <div className="text-[10px] uppercase text-content-secondary">{f.label}</div>
+                    <div className="text-sm font-mono font-semibold text-content-primary">{fmt(f.value)}</div>
+                  </div>
+                ))}
+              </div>
+
+              {investigateData.flags.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-semibold uppercase text-content-secondary mb-2">Flags</p>
+                  <div className="space-y-1.5">
+                    {investigateData.flags.map((f: any, i: number) => (
+                      <div key={i} className="text-xs p-2 rounded bg-status-warning/10 text-content-primary">
+                        <span className="font-semibold">{f.flag}</span>: {f.explanation}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {investigateData.nozzle_detail.length > 0 && (
+                <div className="mb-4 overflow-x-auto">
+                  <p className="text-xs font-semibold uppercase text-content-secondary mb-2">Nozzle Detail</p>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-surface-border">
+                        <th className="text-left py-1.5 px-2 text-content-secondary">Nozzle</th>
+                        <th className="text-right py-1.5 px-2 text-content-secondary">Volume</th>
+                        <th className="text-right py-1.5 px-2 text-content-secondary">Revenue</th>
+                        <th className="text-left py-1.5 px-2 text-content-secondary">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {investigateData.nozzle_detail.map((n: any, i: number) => (
+                        <tr key={i} className="border-b border-surface-border/50">
+                          <td className="py-1.5 px-2 text-content-primary">{n.nozzle_id}</td>
+                          <td className="py-1.5 px-2 text-right font-mono text-content-primary">{n.volume_sold}</td>
+                          <td className="py-1.5 px-2 text-right font-mono text-content-primary">{fmt(n.revenue)}</td>
+                          <td className="py-1.5 px-2 text-content-secondary">
+                            {n.duplicate_reading_flagged && <span className="text-status-error">Duplicate reading override. </span>}
+                            {n.implausible_volume_flagged && <span className="text-status-error">Implausible volume override. </span>}
+                            {n.meter_deviation_flagged && <span className="text-status-warning">Meter deviation {n.meter_deviation_percent}%. </span>}
+                            {n.changeover_reading != null && <span className="text-content-secondary">Price change mid-shift. </span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {Object.keys(investigateData.tank_variance || {}).length > 0 && (
+                <div className="mb-4 overflow-x-auto">
+                  <p className="text-xs font-semibold uppercase text-content-secondary mb-2">Tank vs. Nozzle Variance</p>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-surface-border">
+                        <th className="text-left py-1.5 px-2 text-content-secondary">Tank</th>
+                        <th className="text-left py-1.5 px-2 text-content-secondary">Status</th>
+                        <th className="text-right py-1.5 px-2 text-content-secondary">Nozzle Total (L)</th>
+                        <th className="text-right py-1.5 px-2 text-content-secondary">Tank Movement (L)</th>
+                        <th className="text-right py-1.5 px-2 text-content-secondary">Variance %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(investigateData.tank_variance).map(([tankId, t]: [string, any]) => (
+                        <tr key={tankId} className="border-b border-surface-border/50">
+                          <td className="py-1.5 px-2 text-content-primary">{tankId}</td>
+                          <td className={`py-1.5 px-2 font-semibold ${t.status === 'FAIL' ? 'text-status-error' : t.status === 'WARNING' ? 'text-status-warning' : 'text-status-success'}`}>
+                            {t.status || '-'}
+                          </td>
+                          <td className="py-1.5 px-2 text-right font-mono text-content-primary">{t.nozzle_total ?? '-'}</td>
+                          <td className="py-1.5 px-2 text-right font-mono text-content-primary">{t.tank_movement ?? '-'}</td>
+                          <td className="py-1.5 px-2 text-right font-mono text-content-primary">{t.variance_percent ?? '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
