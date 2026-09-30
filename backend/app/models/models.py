@@ -991,15 +991,82 @@ class HandoverOutput(BaseModel):
     phase: str = "completed"    # "readings_verified" | "completed" | "readings_superseded"
     phase_1_completed_at: Optional[str] = None
     phase_2_completed_at: Optional[str] = None
-    review_status: str = "submitted"           # "submitted" | "flagged" | "approved" | "returned"
+    review_status: str = "submitted"           # "submitted" | "flagged" | "approved" | "returned" | "voided" | "superseded"
     supervisor_review: Optional[dict] = None   # {reviewed_by, reviewed_by_name, reviewed_at, action, note}
     auto_flag_reasons: Optional[List[str]] = None  # e.g. ["cash_shortage", "meter_deviation"]
     notes: Optional[str] = None
     created_at: str
     stock_snapshot: Optional[dict] = None
 
+    # --- Supersession lineage -------------------------------------------------
+    # A (shift_id, attendant_id) pair should only ever have one CANONICAL
+    # handover at a time (see app/services/handover_lookup.py). When a new
+    # submission replaces an older one for the same pair, the old record's
+    # review_status becomes "superseded" and superseded_by is set to the new
+    # handover_id; the new record's supersedes points back at the old one.
+    # Absent on every record written before this field existed — that reads
+    # correctly as "not superseded" (there was never more than one handover
+    # per pair to link, historically).
+    supersedes: Optional[str] = None       # handover_id this one replaces, if any
+    superseded_by: Optional[str] = None    # set on the OLD record once replaced
+    attempt_number: int = 1                # 1st, 2nd, ... submission for this (shift_id, attendant_id)
+
 
 # ===== Enter Readings (Dual Meter) Models =====
+#
+# NOTE ON TARGET SHAPES BELOW (AttendantReadingRecord, NozzleReadingLedgerEntry):
+# These document where attendant_readings.json records and nozzle reading
+# state are HEADED, as part of extending the canonical-handover invariant
+# down to the reading/meter layer (see app/services/handover_lookup.py).
+# Nothing writes these two new fields yet — attendant_readings.json records
+# are still built as plain dicts at their call sites in attendant_handover.py
+# and enter_readings.py, and nozzle config still carries flat
+# electronic_reading/mechanical_reading fields rather than a
+# reading_history ledger. That write-side migration is separate follow-up
+# work; these models exist now so the target shape is defined in one place
+# before that work starts, not invented ad hoc at each call site.
+
+class AttendantReadingRecord(BaseModel):
+    """
+    Target shape for an attendant_readings.json record (keys
+    AR-{shift_id}-{attendant_id}-O / -C). Documents two additions on top of
+    today's actual stored shape:
+      - source_handover_id: which handover last wrote this slot, so a
+        conflict/carry-forward check can tell whether the record backing it
+        is still canonical (see is_reading_current in handover_lookup.py).
+      - history: prior versions of this slot, appended here before being
+        overwritten, instead of silently discarded the way a resubmission
+        clobbers this record today.
+    """
+    shift_id: str
+    user_id: str
+    user_name: str
+    reading_type: str  # "Opening" | "Closing"
+    nozzle_readings: List[dict]
+    submitted_at: str
+    review_status: str = "submitted"
+    source: Optional[str] = None
+    voided: Optional[bool] = None
+    source_handover_id: Optional[str] = None
+    history: Optional[List[dict]] = None
+
+
+class NozzleReadingLedgerEntry(BaseModel):
+    """
+    Target shape for one entry in a nozzle's reading_history ledger —
+    replaces directly overwriting nozzle["electronic_reading"] /
+    ["mechanical_reading"] (see database/storage.py sync_nozzle_state).
+    "Current" reading for opening-reading carry-forward becomes "the latest
+    entry in this list where superseded is falsy", resolved centrally by
+    get_nozzle_current_reading() in handover_lookup.py rather than read
+    directly off the nozzle object by each caller.
+    """
+    electronic_reading: float
+    mechanical_reading: Optional[float] = None
+    source_handover_id: Optional[str] = None
+    recorded_at: str
+    superseded: bool = False
+
 
 class NozzleDualReadingEntry(BaseModel):
     """Single nozzle dual reading (electronic + mechanical) for enter-readings"""

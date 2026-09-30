@@ -13,6 +13,7 @@ from ...config import get_fuel_price
 from ...database.storage import get_nozzle, get_nozzle_ids_for_tank, get_tank_id_for_nozzle, save_station_storage
 from .auth import get_current_user, get_station_context
 from ...database.station_files import load_station_json, save_station_json
+from ...services.handover_lookup import is_reading_current, get_nozzle_current_reading
 
 router = APIRouter()
 
@@ -124,6 +125,11 @@ def _find_previous_shift_readings(shift: dict, storage: dict, station_id: str) -
     result_from = {}  # nozzle_id -> submitted_at of the record it came from, for conflict resolution
     for key, record in readings_db.items():
         if not (key.startswith(prefix) and key.endswith("-C")):
+            continue
+        if not is_reading_current(record):
+            # A voided/superseded/excluded closing record must not be
+            # carried forward as the next shift's opening - it's exactly
+            # the number that was flagged or reversed as wrong.
             continue
         submitted_at = record.get("submitted_at", "")
         for nr in record.get("nozzle_readings", []):
@@ -242,8 +248,9 @@ async def get_my_shift_readings(ctx: dict = Depends(get_station_context)):
             elec_open = prev_readings[nozzle_id]["electronic"]
             mech_open = prev_readings[nozzle_id]["mechanical"]
         else:
-            elec_open = nozzle.get("electronic_reading", 0) or 0
-            mech_open = nozzle.get("mechanical_reading", 0) or 0
+            current = get_nozzle_current_reading(nozzle_id, storage) or {}
+            elec_open = current.get("electronic_reading", 0) or 0
+            mech_open = current.get("mechanical_reading", 0) or 0
 
         detail = {
             "nozzle_id": nozzle_id,

@@ -738,6 +738,15 @@ export default function MyShift() {
           scrollToNoteField(`implausible-note-${conflict.nozzle_id}`)
           throw new Error(conflict.message || 'This shift\'s volume for this nozzle looks implausible — explain below and resubmit.')
         }
+        if (err.detail && typeof err.detail === 'object' && err.detail.error === 'handover_already_approved') {
+          // Void is owner-only — an attendant has no way to act on the
+          // backend's "void it first" wording themselves, so this needs
+          // its own message pointing them to a supervisor/owner instead.
+          throw new Error(
+            'This shift already has an approved handover on record. Ask your supervisor or owner to review it '
+            + '(Manage Shift → Void) before you resubmit — this usually means it was already submitted and approved earlier.'
+          )
+        }
         throw new Error((typeof err.detail === 'string' ? err.detail : null) || 'Failed to submit readings')
       }
 

@@ -127,6 +127,35 @@ export default function Shifts() {
   const [voidTarget, setVoidTarget] = useState<{ shift_id: string; attendant_id: string; attendant_name: string } | null>(null)
   const [voidNote, setVoidNote] = useState('')
   const [voiding, setVoiding] = useState(false)
+  // Every handover on record for voidTarget's shift+attendant, so an owner
+  // can see (and pick) a specific one instead of voiding all of them
+  // together — critical when one is a genuine, already-approved entry and
+  // another is a duplicate/orphan sitting alongside it (the exact shape of
+  // the recurring duplicate-handover issue: voiding "everything" for the
+  // pair would reverse the good entry too).
+  const [voidTargetHandovers, setVoidTargetHandovers] = useState<any[]>([])
+  const [selectedVoidHandoverId, setSelectedVoidHandoverId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!voidTarget) {
+      setVoidTargetHandovers([])
+      setSelectedVoidHandoverId(null)
+      return
+    }
+    authFetch(`${BASE}/handover/entries?shift_id=${encodeURIComponent(voidTarget.shift_id)}`, { headers: getHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then((entries: any[]) => {
+        const mine = (entries || [])
+          .filter(h => h.attendant_id === voidTarget.attendant_id && h.review_status !== 'voided')
+          .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))
+        setVoidTargetHandovers(mine)
+        // Default: pre-select a specific handover only when there's more
+        // than one — with exactly one, "void all" and "void this one" are
+        // the same action, so there's nothing to choose.
+        setSelectedVoidHandoverId(mine.length > 1 ? null : (mine[0]?.handover_id || null))
+      })
+      .catch(() => setVoidTargetHandovers([]))
+  }, [voidTarget])
 
   const handleVoidEntry = async () => {
     if (!voidTarget || !voidNote.trim()) return
@@ -139,6 +168,7 @@ export default function Shifts() {
           shift_id: voidTarget.shift_id,
           attendant_id: voidTarget.attendant_id,
           note: voidNote.trim(),
+          ...(selectedVoidHandoverId ? { handover_id: selectedVoidHandoverId } : {}),
         }),
       })
       if (!res.ok) {
@@ -772,6 +802,10 @@ export default function Shifts() {
             [conflict.nozzle_id]: { volume: conflict.volume, threshold: conflict.threshold },
           }))
           toast.error(conflict.message || "This shift's volume for this nozzle looks implausible — explain below and resubmit.")
+          return
+        }
+        if (err.detail && typeof err.detail === 'object' && err.detail.error === 'handover_already_approved') {
+          toast.error(err.detail.message || 'This shift already has an approved handover — void it first (Manage Shift → Void) if it needs to be redone.')
           return
         }
         toast.error((typeof err.detail === 'string' ? err.detail : null) || 'Failed to submit readings')
@@ -1806,6 +1840,47 @@ export default function Shifts() {
                 otherwise reconcile the physical side separately.
               </p>
             </div>
+
+            {voidTargetHandovers.length > 1 && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-content-primary mb-1">
+                  {voidTargetHandovers.length} entries on record for this attendant on this shift — pick one to void
+                </label>
+                <div className="space-y-2">
+                  {voidTargetHandovers.map((h, idx) => (
+                    <label key={h.handover_id}
+                      className="flex items-start gap-2 p-2 border border-surface-border rounded-md cursor-pointer hover:bg-surface-bg"
+                    >
+                      <input
+                        type="radio"
+                        name="void-target-handover"
+                        className="mt-1"
+                        checked={selectedVoidHandoverId === h.handover_id}
+                        onChange={() => setSelectedVoidHandoverId(h.handover_id)}
+                      />
+                      <span className="text-xs text-content-primary">
+                        <span className="font-medium">Attempt {idx + 1} of {voidTargetHandovers.length}</span>
+                        {' — '}status: <span className="font-medium">{h.review_status}</span>
+                        {h.created_at && <>, submitted {formatDateTimeToDisplay(h.created_at)}</>}
+                        {typeof h.total_expected === 'number' && <>, expected K{h.total_expected.toLocaleString(undefined, { minimumFractionDigits: 2 })}</>}
+                      </span>
+                    </label>
+                  ))}
+                  <label className="flex items-start gap-2 p-2 border border-surface-border rounded-md cursor-pointer hover:bg-surface-bg">
+                    <input
+                      type="radio"
+                      name="void-target-handover"
+                      className="mt-1"
+                      checked={selectedVoidHandoverId === null}
+                      onChange={() => setSelectedVoidHandoverId(null)}
+                    />
+                    <span className="text-xs text-status-error font-medium">
+                      Void all {voidTargetHandovers.length} entries together (original behavior)
+                    </span>
+                  </label>
+                </div>
+              </div>
+            )}
 
             <div className="mb-5">
               <label className="block text-sm font-medium text-content-primary mb-1">

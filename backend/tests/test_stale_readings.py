@@ -43,6 +43,36 @@ def test_review_queue_reports_awaiting_closing(client, owner_headers, monkeypatc
     assert rows["HO-A"]["hours_waiting"] >= 4
 
 
+def test_review_queue_reports_duplicate_handover_groups(client, owner_headers, monkeypatch):
+    handovers = {
+        "HO-APPROVED": {
+            "handover_id": "HO-APPROVED", "shift_id": "S1", "attendant_id": "A1",
+            "attendant_name": "A", "date": "2026-05-27", "shift_type": "Day",
+            "phase": "completed", "review_status": "approved",
+            "created_at": datetime.now().isoformat(),
+        },
+        "HO-ORPHAN": {
+            "handover_id": "HO-ORPHAN", "shift_id": "S1", "attendant_id": "A1",
+            "attendant_name": "A", "date": "2026-05-27", "shift_type": "Day",
+            "phase": "completed", "review_status": "returned",
+            "created_at": datetime.now().isoformat(),
+        },
+        "HO-CLEAN": {
+            "handover_id": "HO-CLEAN", "shift_id": "S2", "attendant_id": "A2",
+            "attendant_name": "B", "date": "2026-05-27", "shift_type": "Day",
+            "phase": "completed", "review_status": "submitted",
+            "created_at": datetime.now().isoformat(),
+        },
+    }
+    monkeypatch.setattr(ah, "_load_handovers", lambda sid: handovers)
+
+    res = client.get("/api/v1/handover/review-queue", headers=owner_headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["duplicate_handover_groups"] == 1
+    assert data["duplicate_handover_groups_needing_review"] == 0
+
+
 def test_notify_stale_readings_is_deduped(monkeypatch):
     handovers = {
         "HO-A": _rv(6, "S1", "A"),   # stale -> notify

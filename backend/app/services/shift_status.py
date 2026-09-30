@@ -22,6 +22,7 @@ from fastapi import HTTPException
 from ..database.station_files import load_station_json
 from ..database.storage import save_station_storage
 from .audit_service import log_audit_event
+from .handover_lookup import get_active_handover, is_handover_superseded
 
 HANDOVERS_FILE = "attendant_handovers.json"
 
@@ -55,38 +56,39 @@ def _shift_fully_approved(shift: dict, shift_id: str, station_id: str, storage: 
     that was already done correctly (left alone, stays locked).
 
     Fallback when no assignments are recorded on the shift: at least one
-    handover exists for it and none are unapproved.
+    handover exists for it and every attendant with one has it resolved.
+
+    Resolves each attendant's status through get_active_handover rather
+    than scanning every handover for the shift directly — a stray orphan
+    (an old duplicate submission that predates auto-supersede, or one that
+    hasn't been backfilled yet) must never block a co-attendant's already-
+    approved work, and must never be picked over that attendant's own
+    resolved handover just because it happens to be more recent.
     """
     handovers = load_station_json(station_id, HANDOVERS_FILE, default={})
-    # Exclude superseded handovers (redo-readings) — the old record is left
-    # in place with whatever review_status it had before being replaced
-    # (never resolved to approved/voided), so without this filter it stays
-    # a phantom permanent blocker even after the attendant's real, current
-    # handover gets fully approved.
-    shift_handovers = [
-        h for h in handovers.values()
-        if h.get("shift_id") == shift_id and h.get("phase") != "readings_superseded"
-    ]
-    if not shift_handovers:
-        return False
-    # Any handover not resolved (approved, or voided out of the picture
-    # entirely) — e.g. returned and being redone — blocks completion.
     resolved_statuses = ("approved", "voided")
-    if any(h.get("review_status") not in resolved_statuses for h in shift_handovers):
-        return False
 
-    # Every assigned attendant must have a resolved handover (approved or
-    # voided). Approving/voiding one attendant never completes the shift
-    # while a co-attendant is still working.
     assigned_ids = {a.get("attendant_id") for a in (shift or {}).get("assignments", [])
                     if a.get("attendant_id")}
     if assigned_ids:
-        resolved_ids = {h.get("attendant_id") for h in shift_handovers
-                        if h.get("review_status") in resolved_statuses}
-        if not assigned_ids.issubset(resolved_ids):
-            return False
-    # (Shift with no recorded assignments → fall back to "all handovers resolved".)
-    return True
+        for aid in assigned_ids:
+            active = get_active_handover(station_id, shift_id, aid, handovers=handovers)
+            if active is None or active.get("review_status") not in resolved_statuses:
+                return False
+        return True
+
+    # No recorded assignments to check against - fall back to "at least one
+    # handover exists for this shift and every non-superseded one is
+    # resolved". Doesn't group by attendant_id, since this fallback exists
+    # precisely for data where assignments (and possibly attendant_id) may
+    # not be populated.
+    shift_handovers = [
+        h for h in handovers.values()
+        if h.get("shift_id") == shift_id and not is_handover_superseded(h)
+    ]
+    if not shift_handovers:
+        return False
+    return all(h.get("review_status") in resolved_statuses for h in shift_handovers)
 
 
 def describe_unresolved_attendants(shift: dict, shift_id: str, station_id: str, storage: dict) -> list:
@@ -99,16 +101,14 @@ def describe_unresolved_attendants(shift: dict, shift_id: str, station_id: str, 
     "auto-closed" alone doesn't tell a manager what to go do next.
     """
     handovers = load_station_json(station_id, HANDOVERS_FILE, default={})
-    shift_handovers = [
-        h for h in handovers.values()
-        if h.get("shift_id") == shift_id and h.get("phase") != "readings_superseded"
-    ]
-    by_attendant: dict = {}
-    for h in shift_handovers:
-        aid = h.get("attendant_id")
-        if aid:
-            by_attendant.setdefault(aid, []).append(h)
-
+    # Excludes superseded records, matching the "no assignments" fallback
+    # further down - a shift whose only handover is a stray superseded one
+    # should still trip the "check for a duplicate shift record" diagnostic
+    # below, not silently look like it has real, unresolved work.
+    has_any_handover = any(
+        h.get("shift_id") == shift_id and not is_handover_superseded(h)
+        for h in handovers.values()
+    )
     resolved_statuses = ("approved", "voided")
     blockers = []
     assignments = (shift or {}).get("assignments", [])
@@ -120,7 +120,7 @@ def describe_unresolved_attendants(shift: dict, shift_id: str, station_id: str, 
     # always means there's a second, empty/stray shift record for the same
     # date+type, and close_day picked that one instead of the real shift
     # where the actual work and approvals happened.
-    if not assignments and not shift_handovers:
+    if not assignments and not has_any_handover:
         return [
             f"This {shift.get('shift_type', 'shift')} shift record ({shift_id}) has no "
             "attendants assigned and no handovers submitted — check for a duplicate shift "
@@ -134,17 +134,20 @@ def describe_unresolved_attendants(shift: dict, shift_id: str, station_id: str, 
             "rather than an unapproved handover."
         ]
 
+    # Resolve each attendant's status through get_active_handover, same
+    # as _shift_fully_approved — a stray orphan (superseded or predating
+    # auto-supersede) must never be picked over that attendant's own
+    # resolved handover just because it happens to be more recent.
     if assignments:
         for a in assignments:
             aid = a.get("attendant_id")
             if not aid:
                 continue
             name = a.get("attendant_name") or aid
-            hs = by_attendant.get(aid, [])
-            if not hs:
+            h = get_active_handover(station_id, shift_id, aid, handovers=handovers)
+            if h is None:
                 blockers.append(f"{name} — no handover submitted")
                 continue
-            h = max(hs, key=lambda x: x.get("created_at", ""))
             rs = h.get("review_status", "submitted")
             if rs in resolved_statuses:
                 continue
@@ -156,7 +159,13 @@ def describe_unresolved_attendants(shift: dict, shift_id: str, station_id: str, 
                 blockers.append(f"{name} — handover awaiting review ({rs})")
     else:
         # No recorded assignments to check against — fall back to naming any
-        # unresolved handover directly.
+        # unresolved, non-superseded handover directly (doesn't group by
+        # attendant_id, since this fallback exists precisely for data where
+        # assignments/attendant_id may not be populated).
+        shift_handovers = [
+            h for h in handovers.values()
+            if h.get("shift_id") == shift_id and not is_handover_superseded(h)
+        ]
         for h in shift_handovers:
             rs = h.get("review_status", "submitted")
             if rs not in resolved_statuses:

@@ -19,6 +19,7 @@ from ...services.shift_status import (
     describe_unresolved_attendants,
     advance_shift_on_approval,
 )
+from ...services.handover_lookup import is_handover_superseded
 
 router = APIRouter()
 
@@ -114,11 +115,6 @@ async def diagnose_close_off(
         shift_type_counts[shift_type] = shift_type_counts.get(shift_type, 0) + 1
 
         assignments = s.get("assignments", [])
-        shift_handovers = [h for h in all_handovers.values() if h.get("shift_id") == sid]
-        assigned_ids = {a.get("attendant_id") for a in assignments if a.get("attendant_id")}
-        resolved_ids = {h.get("attendant_id") for h in shift_handovers
-                        if h.get("review_status") in resolved_statuses
-                        and h.get("phase") != "readings_superseded"}
 
         shifts_out.append({
             "shift_id": sid,
@@ -129,7 +125,11 @@ async def diagnose_close_off(
                 {"attendant_id": a.get("attendant_id"), "attendant_name": a.get("attendant_name")}
                 for a in assignments
             ],
-            "fully_approved": bool(assigned_ids) and assigned_ids.issubset(resolved_ids),
+            # Delegates to the real gate (shift_status._shift_fully_approved)
+            # rather than a second, hand-rolled approximation - a diagnostic
+            # tool whose entire purpose is explaining "why can't I close this
+            # day" must never disagree with the logic it's explaining.
+            "fully_approved": _shift_fully_approved(s, sid, station_id, storage),
             "handovers": [
                 {
                     "handover_id": hid,
@@ -139,7 +139,7 @@ async def diagnose_close_off(
                     "review_status": h.get("review_status"),
                     "created_at": h.get("created_at"),
                     "resolved": h.get("review_status") in resolved_statuses,
-                    "superseded": h.get("phase") == "readings_superseded",
+                    "superseded": is_handover_superseded(h),
                 }
                 for hid, h in all_handovers.items() if h.get("shift_id") == sid
             ],

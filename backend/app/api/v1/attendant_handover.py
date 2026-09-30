@@ -24,6 +24,12 @@ from .auth import get_current_user, require_supervisor_or_owner, require_manager
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
 from ...services.shift_status import assert_shift_editable, advance_shift_on_approval
+from ...services.handover_lookup import (
+    resolve_resubmission, mark_superseded, is_reading_current,
+    get_canonical_handover, get_canonical_nozzle_summaries, is_handover_reading_trustworthy,
+    get_active_handover, find_duplicate_handover_groups, get_most_recent_handover,
+    apply_resubmission_lineage,
+)
 from ...services.business_hours import business_hours_elapsed
 from ...services.stock_service import (
     apply_handover_sales, reverse_handover_sales,
@@ -242,8 +248,18 @@ def _find_conflicting_closing_reading(nozzle_id: str, new_electronic_reading: fl
 
     Returns {"shift_id", "reading"} for the highest conflicting reading found
     across all other shifts, or None.
+
+    A candidate reading is skipped if either the raw record itself is no
+    longer current (voided/superseded/excluded_from_checks - see
+    is_reading_current) OR the handover that produced it is no longer
+    trustworthy as history (voided/superseded/returned - see
+    is_handover_reading_trustworthy). The two checks aren't redundant: the
+    raw record's own flags catch void's explicit tagging of the AR- record,
+    while the handover-status check catches "returned", which void tags but
+    a supervisor's ordinary Return action never did.
     """
     readings_db = _load_enter_readings(station_id)
+    handovers = _load_handovers(station_id)
     worst = None
     for sid in storage.get("shifts", {}):
         if sid == this_shift_id:
@@ -252,7 +268,14 @@ def _find_conflicting_closing_reading(nozzle_id: str, new_electronic_reading: fl
         for key, record in readings_db.items():
             if not (key.startswith(prefix) and key.endswith("-C")):
                 continue
-            if record.get("voided"):
+            if not is_reading_current(record):
+                continue
+            attendant_id = record.get("user_id")
+            owning_handover = (
+                get_most_recent_handover(station_id, sid, attendant_id, handovers=handovers)
+                if attendant_id else None
+            )
+            if not is_handover_reading_trustworthy(owning_handover):
                 continue
             for nr in record.get("nozzle_readings", []):
                 if nr.get("nozzle_id") != nozzle_id:
@@ -1263,20 +1286,30 @@ def _compute_tank_nozzle_variance(station_id: str, shift_id: str, storage: dict,
     if not status["all_submitted"]:
         return [], {"status": "incomplete"}
 
-    # Gather every attendant's nozzle summaries, keyed by attendant so the
-    # caller's own (possibly not-yet-saved) submission always wins over
-    # whatever is already on disk for that same attendant. Also track each
+    # Gather every attendant's nozzle summaries, keyed by attendant, from
+    # each attendant's CANONICAL handover only — not just whichever handover
+    # for that attendant happens to be iterated last. Before this, a stray
+    # duplicate/orphan handover for one attendant (voided, superseded, or
+    # simply the wrong one of several submissions) could silently overwrite
+    # another attendant's real figures in this dict, corrupting the
+    # shift-wide tank-vs-nozzle comparison for everyone on the shift, not
+    # just the attendant the bad handover belonged to. Also track each
     # attendant's phase/actual_cash — needed below to know when a tank's
     # cash figure is actually ready to persist (every contributing
     # attendant financially closed, not just readings-submitted).
     handovers = _load_handovers(station_id)
     by_attendant: dict = {}
     attendant_financials: dict = {}
-    for ho in handovers.values():
-        if ho.get("shift_id") == shift_id and ho.get("phase") in ("readings_verified", "completed"):
-            aid = ho.get("attendant_id")
-            by_attendant[aid] = ho.get("nozzle_summaries") or []
-            attendant_financials[aid] = {"phase": ho.get("phase"), "actual_cash": ho.get("actual_cash")}
+    attendant_ids_for_shift = {
+        ho.get("attendant_id") for ho in handovers.values()
+        if ho.get("shift_id") == shift_id and ho.get("attendant_id")
+    }
+    for aid in attendant_ids_for_shift:
+        canonical = get_canonical_handover(station_id, shift_id, aid, handovers=handovers)
+        if canonical is None or canonical.get("phase") not in ("readings_verified", "completed"):
+            continue
+        by_attendant[aid] = canonical.get("nozzle_summaries") or []
+        attendant_financials[aid] = {"phase": canonical.get("phase"), "actual_cash": canonical.get("actual_cash")}
     if current_attendant_id is not None:
         by_attendant[current_attendant_id] = current_nozzle_summaries or []
         attendant_financials.setdefault(current_attendant_id, {"phase": None, "actual_cash": None})
@@ -2137,15 +2170,15 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
                 "new_price": price_info.get("new_price"),
             })
 
-    # Check for existing Phase 1 handover (readings_verified)
+    # Check for existing Phase 1 handover (readings_verified) - via the one
+    # active (non-superseded) handover for this pair, not whichever happens
+    # to be iterated last, so a historical orphan can't be picked over it.
     handovers = _load_handovers(ctx["station_id"])
-    readings_verified_handover = None
-    has_any_handover = False
-    for ho in handovers.values():
-        if ho.get("shift_id") == shift_id and ho.get("attendant_id") == user_id:
-            has_any_handover = True
-            if ho.get("phase") == "readings_verified":
-                readings_verified_handover = ho
+    active_handover = get_active_handover(ctx["station_id"], shift_id, user_id, handovers=handovers)
+    has_any_handover = active_handover is not None
+    readings_verified_handover = (
+        active_handover if (active_handover and active_handover.get("phase") == "readings_verified") else None
+    )
 
     # Start-of-shift opening verification (additive). A shift that already has a
     # handover (readings/closing in progress) is treated as verified so in-flight
@@ -2312,15 +2345,23 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
     if not attendant_assignment:
         raise HTTPException(status_code=404, detail="Attendant not assigned to this shift")
 
-    # Block duplicate entry
+    # Same resubmission gate as submit_readings/submit_handover - see
+    # resolve_resubmission. This endpoint previously hard-blocked any
+    # resubmission unconditionally, with no path to auto-supersede an
+    # unresolved/returned prior attempt.
     handovers = _load_handovers(station_id)
-    for ho in handovers.values():
-        if ho.get("shift_id") == data.shift_id and ho.get("attendant_id") == data.attendant_id:
-            if ho.get("phase") in ("readings_verified", "completed"):
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Readings already submitted for {attendant_name}. Use handover review to correct.",
-                )
+    resubmission = resolve_resubmission(handovers, data.shift_id, data.attendant_id)
+    if resubmission["action"] == "reject":
+        raise HTTPException(status_code=409, detail={
+            "error": "handover_already_approved",
+            "existing_handover_id": resubmission["prior_id"],
+            "message": resubmission["reject_reason"],
+        })
+    if resubmission["action"] == "manual_redo_required":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Readings already submitted for {attendant_name}. Use handover review to correct.",
+        )
 
     allowed_nozzle_ids = set(attendant_assignment.get("nozzle_ids", []))
     opening_map = {nr.nozzle_id: nr for nr in data.opening_readings}
@@ -2440,6 +2481,8 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
 
     handover_id = f"HO-{data.shift_id}-{data.attendant_id}-MRE-{datetime.now().strftime('%H%M%S')}"
 
+    supersedes_id, attempt_number = apply_resubmission_lineage(handovers, resubmission, handover_id)
+
     handover_out = HandoverOutput(
         handover_id=handover_id,
         shift_id=data.shift_id,
@@ -2470,11 +2513,23 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
         auto_flag_reasons=auto_flag_reasons or None,
         notes=data.notes,
         created_at=now_iso,
+        supersedes=supersedes_id,
+        attempt_number=attempt_number,
     )
 
     handovers[handover_id] = handover_out.dict()
     handovers[handover_id]["tank_nozzle_reconciliation"] = tank_details
     _save_handovers(handovers, station_id)
+
+    if resubmission["action"] == "supersede":
+        log_audit_event(
+            station_id=station_id,
+            action="handover_auto_superseded",
+            performed_by=ctx["username"],
+            entity_type="handover",
+            entity_id=supersedes_id,
+            details={"superseded_by": handover_id, "shift_id": data.shift_id, "attendant_id": data.attendant_id},
+        )
 
     # Mirror to attendant_readings.json (O and C keys used by the chain logic)
     ar_db = load_station_json(station_id, "attendant_readings.json", default={})
@@ -2731,15 +2786,21 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
                    f"before this handover can be submitted.",
         )
 
-    # Prevent duplicate Phase 1 submissions
+    # Decide whether this is a fresh submission, an auto-supersede of an
+    # unresolved/returned prior attempt, or must be rejected outright
+    # because the shift already has an approved handover for this attendant
+    # (see resolve_resubmission for the full state machine).
     handovers = _load_handovers(station_id)
-    has_handover = False
-    for ho in handovers.values():
-        if (ho.get("shift_id") == data.shift_id
-            and ho.get("attendant_id") == user_id):
-            has_handover = True
-            if ho.get("phase") == "readings_verified":
-                raise HTTPException(status_code=409, detail="Readings already submitted for this shift. Use redo-readings to replace.")
+    resubmission = resolve_resubmission(handovers, data.shift_id, user_id)
+    if resubmission["action"] == "reject":
+        raise HTTPException(status_code=409, detail={
+            "error": "handover_already_approved",
+            "existing_handover_id": resubmission["prior_id"],
+            "message": resubmission["reject_reason"],
+        })
+    if resubmission["action"] == "manual_redo_required":
+        raise HTTPException(status_code=409, detail="Readings already submitted for this shift. Use redo-readings to replace.")
+    has_handover = resubmission["action"] == "supersede" or resubmission.get("supersedes_id") is not None
 
     # Gate: the attendant must have started the shift (verified the carried-forward
     # opening) before ending it. A shift that already has a handover (e.g. a redo)
@@ -2778,6 +2839,10 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
     handover_id = f"HO-{data.shift_id}-{user_id}-{datetime.now().strftime('%H%M%S')}"
     now_iso = datetime.now().isoformat()
 
+    # Link this submission to whatever it replaces (if anything) and retire
+    # the prior record - see resolve_resubmission for when supersedes_id is set.
+    supersedes_id, attempt_number = apply_resubmission_lineage(handovers, resubmission, handover_id)
+
     handover_output = HandoverOutput(
         handover_id=handover_id,
         shift_id=data.shift_id,
@@ -2805,10 +2870,22 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
         notes=data.notes,
         created_at=now_iso,
         stock_snapshot=enriched_snapshot,
+        supersedes=supersedes_id,
+        attempt_number=attempt_number,
     )
 
     handovers[handover_id] = handover_output.dict()
     _save_handovers(handovers, station_id)
+
+    if resubmission["action"] == "supersede":
+        log_audit_event(
+            station_id=station_id,
+            action="handover_auto_superseded",
+            performed_by=ctx["username"],
+            entity_type="handover",
+            entity_id=supersedes_id,
+            details={"superseded_by": handover_id, "shift_id": data.shift_id, "attendant_id": user_id},
+        )
 
     # Mirror nozzle readings into attendant_readings.json so nozzle-readings-for-tank
     # can find them regardless of which path the attendant used.
@@ -3083,6 +3160,7 @@ async def redo_readings(data: dict, ctx: dict = Depends(get_station_context)):
         raise HTTPException(status_code=403, detail="Only the assigned attendant or a supervisor can redo readings")
 
     handover["phase"] = "readings_superseded"
+    mark_superseded(handover)
     _save_handovers(handovers, station_id)
 
     log_audit_event(
@@ -3106,6 +3184,18 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     user_name = ctx["full_name"]
 
     shift, my_assignment, allowed_nozzle_ids = _validate_shift_and_assignment(data.shift_id, ctx, storage)
+
+    # Same resubmission gate as submit_readings - see resolve_resubmission.
+    handovers = _load_handovers(station_id)
+    resubmission = resolve_resubmission(handovers, data.shift_id, user_id)
+    if resubmission["action"] == "reject":
+        raise HTTPException(status_code=409, detail={
+            "error": "handover_already_approved",
+            "existing_handover_id": resubmission["prior_id"],
+            "message": resubmission["reject_reason"],
+        })
+    if resubmission["action"] == "manual_redo_required":
+        raise HTTPException(status_code=409, detail="Readings already submitted for this shift. Use redo-readings to replace.")
 
     nozzle_summaries, fuel_revenue = _process_nozzle_readings(
         data.nozzle_readings, storage, station_id, data.shift_id, user_id, allowed_nozzle_ids,
@@ -3152,9 +3242,10 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
         auto_flag_reasons = auto_flag_reasons + tank_flags
         review_status = "flagged"
 
-    handovers = _load_handovers(station_id)
     handover_id = f"HO-{data.shift_id}-{user_id}-{datetime.now().strftime('%H%M%S')}"
     now_iso = datetime.now().isoformat()
+
+    supersedes_id, attempt_number = apply_resubmission_lineage(handovers, resubmission, handover_id)
 
     handover_output = HandoverOutput(
         handover_id=handover_id,
@@ -3185,11 +3276,23 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
         notes=data.notes,
         created_at=now_iso,
         stock_snapshot=enriched_snapshot,
+        supersedes=supersedes_id,
+        attempt_number=attempt_number,
     )
 
     handovers[handover_id] = handover_output.dict()
     handovers[handover_id]["tank_nozzle_reconciliation"] = tank_details
     _save_handovers(handovers, station_id)
+
+    if resubmission["action"] == "supersede":
+        log_audit_event(
+            station_id=station_id,
+            action="handover_auto_superseded",
+            performed_by=ctx["username"],
+            entity_type="handover",
+            entity_id=supersedes_id,
+            details={"superseded_by": handover_id, "shift_id": data.shift_id, "attendant_id": user_id},
+        )
 
     if new_items_to_create:
         _create_credit_sale_records(new_items_to_create, handover_id, handover_output, shift, storage, station_id)
@@ -4022,12 +4125,20 @@ async def get_review_queue(
     awaiting_closing.sort(key=lambda r: r["hours_waiting"], reverse=True)
     stale_readings = [h for h in awaiting_closing if h["is_stale"]]
 
+    # Station-wide (not scoped to the shift_id/date filters above) - a
+    # recurrence of the duplicate-handover bug this whole review page exists
+    # to catch should be visible regardless of which date someone happens
+    # to be looking at right now.
+    duplicate_groups = find_duplicate_handover_groups(handovers)
+
     return {
         "pending": len(pending),
         "flagged": flagged_count,
         "approved_today": len(approved_today),
         "awaiting_closing": len(awaiting_closing),
         "stale_readings_count": len(stale_readings),
+        "duplicate_handover_groups": len(duplicate_groups["unambiguous"]) + len(duplicate_groups["ambiguous"]),
+        "duplicate_handover_groups_needing_review": len(duplicate_groups["ambiguous"]),
         "handovers": pending,
         "awaiting_closing_handovers": awaiting_closing,
     }
@@ -4233,15 +4344,27 @@ async def void_handover(data: VoidHandoverInput, ctx: dict = Depends(get_station
 
     # Tag the raw reading records too, so opening-reading carry-forward and the
     # duplicate-reading gate both stop treating this shift's numbers as real
-    # history for other shifts.
-    readings_db = _load_enter_readings(station_id)
-    changed = False
-    for key in (f"AR-{data.shift_id}-{data.attendant_id}-O", f"AR-{data.shift_id}-{data.attendant_id}-C"):
-        if key in readings_db:
-            readings_db[key]["voided"] = True
-            changed = True
-    if changed:
-        _save_enter_readings(readings_db, station_id)
+    # history for other shifts - but ONLY when the handover(s) just voided
+    # include whichever one is most recent for this pair. The shared
+    # AR-{shift_id}-{attendant_id}-O/C record is a single slot that every
+    # submission path overwrites unconditionally, so its current content
+    # always belongs to the most recently created handover for the pair -
+    # never an earlier one. Voiding an OLDER handover_id (via the picker,
+    # while a newer sibling survives untouched) must not tag this record:
+    # doing so would mislabel the surviving handover's real, current data
+    # as voided.
+    most_recent = get_most_recent_handover(station_id, data.shift_id, data.attendant_id, handovers=handovers)
+    most_recent_id = next(hid for hid, h in handovers.items() if h is most_recent)
+
+    if most_recent_id in voided_ids:
+        readings_db = _load_enter_readings(station_id)
+        changed = False
+        for key in (f"AR-{data.shift_id}-{data.attendant_id}-O", f"AR-{data.shift_id}-{data.attendant_id}-C"):
+            if key in readings_db:
+                readings_db[key]["voided"] = True
+                changed = True
+        if changed:
+            _save_enter_readings(readings_db, station_id)
 
     for handover_id in voided_ids:
         log_audit_event(
@@ -4449,6 +4572,115 @@ async def delete_voided_handover(data: DeleteVoidedHandoverInput, ctx: dict = De
     return {"status": "success", "deleted_handover_ids": deleted_ids}
 
 
+class BackfillSupersedeInput(BaseModel):
+    shift_id: str
+    attendant_id: str
+    # The one handover that stays canonical/untouched - normally the
+    # approved (or otherwise resolved) one.
+    keep_handover_id: str
+    # Every other handover for this pair to mark superseded. Must not
+    # include keep_handover_id. Already-voided entries are skipped (they're
+    # already a terminal, resolved state and need no backfill).
+    supersede_handover_ids: List[str]
+    reason: str
+
+
+@router.post("/backfill-supersede", dependencies=[Depends(require_owner)])
+async def backfill_supersede(data: BackfillSupersedeInput, ctx: dict = Depends(get_station_context)):
+    """
+    One-time cleanup for historical duplicate handovers that predate the
+    auto-supersede guard on submission (see resolve_resubmission) - e.g. an
+    approved handover sitting alongside a stray "returned"/"submitted"
+    orphan from an accidental resubmission, with no lineage link between
+    them because neither existed when the duplicate was created.
+
+    Marks every id in supersede_handover_ids as superseded-by
+    keep_handover_id (same mechanism as an automatic supersede at
+    submission time - see mark_superseded), then re-checks whether the
+    shift can now advance to 'completed'. Does not touch keep_handover_id,
+    stock, credit sales, or any financial figures - this only affects which
+    handover is treated as canonical going forward; the resolved one's own
+    figures are exactly as they always were.
+
+    Not for correcting a mistake going forward - use Void for that. This
+    exists specifically to backfill data that accumulated before write-time
+    enforcement existed.
+    """
+    if not data.reason or not data.reason.strip():
+        raise HTTPException(status_code=400, detail="A reason is required to backfill supersession")
+    if data.keep_handover_id in data.supersede_handover_ids:
+        raise HTTPException(status_code=400, detail="keep_handover_id cannot also be in supersede_handover_ids")
+
+    station_id = ctx["station_id"]
+    handovers = _load_handovers(station_id)
+
+    def _find(hid):
+        h = handovers.get(hid)
+        if not h or h.get("shift_id") != data.shift_id or h.get("attendant_id") != data.attendant_id:
+            return None
+        return h
+
+    keeper = _find(data.keep_handover_id)
+    if keeper is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{data.keep_handover_id} not found for this attendant on this shift.",
+        )
+
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
+    if keeper.get("date", "") in close_offs:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot backfill. Day {keeper['date']} has been closed off — reopen the day first.",
+        )
+
+    to_supersede = []
+    for hid in data.supersede_handover_ids:
+        h = _find(hid)
+        if h is None:
+            raise HTTPException(status_code=404, detail=f"{hid} not found for this attendant on this shift.")
+        if h.get("review_status") == "voided":
+            continue
+        to_supersede.append((hid, h))
+
+    if not to_supersede:
+        raise HTTPException(
+            status_code=400,
+            detail="Nothing to backfill — every id in supersede_handover_ids is already voided or the list was empty.",
+        )
+
+    superseded_ids = []
+    for hid, h in to_supersede:
+        mark_superseded(h)
+        h["superseded_by"] = data.keep_handover_id
+        superseded_ids.append(hid)
+
+    _save_handovers(handovers, station_id)
+
+    for hid in superseded_ids:
+        log_audit_event(
+            station_id=station_id,
+            action="handover_backfill_superseded",
+            performed_by=ctx["username"],
+            entity_type="handover",
+            entity_id=hid,
+            details={
+                "shift_id": data.shift_id, "attendant_id": data.attendant_id,
+                "superseded_by": data.keep_handover_id, "reason": data.reason,
+            },
+        )
+
+    # This may be the last thing blocking the shift from completing.
+    advanced = advance_shift_on_approval(data.shift_id, station_id, ctx["storage"], ctx["username"])
+
+    return {
+        "status": "success",
+        "superseded_handover_ids": superseded_ids,
+        "kept_handover_id": data.keep_handover_id,
+        "shift_advanced_to_completed": advanced,
+    }
+
+
 class ExcludeReadingInput(BaseModel):
     shift_id: str
     attendant_id: str
@@ -4495,13 +4727,12 @@ async def exclude_reading(data: ExcludeReadingInput, ctx: dict = Depends(get_sta
     _save_enter_readings(readings_db, station_id)
 
     # Mirror onto the handover's own nozzle_summaries so Handover Review
-    # shows this was excluded when browsing that shift.
+    # shows this was excluded when browsing that shift. Targets the
+    # canonical handover specifically - not just whichever matching record
+    # is iterated first - since this is meant to correct the real,
+    # already-approved shift, not an unrelated stray duplicate.
     handovers = _load_handovers(station_id)
-    handover = next(
-        (h for h in handovers.values()
-         if h.get("shift_id") == data.shift_id and h.get("attendant_id") == data.attendant_id),
-        None,
-    )
+    handover = get_canonical_handover(station_id, data.shift_id, data.attendant_id, handovers=handovers)
     if handover:
         summary = next(
             (ns for ns in handover.get("nozzle_summaries", []) if ns.get("nozzle_id") == data.nozzle_id), None

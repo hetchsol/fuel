@@ -133,6 +133,7 @@ const REVIEW_STATUS_STYLES: Record<string, { bg: string; color: string; label: s
   approved: { bg: 'var(--color-status-success-light, #e6f9e6)', color: 'var(--color-status-success)', label: 'Approved' },
   returned: { bg: 'var(--color-status-warning-light, #fff8e1)', color: 'var(--color-status-warning)', label: 'Returned' },
   voided: { bg: 'var(--color-surface-border, #eee)', color: 'var(--color-content-secondary)', label: 'Voided' },
+  superseded: { bg: 'var(--color-surface-border, #eee)', color: 'var(--color-content-secondary)', label: 'Superseded' },
 }
 
 const FLAG_LABELS: Record<string, string> = {
@@ -157,6 +158,8 @@ export default function HandoverReview() {
   const [summaryFlagged, setSummaryFlagged] = useState(0)
   const [summaryApprovedToday, setSummaryApprovedToday] = useState(0)
   const [staleReadingsCount, setStaleReadingsCount] = useState(0)
+  const [duplicateHandoverGroups, setDuplicateHandoverGroups] = useState(0)
+  const [duplicateGroupsNeedingReview, setDuplicateGroupsNeedingReview] = useState(0)
   const [awaitingCount, setAwaitingCount] = useState(0)
   const [awaitingClosing, setAwaitingClosing] = useState<HandoverEntry[]>([])
 
@@ -293,6 +296,8 @@ export default function HandoverReview() {
         setSummaryFlagged(data.flagged || 0)
         setSummaryApprovedToday(data.approved_today || 0)
         setStaleReadingsCount(data.stale_readings_count || 0)
+        setDuplicateHandoverGroups(data.duplicate_handover_groups || 0)
+        setDuplicateGroupsNeedingReview(data.duplicate_handover_groups_needing_review || 0)
         setAwaitingCount(data.awaiting_closing || 0)
         setAwaitingClosing(data.awaiting_closing_handovers || [])
         setLoading(false)
@@ -829,6 +834,20 @@ export default function HandoverReview() {
         <div className="rounded-lg p-3 text-sm" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)', borderWidth: 1, borderColor: 'var(--color-status-warning)' }}>
           <span className="font-semibold">{staleReadingsCount} entries</span> have been verified but the shift has not been completed (over 4 hours ago). Follow up in the office.
           {' '}If still unresolved, these will be automatically closed using expected figures (not a verified cash/dip count) 12 hours after readings were verified.
+        </div>
+      )}
+
+      {/* Duplicate handover warning — more than one handover exists for the
+          same shift/attendant pair, almost always an accidental
+          resubmission. Only shown when non-zero: this is meant to catch a
+          recurrence, not clutter the page on an ordinary day. */}
+      {duplicateHandoverGroups > 0 && (
+        <div className="rounded-lg p-3 text-sm" style={{ backgroundColor: 'var(--color-status-error-light, #fde8e8)', color: 'var(--color-status-error)', borderWidth: 1, borderColor: 'var(--color-status-error)' }}>
+          <span className="font-semibold">{duplicateHandoverGroups} shift/attendant pair{duplicateHandoverGroups === 1 ? '' : 's'}</span>{' '}
+          {duplicateHandoverGroups === 1 ? 'has' : 'have'} more than one handover on record — usually an accidental resubmission.
+          {duplicateGroupsNeedingReview > 0 && (
+            <> <span className="font-semibold">{duplicateGroupsNeedingReview}</span> need manual review (no single approved handover to keep) — check Void on the Manage Shift page.</>
+          )}
         </div>
       )}
 
