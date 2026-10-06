@@ -9,7 +9,7 @@ const BASE = '/api/v1'
 const fmtZMW = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 type Tab = 'lubricants' | 'cylinders' | 'accessories' | 'movements'
-type StockAction = 'receive' | 'issue' | 'return_to_store' | 'damage' | 'adjust'
+type StockAction = 'receive' | 'issue' | 'return_to_store' | 'return_to_supplier' | 'damage' | 'adjust'
 type Bin = 'stores' | 'forecourt'
 
 interface StockItem {
@@ -222,8 +222,10 @@ export default function StoresDashboard() {
     if (!['manager', 'owner'].includes(u.role)) router.push('/')
   }, [router])
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true)
+  // `quiet` refreshes keep the page in place (no spinner) so stock received,
+  // issued, sold or returned by someone else shows up while this page is open.
+  const fetchAll = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true)
     try {
       const [dashR, lubR, accR, cylR, movR] = await Promise.all([
         authFetch(`${BASE}/stores/dashboard`, { headers: getHeaders() }),
@@ -241,13 +243,20 @@ export default function StoresDashboard() {
       setCylPricing(cyls.prices || {})
       setAllMovements(Array.isArray(movs) ? movs : [])
     } catch {
-      toast.error('Failed to load stock data')
+      if (!quiet) toast.error('Failed to load stock data')
     } finally {
-      setLoading(false)
+      if (!quiet) setLoading(false)
     }
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') fetchAll(true) }
+    const timer = setInterval(refresh, 30000)
+    window.addEventListener('focus', refresh)
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh) }
+  }, [fetchAll])
 
   const lubricants: LubRow[] = lubCatalog.map((cat: any) => {
     const itemKey = `lubricant:${cat.product_code}`
@@ -321,6 +330,11 @@ export default function StoresDashboard() {
   if (loading) return <LoadingSpinner fullPage text="Loading stock management..." />
 
   const reorderCount = [...lubricants, ...accessories].filter(r => r.needs_reorder).length
+  const emptiesTotal = cylinders.reduce((sum, c) => sum + c.empty_stores + c.empty_forecourt, 0)
+  const emptiesBySize = cylinders
+    .filter(c => c.empty_stores + c.empty_forecourt > 0)
+    .map(c => `${c.size_kg}kg: ${c.empty_stores + c.empty_forecourt}`)
+    .join(', ')
   const recentMovements = allMovements.slice(0, 5)
 
   const TABS: { key: Tab; label: string }[] = [
@@ -347,7 +361,7 @@ export default function StoresDashboard() {
       </div>
 
       {/* Summary strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-surface-card rounded-lg border border-surface-border p-4">
           <p className="text-xs text-content-secondary mb-1">Lubricant Products</p>
           <p className="text-2xl font-bold text-content-primary">{lubricants.length}</p>
@@ -360,6 +374,12 @@ export default function StoresDashboard() {
           <p className={`text-xs mb-1 ${reorderCount > 0 ? 'text-status-error' : 'text-content-secondary'}`}>Need Re-order</p>
           <p className={`text-2xl font-bold ${reorderCount > 0 ? 'text-status-error' : 'text-content-primary'}`}>{reorderCount}</p>
         </div>
+        <button type="button" onClick={() => setTab('cylinders')}
+          className="text-left bg-surface-card rounded-lg border border-surface-border p-4 hover:bg-surface-bg">
+          <p className="text-xs text-content-secondary mb-1">Empty Cylinders</p>
+          <p className="text-2xl font-bold text-content-primary">{emptiesTotal}</p>
+          <p className="text-xs text-content-secondary mt-0.5 truncate">{emptiesBySize || 'none on hand'}</p>
+        </button>
         <div className="bg-surface-card rounded-lg border border-surface-border p-4">
           <p className="text-xs text-content-secondary mb-1">Recent Movements</p>
           <p className="text-2xl font-bold text-content-primary">{allMovements.length}</p>
@@ -768,13 +788,14 @@ function MovementsTab({ movements }: { movements: Movement[] }) {
 
   const TYPE_COLORS: Record<string, string> = {
     receive: 'text-status-success', issue: 'text-action-primary',
-    return_to_store: 'text-status-success',
+    return_to_store: 'text-status-success', return_to_supplier: 'text-status-warning',
     damage: 'text-status-error', adjust: 'text-status-warning',
     sale: 'text-content-secondary', return: 'text-content-secondary',
   }
 
   const TYPE_LABELS: Record<string, string> = {
     receive: 'Receive', issue: 'Issue', return_to_store: 'Return to Store',
+    return_to_supplier: 'Empties to Supplier',
     damage: 'Damage', adjust: 'Adjust', sale: 'Sale', return: 'Return',
   }
 
@@ -784,7 +805,7 @@ function MovementsTab({ movements }: { movements: Movement[] }) {
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
           className="px-3 py-1.5 text-sm rounded border border-surface-border bg-surface-bg text-content-primary">
           <option value="">All types</option>
-          {['receive', 'issue', 'return_to_store', 'damage', 'adjust', 'sale', 'return'].map(t => (
+          {['receive', 'issue', 'return_to_store', 'return_to_supplier', 'damage', 'adjust', 'sale', 'return'].map(t => (
             <option key={t} value={t}>{TYPE_LABELS[t] || t}</option>
           ))}
         </select>
@@ -975,15 +996,31 @@ function StockActionModal({ item_key, name, stores, forecourt, onClose, onDone }
   const [qty, setQty] = useState('')
   const [note, setNote] = useState('')
   const [bin, setBin] = useState<Bin>('stores')
+  const [supplier, setSupplier] = useState('')
+  const [reference, setReference] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // Empty cylinders get one extra action: handing them back to the supplier.
+  const isEmptyCylinder = item_key.startsWith('cylinder_empty:')
   const ACTIONS: [StockAction, string, string][] = [
     ['receive', 'Receive', 'Add stock to stores (backroom)'],
     ['issue', 'Issue', 'Move stock from stores to forecourt'],
     ['return_to_store', 'Return', 'Move stock from forecourt back to stores'],
+    ...(isEmptyCylinder
+      ? [['return_to_supplier', 'To Supplier', 'Empty cylinders handed back to the supplier'] as [StockAction, string, string]]
+      : []),
     ['damage', 'Damage', 'Write off damaged units'],
     ['adjust', 'Adjust', 'Set a bin to the physically counted qty'],
   ]
+
+  const pickAction = (a: StockAction) => {
+    setAction(a); setQty(''); setNote('')
+    // Refill empties land on the forecourt, so that's where returns come from by default.
+    if (a === 'return_to_supplier') setBin('forecourt')
+  }
+
+  const showBin = action === 'damage' || action === 'adjust' || action === 'return_to_supplier'
+  const currentBinQty = bin === 'stores' ? stores : forecourt
 
   const submit = async () => {
     const q = parseFloat(qty)
@@ -993,6 +1030,11 @@ function StockActionModal({ item_key, name, stores, forecourt, onClose, onDone }
     } else {
       if (isNaN(q) || q <= 0) { toast.error('Enter a quantity greater than zero.'); return }
       if (action === 'damage' && !note.trim()) { toast.error('A reason is required for damage.'); return }
+      if (action === 'return_to_supplier') {
+        if (!Number.isInteger(q)) { toast.error('Enter a whole number of cylinders.'); return }
+        if (!supplier.trim()) { toast.error('Enter the supplier.'); return }
+        if (q > currentBinQty) { toast.error(`Only ${currentBinQty} empty in ${bin}.`); return }
+      }
     }
 
     setBusy(true)
@@ -1001,6 +1043,10 @@ function StockActionModal({ item_key, name, stores, forecourt, onClose, onDone }
       if (action === 'receive') { path = '/stores/receive'; body = { item_key, qty: q, note: note.trim() } }
       else if (action === 'issue') { path = '/stores/issue'; body = { item_key, qty: q, note: note.trim() } }
       else if (action === 'return_to_store') { path = '/stores/return-to-store'; body = { item_key, qty: q, note: note.trim() } }
+      else if (action === 'return_to_supplier') {
+        path = '/stores/return-to-supplier'
+        body = { item_key, qty: q, bin, supplier: supplier.trim(), reference: reference.trim(), note: note.trim() }
+      }
       else if (action === 'damage') { path = '/stores/damage'; body = { item_key, qty: q, bin, note: note.trim() } }
       else { path = '/stores/adjust'; body = { item_key, bin, new_qty: q, reason: note.trim() } }
 
@@ -1020,8 +1066,6 @@ function StockActionModal({ item_key, name, stores, forecourt, onClose, onDone }
     }
   }
 
-  const showBin = action === 'damage' || action === 'adjust'
-  const currentBinQty = bin === 'stores' ? stores : forecourt
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -1032,9 +1076,9 @@ function StockActionModal({ item_key, name, stores, forecourt, onClose, onDone }
         </p>
 
         {/* Action selector */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1 mb-4">
+        <div className={`grid grid-cols-2 ${ACTIONS.length > 5 ? 'sm:grid-cols-3' : 'sm:grid-cols-5'} gap-1 mb-4`}>
           {ACTIONS.map(([a, label]) => (
-            <button key={a} type="button" onClick={() => { setAction(a); setQty(''); setNote('') }}
+            <button key={a} type="button" onClick={() => pickAction(a)}
               className="py-1.5 text-xs font-medium rounded border text-center"
               style={{
                 backgroundColor: action === a ? 'var(--color-action-primary)' : 'transparent',
@@ -1059,9 +1103,17 @@ function StockActionModal({ item_key, name, stores, forecourt, onClose, onDone }
             </div>
           )}
           <Field
-            label={action === 'adjust' ? `New ${bin} quantity (currently ${currentBinQty})` : 'Quantity'}
+            label={action === 'adjust' ? `New ${bin} quantity (currently ${currentBinQty})`
+              : action === 'return_to_supplier' ? `Empty cylinders handed over (${currentBinQty} in ${bin})`
+              : 'Quantity'}
             value={qty} onChange={setQty} type="number" placeholder="0" autoFocus
           />
+          {action === 'return_to_supplier' && (
+            <>
+              <Field label="Supplier (required)" value={supplier} onChange={setSupplier} placeholder="Supplier name" />
+              <Field label="Delivery note / exchange slip no." value={reference} onChange={setReference} placeholder="Optional" />
+            </>
+          )}
           <div>
             <label className="block text-xs font-medium text-content-secondary mb-1">
               {action === 'damage' || action === 'adjust' ? 'Reason (required)' : 'Note (optional)'}

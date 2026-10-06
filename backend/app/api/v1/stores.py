@@ -45,6 +45,15 @@ class IssueInput(BaseModel):
     note: str = ""
 
 
+class SupplierReturnInput(BaseModel):
+    item_key: str                 # a cylinder_empty:{size}kg item
+    qty: float
+    supplier: str
+    reference: str = ""           # supplier delivery note / exchange slip number
+    bin: str = "forecourt"
+    note: str = ""
+
+
 class DamageInput(BaseModel):
     item_key: str
     qty: float
@@ -183,6 +192,13 @@ def issue(data: IssueInput, ctx: dict = Depends(get_station_context)):
 @router.post("/return-to-store", dependencies=[Depends(require_manager_or_owner)])
 def return_to_store(data: IssueInput, ctx: dict = Depends(get_station_context)):
     return svc.return_to_store(ctx["station_id"], data.item_key, data.qty, ctx["username"], data.note)
+
+
+@router.post("/return-to-supplier", dependencies=[Depends(require_manager_or_owner)])
+def return_to_supplier(data: SupplierReturnInput, ctx: dict = Depends(get_station_context)):
+    """Empty cylinders handed back to the supplier. Manager/owner only."""
+    return svc.return_to_supplier(ctx["station_id"], data.item_key, data.qty, data.bin,
+                                  data.supplier, data.reference, ctx["username"], data.note)
 
 
 @router.post("/damage", dependencies=[Depends(require_manager_or_owner)])

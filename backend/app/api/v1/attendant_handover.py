@@ -27,10 +27,13 @@ from ...services.shift_status import assert_shift_editable, advance_shift_on_app
 from ...services.handover_lookup import (
     resolve_resubmission, mark_superseded, is_reading_current,
     get_canonical_handover, get_canonical_nozzle_summaries, is_handover_reading_trustworthy,
-    get_active_handover, find_duplicate_handover_groups, get_most_recent_handover,
-    apply_resubmission_lineage,
+    get_active_handover, find_duplicate_handover_groups, get_most_recent_handover, is_handover_canonical,
+    apply_resubmission_lineage, is_handover_superseded,
 )
 from ...services.business_hours import business_hours_elapsed
+from ...services.credit_sale_owner import (
+    sale_belongs_to, shift_attendants, find_credit_duplicate, describe_duplicate,
+)
 from ...services.stock_service import (
     apply_handover_sales, reverse_handover_sales,
     load_items as load_stock_items, make_key as make_stock_key,
@@ -1058,15 +1061,22 @@ def _resolve_credit_sale_price(product_code, fuel_type, account, storage, statio
     return price
 
 
-def _process_credit_sales(credit_sale_items, storage, shift_id, station_id):
+def _process_credit_sales(credit_sale_items, storage, shift_id, station_id, attendant_id):
     """
-    Process credit sale line items.
+    Process credit sale line items for ONE attendant's handover.
     Dedup key: (account_id, fuel_type) per shift — same account cannot buy the
     same fuel type twice in one shift.
+
+    Already-recorded sales are pulled in only when they belong to this
+    attendant (see services/credit_sale_owner.sale_belongs_to) — never just
+    because they share the shift, which used to let a sale recorded against
+    attendant A land in attendant B's handover too.
     Returns (credit_total, credit_sale_details, new_items_to_create, duplicates).
     """
     accounts_data = storage.get('accounts', {})
     credit_sales_data = storage.get('credit_sales', [])
+    handovers = _load_handovers(station_id)
+    shifts = storage.get('shifts', {})
 
     enriched_items = []
     for item in credit_sale_items:
@@ -1086,7 +1096,8 @@ def _process_credit_sales(credit_sale_items, storage, shift_id, station_id):
             "coupon_serial": item.coupon_serial,
         })
 
-    pre_existing = [s for s in credit_sales_data if s.get("shift_id") == shift_id and not s.get("voided")]
+    pre_existing = [s for s in credit_sales_data
+                    if sale_belongs_to(s, shift_id, attendant_id, handovers, shifts)]
     pre_existing_details = []
     for s in pre_existing:
         pre_existing_details.append({
@@ -1105,26 +1116,29 @@ def _process_credit_sales(credit_sale_items, storage, shift_id, station_id):
             "slip_number": s.get("slip_number"),
         })
 
-    # Dedup key: coupon_serial when present (each coupon is a distinct trip), else (account_id, fuel_type)
-    def _pre_existing_key(s):
-        cs = s.get("coupon_serial")
-        return ("coupon", s.get("account_id"), cs) if cs else ("ft", s.get("account_id"), s.get("fuel_type"))
-
-    pre_existing_keys = {_pre_existing_key(s) for s in pre_existing}
+    # Duplicates are checked against EVERY attendant's live sales (see
+    # find_credit_duplicate), not just this attendant's: what counts in this
+    # handover is ownership, but a coupon B re-enters after A already recorded
+    # it must still be refused. Coupon serials are single-use per client
+    # station-wide; coupon-less sales are client + fuel type per shift.
     new_items_to_create = []
     duplicates = []
     seen_in_submission = set()
     for item in enriched_items:
-        cs = item.get("coupon_serial")
+        cs = (item.get("coupon_serial") or "").strip().upper()
         key = ("coupon", item["account_id"], cs) if cs else ("ft", item["account_id"], item["fuel_type"])
-        if key in pre_existing_keys or key in seen_in_submission:
+        dup = find_credit_duplicate(credit_sales_data, item["account_id"], item["fuel_type"],
+                                    item.get("coupon_serial"), shift_id)
+        if dup or key in seen_in_submission:
             item["source"] = "skipped_duplicate"
             label = f"coupon {cs}" if cs else item["fuel_type"]
+            reason = (f"{item['account_name']} / {describe_duplicate(dup, handovers, shifts)}" if dup
+                      else f"{item['account_name']} / {label} entered twice in this submission")
             duplicates.append({
                 "account_name": item["account_name"],
                 "fuel_type": item["fuel_type"],
                 "volume": item["volume"],
-                "reason": f"{item['account_name']} / {label} already recorded for this shift",
+                "reason": reason,
             })
         else:
             new_items_to_create.append(item)
@@ -1510,7 +1524,12 @@ def _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift
     trades_out = enriched_snapshot.get("lpg_trades", []) or []
     grand_total = round(grand_total + trade_revenue, 2)
     book_pop = sum(r["balance"] + r.get("closing_empty", 0) for r in cylinder_rows)
+    prior_lpg = lpg_daily_db.get(lpg_entry_id) or {}
     lpg_daily_db[lpg_entry_id] = {
+        # Carried over: the Stores baseline belongs to whatever has already
+        # been applied, not to this rebuild of the display rows.
+        "stores_applied": prior_lpg.get("stores_applied", {}),
+        "stores_applied_by_handover": prior_lpg.get("stores_applied_by_handover"),
         "entry_id": lpg_entry_id, "date": shift_date, "shift_type": shift_type,
         "salesperson": user_name, "cylinder_rows": cylinder_rows,
         "grand_total_value": grand_total, "book_cylinder_population": book_pop,
@@ -1592,112 +1611,192 @@ def _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift
     save_lubricant_daily(lub_daily_db, station_id)
 
 
+def _set_entry_contribution(entry: dict, handover_id: str, totals: Optional[dict]):
+    """
+    Record (or with totals=None, remove) one handover's contribution to a Daily
+    Entry's Stores baseline, and recompute `stores_applied` as the SUM of every
+    contributing handover. Accessories/lubricants entries are shared by every
+    shift on a date, so a single overwrite would drop the other shift's share
+    and make a later manual correction on that page double-count it.
+    Entries written before this existed have a bare `stores_applied` with no
+    breakdown; that legacy figure is kept as its own contribution.
+    """
+    by_ho = entry.get("stores_applied_by_handover")
+    if by_ho is None:
+        by_ho = {}
+        if entry.get("stores_applied"):
+            by_ho["_legacy"] = dict(entry["stores_applied"])
+    if totals:
+        by_ho[handover_id] = totals
+    else:
+        by_ho.pop(handover_id, None)
+    combined: dict = {}
+    for contrib in by_ho.values():
+        for k, v in (contrib or {}).items():
+            combined[k] = round(combined.get(k, 0) + (v or 0), 4)
+    entry["stores_applied_by_handover"] = by_ho
+    entry["stores_applied"] = {k: v for k, v in combined.items() if v}
+
+
+def _apply_handover_stock(station_id, handover, performed_by):
+    """
+    Push this handover's stock snapshot (lubricants, LPG cylinders, accessories)
+    to Stores now. Called at SUBMISSION so stock on hand is real time; the
+    approval path still calls apply_handover_sales too, which is a no-op once
+    `stock_applied` is set (and catches handovers submitted before this change).
+    Best-effort: a stock bookkeeping failure must never block a submission.
+    The caller persists the handover so `stock_applied` sticks.
+    """
+    try:
+        if handover and handover.get("stock_snapshot") and not handover.get("stock_applied"):
+            apply_handover_sales(station_id, handover, performed_by)
+            _mark_daily_entries_stores_applied(station_id, handover, performed_by)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Stock apply failed for %s: %s", handover.get("handover_id"), exc)
+
+
+def _reverse_handover_stock(station_id, handover, performed_by):
+    """Undo _apply_handover_stock for a handover being superseded, redone or voided."""
+    try:
+        if handover and handover.get("stock_applied"):
+            reverse_handover_sales(station_id, handover, performed_by)
+            _clear_daily_entries_stores_applied(station_id, handover)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Stock reverse failed for %s: %s", handover.get("handover_id"), exc)
+
+
+def _retire_superseded_stock(station_id, handovers, resubmission, performed_by):
+    """A resubmission replaced a live prior attempt: credit its stock back before the new one applies."""
+    prior_id = resubmission.get("supersedes_id")
+    if resubmission.get("action") == "supersede" and prior_id in handovers:
+        _reverse_handover_stock(station_id, handovers[prior_id], performed_by)
+
+
+def _handover_entry_totals(handover) -> dict:
+    """
+    This handover's Stores effect split by Daily Entry type, in the same
+    "sold + damaged" / negative-empties form apply_handover_sales uses:
+    {"lpg": {...}, "acc": {...}, "lub": {...}}.
+    """
+    snap = handover.get("stock_snapshot") or {}
+    lpg_totals: dict = {}
+    for r in (snap.get("lpg_cylinders") or []):
+        size = r.get("size_kg")
+        if size is None:
+            continue
+        total = r.get("total_sold")
+        if total is None:
+            total = (r.get("sold_refill", 0) or 0) + (r.get("sold_with_cylinder", 0) or 0)
+        total = round((total or 0) + (r.get("damaged", 0) or 0), 4)
+        if total:
+            lpg_totals[f"cylinder_full:{size}kg"] = total
+        if r.get("sold_refill"):
+            lpg_totals[f"cylinder_empty:{size}kg"] = -round(r.get("sold_refill") or 0, 4)
+
+    acc_totals: dict = {}
+    for r in (snap.get("accessories") or []):
+        qty = round((r.get("sold", 0) or 0) + (r.get("damaged", 0) or 0), 4)
+        if qty:
+            acc_totals[f"lpg_accessory:{r.get('product_code')}"] = qty
+
+    lub_totals: dict = {}
+    for r in (snap.get("lubricants") or []):
+        qty = round((r.get("sold", 0) or 0) + (r.get("damaged", 0) or 0), 4)
+        if qty:
+            lub_totals[f"lubricant:{r.get('product_code')}"] = qty
+    return {"lpg": lpg_totals, "acc": acc_totals, "lub": lub_totals}
+
+
+def _daily_entry_targets(station_id, handover):
+    """(totals_key, loader, saver, matcher) for each Daily Entry type this handover feeds."""
+    shift_date = handover.get("date", "")
+    shift_type = handover.get("shift_type", "")
+    return [
+        ("lpg", load_lpg_daily, save_lpg_daily,
+         lambda e: e.get("date") == shift_date and e.get("shift_type") == shift_type),
+        ("acc", load_lpg_accessories, save_lpg_accessories,
+         lambda e: e.get("date") == shift_date),
+        ("lub", load_lubricant_daily, save_lubricant_daily,
+         lambda e: e.get("date") == shift_date and e.get("location") == "Island 3"),
+    ]
+
+
 def _mark_daily_entries_stores_applied(station_id, handover, performed_by):
     """
     After apply_handover_sales() has actually moved Stores' bins for this
-    handover (called separately, at approval), stamp the same "sold + damaged"
+    handover (called separately, at submission), stamp the same "sold + damaged"
     / empties totals onto the matching Daily Entry record's `stores_applied`
     field — the same records _feed_daily_entries writes/upserts at submission.
 
     This is what lets a later manual correction on that Daily Entry (via the
     LPG/Lubricants/Accessories Daily pages) compute the right incremental
     delta instead of re-applying — and double-counting — what this shift's
-    approval already pushed to Stores. Mirrors apply_handover_sales's own
+    submission already pushed to Stores. Mirrors apply_handover_sales's own
     formula exactly. Best-effort: a bookkeeping-only side effect must not
-    block approval.
+    block a submission.
 
-    Known limitation: if a manual Daily Entry edit for the same date/shift
-    happens *between* shift submission and this shift's approval, the two
-    can still race — this only guards against double-counting once the
-    shift's own Stores application has actually happened.
+    Stored per handover (see _set_entry_contribution) so two shifts sharing
+    one date's entry each keep their own share of the baseline.
     """
     try:
-        snap = handover.get("stock_snapshot") or {}
-        shift_date = handover.get("date", "")
-        shift_type = handover.get("shift_type", "")
-
-        lpg_totals: dict = {}
-        for r in (snap.get("lpg_cylinders") or []):
-            size = r.get("size_kg")
-            if size is None:
+        hid = handover.get("handover_id", "")
+        totals = _handover_entry_totals(handover)
+        for key, load, save, matches in _daily_entry_targets(station_id, handover):
+            if not totals[key]:
                 continue
-            total = r.get("total_sold")
-            if total is None:
-                total = (r.get("sold_refill", 0) or 0) + (r.get("sold_with_cylinder", 0) or 0)
-            total = round((total or 0) + (r.get("damaged", 0) or 0), 4)
-            if total:
-                lpg_totals[f"cylinder_full:{size}kg"] = total
-            if r.get("sold_refill"):
-                lpg_totals[f"cylinder_empty:{size}kg"] = -round(r.get("sold_refill") or 0, 4)
-        if lpg_totals:
-            lpg_db = load_lpg_daily(station_id)
-            for entry in lpg_db.values():
-                if entry.get("date") == shift_date and entry.get("shift_type") == shift_type:
-                    entry["stores_applied"] = lpg_totals
-                    save_lpg_daily(lpg_db, station_id)
-                    break
-
-        acc_totals = {}
-        for r in (snap.get("accessories") or []):
-            qty = round((r.get("sold", 0) or 0) + (r.get("damaged", 0) or 0), 4)
-            if qty:
-                acc_totals[f"lpg_accessory:{r.get('product_code')}"] = qty
-        if acc_totals:
-            acc_db = load_lpg_accessories(station_id)
-            for entry in acc_db.values():
-                if entry.get("date") == shift_date:
-                    entry["stores_applied"] = acc_totals
-                    save_lpg_accessories(acc_db, station_id)
-                    break
-
-        lub_totals = {}
-        for r in (snap.get("lubricants") or []):
-            qty = round((r.get("sold", 0) or 0) + (r.get("damaged", 0) or 0), 4)
-            if qty:
-                lub_totals[f"lubricant:{r.get('product_code')}"] = qty
-        if lub_totals:
-            lub_db = load_lubricant_daily(station_id)
-            for entry in lub_db.values():
-                if entry.get("date") == shift_date and entry.get("location") == "Island 3":
-                    entry["stores_applied"] = lub_totals
-                    save_lubricant_daily(lub_db, station_id)
+            db = load(station_id)
+            for entry in db.values():
+                if matches(entry):
+                    _set_entry_contribution(entry, hid, totals[key])
+                    save(db, station_id)
                     break
     except Exception:
         pass
+
+
+def _remove_entry_contribution(entry: dict, handover_id: str, totals: dict):
+    """
+    Take one handover's share out of a Daily Entry's Stores baseline. When the
+    share was recorded before the per-handover breakdown existed it sits inside
+    the bare/legacy figure, so it is subtracted from that instead — never a
+    blanket reset, which would also wipe another shift's share of a shared
+    accessories/lubricants entry.
+    """
+    by_ho = entry.get("stores_applied_by_handover")
+    if by_ho is not None and handover_id in by_ho:
+        _set_entry_contribution(entry, handover_id, None)
+        return
+    base = (entry.get("stores_applied") or {}) if by_ho is None else (by_ho.get("_legacy") or {})
+    reduced = {k: round((v or 0) - (totals.get(k, 0) or 0), 4) for k, v in base.items()}
+    reduced = {k: v for k, v in reduced.items() if v}
+    if by_ho is None:
+        entry["stores_applied"] = reduced
+    else:
+        by_ho["_legacy"] = reduced
+        _set_entry_contribution(entry, handover_id, None)  # recompute the sum
 
 
 def _clear_daily_entries_stores_applied(station_id, handover):
     """
     Counterpart to _mark_daily_entries_stores_applied — called after
     reverse_handover_sales credits this handover's quantities back to Stores,
-    so the matching Daily Entry record's `stores_applied` baseline drops back
-    to zero too. Without this, a later correction on that entry would compute
-    its delta against totals Stores no longer actually holds. Best-effort.
+    so this handover's share of the matching Daily Entry record's
+    `stores_applied` baseline is removed too (other shifts' shares stay).
+    Without this, a later correction on that entry would compute its delta
+    against totals Stores no longer actually holds. Best-effort.
     """
     try:
-        shift_date = handover.get("date", "")
-        shift_type = handover.get("shift_type", "")
-
-        lpg_db = load_lpg_daily(station_id)
-        for entry in lpg_db.values():
-            if entry.get("date") == shift_date and entry.get("shift_type") == shift_type:
-                entry["stores_applied"] = {}
-                save_lpg_daily(lpg_db, station_id)
-                break
-
-        acc_db = load_lpg_accessories(station_id)
-        for entry in acc_db.values():
-            if entry.get("date") == shift_date:
-                entry["stores_applied"] = {}
-                save_lpg_accessories(acc_db, station_id)
-                break
-
-        lub_db = load_lubricant_daily(station_id)
-        for entry in lub_db.values():
-            if entry.get("date") == shift_date and entry.get("location") == "Island 3":
-                entry["stores_applied"] = {}
-                save_lubricant_daily(lub_db, station_id)
-                break
+        hid = handover.get("handover_id", "")
+        totals = _handover_entry_totals(handover)
+        for key, load, save, matches in _daily_entry_targets(station_id, handover):
+            db = load(station_id)
+            for entry in db.values():
+                if matches(entry):
+                    _remove_entry_contribution(entry, hid, totals[key])
+                    save(db, station_id)
+                    break
     except Exception:
         pass
 
@@ -1866,6 +1965,9 @@ def _create_credit_sale_records(new_items_to_create, handover_id, handover_outpu
             "coupon_serial": item.get("coupon_serial"),
             "auth_reference": auth_reference,
             "slip_number": slip_number,
+            "attendant_id": handover_output.attendant_id,
+            "attendant_name": handover_output.attendant_name,
+            "handover_id": handover_id,
         }
         try:
             process_credit_sale(
@@ -2446,6 +2548,11 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
 
     # POS: if breakdown items provided, derive sum from them
     retro_pos_breakdown = None
+    # The attempt this entry replaces (if any) is still live at this point;
+    # its slips are being re-entered, not duplicated.
+    _require_no_pos_conflicts(
+        handovers, shift.get("date", ""), data.pos_items,
+        resubmission.get("supersedes_id") if resubmission.get("action") == "supersede" else None)
     if data.pos_items:
         retro_pos_breakdown = [item if isinstance(item, dict) else item.model_dump() for item in data.pos_items]
         retro_pos_total = round(sum((item.get("amount", 0) if isinstance(item, dict) else item.amount) for item in data.pos_items), 2)
@@ -2519,6 +2626,7 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
 
     handovers[handover_id] = handover_out.dict()
     handovers[handover_id]["tank_nozzle_reconciliation"] = tank_details
+    _retire_superseded_stock(station_id, handovers, resubmission, ctx["username"])
     _save_handovers(handovers, station_id)
 
     if resubmission["action"] == "supersede":
@@ -2943,6 +3051,12 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
     # Feed daily entry files
     _feed_daily_entries(enriched_snapshot, station_id, user_id, user_name, shift, handover_id)
 
+    # Stock moves now, not at approval: credit back a replaced attempt, then
+    # take this one's sales out of Stores.
+    _retire_superseded_stock(station_id, handovers, resubmission, ctx["username"])
+    _apply_handover_stock(station_id, handovers[handover_id], ctx["username"])
+    _save_handovers(handovers, station_id)
+
     log_audit_event(
         station_id=station_id, action="readings_verified",
         performed_by=ctx["username"], entity_type="handover", entity_id=handover_id,
@@ -3002,14 +3116,19 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     # Block closing edits to a finalized (reconciled / inactive) shift.
     assert_shift_editable(storage.get("shifts", {}).get(shift_id))
 
-    if data.credit_sale_items:
-        credit_sales, credit_sale_details, new_items_to_create, _ = \
-            _process_credit_sales(data.credit_sale_items, storage, shift_id, station_id)
+    # Always run, even with no new lines, so sales already recorded against
+    # THIS attendant (e.g. from the Accounts page during the shift) count in
+    # this handover. Falls back to the client total only when there are none.
+    calc_total, calc_details, calc_new, _ = _process_credit_sales(
+        data.credit_sale_items or [], storage, shift_id, station_id, handover.get("attendant_id", ""))
+    if data.credit_sale_items or calc_details:
+        credit_sales, credit_sale_details, new_items_to_create = calc_total, calc_details, calc_new
 
     # POS: if breakdown items provided, derive sum from them. Each item gets
     # a server-generated id so a wrongly entered one can be removed later
     # without touching the rest — see delete_pos_receipt_item.
     pos_breakdown = None
+    _require_no_pos_conflicts(handovers, handover.get("date", ""), data.pos_items, data.handover_id)
     if data.pos_items:
         pos_breakdown = [{**item.model_dump(), "id": str(uuid.uuid4())} for item in data.pos_items]
         pos_total = round(sum(item.amount for item in data.pos_items), 2)
@@ -3161,6 +3280,8 @@ async def redo_readings(data: dict, ctx: dict = Depends(get_station_context)):
 
     handover["phase"] = "readings_superseded"
     mark_superseded(handover)
+    # Its stock went out at submission; the redo will apply its own.
+    _reverse_handover_stock(station_id, handover, ctx["username"])
     _save_handovers(handovers, station_id)
 
     log_audit_event(
@@ -3224,9 +3345,10 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     # Credit sales
     credit_sale_details = None
     new_items_to_create = []
-    if data.credit_sale_items:
-        data.credit_sales, credit_sale_details, new_items_to_create, _ = \
-            _process_credit_sales(data.credit_sale_items, storage, data.shift_id, station_id)
+    calc_total, calc_details, calc_new, _ = _process_credit_sales(
+        data.credit_sale_items or [], storage, data.shift_id, station_id, user_id)
+    if data.credit_sale_items or calc_details:
+        data.credit_sales, credit_sale_details, new_items_to_create = calc_total, calc_details, calc_new
 
     expected_cash = round(total_expected - data.credit_sales, 2)
     difference = round(data.actual_cash - expected_cash, 2)
@@ -3282,6 +3404,8 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
 
     handovers[handover_id] = handover_output.dict()
     handovers[handover_id]["tank_nozzle_reconciliation"] = tank_details
+    _retire_superseded_stock(station_id, handovers, resubmission, ctx["username"])
+    _apply_handover_stock(station_id, handovers[handover_id], ctx["username"])
     _save_handovers(handovers, station_id)
 
     if resubmission["action"] == "supersede":
@@ -3459,6 +3583,51 @@ async def reopen_handover(
     return {"status": "success", "message": f"Handover {handover_id} reopened for correction"}
 
 
+def _pos_reference_conflict(handovers: dict, date: str, reference: Optional[str],
+                            exclude_handover_id: Optional[str] = None,
+                            exclude_item_id: Optional[str] = None) -> Optional[dict]:
+    """
+    The live handover on the same date that already carries this POS
+    terminal reference, if any — across EVERY attendant, so one card slip
+    can't be counted in two attendants' handovers. Voided and superseded
+    handovers don't count. Items without a reference can't be compared
+    across attendants (two equal-amount payments are normal) and are left to
+    the per-handover check.
+    """
+    ref = (reference or "").strip().lower()
+    if not ref:
+        return None
+    for hid, h in handovers.items():
+        if h.get("date") != date or not is_handover_canonical(h):
+            continue
+        for e in h.get("pos_breakdown") or []:
+            if (e.get("reference") or "").strip().lower() != ref:
+                continue
+            if hid == exclude_handover_id and (exclude_item_id is None or e.get("id") == exclude_item_id):
+                continue
+            return h
+    return None
+
+
+def _require_no_pos_conflicts(handovers: dict, date: str, items, exclude_handover_id: Optional[str]):
+    """Reject a POS submission whose references repeat each other or another attendant's slips."""
+    seen = set()
+    for item in items or []:
+        raw = item.get("reference") if isinstance(item, dict) else getattr(item, "reference", None)
+        ref = (raw or "").strip()
+        if not ref:
+            continue
+        if ref.lower() in seen:
+            raise HTTPException(status_code=409, detail=f"POS reference '{ref}' is entered twice.")
+        seen.add(ref.lower())
+        clash = _pos_reference_conflict(handovers, date, ref, exclude_handover_id=exclude_handover_id)
+        if clash:
+            raise HTTPException(
+                status_code=409,
+                detail=f"POS reference '{ref}' is already recorded on "
+                       f"{clash.get('attendant_name') or clash.get('attendant_id')}'s handover for {date}.")
+
+
 class POSReceiptsInput(BaseModel):
     pos_items: List[POSReceiptItem]
 
@@ -3509,10 +3678,16 @@ async def patch_pos_receipts(
     duplicates = []
     for item in data.pos_items:
         ref = (item.reference or "").strip()
+        clash = _pos_reference_conflict(handovers, handover.get("date", ""), ref,
+                                        exclude_handover_id=handover_id) if ref else None
         if ref:
             if ref.lower() in existing_refs:
                 duplicates.append({"type_name": item.type_name, "amount": item.amount, "reference": ref,
                                    "reason": f"Reference '{ref}' already recorded"})
+            elif clash:
+                duplicates.append({"type_name": item.type_name, "amount": item.amount, "reference": ref,
+                                   "reason": f"Reference '{ref}' already recorded on "
+                                             f"{clash.get('attendant_name') or clash.get('attendant_id')}'s handover"})
             else:
                 accepted.append(item)
                 existing_refs.add(ref.lower())  # guard within the same submission too
@@ -3674,6 +3849,14 @@ async def edit_pos_receipt_item(
     if target is None:
         raise HTTPException(status_code=404, detail="POS receipt item not found on this handover")
 
+    clash = _pos_reference_conflict(handovers, handover.get("date", ""), data.reference,
+                                    exclude_handover_id=handover_id, exclude_item_id=item_id)
+    if clash:
+        raise HTTPException(
+            status_code=409,
+            detail=f"POS reference '{(data.reference or '').strip()}' is already recorded on "
+                   f"{clash.get('attendant_name') or clash.get('attendant_id')}'s handover for {handover.get('date', '')}.")
+
     old_amount = target.get("amount", 0)
     difference_before = handover.get("difference", 0)
 
@@ -3747,7 +3930,7 @@ async def patch_credit_sales(
     shift = storage.get("shifts", {}).get(shift_id, {})
 
     credit_total, credit_sale_details, new_items_to_create, duplicates = \
-        _process_credit_sales(data.credit_items, storage, shift_id, station_id)
+        _process_credit_sales(data.credit_items, storage, shift_id, station_id, handover.get("attendant_id", ""))
 
     if duplicates and not new_items_to_create:
         raise HTTPException(
@@ -3776,6 +3959,9 @@ async def patch_credit_sales(
             "coupon_serial": item.get("coupon_serial"),
             "auth_reference": auth_reference,
             "slip_number": slip_number,
+            "attendant_id": handover.get("attendant_id"),
+            "attendant_name": handover.get("attendant_name"),
+            "handover_id": handover_id,
         }
         try:
             process_credit_sale(
@@ -3955,6 +4141,14 @@ async def edit_credit_sale_item(
         raise HTTPException(status_code=404, detail="Account not found")
     if new_account.get("is_suspended"):
         raise HTTPException(status_code=400, detail=f"Account '{data.account_name}' is suspended and cannot receive credit sales.")
+
+    # An edit must not turn this sale into a copy of one already recorded
+    # (by this or any other attendant) — e.g. by changing its coupon serial.
+    dup = find_credit_duplicate(credit_sales_data, data.account_id, data.fuel_type, data.coupon_serial,
+                                ledger_sale.get("shift_id", ""), exclude_sale_id=sale_id)
+    if dup:
+        raise HTTPException(status_code=409, detail=f"{data.account_name}: "
+                            f"{describe_duplicate(dup, handovers, storage.get('shifts', {}))}.")
 
     price = _resolve_credit_sale_price(data.product_code, data.fuel_type, new_account, storage, station_id)
     new_amount = round(data.volume * price, 2)
@@ -4314,9 +4508,7 @@ async def void_handover(data: VoidHandoverInput, ctx: dict = Depends(get_station
             )
 
         # Reverse already-applied stock effects, if any.
-        if handover.get("stock_applied"):
-            reverse_handover_sales(station_id, handover, ctx["username"])
-            _clear_daily_entries_stores_applied(station_id, handover)
+        _reverse_handover_stock(station_id, handover, ctx["username"])
 
         # Reverse credit sales created by this specific handover — sale_id is
         # prefixed CS-HO-{handover_id}-, so this never touches a co-attendant's
@@ -4401,15 +4593,103 @@ class UnvoidHandoverInput(BaseModel):
     # voided handover for this attendant+shift is restored together — the
     # original all-in-one behavior, preserved for existing callers.
     handover_id: Optional[str] = None
+    # True: only report what would block the un-void (see _unvoid_clashes);
+    # change nothing. Lets the Shifts page show the clashes before confirming.
+    check_only: bool = False
+
+
+def _comes_back_live(handover: dict) -> bool:
+    """Would un-voiding this entry make it a live (canonical) one again?"""
+    if handover.get("pre_void_review_status") == "superseded":
+        return False
+    if handover.get("superseded_by") or handover.get("phase") == "readings_superseded":
+        return False
+    return True
+
+
+def _unvoid_clashes(handovers: dict, matches: list, storage: dict) -> list:
+    """
+    Everything that would make an un-void double-count, checked BEFORE anything
+    is restored. Each clash is {kind, message, ...}:
+
+      multiple_entries  more than one voided entry for this attendant+shift
+                        would come back live together (carries `candidates`
+                        so the owner can restore exactly one);
+      live_replacement  the attendant already has a live entry for this shift
+                        (typically the corrected resubmission after the void);
+      pos_reference     one of its POS slips is now on another live handover;
+      credit_coupon     one of its credit sales is now recorded on another entry.
+
+    Nothing is resolved automatically — which entry is right is the owner's call.
+    """
+    clashes = []
+    live_matches = [(hid, h) for hid, h in matches if _comes_back_live(h)]
+    if not live_matches:
+        return clashes
+    first = live_matches[0][1]
+    name = first.get("attendant_name") or first.get("attendant_id", "")
+    match_ids = {hid for hid, _ in matches}
+
+    if len(live_matches) > 1:
+        clashes.append({
+            "kind": "multiple_entries",
+            "message": f"{len(live_matches)} voided entries for {name} on this shift would all come back. "
+                       "Restore one at a time.",
+            "candidates": [{"handover_id": hid, "created_at": h.get("created_at", ""),
+                            "status": h.get("pre_void_review_status", "submitted"),
+                            "total_expected": h.get("total_expected", 0)}
+                           for hid, h in live_matches],
+        })
+
+    for hid, h in handovers.items():
+        if hid in match_ids or not is_handover_canonical(h):
+            continue
+        if h.get("shift_id") == first.get("shift_id") and h.get("attendant_id") == first.get("attendant_id"):
+            clashes.append({
+                "kind": "live_replacement", "handover_id": hid,
+                "message": f"{name} already has a live entry for this shift ({hid}, "
+                           f"{h.get('review_status', 'submitted')}). Void it first if the original is the right one.",
+            })
+
+    shifts = storage.get("shifts", {})
+    sales = storage.get("credit_sales", [])
+    for hid, h in live_matches:
+        for e in h.get("pos_breakdown") or []:
+            ref = (e.get("reference") or "").strip()
+            clash = _pos_reference_conflict(handovers, h.get("date", ""), ref, exclude_handover_id=hid) if ref else None
+            if clash:
+                clashes.append({
+                    "kind": "pos_reference", "reference": ref, "handover_id": clash.get("handover_id"),
+                    "message": f"POS slip '{ref}' is now on "
+                               f"{clash.get('attendant_name') or clash.get('attendant_id')}'s handover.",
+                })
+        prefix = f"CS-HO-{hid}-"
+        for sale in sales:
+            if not (sale.get("sale_id", "").startswith(prefix) and sale.get("voided")):
+                continue
+            dup = find_credit_duplicate(sales, sale.get("account_id", ""), sale.get("fuel_type", ""),
+                                        sale.get("coupon_serial"), sale.get("shift_id", ""),
+                                        exclude_sale_id=sale.get("sale_id"))
+            if dup:
+                account = storage.get("accounts", {}).get(sale.get("account_id", ""), {})
+                clashes.append({
+                    "kind": "credit_coupon", "sale_id": sale.get("sale_id"),
+                    "message": f"{account.get('account_name', sale.get('account_id', ''))}: "
+                               f"{describe_duplicate(dup, handovers, shifts)}.",
+                })
+    return clashes
 
 
 @router.post("/unvoid", dependencies=[Depends(require_owner)])
 async def unvoid_handover(data: UnvoidHandoverInput, ctx: dict = Depends(get_station_context)):
     """
     Reverse a mistaken Void — restores the entry to whatever review status
-    it had before voiding, re-applying stock and credit-sale effects if it
-    had already been approved at the time it was voided. Owner only, same
-    gate as Void.
+    it had before voiding and re-applies its stock and credit-sale effects.
+    Owner only, same gate as Void.
+
+    Refused (409, with the list) if restoring would double-count anything —
+    see _unvoid_clashes. `check_only` returns that list without changing
+    anything.
     """
     station_id = ctx["station_id"]
     handovers = _load_handovers(station_id)
@@ -4429,22 +4709,38 @@ async def unvoid_handover(data: UnvoidHandoverInput, ctx: dict = Depends(get_sta
 
     close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
 
+    # All checks run before anything is restored, so a refusal never leaves
+    # some of the matched entries restored and others not.
+    closed = sorted({h.get("date", "") for _, h in matches if h.get("date", "") in close_offs})
+    clashes = _unvoid_clashes(handovers, matches, ctx["storage"])
+    if data.check_only:
+        return {"can_unvoid": not closed and not clashes, "clashes": clashes,
+                "closed_days": closed}
+    if closed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot un-void. Day {closed[0]} has been closed off — reopen the day first.",
+        )
+    if clashes:
+        raise HTTPException(status_code=409, detail={
+            "message": "This entry can't be restored without counting sales twice.",
+            "clashes": clashes,
+        })
+
     unvoided_ids = []
     for handover_id, handover in matches:
-        if handover.get("date", "") in close_offs:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot un-void. Day {handover['date']} has been closed off — reopen the day first.",
-            )
-
         restored_status = handover.get("pre_void_review_status", "submitted")
         handover["review_status"] = restored_status
 
-        if restored_status == "approved":
-            if not handover.get("stock_applied"):
-                apply_handover_sales(station_id, handover, ctx["username"])
-                _mark_daily_entries_stores_applied(station_id, handover, ctx["username"])
+        # Stock is applied at submission now, so any live (non-superseded)
+        # handover gets it back — not only approved ones.
+        if not is_handover_superseded(handover):
+            _apply_handover_stock(station_id, handover, ctx["username"])
 
+        # Void reversed this handover's own credit sales whatever its status,
+        # so un-void restores them whatever its status too — otherwise the
+        # handover's credit total keeps counting sales the ledger has voided.
+        if restored_status != "superseded":
             accounts_data = ctx["storage"].get("accounts", {})
             credit_sales_data = ctx["storage"].get("credit_sales", [])
             prefix = f"CS-HO-{handover_id}-"
@@ -4597,8 +4893,9 @@ async def backfill_supersede(data: BackfillSupersedeInput, ctx: dict = Depends(g
     Marks every id in supersede_handover_ids as superseded-by
     keep_handover_id (same mechanism as an automatic supersede at
     submission time - see mark_superseded), then re-checks whether the
-    shift can now advance to 'completed'. Does not touch keep_handover_id,
-    stock, credit sales, or any financial figures - this only affects which
+    shift can now advance to 'completed'. Credits back any stock a duplicate
+    had applied at submission (only a duplicate's, never keep_handover_id's);
+    otherwise does not touch credit sales or any financial figures - this only affects which
     handover is treated as canonical going forward; the resolved one's own
     figures are exactly as they always were.
 
@@ -4653,6 +4950,8 @@ async def backfill_supersede(data: BackfillSupersedeInput, ctx: dict = Depends(g
     for hid, h in to_supersede:
         mark_superseded(h)
         h["superseded_by"] = data.keep_handover_id
+        # Stock is applied at submission, so a duplicate may hold some.
+        _reverse_handover_stock(station_id, h, ctx["username"])
         superseded_ids.append(hid)
 
     _save_handovers(handovers, station_id)

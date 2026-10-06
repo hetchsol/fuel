@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getHeaders, authFetch } from '../lib/api'
+import { getTodayISO } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -90,12 +91,20 @@ export default function Accounts() {
     pricing_tier: 'standard',
     amount: '',
     shift_id: '',
+    attendant_id: '',
     notes: '',
     coupon_serial: '',
     driver_name: '',
     vehicle_reg: '',
   })
   const [lastAuthRef, setLastAuthRef] = useState('')
+  // Every credit sale is tied to the shift and attendant who made it, so it can
+  // never be counted in another attendant's handover.
+  const [saleDate, setSaleDate] = useState(getTodayISO())
+  const [dateShifts, setDateShifts] = useState<any[]>([])
+  const selectedShift = dateShifts.find((sh: any) => sh.shift_id === saleForm.shift_id)
+  const shiftAttendants: { attendant_id: string; attendant_name: string }[] =
+    (selectedShift?.assignments || []).filter((a: any) => a.attendant_id)
 
   // Only two tiers: standard (global price) and custom (free entry).
   // Per-account rates are configured on the account record itself via
@@ -112,14 +121,32 @@ export default function Accounts() {
     const clientCode = account?.client_code || ''
     if (!clientCode || !vehicleReg.trim() || !couponSerial.trim()) return ''
     const vehicleClean = vehicleReg.replace(/\s+/g, '').toUpperCase()
-    const now = new Date()
-    const d = String(now.getDate()).padStart(2, '0')
-    const m = String(now.getMonth() + 1).padStart(2, '0')
-    const y = now.getFullYear()
+    // The server stamps the sale with its shift's date, so the preview must too.
+    const [y, m, d] = (selectedShift?.date || saleDate).split('-')
     return `${clientCode}-${vehicleClean}-${d}${m}${y}-${couponSerial.trim().toUpperCase()}`
   }
 
   const liveAuthRef = buildAuthRef(saleForm.account_id, saleForm.vehicle_reg, saleForm.coupon_serial)
+
+  useEffect(() => {
+    if (!saleDate) { setDateShifts([]); return }
+    let cancelled = false
+    authFetch(`${BASE}/shifts/date/${saleDate}`, { headers: getHeaders() })
+      .then(r => (r.ok ? r.json() : []))
+      .then(data => {
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : []
+        setDateShifts(list)
+        // Keep the picks only if they still exist on the newly chosen date.
+        setSaleForm(prev => {
+          const sh = list.find((x: any) => x.shift_id === prev.shift_id)
+          const keepAtt = sh && (sh.assignments || []).some((a: any) => a.attendant_id === prev.attendant_id)
+          return { ...prev, shift_id: sh ? prev.shift_id : '', attendant_id: keepAtt ? prev.attendant_id : '' }
+        })
+      })
+      .catch(() => { if (!cancelled) setDateShifts([]) })
+    return () => { cancelled = true }
+  }, [saleDate])
 
   useEffect(() => {
     fetchAccounts()
@@ -350,18 +377,19 @@ export default function Accounts() {
     setError('')
 
     try {
-      // Generate sale ID
-      const saleId = `CS-${Date.now()}`
-      const currentDate = new Date().toISOString().split('T')[0]
-
+      if (!saleForm.shift_id || !saleForm.attendant_id) {
+        throw new Error('Select the shift and the attendant who made this sale.')
+      }
+      // sale_id and date are replaced server-side; sent only to satisfy the schema.
       const payload = {
-        sale_id: saleId,
+        sale_id: `CS-${Date.now()}`,
         account_id: saleForm.account_id,
         fuel_type: saleForm.fuel_type,
         volume: parseFloat(saleForm.volume),
         amount: parseFloat(saleForm.amount),
-        shift_id: saleForm.shift_id || `SHIFT-${currentDate}`,
-        date: currentDate,
+        shift_id: saleForm.shift_id,
+        attendant_id: saleForm.attendant_id,
+        date: selectedShift?.date || saleDate,
         invoice_number: saleForm.notes || null,
         driver_name: saleForm.driver_name.trim() || null,
         vehicle_reg: saleForm.vehicle_reg.trim() || null,
@@ -393,20 +421,22 @@ export default function Accounts() {
       setLastAuthRef(authRef)
       toast.success(authRef ? `Sale recorded. Auth ref: ${authRef}` : 'Credit sale recorded')
 
-      // Reset form — re-seed price from live settings
-      setSaleForm({
+      // Reset form — re-seed price from live settings. Shift and attendant
+      // are kept: the next sale is usually by the same person on the same shift.
+      setSaleForm(prev => ({
         account_id: '',
         fuel_type: 'Diesel',
         volume: '',
         price_per_liter: fuelPrices.Diesel ? fuelPrices.Diesel.toFixed(2) : '',
         pricing_tier: 'standard',
         amount: '',
-        shift_id: '',
+        shift_id: prev.shift_id,
+        attendant_id: prev.attendant_id,
         notes: '',
         coupon_serial: '',
         driver_name: '',
         vehicle_reg: '',
-      })
+      }))
 
       // Refresh accounts to update balances
       fetchAccounts()
@@ -771,6 +801,50 @@ export default function Accounts() {
         )}
 
         <form onSubmit={handleSubmitSale} className="space-y-5">
+
+          {/* Who made the sale: date, shift, attendant */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Sale Date</label>
+              <input
+                type="date"
+                value={saleDate}
+                max={getTodayISO()}
+                onChange={(e) => setSaleDate(e.target.value)}
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary bg-surface-bg text-content-primary"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Shift</label>
+              <select
+                value={saleForm.shift_id}
+                onChange={(e) => setSaleForm({ ...saleForm, shift_id: e.target.value, attendant_id: '' })}
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary bg-surface-bg text-content-primary"
+                required
+              >
+                <option value="">{dateShifts.length ? 'Select shift' : 'No shifts on this date'}</option>
+                {dateShifts.map((sh: any) => (
+                  <option key={sh.shift_id} value={sh.shift_id}>{sh.shift_type} shift</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-content-secondary mb-1">Attendant who made the sale</label>
+              <select
+                value={saleForm.attendant_id}
+                onChange={(e) => setSaleForm({ ...saleForm, attendant_id: e.target.value })}
+                className="w-full px-3 py-2 border border-surface-border rounded-md focus:outline-none focus:ring-action-primary focus:border-action-primary bg-surface-bg text-content-primary"
+                disabled={!saleForm.shift_id}
+                required
+              >
+                <option value="">{saleForm.shift_id ? 'Select attendant' : 'Select a shift first'}</option>
+                {shiftAttendants.map(a => (
+                  <option key={a.attendant_id} value={a.attendant_id}>{a.attendant_name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           {/* Account + Coupon */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

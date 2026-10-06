@@ -190,19 +190,51 @@ export default function Shifts() {
 
   // Un-void: restore a mistakenly-voided entry (owner only)
   const [unvoiding, setUnvoiding] = useState<string | null>(null)
+  // What blocks an un-void (a live replacement entry, a POS slip or coupon now
+  // on someone else's entry). Shown instead of restoring; nothing is changed.
+  const [unvoidBlock, setUnvoidBlock] = useState<{
+    target: { shift_id: string; attendant_id: string; attendant_name: string }
+    clashes: any[]
+    closedDays: string[]
+  } | null>(null)
 
-  const handleUnvoidEntry = async (target: { shift_id: string; attendant_id: string; attendant_name: string }) => {
-    if (!confirm(`Un-void ${target.attendant_name}'s entry? It will be restored to its status before voiding, and stock/credit effects re-applied if it was already approved.`)) return
+  const handleUnvoidEntry = async (
+    target: { shift_id: string; attendant_id: string; attendant_name: string },
+    handoverId?: string,
+  ) => {
+    const body = { shift_id: target.shift_id, attendant_id: target.attendant_id, handover_id: handoverId || null }
     setUnvoiding(target.attendant_id)
     try {
+      const checkRes = await authFetch(`${BASE}/handover/unvoid`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getHeaders() },
+        body: JSON.stringify({ ...body, check_only: true }),
+      })
+      const check = await checkRes.json()
+      if (!checkRes.ok) {
+        toast.error(`Failed to un-void entry: ${check.detail || JSON.stringify(check)}`)
+        return
+      }
+      if (!check.can_unvoid) {
+        setUnvoidBlock({ target, clashes: check.clashes || [], closedDays: check.closed_days || [] })
+        return
+      }
+      setUnvoidBlock(null)
+      if (!confirm(`Un-void ${target.attendant_name}'s entry? It will be restored to its status before voiding, and its stock and credit effects re-applied.`)) return
+
       const res = await authFetch(`${BASE}/handover/unvoid`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getHeaders() },
-        body: JSON.stringify({ shift_id: target.shift_id, attendant_id: target.attendant_id }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
         const error = await res.json()
-        toast.error(`Failed to un-void entry: ${error.detail || JSON.stringify(error)}`)
+        // Something changed between the check and the restore: show the new list.
+        if (res.status === 409 && error.detail?.clashes) {
+          setUnvoidBlock({ target, clashes: error.detail.clashes, closedDays: [] })
+          return
+        }
+        toast.error(`Failed to un-void entry: ${typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail || error)}`)
         return
       }
       toast.success(`${target.attendant_name}'s entry restored.`)
@@ -1827,7 +1859,7 @@ export default function Shifts() {
                 This voids every nozzle reading, cash handover, stock movement, and
                 credit sale recorded for this attendant on this shift — even if
                 already approved. Stock and credit-account balances are reversed
-                back to their pre-approval values. This cannot be undone from here.
+                back. This cannot be undone from here.
               </p>
             </div>
 
@@ -1915,6 +1947,55 @@ export default function Shifts() {
               >
                 {voiding ? 'Voiding...' : 'Void/Annul Entry'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Un-void blocked: what would be counted twice, and how to fix it */}
+      {unvoidBlock && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-card rounded-lg p-6 max-w-lg w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-content-primary">Cannot Un-void Yet</h2>
+              <button onClick={() => setUnvoidBlock(null)} className="text-content-secondary hover:text-content-primary text-2xl">&times;</button>
+            </div>
+            <p className="text-sm text-content-secondary mb-3">
+              Restoring {unvoidBlock.target.attendant_name}'s entry now would count sales twice.
+              Nothing has been changed. Resolve the items below, then try again.
+            </p>
+            <ul className="space-y-2 mb-5">
+              {unvoidBlock.closedDays.map(d => (
+                <li key={d} className="p-2 rounded border border-status-error bg-status-error/10 text-xs text-status-error">
+                  Day {formatDateToDisplay(d)} has been closed off. Reopen the day first.
+                </li>
+              ))}
+              {unvoidBlock.clashes.map((c, i) => (
+                <li key={i} className="p-2 rounded border border-status-warning bg-status-warning/10 text-xs text-content-primary">
+                  <p>{c.message}</p>
+                  {c.kind === 'multiple_entries' && (
+                    <div className="mt-2 space-y-1">
+                      {(c.candidates || []).map((cand: any) => (
+                        <div key={cand.handover_id} className="flex items-center justify-between gap-2">
+                          <span className="text-content-secondary">
+                            Submitted {formatDateTimeToDisplay(cand.created_at)}, {cand.status},
+                            expected K{(cand.total_expected || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                          <button
+                            onClick={() => handleUnvoidEntry(unvoidBlock.target, cand.handover_id)}
+                            className="px-2 py-1 rounded border border-surface-border text-content-primary hover:bg-surface-bg shrink-0">
+                            Restore this one
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end">
+              <button onClick={() => setUnvoidBlock(null)}
+                className="px-4 py-2 text-sm rounded border border-surface-border text-content-secondary">Close</button>
             </div>
           </div>
         </div>

@@ -187,6 +187,37 @@ def return_to_store(station_id: str, item_key: str, qty, performed_by: str, note
     return item
 
 
+def return_to_supplier(station_id: str, item_key: str, qty, bin: str, supplier: str,
+                       reference: str, performed_by: str, note: str = "") -> dict:
+    """
+    Empty LPG cylinders handed back to the supplier (usually in exchange for
+    full ones, which are booked separately via receive()). Takes them out of
+    the chosen bin — forecourt by default, since that's where every refill's
+    returned empty lands (see apply_handover_sales). Never lets the count go
+    below zero: you can't hand over empties the station doesn't have.
+    """
+    qty = _require_positive(qty)
+    if qty != int(qty):
+        raise HTTPException(status_code=400, detail="Cylinder count must be a whole number.")
+    if bin not in BINS:
+        raise HTTPException(status_code=400, detail=f"bin must be one of {BINS}.")
+    if not (supplier or "").strip():
+        raise HTTPException(status_code=400, detail="Supplier is required.")
+    items = load_items(station_id)
+    item = _require_item(items, item_key)
+    if item.get("category") != "cylinder_empty":
+        raise HTTPException(status_code=400, detail="Only empty cylinders can be returned to the supplier.")
+    if qty > item[bin]:
+        raise HTTPException(status_code=400,
+                            detail=f"Cannot return {int(qty)}: only {item[bin]:g} empty in {bin}.")
+    item[bin] = round(item[bin] - qty, 4)
+    save_items(station_id, items)
+    detail = f"Supplier: {supplier.strip()}" + (f"; ref {reference.strip()}" if (reference or "").strip() else "")
+    _record_movement(station_id, "return_to_supplier", item, qty, bin, None, performed_by,
+                     note=f"{detail}. {note}".strip() if note else detail, ref=(reference or "").strip())
+    return item
+
+
 def damage(station_id: str, item_key: str, qty, bin: str, performed_by: str, note: str) -> dict:
     qty = _require_positive(qty)
     if bin not in BINS:
@@ -317,6 +348,29 @@ def sync_forecourt_deltas(station_id: str, previous: dict, current: dict,
     return current
 
 
+def rebase_manual_contribution(by_handover: Optional[dict], current: dict) -> Optional[dict]:
+    """
+    A manual Daily Entry save has just synced Stores to `current` (the entry's
+    whole cumulative total). Keep the per-handover breakdown of that baseline
+    consistent: every handover keeps its own share and whatever is left over
+    is the manual page's own share (`_manual`), so the breakdown still adds up
+    to `current`. Returns None for entries that never had a breakdown, whose
+    bare `stores_applied` stays authoritative as before.
+    """
+    if by_handover is None:
+        return None
+    others = {k: v for k, v in by_handover.items() if k != "_manual"}
+    sums: dict = {}
+    for contrib in others.values():
+        for k, v in (contrib or {}).items():
+            sums[k] = sums.get(k, 0) + (v or 0)
+    manual = {k: round((current.get(k, 0) or 0) - sums.get(k, 0), 4) for k in set(current) | set(sums)}
+    manual = {k: v for k, v in manual.items() if v}
+    if manual:
+        others["_manual"] = manual
+    return others
+
+
 def _add_delta(acc: dict, key: Optional[str], qty):
     if key and qty:
         acc[key] = acc.get(key, 0) + qty
@@ -364,7 +418,8 @@ def _compute_stock_deltas(snap: dict) -> tuple:
 def apply_handover_sales(station_id: str, handover: dict, performed_by: str = "system") -> dict:
     """
     Apply ONE handover's stock snapshot to the forecourt bins — called when the
-    handover is approved (per-shift, not at day close):
+    attendant submits it, so stock on hand is real time (approval calls it
+    again, which is a no-op thanks to the idempotency flag below):
       - decrement forecourt by quantity sold + damaged (lubricants, LPG
         accessories, full cylinders = refills + with-cylinder sales + traded-out
         — damaged stock leaves the sellable forecourt count the same as a sale);
@@ -626,6 +681,11 @@ def dashboard(station_id: str) -> dict:
             "reorder_count": len(reorder),
             "total_stores_units": round(sum(r.get("stores", 0) for r in rows), 3),
             "total_forecourt_units": round(sum(r.get("forecourt", 0) for r in rows), 3),
+            # Empty cylinders on hand per size (both bins), for the empties tile.
+            "empties_on_hand": {
+                r.get("product_code"): round((r.get("stores", 0) or 0) + (r.get("forecourt", 0) or 0), 3)
+                for r in rows if r.get("category") == "cylinder_empty"
+            },
         },
         "reorder_alerts": reorder,
         "recent_movements": recent,

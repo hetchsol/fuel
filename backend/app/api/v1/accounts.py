@@ -10,6 +10,9 @@ from ...models.models import AccountHolder, CreditSale
 from ...services.inventory import process_credit_sale
 from ...config import resolve_fuel_price
 from ...services.relationship_validation import validate_create
+from ...services.credit_sale_owner import (
+    resolve_sale_attendant, creating_handover_id, shift_attendants, find_credit_duplicate, describe_duplicate,
+)
 from ...services.audit_service import log_audit_event
 from ...database.storage import save_station_storage
 from .auth import get_station_context, require_manager_or_owner, require_owner
@@ -91,14 +94,13 @@ async def search_credit_sales(
     /sales/account/{account_id}: date (exact, or a from_date/to_date range),
     shift_type, attendant_id, and fuel_type.
 
-    Credit sale records don't carry attendant_id or shift_type directly, so
-    each result is enriched by looking up the handover that created it —
-    parsed from invoice_number's "Handover {handover_id}" tag — for
-    attendant_id/attendant_name and shift_type. A sale with no resolvable
-    handover (e.g. very old data, or a non-standard invoice_number) still
-    appears, just with those fields blank, and is excluded only by filters
-    that don't apply to it (attendant_id/shift_type filters simply won't
-    match it, same as any other non-matching sale).
+    Each result carries the attendant the sale is bound to (see
+    services/credit_sale_owner): the stamped attendant_id, else the handover
+    that created it, else the only attendant on that shift. Historical sales
+    with none of those simply show blank attendant fields — attendant binding
+    applies to sales recorded from its rollout onward and older records are
+    deliberately left as they are. shift_type comes from the shift record
+    (falling back to the handover).
 
     Declared here, before GET /{account_id}, deliberately — that catch-all
     single-segment route would otherwise swallow "GET /sales" by matching
@@ -112,6 +114,7 @@ async def search_credit_sales(
     accounts_data = storage.get('accounts', {})
     credit_sales_data = storage.get('credit_sales', [])
     handovers = _load_handovers(station_id)
+    shifts = storage.get('shifts', {})
 
     results = []
     for sale in credit_sales_data:
@@ -129,22 +132,22 @@ async def search_credit_sales(
         if fuel_type and (sale.get("fuel_type") or "").lower() != fuel_type.lower():
             continue
 
-        invoice_number = sale.get("invoice_number") or ""
-        handover_id = invoice_number[len("Handover "):] if invoice_number.startswith("Handover ") else None
-        handover = handovers.get(handover_id, {}) if handover_id else {}
-
-        sale_shift_type = handover.get("shift_type", "")
-        if shift_type and sale_shift_type.lower() != shift_type.lower():
-            continue
-        sale_attendant_id = handover.get("attendant_id", "")
+        owner = resolve_sale_attendant(sale, handovers, shifts)
+        sale_attendant_id = owner[0] if owner else ""
         if attendant_id and sale_attendant_id != attendant_id:
+            continue
+
+        ho = handovers.get(creating_handover_id(sale) or "", {})
+        sale_shift_type = (shifts.get(sale.get("shift_id", ""), {}).get("shift_type")
+                           or ho.get("shift_type", "") or "")
+        if shift_type and sale_shift_type.lower() != shift_type.lower():
             continue
 
         results.append({
             **{k: v for k, v in sale.items() if k != "voided"},
             "account_name": accounts_data.get(sale.get("account_id", ""), {}).get("account_name", sale.get("account_id", "")),
             "attendant_id": sale_attendant_id,
-            "attendant_name": handover.get("attendant_name", ""),
+            "attendant_name": owner[1] if owner else "",
             "shift_type": sale_shift_type,
         })
 
@@ -307,10 +310,92 @@ async def delete_account(account_id: str, ctx: dict = Depends(get_station_contex
     return {"deleted": account_id}
 
 
+def _gate_sale_attendant(storage: dict, station_id: str, shift_id: str, attendant_id: Optional[str], ctx: dict):
+    """
+    The attendant gate every credit sale entered outside a handover must pass.
+    Returns (shift, attendant_name, canonical_handover_or_None).
+
+    A sale is accepted only for a real shift, a named attendant who is on that
+    shift's roster, and while that attendant's handover can still change (not
+    approved, day not closed, shift not locked). An attendant can only record
+    sales against themselves.
+    """
+    from .attendant_handover import _load_handovers
+    from ...services.handover_lookup import get_canonical_handover
+    from ...services.shift_status import assert_shift_editable
+    from ...database.station_files import load_station_json
+
+    shift = storage.get('shifts', {}).get(shift_id or "")
+    if not shift:
+        raise HTTPException(status_code=400, detail="Select the shift this sale was made on.")
+    if not attendant_id:
+        raise HTTPException(status_code=400, detail="Select the attendant who made this sale.")
+    roster = shift_attendants(shift)
+    if attendant_id not in roster:
+        raise HTTPException(status_code=400,
+                            detail=f"That attendant is not assigned to shift {shift_id}.")
+    role = ctx.get("role")
+    role_str = role.value if hasattr(role, "value") else str(role)
+    if role_str == "user" and attendant_id != ctx.get("user_id"):
+        raise HTTPException(status_code=403, detail="You can only record sales made by yourself.")
+    assert_shift_editable(shift)
+    close_offs = load_station_json(station_id, "daily_close_offs.json", default={})
+    if shift.get("date", "") in close_offs:
+        raise HTTPException(status_code=400, detail=f"Day {shift.get('date')} has been closed off.")
+    handover = get_canonical_handover(station_id, shift_id, attendant_id, handovers=_load_handovers(station_id))
+    if handover and handover.get("review_status") == "approved":
+        raise HTTPException(
+            status_code=400,
+            detail=f"{roster[attendant_id]}'s handover for this shift is already approved. "
+                   "It must be voided before more sales can be added to it.")
+    return shift, roster[attendant_id], handover
+
+
+def _attach_sale_to_handover(station_id: str, storage: dict, handover_id: str, sale_dict: dict,
+                             account_name: str, performed_by: str):
+    """
+    Add a just-recorded sale to its attendant's already-closed handover so the
+    handover's credit total and cash variance reflect it straight away. A
+    handover still at readings stage picks the sale up when it's closed
+    (submit_closing pulls in every sale bound to that attendant).
+    """
+    from .attendant_handover import (
+        _load_handovers, _save_handovers, _recalculate_reconciliation, _record_reconciliation_adjustment,
+    )
+    handovers = _load_handovers(station_id)
+    handover = handovers.get(handover_id)
+    if not handover or handover.get("phase") != "completed":
+        return
+    difference_before = handover.get("difference", 0)
+    details = list(handover.get("credit_sale_details") or [])
+    details.append({
+        "account_id": sale_dict["account_id"], "account_name": account_name,
+        "fuel_type": sale_dict["fuel_type"], "volume": sale_dict["volume"],
+        "price_per_liter": round(sale_dict["amount"] / sale_dict["volume"], 2) if sale_dict.get("volume") else 0,
+        "amount": sale_dict["amount"], "source": "pre_existing", "sale_id": sale_dict["sale_id"],
+        "driver_name": sale_dict.get("driver_name"), "vehicle_reg": sale_dict.get("vehicle_reg"),
+        "coupon_serial": sale_dict.get("coupon_serial"), "auth_reference": sale_dict.get("auth_reference"),
+    })
+    handover["credit_sale_details"] = details
+    handover["credit_sales"] = round((handover.get("credit_sales") or 0) + sale_dict["amount"], 2)
+    _recalculate_reconciliation(handover, storage)
+    _record_reconciliation_adjustment(
+        handover, "credit_sale", f"Credit sale {sale_dict['sale_id']} added from Accounts",
+        sale_dict["amount"], difference_before, performed_by,
+    )
+    _save_handovers(handovers, station_id)
+
+
 @router.post("/sales", response_model=CreditSale)
 async def record_credit_sale(sale: CreditSale, ctx: dict = Depends(get_station_context)):
-    """Record a credit sale transaction. Generates auth_reference from client code, vehicle reg, date and coupon serial."""
+    """
+    Record a credit sale (prepaid or postpaid account) made by a named attendant
+    on a named shift. Passes the attendant gate (_gate_sale_attendant) first;
+    the attendant is stamped on the record and can't be changed afterwards.
+    Generates auth_reference from client code, vehicle reg, date and coupon serial.
+    """
     storage = ctx["storage"]
+    station_id = ctx["station_id"]
     accounts_data = storage.get('accounts', {})
     credit_sales_data = storage.setdefault('credit_sales', [])
 
@@ -320,7 +405,23 @@ async def record_credit_sale(sale: CreditSale, ctx: dict = Depends(get_station_c
     if account.get("is_suspended"):
         raise HTTPException(status_code=400, detail=f"Account '{account.get('account_name')}' is suspended and cannot receive credit sales.")
 
+    shift, attendant_name, handover = _gate_sale_attendant(storage, station_id, sale.shift_id, sale.attendant_id, ctx)
+
+    # Same duplicate rule as handover entry, across every attendant: a coupon
+    # already recorded by anyone can't be charged to the client again.
+    dup = find_credit_duplicate(credit_sales_data, sale.account_id, sale.fuel_type, sale.coupon_serial, sale.shift_id)
+    if dup:
+        from .attendant_handover import _load_handovers
+        raise HTTPException(status_code=409, detail=f"{account.get('account_name', sale.account_id)}: "
+                            f"{describe_duplicate(dup, _load_handovers(station_id), storage.get('shifts', {}))}.")
+
     sale_dict = sale.dict()
+    # Server-owned identity and attribution: the client can't pick the id,
+    # the date (it's the shift's date), or rename the attendant.
+    sale_dict['sale_id'] = f"CS-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+    sale_dict['date'] = shift.get("date", sale.date)
+    sale_dict['attendant_name'] = attendant_name
+    sale_dict['handover_id'] = None
 
     # Price is always resolved server-side — never trust a client-supplied
     # amount. The account's negotiated rate wins when configured, otherwise
@@ -339,10 +440,10 @@ async def record_credit_sale(sale: CreditSale, ctx: dict = Depends(get_station_c
             client_code = generate_client_code(account.get('account_name', ''), existing_codes)
             account['client_code'] = client_code
         sale_dict['auth_reference'] = generate_auth_reference(
-            client_code, sale.vehicle_reg, sale.date, sale.coupon_serial
+            client_code, sale.vehicle_reg, sale_dict["date"], sale.coupon_serial
         )
 
-    validate_create('credit_sales', sale_dict)
+    validate_create('credit_sales', sale_dict, storage=storage)
 
     process_credit_sale(
         accounts=accounts_data,
@@ -352,7 +453,19 @@ async def record_credit_sale(sale: CreditSale, ctx: dict = Depends(get_station_c
         sale_data=sale_dict,
     )
 
-    save_station_storage(ctx["station_id"])
+    attached = bool(handover and handover.get("phase") == "completed")
+    if attached:
+        _attach_sale_to_handover(station_id, storage, handover["handover_id"], sale_dict,
+                                 account.get("account_name", sale.account_id), ctx["username"])
+
+    log_audit_event(
+        station_id=station_id, action="credit_sale_recorded",
+        performed_by=ctx["username"], entity_type="credit_sale", entity_id=sale_dict['sale_id'],
+        details={"account_id": sale.account_id, "shift_id": sale.shift_id, "amount": sale_dict['amount'],
+                 "attendant_id": sale.attendant_id, "attendant_name": attendant_name,
+                 "attached_to_handover": handover["handover_id"] if attached else None},
+    )
+    save_station_storage(station_id)
     return CreditSale(**sale_dict)
 
 

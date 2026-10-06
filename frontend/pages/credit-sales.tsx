@@ -80,6 +80,7 @@ export default function CreditSales() {
 
   useEffect(() => { fetchSales() }, [fetchSales])
 
+
   if (!['manager', 'owner'].includes(userRole)) return null
 
   const fmt = (v: number) => `K${(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -93,6 +94,7 @@ export default function CreditSales() {
         <h1 className="text-2xl font-bold text-content-primary">Credit Sales</h1>
         <p className="text-sm text-content-secondary mt-1">
           Every credit sale, filterable by date, shift, attendant, fuel/product, and client.
+          New sales are tied to the attendant who made them.
         </p>
       </div>
 
@@ -189,6 +191,7 @@ export default function CreditSales() {
           </>
         )}
       </div>
+
     </div>
   )
 }

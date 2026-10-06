@@ -422,6 +422,8 @@ def submit_lpg_entry(
         total_trade_revenue=total_trade_revenue,
         warnings=warnings if warnings else None,
         stores_applied=current_applied,
+        stores_applied_by_handover=svc.rebase_manual_contribution(
+            (lpg_daily_db.get(entry_id) or {}).get("stores_applied_by_handover"), current_applied),
     )
 
     lpg_daily_db[entry_id] = output.model_dump(mode='json')
@@ -618,6 +620,8 @@ def submit_accessories_entry(
         notes=entry_input.notes,
         damage_status="pending" if any_damage else "none",
         stores_applied=current_applied,
+        stores_applied_by_handover=svc.rebase_manual_contribution(
+            (lpg_accessories_db.get(entry_id) or {}).get("stores_applied_by_handover"), current_applied),
     )
 
     lpg_accessories_db[entry_id] = output.model_dump(mode='json')

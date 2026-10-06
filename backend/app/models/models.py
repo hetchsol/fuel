@@ -372,6 +372,13 @@ class CreditSale(BaseModel):
     auth_reference: Optional[str] = None  # e.g. "CBM-ABZ1234ZM-30062026-C0045"
     invoice_number: Optional[str] = None
     slip_number: Optional[str] = None  # legacy; superseded by auth_reference
+    # The attendant who made the sale. Stamped server-side when the sale is
+    # recorded and never changed afterwards — this is what stops a sale made
+    # by attendant A from ever being counted in attendant B's handover.
+    # Records created before this field existed are bound by the backfill.
+    attendant_id: Optional[str] = None
+    attendant_name: Optional[str] = None
+    handover_id: Optional[str] = None  # Set only when a handover itself created the sale
 
 class HandoverCreditSaleItem(BaseModel):
     account_id: str
@@ -739,6 +746,7 @@ class LPGDailyEntryOutput(BaseModel):
     # this entry — lets a resubmit (correction) apply only the delta instead of
     # double-counting. See stock_service.sync_forecourt_deltas.
     stores_applied: dict = {}
+    stores_applied_by_handover: Optional[dict] = None  # per-handover shares of stores_applied
     warnings: Optional[List[str]] = None
 
 class LPGAccessoryDailyRow(BaseModel):
@@ -775,6 +783,7 @@ class LPGAccessoriesDailyOutput(BaseModel):
     damage_authorised_at: Optional[str] = None
     # See LPGDailyEntryOutput.stores_applied.
     stores_applied: dict = {}
+    stores_applied_by_handover: Optional[dict] = None  # per-handover shares of stores_applied
 
 
 # ===== Lubricants Daily Operations Models =====
@@ -818,6 +827,7 @@ class LubricantDailyEntryOutput(BaseModel):
     damage_authorised_at: Optional[str] = None
     # See LPGDailyEntryOutput.stores_applied.
     stores_applied: dict = {}
+    stores_applied_by_handover: Optional[dict] = None  # per-handover shares of stores_applied
 
 
 # ===== Attendant Shift Handover Models =====
