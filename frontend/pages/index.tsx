@@ -4,6 +4,7 @@ import useSWR from 'swr'
 import { getDaily, getFlags, getTankLevels, isManagerOrAbove, authFetch, getHeaders } from '../lib/api'
 import TankCard from '../components/TankCard'
 import DayChecklist from '../components/DayChecklist'
+import StockCountBanner from '../components/StockCountBanner'
 import AttendantShiftCard from '../components/AttendantShiftCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { useWorkingDay } from '../contexts/WorkingDayContext'
@@ -125,6 +126,11 @@ export default function Home() {
           className="block w-full sm:w-auto px-3 py-2 border border-surface-border rounded-input shadow-sm focus:outline-none focus:ring-action-primary focus:border-action-primary"
         />
       </div>
+
+      {/* Until the station is live on Forecourt counts: count stock, then go live */}
+      {isManagerOrAbove(userRole) && (
+        <StockCountBanner isOwner={userRole === 'owner'} className="mb-6 animate-fade-in-up-2" />
+      )}
 
       {/* Today's Flow launchpad — read-only day-chain status for managers/owners */}
       {isManagerOrAbove(userRole) && (

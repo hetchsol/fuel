@@ -124,16 +124,18 @@ export default function ForecourtCountsPanel({ isOwner, onChanged }: { isOwner: 
             Attendants' opening stock still carries forward from the previous shift's closing count, and stock you
             issue to the forecourt does not reach them. Going live makes the Forecourt count the figure each
             attendant confirms or corrects at the start of their shift.
+            Do a Forecourt and a Stores stock take at a shift change first, then keep those counts.
           </p>
           {isOwner ? (
             <div className="flex flex-wrap gap-2 mt-3">
-              <button onClick={() => previewGoLive('last_closing')} disabled={busy}
-                className="px-3 py-1.5 text-xs font-semibold rounded bg-action-primary text-white disabled:opacity-50">
-                Preview: use last shift closing counts
-              </button>
+              {/* Recommended path: count the Forecourt (Stock Takes), then keep those counts */}
               <button onClick={() => previewGoLive('current_counts')} disabled={busy}
-                className="px-3 py-1.5 text-xs font-medium rounded border border-surface-border text-content-secondary hover:bg-surface-bg disabled:opacity-50">
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-action-primary text-white disabled:opacity-50">
                 Preview: keep current Forecourt counts
+              </button>
+              <button onClick={() => previewGoLive('last_closing')} disabled={busy}
+                className="px-3 py-1.5 text-xs font-medium rounded border border-surface-border text-content-secondary hover:bg-surface-bg disabled:opacity-50">
+                Preview: use last shift closing counts
               </button>
             </div>
           ) : (
@@ -210,8 +212,11 @@ function GoLiveModal({ source, rows, busy, onApply, onClose }: {
   source: string; rows: GoLiveRow[]; busy: boolean; onApply: () => void; onClose: () => void
 }) {
   const [confirmed, setConfirmed] = useState(false)
+  const [zeroAccepted, setZeroAccepted] = useState(false)
   const target = (r: GoLiveRow) => source === 'last_closing' ? r.last_closing : (r.forecourt_now ?? 0)
   const changes = rows.filter(r => target(r) !== (r.forecourt_now ?? 0)).length
+  // Counts the switch would wipe: stock on the Forecourt now, 0 afterwards
+  const zeroed = rows.filter(r => (r.forecourt_now ?? 0) > 0 && target(r) === 0)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-surface-card rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
@@ -224,6 +229,19 @@ function GoLiveModal({ source, rows, busy, onApply, onClose }: {
             {' '}Shifts already started keep the old behaviour. This can only be done once.
           </p>
         </div>
+        {zeroed.length > 0 && (
+          <div className="mx-5 mt-4 rounded border border-status-error bg-status-error/5 p-3">
+            <p className="text-sm font-semibold text-status-error">
+              {zeroed.length} item{zeroed.length === 1 ? '' : 's'} on the Forecourt would be set to 0
+            </p>
+            <p className="text-xs text-content-secondary mt-1">
+              {zeroed.slice(0, 6).map(r => `${r.name} (${r.forecourt_now})`).join(', ')}
+              {zeroed.length > 6 ? `, and ${zeroed.length - 6} more` : ''}.
+              The last shift closing shows none of these. If the stock is physically there, cancel, do a Forecourt
+              stock take, and go live with &quot;keep current Forecourt counts&quot; instead.
+            </p>
+          </div>
+        )}
         <div className="overflow-auto flex-1">
           <table className="min-w-full text-sm">
             <thead className="bg-surface-bg sticky top-0">
@@ -237,12 +255,13 @@ function GoLiveModal({ source, rows, busy, onApply, onClose }: {
               {rows.map(r => {
                 const after = target(r)
                 const changed = after !== (r.forecourt_now ?? 0)
+                const wiped = (r.forecourt_now ?? 0) > 0 && after === 0
                 return (
-                  <tr key={r.item_key} className="border-t border-surface-border">
+                  <tr key={r.item_key} className={`border-t border-surface-border ${wiped ? 'bg-status-error/5' : ''}`}>
                     <td className="px-3 py-1.5 text-content-primary">{r.name}</td>
                     <td className="px-3 py-1.5 font-mono text-content-secondary">{r.forecourt_now ?? 'not set up'}</td>
                     <td className="px-3 py-1.5 font-mono text-content-secondary">{r.last_closing}</td>
-                    <td className={`px-3 py-1.5 font-mono ${changed ? 'text-status-warning font-semibold' : 'text-content-primary'}`}>{after}</td>
+                    <td className={`px-3 py-1.5 font-mono ${wiped ? 'text-status-error font-semibold' : changed ? 'text-status-warning font-semibold' : 'text-content-primary'}`}>{after}</td>
                   </tr>
                 )
               })}
@@ -254,10 +273,16 @@ function GoLiveModal({ source, rows, busy, onApply, onClose }: {
             <input type="checkbox" className="mt-0.5" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />
             <span>I have checked these figures against what is on the forecourt.</span>
           </label>
+          {zeroed.length > 0 && (
+            <label className="flex items-start gap-2 text-sm text-status-error cursor-pointer">
+              <input type="checkbox" className="mt-0.5" checked={zeroAccepted} onChange={e => setZeroAccepted(e.target.checked)} />
+              <span>I understand {zeroed.length} Forecourt count{zeroed.length === 1 ? '' : 's'} will be set to 0.</span>
+            </label>
+          )}
           <div className="flex justify-end gap-2">
             <button onClick={onClose} disabled={busy}
               className="px-4 py-2 text-sm rounded border border-surface-border text-content-secondary">Cancel</button>
-            <button onClick={onApply} disabled={busy || !confirmed}
+            <button onClick={onApply} disabled={busy || !confirmed || (zeroed.length > 0 && !zeroAccepted)}
               className="px-4 py-2 text-sm font-semibold rounded bg-action-primary text-white disabled:opacity-50">
               {busy ? 'Switching...' : 'Go live'}
             </button>
