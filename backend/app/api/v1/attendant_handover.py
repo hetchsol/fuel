@@ -37,6 +37,8 @@ from ...services.credit_sale_owner import (
 from ...services.stock_service import (
     apply_handover_sales, reverse_handover_sales,
     load_items as load_stock_items, make_key as make_stock_key,
+    forecourt_live_since, forecourt_additions,
+    load_opening_variances, save_opening_variances,
 )
 from ...database.station_files import load_station_json, save_station_json
 from .enter_readings import _load_readings as _load_enter_readings, _save_readings as _save_enter_readings
@@ -892,12 +894,14 @@ def _process_stock_snapshot(stock_snapshot, station_id, storage, my_assignment=N
         t_in = traded_in_map.get(row.size_kg, 0)
         t_out = traded_out_map.get(row.size_kg, 0)
         # Filled-stock variance: traded_out leaves as filled; traded_in arrives empty and does not count here.
-        expected_closing = row.opening_full - total_sold - damaged - t_out
+        additions = row.additions or 0
+        additions_empty = getattr(row, 'additions_empty', 0) or 0
+        expected_closing = row.opening_full + additions - total_sold - damaged - t_out
         variance = expected_closing - row.closing_full
         # Empty-stock variance: refill sales and upgrade trade-ins add to empties; downgrade trade-outs
         # (when the station gives back a smaller empty) reduce them. In the upgrade case the station
         # hands out a filled larger cylinder, so there is no empty-out movement for traded_out.
-        expected_closing_empty = row.opening_empty + row.sold_refill + t_in
+        expected_closing_empty = row.opening_empty + additions_empty + row.sold_refill + t_in
         empty_variance = expected_closing_empty - row.closing_empty
         pricing = get_pricing_for_size(row.size_kg, lpg_pricing_db)
         value_refill = round(row.sold_refill * pricing["price_refill"], 2)
@@ -911,7 +915,8 @@ def _process_stock_snapshot(stock_snapshot, station_id, storage, my_assignment=N
             stock_variance_flags.append(f"LPG {row.size_kg}kg empty: variance {empty_variance}")
         enriched_lpg.append({
             "size_kg": row.size_kg, "opening_full": row.opening_full, "opening_empty": row.opening_empty,
-            "additions": row.additions, "closing_full": row.closing_full, "closing_empty": row.closing_empty,
+            "additions": additions, "additions_empty": additions_empty,
+            "closing_full": row.closing_full, "closing_empty": row.closing_empty,
             "total_sold": total_sold, "sold_refill": row.sold_refill, "sold_with_cylinder": row.sold_with_cylinder,
             "damaged": damaged,
             "traded_in": t_in, "traded_out": t_out,
@@ -937,7 +942,7 @@ def _process_stock_snapshot(stock_snapshot, station_id, storage, my_assignment=N
     for row in stock_snapshot.accessories:
         sold = getattr(row, 'sold', 0) or max(0, row.opening_stock + row.additions - row.closing_stock)
         damaged = getattr(row, 'damaged', 0)
-        expected_closing = row.opening_stock - sold - damaged
+        expected_closing = row.opening_stock + (row.additions or 0) - sold - damaged
         variance = expected_closing - row.closing_stock
         unit_price = acc_price_map.get(row.product_code, 0)
         sales_value = round(sold * unit_price, 2)
@@ -963,7 +968,7 @@ def _process_stock_snapshot(stock_snapshot, station_id, storage, my_assignment=N
     for row in stock_snapshot.lubricants:
         sold = getattr(row, 'sold', 0) or max(0, row.opening_stock + row.additions - row.closing_stock)
         damaged = getattr(row, 'damaged', 0)
-        expected_closing = row.opening_stock - sold - damaged
+        expected_closing = row.opening_stock + (row.additions or 0) - sold - damaged
         variance = expected_closing - row.closing_stock
         unit_price = lub_price_map.get(row.product_code, 0)
         sales_value = round(sold * unit_price, 2)
@@ -2323,6 +2328,11 @@ class VerifyOpeningInput(BaseModel):
     # when there is no previous shift to auto-derive them from, or to correct
     # an auto-derived value. Each item: {nozzle_id, electronic_reading, mechanical_reading}
     manual_nozzle_readings: Optional[List[dict]] = None
+    # Shift-start stock confirmation for the attendant's assigned categories:
+    # {"lpg_cylinders": [{size_kg, counted_full, counted_empty}],
+    #  "accessories": [{product_code, counted}], "lubricants": [{product_code, counted}],
+    #  "note": "..."}. A count equal to the system figure is a confirmation.
+    stock_counts: Optional[dict] = None
 
 
 @router.post("/verify-opening")
@@ -2336,7 +2346,16 @@ async def verify_opening(data: VerifyOpeningInput, ctx: dict = Depends(get_stati
     storage = ctx["storage"]
     station_id = ctx["station_id"]
     user_id = ctx["user_id"]
-    _validate_shift_and_assignment(data.shift_id, ctx, storage)
+    shift, my_assignment, _ = _validate_shift_and_assignment(data.shift_id, ctx, storage)
+
+    key = f"{data.shift_id}-{user_id}"
+    existing = _load_opening_verifications(station_id).get(key) or {}
+    verified_at = datetime.now().isoformat()
+    # A confirmed shift-start count is final: sales are measured from it, so
+    # starting again must not replace it.
+    stock_opening = existing.get("stock_opening") or _record_stock_count(
+        station_id, storage, {**shift, "shift_id": data.shift_id}, my_assignment,
+        data.stock_counts, ctx, verified_at)
 
     # For retrospective shifts: write the manually confirmed opening readings so
     # the 3-tier priority chain uses them as the authoritative opening baseline.
@@ -2361,15 +2380,18 @@ async def verify_opening(data: VerifyOpeningInput, ctx: dict = Depends(get_stati
         save_station_json(station_id, 'attendant_readings.json', ar_db)
 
     verifications = _load_opening_verifications(station_id)
-    key = f"{data.shift_id}-{user_id}"
     record = {
         "shift_id": data.shift_id,
         "attendant_id": user_id,
         "attendant_name": ctx["full_name"],
-        "verified_at": datetime.now().isoformat(),
+        "verified_at": existing.get("verified_at") if existing.get("stock_opening") else verified_at,
         "discrepancy_note": (data.discrepancy_note or "").strip() or None,
         "retrospective": bool(data.manual_nozzle_readings),
     }
+    if stock_opening:
+        record["stock_opening"] = stock_opening
+        if existing.get("additions_until"):
+            record["additions_until"] = existing["additions_until"]
     verifications[key] = record
     _save_opening_verifications(verifications, station_id)
 
@@ -2382,6 +2404,7 @@ async def verify_opening(data: VerifyOpeningInput, ctx: dict = Depends(get_stati
         details={
             "discrepancy_note": record["discrepancy_note"],
             "retrospective": record["retrospective"],
+            "stock_count_differences": (stock_opening or {}).get("differences", 0),
         },
     )
     return {"status": "success", "opening_verification": record}
@@ -2592,6 +2615,7 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
 
     handover_out = HandoverOutput(
         handover_id=handover_id,
+        counts_live=_shift_counts_live(station_id, shift, data.shift_id, data.attendant_id),
         shift_id=data.shift_id,
         attendant_id=data.attendant_id,
         attendant_name=attendant_name,
@@ -2700,156 +2724,124 @@ async def get_opening_verifications(ctx: dict = Depends(get_station_context)):
     return _load_opening_verifications(ctx["station_id"])
 
 
-@router.get("/stock-opening")
-async def get_stock_opening(ctx: dict = Depends(get_station_context)):
-    """
-    Return consolidated opening stock for the current shift.
-    Looks for the most recent handover with stock_snapshot at this station,
-    uses its closing values as opening. Falls back to the Stores/forecourt
-    bin (the manager's live-issued stock, kept in sync by stock_service —
-    see apply_handover_sales), then to catalog defaults as a last resort for
-    stations that haven't adopted Stores yet.
-    """
-    station_id = ctx["station_id"]
-    storage = ctx["storage"]
+def _is_live_handover(h: dict) -> bool:
+    """A handover that still counts: not voided and not replaced by a resubmission."""
+    if h.get("review_status") in ("voided", "superseded"):
+        return False
+    if h.get("superseded_by") or h.get("phase") == "readings_superseded":
+        return False
+    return True
 
-    # --- Find each category's most recent handover with data for it ---
-    # A single "most recent handover with any stock_snapshot" pointer would
-    # skip a category's true last closing if a more recent handover only
-    # covered a different category (e.g. one attendant assigned solely to
-    # LPG, the next solely to Accessories) - so each category is resolved
-    # independently against its own most recent contributing handover.
-    handovers = _load_handovers(station_id)
-    prev_lpg_snapshot = None
-    prev_acc_snapshot = None
-    prev_lub_snapshot = None
-    if handovers:
-        sorted_handovers = sorted(
-            handovers.values(),
-            key=lambda h: h.get("created_at", ""),
-            reverse=True,
-        )
-        for h in sorted_handovers:
-            snap = h.get("stock_snapshot")
-            if not snap:
-                continue
-            if prev_lpg_snapshot is None and snap.get("lpg_cylinders"):
-                prev_lpg_snapshot = snap
-            if prev_acc_snapshot is None and snap.get("accessories"):
-                prev_acc_snapshot = snap
-            if prev_lub_snapshot is None and snap.get("lubricants"):
-                prev_lub_snapshot = snap
-            if prev_lpg_snapshot and prev_acc_snapshot and prev_lub_snapshot:
-                break
 
-    # --- Stores/forecourt balances (authoritative live stock where adopted) ---
+def _last_category_handovers(station_id: str) -> dict:
+    """
+    Most recent live handover per stock category ({"lpg"|"acc"|"lub": handover}).
+    Each category is resolved independently: a single "most recent handover
+    with any stock" pointer would skip a category's true last closing when a
+    later handover only covered a different category (e.g. one attendant on
+    LPG only, the next on Accessories only).
+    """
+    found: dict = {}
+    for h in sorted(_load_handovers(station_id).values(),
+                    key=lambda h: h.get("created_at", ""), reverse=True):
+        snap = h.get("stock_snapshot")
+        if not snap or not _is_live_handover(h):
+            continue
+        for cat, field in (("lpg", "lpg_cylinders"), ("acc", "accessories"), ("lub", "lubricants")):
+            if cat not in found and snap.get(field):
+                found[cat] = h
+        if len(found) == 3:
+            break
+    return found
+
+
+def _compute_stock_opening(station_id: str, storage: dict, use_forecourt: bool) -> dict:
+    """
+    The system's opening stock for a new shift.
+
+    use_forecourt=True (station live on the Forecourt bin, live shift): the
+    Forecourt count, which already includes everything a manager issued since
+    the last shift. Otherwise (not live yet, or a retrospective shift where a
+    live count means nothing): the previous handover's closing count. Either
+    falls back to the other source, then to catalog figures, when an item has
+    no data at all.
+    """
+    last = _last_category_handovers(station_id)
     stock_items = load_stock_items(station_id)
 
     def _forecourt(category: str, code: str) -> Optional[float]:
         item = stock_items.get(make_stock_key(category, code))
         return item.get("forecourt") if item else None
 
-    # --- LPG pricing ---
+    def _prev_rows(cat: str, field: str, key: str) -> dict:
+        h = last.get(cat)
+        return {r.get(key): r for r in ((h or {}).get("stock_snapshot") or {}).get(field, [])}
+
+    def _pick(category: str, code: str, prev_value, fallback):
+        fc = _forecourt(category, code)
+        if use_forecourt and fc is not None:
+            return fc, "forecourt"
+        if prev_value is not None:
+            return prev_value, "previous_closing"
+        if fc is not None:
+            return fc, "forecourt"
+        return fallback, "catalog"
+
     lpg_pricing_db = load_lpg_pricing(station_id)
-
-    # --- LPG Cylinders ---
+    prev_lpg = _prev_rows("lpg", "lpg_cylinders", "size_kg")
     lpg_cylinders = []
-    prev_lpg_map = {}
-    if prev_lpg_snapshot:
-        for row in prev_lpg_snapshot.get("lpg_cylinders", []):
-            prev_lpg_map[row["size_kg"]] = row
-
     for size in LPG_SIZES:
         pricing = get_pricing_for_size(size, lpg_pricing_db)
-        prev = prev_lpg_map.get(size)
-        size_code = f"{size}kg"
-        if prev:
-            opening_full = prev.get("closing_full", 0)
-            opening_empty = prev.get("closing_empty", 0)
-        else:
-            opening_full = _forecourt("cylinder_full", size_code) or 0
-            opening_empty = _forecourt("cylinder_empty", size_code) or 0
+        prev = prev_lpg.get(size)
+        full, src = _pick("cylinder_full", f"{size}kg", prev.get("closing_full", 0) if prev else None, 0)
+        empty, _ = _pick("cylinder_empty", f"{size}kg", prev.get("closing_empty", 0) if prev else None, 0)
         lpg_cylinders.append({
             "size_kg": size,
-            "opening_full": opening_full,
-            "opening_empty": opening_empty,
+            "opening_full": full,
+            "opening_empty": empty,
+            "source": src,
             "refill_price": pricing["price_refill"],
             "price_with_cylinder": pricing["price_with_cylinder"],
         })
 
-    # --- LPG Accessories ---
-    accessories = []
-    prev_acc_map = {}
-    if prev_acc_snapshot:
-        for row in prev_acc_snapshot.get("accessories", []):
-            prev_acc_map[row["product_code"]] = row
-
-    # Use in-memory catalog first, fall back to defaults
+    prev_acc = _prev_rows("acc", "accessories", "product_code")
     acc_catalog = storage.get("lpg_accessories", {})
     if acc_catalog:
-        for code, item in acc_catalog.items():
-            prev = prev_acc_map.get(code)
-            if prev:
-                opening = prev.get("closing_stock", 0)
-            else:
-                forecourt_qty = _forecourt("lpg_accessory", code)
-                opening = forecourt_qty if forecourt_qty is not None else item.get("current_stock", 0)
-            accessories.append({
-                "product_code": code,
-                "description": item.get("description", ""),
-                "opening_stock": opening,
-                "unit_price": item.get("unit_price", 0),
-            })
+        acc_source = [(code, item.get("description", ""), item.get("unit_price", 0), item.get("current_stock", 0))
+                      for code, item in acc_catalog.items()]
     else:
-        for item in DEFAULT_LPG_ACCESSORIES:
-            code = item["product_code"]
-            prev = prev_acc_map.get(code)
-            if prev:
-                opening = prev.get("closing_stock", 0)
-            else:
-                forecourt_qty = _forecourt("lpg_accessory", code)
-                opening = forecourt_qty if forecourt_qty is not None else 0
-            accessories.append({
-                "product_code": code,
-                "description": item["description"],
-                "opening_stock": opening,
-                "unit_price": item.get("selling_price", 0),
-            })
+        acc_source = [(item["product_code"], item["description"], item.get("selling_price", 0), 0)
+                      for item in DEFAULT_LPG_ACCESSORIES]
+    accessories = []
+    for code, desc, price, catalog_stock in acc_source:
+        prev = prev_acc.get(code)
+        opening, src = _pick("lpg_accessory", code, prev.get("closing_stock", 0) if prev else None, catalog_stock)
+        accessories.append({
+            "product_code": code, "description": desc,
+            "opening_stock": opening, "source": src, "unit_price": price,
+        })
 
-    # --- Lubricants (Island 3 only) ---
-    lubricants = []
-    prev_lub_map = {}
-    if prev_lub_snapshot:
-        for row in prev_lub_snapshot.get("lubricants", []):
-            prev_lub_map[row["product_code"]] = row
-
+    prev_lub = _prev_rows("lub", "lubricants", "product_code")
     lub_catalog = load_lubricant_catalog(station_id)
-    # Get current stock from most recent lubricant daily entry
-    lub_daily_db = load_lubricant_daily(station_id)
+    # Pre-Stores fallback: balance on the most recent Island 3 lubricant daily entry
     lub_current_stock = {}
-    island3_entries = [
-        e for e in lub_daily_db.values()
-        if e.get("location") == "Island 3"
-    ]
+    island3_entries = [e for e in load_lubricant_daily(station_id).values() if e.get("location") == "Island 3"]
     if island3_entries:
         island3_entries.sort(key=lambda x: x.get("date", ""), reverse=True)
         for row in island3_entries[0].get("product_rows", []):
             lub_current_stock[row["product_code"]] = row.get("balance", 0)
-
+    lubricants = []
     for product in lub_catalog:
         code = product["product_code"]
-        prev = prev_lub_map.get(code)
-        if prev:
-            opening = prev.get("closing_stock", 0)
-        else:
-            forecourt_qty = _forecourt("lubricant", code)
-            opening = forecourt_qty if forecourt_qty is not None else lub_current_stock.get(code, 0)
-        # Only include products with stock > 0 (or that had previous snapshot data)
+        prev = prev_lub.get(code)
+        opening, src = _pick("lubricant", code, prev.get("closing_stock", 0) if prev else None,
+                             lub_current_stock.get(code, 0))
+        # Only products with stock (or that the last shift carried) - the
+        # catalog is long and mostly not stocked on the forecourt.
         if opening > 0 or prev:
             lubricants.append({
-                "product_code": code,
-                "description": product["description"],
-                "opening_stock": opening,
+                "product_code": code, "description": product["description"],
+                "opening_stock": opening, "source": src,
                 "unit_price": product.get("selling_price", 0),
                 "category": product.get("category", ""),
             })
@@ -2858,7 +2850,299 @@ async def get_stock_opening(ctx: dict = Depends(get_station_context)):
         "lpg_cylinders": lpg_cylinders,
         "accessories": accessories,
         "lubricants": lubricants,
+        "previous_handovers": {cat: h.get("handover_id") for cat, h in last.items()},
+        "previous_attendants": {cat: h.get("attendant_name") for cat, h in last.items()},
     }
+
+
+def _uses_forecourt(station_id: str, shift: Optional[dict]) -> bool:
+    return bool(forecourt_live_since(station_id)) and not (shift or {}).get("is_retrospective", False)
+
+
+def _shift_stock_view(station_id: str, storage: dict, shift: Optional[dict], verification: Optional[dict]) -> dict:
+    """
+    Opening stock as one attendant's shift sees it. Before the attendant has
+    confirmed the count: the system figures to confirm. Afterwards: their
+    confirmed (or corrected) count, plus the net stock a manager issued to or
+    took off the forecourt since they started (additions).
+    """
+    station_live = bool(forecourt_live_since(station_id))
+    so = (verification or {}).get("stock_opening")
+    if not so:
+        view = _compute_stock_opening(station_id, storage, _uses_forecourt(station_id, shift))
+        for r in view["lpg_cylinders"]:
+            r.update({"system_full": r["opening_full"], "system_empty": r["opening_empty"],
+                      "additions_full": 0, "additions_empty": 0})
+        for r in view["accessories"] + view["lubricants"]:
+            r.update({"system_stock": r["opening_stock"], "additions": 0})
+        view.update({"count_confirmed": False, "forecourt_live": _uses_forecourt(station_id, shift),
+                     "station_forecourt_live": station_live})
+        return view
+
+    adds = forecourt_additions(station_id, verification.get("verified_at"),
+                               verification.get("additions_until")) if so.get("live") else {}
+    # Prices and catalog details come from the current catalogs, counts from the verification.
+    current = _compute_stock_opening(station_id, storage, False)
+    price_lpg = {r["size_kg"]: r for r in current["lpg_cylinders"]}
+    lpg = []
+    for r in so.get("lpg", []):
+        size = r["size_kg"]
+        cur = price_lpg.get(size, {})
+        lpg.append({
+            "size_kg": size,
+            "opening_full": r["counted_full"], "opening_empty": r["counted_empty"],
+            "system_full": r["system_full"], "system_empty": r["system_empty"],
+            "additions_full": adds.get(f"cylinder_full:{size}kg", 0),
+            "additions_empty": adds.get(f"cylinder_empty:{size}kg", 0),
+            "refill_price": cur.get("refill_price", 0),
+            "price_with_cylinder": cur.get("price_with_cylinder", 0),
+        })
+
+    def _rows(field: str, category: str, catalog_rows: list) -> list:
+        catalog = {r["product_code"]: r for r in catalog_rows}
+        out, seen = [], set()
+        for r in so.get(field, []):
+            code = r["product_code"]
+            seen.add(code)
+            cat = catalog.get(code, {})
+            out.append({
+                "product_code": code,
+                "description": r.get("description") or cat.get("description", code),
+                "opening_stock": r["counted"], "system_stock": r["system"],
+                "additions": adds.get(f"{category}:{code}", 0),
+                "unit_price": cat.get("unit_price", 0), "category": cat.get("category", ""),
+            })
+        # Items issued to the forecourt mid-shift that the attendant had none of at the start
+        for key, qty in adds.items():
+            cat_prefix, _, code = key.partition(":")
+            if cat_prefix == category and code not in seen:
+                cat = catalog.get(code, {})
+                out.append({
+                    "product_code": code, "description": cat.get("description", code),
+                    "opening_stock": 0, "system_stock": 0, "additions": qty,
+                    "unit_price": cat.get("unit_price", 0), "category": cat.get("category", ""),
+                })
+        return out
+
+    # Full catalogs (not only stocked rows) so a mid-shift issue of a new item still has a price
+    lub_catalog = [{"product_code": p["product_code"], "description": p["description"],
+                    "unit_price": p.get("selling_price", 0), "category": p.get("category", "")}
+                   for p in load_lubricant_catalog(station_id)]
+    return {
+        "lpg_cylinders": lpg,
+        "accessories": _rows("accessories", "lpg_accessory", current["accessories"]),
+        "lubricants": _rows("lubricants", "lubricant", lub_catalog),
+        "count_confirmed": True,
+        "forecourt_live": bool(so.get("live")),
+        "station_forecourt_live": station_live,
+        "count_note": so.get("note"),
+    }
+
+
+@router.get("/stock-opening")
+async def get_stock_opening(shift_id: Optional[str] = None, ctx: dict = Depends(get_station_context)):
+    """
+    Opening stock for the caller's shift. With shift_id, reflects the
+    attendant's own shift-start count once confirmed (plus mid-shift
+    additions); without it, the system's current opening figures.
+    """
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+    shift = storage.get("shifts", {}).get(shift_id) if shift_id else None
+    verification = None
+    if shift_id:
+        verification = _load_opening_verifications(station_id).get(f"{shift_id}-{ctx['user_id']}")
+    return _shift_stock_view(station_id, storage, shift, verification)
+
+
+_CATEGORY_LABELS = {"lpg": "LPG", "acc": "Accessories", "lub": "Lubricants"}
+_CATEGORY_FLAGS = {"lpg": "assigned_lpg", "acc": "assigned_accessories", "lub": "assigned_lubricants"}
+
+
+def _record_stock_count(station_id: str, storage: dict, shift: dict, assignment: dict,
+                        counts: Optional[dict], ctx: dict, verified_at: str) -> Optional[dict]:
+    """
+    Turn an attendant's shift-start stock confirmation into the stored opening
+    for their assigned categories. Every row they are responsible for must be
+    either confirmed (count == system) or corrected (count given); a
+    difference needs a note and opens a count difference for a manager.
+    Returns the `stock_opening` block for the verification record, or None
+    when the attendant holds no stock category.
+    """
+    cats = [c for c, flag in _CATEGORY_FLAGS.items() if assignment.get(flag)]
+    if not cats:
+        return None
+    if counts is None:
+        raise HTTPException(status_code=400, detail=(
+            "Confirm the opening stock count for "
+            + ", ".join(_CATEGORY_LABELS[c] for c in cats)
+            + " before starting your shift. If you do not see the stock list, refresh the page."))
+
+    live = _uses_forecourt(station_id, shift)
+    system = _compute_stock_opening(station_id, storage, live)
+    note = (counts.get("note") or "").strip()
+
+    def _count(value, label):
+        if value is None or value == "":
+            raise HTTPException(status_code=400, detail=f"Enter a count for {label}.")
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail=f"Count for {label} must be a number.")
+        if v < 0 or v != int(v):
+            raise HTTPException(status_code=400, detail=f"Count for {label} must be a whole number, zero or more.")
+        return int(v)
+
+    differences = []   # (category, item_key, label, system, counted)
+    block = {"live": live, "note": note or None, "lpg": [], "accessories": [], "lubricants": []}
+
+    if "lpg" in cats:
+        given = {int(r.get("size_kg")): r for r in counts.get("lpg_cylinders", []) or [] if r.get("size_kg") is not None}
+        for r in system["lpg_cylinders"]:
+            size = r["size_kg"]
+            g = given.get(size)
+            if g is None:
+                raise HTTPException(status_code=400, detail=f"Confirm the count for {size}kg cylinders.")
+            cf = _count(g.get("counted_full"), f"{size}kg full cylinders")
+            ce = _count(g.get("counted_empty"), f"{size}kg empty cylinders")
+            sf, se = int(round(r["opening_full"] or 0)), int(round(r["opening_empty"] or 0))
+            block["lpg"].append({"size_kg": size, "system_full": sf, "system_empty": se,
+                                 "counted_full": cf, "counted_empty": ce})
+            if cf != sf:
+                differences.append(("lpg", f"cylinder_full:{size}kg", f"{size}kg full cylinders", sf, cf))
+            if ce != se:
+                differences.append(("lpg", f"cylinder_empty:{size}kg", f"{size}kg empty cylinders", se, ce))
+
+    for cat, field, category in (("acc", "accessories", "lpg_accessory"), ("lub", "lubricants", "lubricant")):
+        if cat not in cats:
+            continue
+        given = {r.get("product_code"): r for r in counts.get(field, []) or []}
+        for r in system[field]:
+            code = r["product_code"]
+            label = r.get("description") or code
+            g = given.get(code)
+            if g is None:
+                raise HTTPException(status_code=400, detail=f"Confirm the count for {label}.")
+            counted = _count(g.get("counted"), label)
+            sys_qty = int(round(r["opening_stock"] or 0))
+            block[field].append({"product_code": code, "description": label,
+                                 "system": sys_qty, "counted": counted})
+            if counted != sys_qty:
+                differences.append((cat, f"{category}:{code}", label, sys_qty, counted))
+
+    if differences and not note:
+        raise HTTPException(status_code=400, detail=(
+            "Your count differs from the system for "
+            + ", ".join(d[2] for d in differences)
+            + ". Add a note explaining the difference."))
+
+    if differences:
+        variances = load_opening_variances(station_id)
+        prev_ids = system.get("previous_handovers", {})
+        prev_names = system.get("previous_attendants", {})
+        for cat, item_key, label, sys_qty, counted in differences:
+            vid = f"OSV-{shift['shift_id']}-{ctx['user_id']}-{item_key}"
+            variances[vid] = {
+                "variance_id": vid,
+                "shift_id": shift["shift_id"],
+                "date": shift.get("date"),
+                "shift_type": shift.get("shift_type"),
+                "attendant_id": ctx["user_id"],
+                "attendant_name": ctx["full_name"],
+                "item_key": item_key,
+                "label": label,
+                "system_qty": sys_qty,
+                "counted_qty": counted,
+                "difference": counted - sys_qty,
+                "note": note,
+                "forecourt_live": live,
+                "previous_handover_id": prev_ids.get(cat),
+                "previous_attendant": prev_names.get(cat),
+                "status": "pending",
+                "created_at": verified_at,
+            }
+        save_opening_variances(station_id, variances)
+        try:
+            summary = "; ".join(f"{d[2]}: counted {d[4]}, system {d[3]}" for d in differences)
+            create_notification(
+                station_id=station_id, type="OPENING_STOCK_COUNT", severity="warning",
+                title="Shift-start stock count differs",
+                message=f"{ctx['full_name']} ({shift.get('date')} {shift.get('shift_type')}): {summary}. Note: {note}",
+                entity_type="shift", entity_id=shift["shift_id"],
+            )
+        except Exception:
+            pass
+    block["differences"] = len(differences)
+    return block
+
+
+def _shift_counts_live(station_id: str, shift: dict, shift_id: str, user_id: str) -> bool:
+    """
+    Was this attendant's shift started under live Forecourt counts? Decided
+    once, when the handover is created, and stored on it as `counts_live`.
+    A shift started before go-live (including any later correction of it)
+    stays on the old basis, so nothing that happened before go-live can move
+    the counts the station went live with.
+    """
+    live = forecourt_live_since(station_id)
+    if not live:
+        return False
+    if (shift or {}).get("is_retrospective"):
+        return (shift.get("date") or "") >= live[:10]
+    ver = _load_opening_verifications(station_id).get(f"{shift_id}-{user_id}") or {}
+    if ver.get("stock_opening"):
+        return bool(ver["stock_opening"].get("live"))
+    return (ver.get("verified_at") or "") >= live
+
+
+def _stamp_stock_opening(stock_snapshot, station_id: str, shift_id: str, user_id: str) -> list:
+    """
+    Replace the opening and additions figures the browser sent with the ones
+    the server holds: the attendant's confirmed shift-start count, and the
+    net stock a manager issued to or took off the forecourt since then. The
+    additions window closes at the first submission so a resubmission days
+    later doesn't sweep in later shifts' issues.
+
+    Shifts started before shift-start counts existed (no `stock_opening` on
+    the verification) keep the old behaviour. Returns flags describing any
+    shift-start count differences, for the handover's review.
+    """
+    if not stock_snapshot:
+        return []
+    verifications = _load_opening_verifications(station_id)
+    ver = verifications.get(f"{shift_id}-{user_id}")
+    so = (ver or {}).get("stock_opening")
+    if not so:
+        return []
+    if not ver.get("additions_until"):
+        ver["additions_until"] = datetime.now().isoformat()
+        _save_opening_verifications(verifications, station_id)
+    adds = forecourt_additions(station_id, ver.get("verified_at"), ver["additions_until"]) if so.get("live") else {}
+
+    def _i(v):
+        return int(round(v or 0))
+
+    lpg = {r["size_kg"]: r for r in so.get("lpg", [])}
+    for row in stock_snapshot.lpg_cylinders:
+        c = lpg.get(row.size_kg)
+        row.opening_full = c["counted_full"] if c else 0
+        row.opening_empty = c["counted_empty"] if c else 0
+        row.additions = _i(adds.get(f"cylinder_full:{row.size_kg}kg"))
+        row.additions_empty = _i(adds.get(f"cylinder_empty:{row.size_kg}kg"))
+    for rows, field, category in ((stock_snapshot.accessories, "accessories", "lpg_accessory"),
+                                  (stock_snapshot.lubricants, "lubricants", "lubricant")):
+        counted = {r["product_code"]: r["counted"] for r in so.get(field, [])}
+        for row in rows:
+            row.opening_stock = counted.get(row.product_code, 0)
+            row.additions = _i(adds.get(f"{category}:{row.product_code}"))
+
+    flags = []
+    prefix = f"OSV-{shift_id}-{user_id}-"
+    for vid, v in load_opening_variances(station_id).items():
+        if vid.startswith(prefix):
+            flags.append(f"Opening count {v['label']}: counted {v['counted_qty']}, "
+                         f"system {v['system_qty']} ({'resolved' if v.get('status') == 'resolved' else 'pending manager review'})")
+    return flags
 
 
 @router.post("/submit-readings", response_model=HandoverOutput)
@@ -2924,8 +3208,10 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
         data.nozzle_readings, storage, station_id, data.shift_id, user_id, allowed_nozzle_ids,
         shift_date=shift.get("date"), shift_type=shift.get("shift_type"))
 
+    opening_count_flags = _stamp_stock_opening(data.stock_snapshot, station_id, data.shift_id, user_id)
     lpg_sales, lubricant_sales, accessory_sales, enriched_snapshot, stock_variance_flags = \
         _process_stock_snapshot(data.stock_snapshot, station_id, storage, my_assignment, ctx["role"])
+    stock_variance_flags = stock_variance_flags + opening_count_flags
 
     total_expected = round(fuel_revenue + lpg_sales + lubricant_sales + accessory_sales, 2)
 
@@ -2953,6 +3239,7 @@ async def submit_readings(data: ReadingsVerificationInput, ctx: dict = Depends(g
 
     handover_output = HandoverOutput(
         handover_id=handover_id,
+        counts_live=_shift_counts_live(station_id, shift, data.shift_id, user_id),
         shift_id=data.shift_id,
         attendant_id=user_id,
         attendant_name=user_name,
@@ -3329,8 +3616,10 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
     stock_variance_flags = []
 
     if data.stock_snapshot:
+        opening_count_flags = _stamp_stock_opening(data.stock_snapshot, station_id, data.shift_id, user_id)
         lpg_sales, lubricant_sales, accessory_sales, enriched_snapshot, stock_variance_flags = \
             _process_stock_snapshot(data.stock_snapshot, station_id, storage, my_assignment, ctx["role"])
+        stock_variance_flags = stock_variance_flags + opening_count_flags
 
     total_expected = round(fuel_revenue + lpg_sales + lubricant_sales + accessory_sales, 2)
 
@@ -3371,6 +3660,7 @@ async def submit_handover(data: HandoverInput, ctx: dict = Depends(get_station_c
 
     handover_output = HandoverOutput(
         handover_id=handover_id,
+        counts_live=_shift_counts_live(station_id, shift, data.shift_id, user_id),
         shift_id=data.shift_id,
         attendant_id=user_id,
         attendant_name=user_name,

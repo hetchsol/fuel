@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import DoubleEntryModal from '../components/DoubleEntryModal'
 import Pagination from '../components/Pagination'
+import OpeningStockCount, { CountLine, countLineState } from '../components/OpeningStockCount'
 import { getHeaders, authFetch } from '../lib/api'
 import { formatDateToDisplay, formatTimeToDisplay } from '../lib/dateUtils'
 
@@ -55,6 +56,10 @@ interface LPGCylinderRow {
   size_kg: number
   opening_full: number
   opening_empty: number
+  system_full: number
+  system_empty: number
+  additions_full: number   // issued to (+) / taken off (-) the forecourt since the shift started
+  additions_empty: number
   sold_refill: string
   sold_with_cylinder: string
   damaged: string
@@ -69,6 +74,8 @@ interface AccessoryRow {
   product_code: string
   description: string
   opening_stock: number
+  system_stock: number
+  additions: number
   sold: string
   damaged: string
   closing_stock: string
@@ -81,6 +88,8 @@ interface LubricantRow {
   description: string
   category: string
   opening_stock: number
+  system_stock: number
+  additions: number
   sold: string
   damaged: string
   closing_stock: string
@@ -230,6 +239,12 @@ export default function MyShift() {
   const [openingVerified, setOpeningVerified] = useState(true)
   const [verifyingOpening, setVerifyingOpening] = useState(false)
   const [openingDiscrepancyNote, setOpeningDiscrepancyNote] = useState('')
+  // Shift-start stock count: the attendant confirms or corrects each system count
+  const [stockConfirmed, setStockConfirmed] = useState(false)
+  const [stockFromForecourt, setStockFromForecourt] = useState(false)
+  const [stockCounts, setStockCounts] = useState<Record<string, string>>({})
+  const [stockCountNote, setStockCountNote] = useState('')
+  const [stockCountConsent, setStockCountConsent] = useState(false)
   // Review confirmation modal
   const [showReviewModal, setShowReviewModal] = useState(false)
 
@@ -274,6 +289,81 @@ export default function MyShift() {
       .catch(() => { setShiftFound(false); setLoading(false) })
   }, [])
 
+  // Opening stock for this attendant's shift. Before the shift-start count:
+  // system figures to confirm. After: their confirmed count plus anything the
+  // manager issued to the forecourt since (additions). Figures the attendant
+  // has already typed (sold, closing count, notes) are kept on a refresh.
+  const loadStock = (shiftId: string) => {
+    const qs = shiftId ? `?shift_id=${encodeURIComponent(shiftId)}` : ''
+    return authFetch(`${BASE}/handover/stock-opening${qs}`, { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .catch(() => ({ lpg_cylinders: [], accessories: [], lubricants: [] }))
+      .then(stockData => {
+        setStockConfirmed(!!stockData.count_confirmed)
+        setStockFromForecourt(!!stockData.forecourt_live)
+        setLpgRows(prev => {
+          const kept = new Map(prev.map(r => [r.size_kg, r]))
+          return (stockData.lpg_cylinders || []).map((c: any) => {
+            const old = kept.get(c.size_kg)
+            return {
+              size_kg: c.size_kg,
+              opening_full: c.opening_full || 0,
+              opening_empty: c.opening_empty || 0,
+              system_full: c.system_full ?? c.opening_full ?? 0,
+              system_empty: c.system_empty ?? c.opening_empty ?? 0,
+              additions_full: c.additions_full || 0,
+              additions_empty: c.additions_empty || 0,
+              sold_refill: old?.sold_refill ?? '',
+              sold_with_cylinder: old?.sold_with_cylinder ?? '',
+              damaged: old?.damaged ?? '',
+              closing_full: old?.closing_full ?? '',
+              closing_empty: old?.closing_empty ?? '',
+              variance_note: old?.variance_note ?? '',
+              refill_price: c.refill_price || 0,
+              price_with_cylinder: c.price_with_cylinder || 0,
+            }
+          })
+        })
+        setAccessoryRows(prev => {
+          const kept = new Map(prev.map(r => [r.product_code, r]))
+          return (stockData.accessories || []).map((a: any) => {
+            const old = kept.get(a.product_code)
+            return {
+              product_code: a.product_code,
+              description: a.description,
+              opening_stock: a.opening_stock || 0,
+              system_stock: a.system_stock ?? a.opening_stock ?? 0,
+              additions: a.additions || 0,
+              sold: old?.sold ?? '',
+              damaged: old?.damaged ?? '',
+              closing_stock: old?.closing_stock ?? '',
+              variance_note: old?.variance_note ?? '',
+              unit_price: a.unit_price || 0,
+            }
+          })
+        })
+        setLubricantRows(prev => {
+          const kept = new Map(prev.map(r => [r.product_code, r]))
+          return (stockData.lubricants || []).map((l: any) => {
+            const old = kept.get(l.product_code)
+            return {
+              product_code: l.product_code,
+              description: l.description,
+              category: l.category || '',
+              opening_stock: l.opening_stock || 0,
+              system_stock: l.system_stock ?? l.opening_stock ?? 0,
+              additions: l.additions || 0,
+              sold: old?.sold ?? '',
+              damaged: old?.damaged ?? '',
+              closing_stock: old?.closing_stock ?? '',
+              variance_note: old?.variance_note ?? '',
+              unit_price: l.unit_price || 0,
+            }
+          })
+        })
+      })
+  }
+
   // Load shift data when selectedShiftId changes
   const loadShiftData = (shiftId: string) => {
     setLoading(true)
@@ -292,6 +382,9 @@ export default function MyShift() {
         }
 
         setShiftFound(true)
+        setStockCounts({})
+        setStockCountNote('')
+        setStockCountConsent(false)
         setShiftInfo(shiftData.shift)
         setAssignmentInfo(shiftData.assignment)
         setPriceChangeDetected(shiftData.price_change_detected || false)
@@ -344,53 +437,7 @@ export default function MyShift() {
           .catch(() => {})
 
         // Fetch stock opening separately — failure returns empty defaults
-        authFetch(`${BASE}/handover/stock-opening`, { headers: getAuthHeaders() })
-          .then(r => r.ok ? r.json() : Promise.reject())
-          .catch(() => ({ lpg_cylinders: [], accessories: [], lubricants: [] }))
-          .then(stockData => {
-            setLpgRows(
-              (stockData.lpg_cylinders || []).map((c: any) => ({
-                size_kg: c.size_kg,
-                opening_full: c.opening_full || 0,
-                opening_empty: c.opening_empty || 0,
-                sold_refill: '',
-                sold_with_cylinder: '',
-                damaged: '',
-                closing_full: '',
-                closing_empty: '',
-                variance_note: '',
-                refill_price: c.refill_price || 0,
-                price_with_cylinder: c.price_with_cylinder || 0,
-              }))
-            )
-
-            setAccessoryRows(
-              (stockData.accessories || []).map((a: any) => ({
-                product_code: a.product_code,
-                description: a.description,
-                opening_stock: a.opening_stock || 0,
-                sold: '',
-                damaged: '',
-                closing_stock: '',
-                variance_note: '',
-                unit_price: a.unit_price || 0,
-              }))
-            )
-
-            setLubricantRows(
-              (stockData.lubricants || []).map((l: any) => ({
-                product_code: l.product_code,
-                description: l.description,
-                category: l.category || '',
-                opening_stock: l.opening_stock || 0,
-                sold: '',
-                damaged: '',
-                closing_stock: '',
-                variance_note: '',
-                unit_price: l.unit_price || 0,
-              }))
-            )
-          })
+        loadStock(shiftId)
           .finally(() => setLoading(false))
       })
       .catch(() => {
@@ -402,6 +449,17 @@ export default function MyShift() {
   useEffect(() => {
     if (selectedShiftId) loadShiftData(selectedShiftId)
   }, [selectedShiftId])
+
+  useEffect(() => {
+    if (!selectedShiftId || !stockConfirmed) return
+    const onFocus = () => { if (document.visibilityState === 'visible') loadStock(selectedShiftId) }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
+  }, [selectedShiftId, stockConfirmed])
 
   // Fetch past handovers
   useEffect(() => {
@@ -455,12 +513,13 @@ export default function MyShift() {
     const damaged = parseInt(row.damaged) || 0
     const totalSold = refill + withCyl
     const closingFull = parseInt(row.closing_full) || 0
-    const expectedClosing = row.opening_full - totalSold - damaged
+    const available = row.opening_full + (row.additions_full || 0)
+    const expectedClosing = available - totalSold - damaged
     const variance = row.closing_full !== '' ? expectedClosing - closingFull : 0
     const hasVariance = row.closing_full !== '' && variance !== 0
-    const soldExceedsOpening = totalSold + damaged > row.opening_full
+    const soldExceedsOpening = totalSold + damaged > available
     const value = refill * row.refill_price + withCyl * row.price_with_cylinder
-    return { totalSold, refill, withCyl, damaged, expectedClosing, closingFull, variance, hasVariance, soldExceedsOpening, value }
+    return { totalSold, refill, withCyl, damaged, available, expectedClosing, closingFull, variance, hasVariance, soldExceedsOpening, value }
   })
   const lpgRowTotal = lpgComputations.reduce((s, c) => s + c.value, 0)
   // Trade (upgrade/downgrade) revenue = price_refill[to] + (deposit[to] - deposit[from]) per trade.
@@ -483,12 +542,13 @@ export default function MyShift() {
     const sold = parseInt(row.sold) || 0
     const damaged = parseInt(row.damaged) || 0
     const closing = parseInt(row.closing_stock) || 0
-    const expectedClosing = row.opening_stock - sold - damaged
+    const available = row.opening_stock + (row.additions || 0)
+    const expectedClosing = available - sold - damaged
     const variance = row.closing_stock !== '' ? expectedClosing - closing : 0
     const hasVariance = row.closing_stock !== '' && variance !== 0
-    const soldExceedsOpening = sold + damaged > row.opening_stock
+    const soldExceedsOpening = sold + damaged > available
     const value = sold * row.unit_price
-    return { sold, damaged, expectedClosing, closing, variance, hasVariance, soldExceedsOpening, value }
+    return { sold, damaged, available, expectedClosing, closing, variance, hasVariance, soldExceedsOpening, value }
   })
   const accessoryTotal = accComputations.reduce((s, c) => s + c.value, 0)
 
@@ -497,12 +557,13 @@ export default function MyShift() {
     const sold = parseInt(row.sold) || 0
     const damaged = parseInt(row.damaged) || 0
     const closing = parseInt(row.closing_stock) || 0
-    const expectedClosing = row.opening_stock - sold - damaged
+    const available = row.opening_stock + (row.additions || 0)
+    const expectedClosing = available - sold - damaged
     const variance = row.closing_stock !== '' ? expectedClosing - closing : 0
     const hasVariance = row.closing_stock !== '' && variance !== 0
-    const soldExceedsOpening = sold + damaged > row.opening_stock
+    const soldExceedsOpening = sold + damaged > available
     const value = sold * row.unit_price
-    return { sold, damaged, expectedClosing, closing, variance, hasVariance, soldExceedsOpening, value }
+    return { sold, damaged, available, expectedClosing, closing, variance, hasVariance, soldExceedsOpening, value }
   })
   const lubricantTotal = lubComputations.reduce((s, c) => s + c.value, 0)
 
@@ -660,7 +721,8 @@ export default function MyShift() {
           size_kg: row.size_kg,
           opening_full: row.opening_full,
           opening_empty: row.opening_empty,
-          additions: 0,
+          additions: row.additions_full || 0,
+          additions_empty: row.additions_empty || 0,
           closing_full: parseInt(row.closing_full) || 0,
           closing_empty: parseInt(row.closing_empty) || 0,
           sold_refill: parseInt(row.sold_refill) || 0,
@@ -672,7 +734,7 @@ export default function MyShift() {
           product_code: row.product_code,
           description: row.description,
           opening_stock: row.opening_stock,
-          additions: 0,
+          additions: row.additions || 0,
           sold: parseInt(row.sold) || 0,
           damaged: parseInt(row.damaged) || 0,
           closing_stock: parseInt(row.closing_stock) || 0,
@@ -682,7 +744,7 @@ export default function MyShift() {
           product_code: row.product_code,
           description: row.description,
           opening_stock: row.opening_stock,
-          additions: 0,
+          additions: row.additions || 0,
           sold: parseInt(row.sold) || 0,
           damaged: parseInt(row.damaged) || 0,
           closing_stock: parseInt(row.closing_stock) || 0,
@@ -874,6 +936,27 @@ export default function MyShift() {
     2: 'Review your entries before submitting',
   }
 
+  // Shift-start stock count lines for the categories this attendant holds
+  const stockCountLines: CountLine[] = [
+    ...(assignmentInfo?.assigned_lpg ? lpgRows.flatMap(r => [
+      { key: `lpg:${r.size_kg}:full`, group: 'LPG' as const, label: `${r.size_kg}kg full`, system: r.system_full },
+      { key: `lpg:${r.size_kg}:empty`, group: 'LPG' as const, label: `${r.size_kg}kg empty`, system: r.system_empty },
+    ]) : []),
+    ...(assignmentInfo?.assigned_accessories ? accessoryRows.map(r => (
+      { key: `acc:${r.product_code}`, group: 'Accessories' as const, label: r.description, system: r.system_stock }
+    )) : []),
+    ...(assignmentInfo?.assigned_lubricants ? lubricantRows.map(r => (
+      { key: `lub:${r.product_code}`, group: 'Lubricants' as const, label: r.description, system: r.system_stock }
+    )) : []),
+  ]
+  const needsStockCount = !openingVerified && !stockConfirmed && stockCountLines.length > 0
+  const stockCountStates = stockCountLines.map(l => countLineState(l, stockCounts[l.key]))
+  const stockCountComplete = !needsStockCount || (
+    stockCountStates.every(st => st === 'match' || st === 'differs') &&
+    (!stockCountStates.includes('differs') || stockCountNote.trim() !== '') &&
+    stockCountConsent
+  )
+
   // Start-of-shift: record the attendant's verification of the carried-forward
   // opening readings/stock, then move into the closing flow.
   const handleVerifyOpening = async () => {
@@ -884,6 +967,21 @@ export default function MyShift() {
       const body: any = {
         shift_id: shiftInfo.shift_id,
         discrepancy_note: openingDiscrepancyNote.trim() || null,
+      }
+      if (needsStockCount) {
+        const n = (key: string) => parseInt(stockCounts[key], 10)
+        body.stock_counts = {
+          lpg_cylinders: assignmentInfo?.assigned_lpg
+            ? lpgRows.map(r => ({ size_kg: r.size_kg, counted_full: n(`lpg:${r.size_kg}:full`), counted_empty: n(`lpg:${r.size_kg}:empty`) }))
+            : [],
+          accessories: assignmentInfo?.assigned_accessories
+            ? accessoryRows.map(r => ({ product_code: r.product_code, counted: n(`acc:${r.product_code}`) }))
+            : [],
+          lubricants: assignmentInfo?.assigned_lubricants
+            ? lubricantRows.map(r => ({ product_code: r.product_code, counted: n(`lub:${r.product_code}`) }))
+            : [],
+          note: stockCountNote.trim() || null,
+        }
       }
       if (isRetrospective) {
         // Send manually confirmed opening readings so the backend writes them
@@ -904,6 +1002,8 @@ export default function MyShift() {
         throw new Error(e.detail || 'Failed to verify opening')
       }
       setOpeningVerified(true)
+      // Reload stock so the confirmed counts become this shift's opening
+      if (needsStockCount) await loadStock(shiftInfo.shift_id)
       // Update nozzle rows to use the confirmed opening values
       if (isRetrospective) {
         setNozzleRows(prev => prev.map(row => ({
@@ -1537,8 +1637,21 @@ export default function MyShift() {
             </div>
           </div>
 
+          {needsStockCount && (
+            <OpeningStockCount
+              lines={stockCountLines}
+              counts={stockCounts}
+              onCountChange={(key, value) => setStockCounts(prev => ({ ...prev, [key]: value }))}
+              note={stockCountNote}
+              onNoteChange={setStockCountNote}
+              consent={stockCountConsent}
+              onConsentChange={setStockCountConsent}
+              fromForecourt={stockFromForecourt}
+            />
+          )}
+
           {/* Opening stock summary (read-only) — filtered by assignment */}
-          {(() => {
+          {!needsStockCount && (() => {
             const lpgOpen = assignmentInfo?.assigned_lpg ? lpgRows.filter(r => (r.opening_full || 0) > 0 || (r.opening_empty || 0) > 0) : []
             const accOpen = assignmentInfo?.assigned_accessories ? accessoryRows.filter(r => (r.opening_stock || 0) > 0) : []
             const lubOpen = assignmentInfo?.assigned_lubricants ? lubricantRows.filter(r => (r.opening_stock || 0) > 0) : []
@@ -1586,7 +1699,7 @@ export default function MyShift() {
               />
               <button
                 onClick={handleVerifyOpening}
-                disabled={verifyingOpening}
+                disabled={verifyingOpening || !stockCountComplete}
                 className="mt-3 w-full sm:w-auto px-6 py-3 rounded-lg text-base font-semibold text-white disabled:opacity-50"
                 style={{ backgroundColor: theme.primary }}>
                 {verifyingOpening
@@ -2160,6 +2273,8 @@ export default function MyShift() {
                       <span className="text-sm font-bold" style={{ color: theme.textPrimary }}>{row.size_kg}kg Cylinder</span>
                       <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ backgroundColor: theme.cardBg, color: theme.textSecondary }}>
                         Opening: {row.opening_full}
+                        {row.additions_full !== 0 && <> | {row.additions_full > 0 ? 'Issued' : 'Taken off'}: {Math.abs(row.additions_full)}</>}
+                        {row.additions_empty !== 0 && <> | Empties {row.additions_empty > 0 ? 'added' : 'removed'}: {Math.abs(row.additions_empty)}</>}
                       </span>
                     </div>
 
@@ -2167,14 +2282,14 @@ export default function MyShift() {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div>
                         <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Refills Sold</label>
-                        <input type="number" min={0} max={row.opening_full} step={1}
+                        <input type="number" min={0} max={comp.available} step={1}
                           value={row.sold_refill} onChange={e => updateLpgRow(idx, 'sold_refill', e.target.value)}
                           placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
                           style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
                       </div>
                       <div>
                         <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>New Cyl Sold</label>
-                        <input type="number" min={0} max={row.opening_full} step={1}
+                        <input type="number" min={0} max={comp.available} step={1}
                           value={row.sold_with_cylinder} onChange={e => updateLpgRow(idx, 'sold_with_cylinder', e.target.value)}
                           placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
                           style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
@@ -2209,7 +2324,7 @@ export default function MyShift() {
 
                     {comp.soldExceedsOpening && (
                       <div className="mt-2 text-xs" style={{ color: 'var(--color-status-error)' }}>
-                        Cannot sell more than opening stock ({row.opening_full})
+                        Cannot sell more than opening stock plus stock issued ({comp.available})
                       </div>
                     )}
 
@@ -2322,7 +2437,7 @@ export default function MyShift() {
               <div className="px-4 pb-3">
                 <button onClick={() => {
                   setLpgNoSales(true)
-                  setLpgRows(prev => prev.map(r => ({ ...r, closing_full: String(r.opening_full), closing_empty: String(r.opening_empty) })))
+                  setLpgRows(prev => prev.map(r => ({ ...r, closing_full: String(r.opening_full + (r.additions_full || 0)), closing_empty: String(r.opening_empty + (r.additions_empty || 0)) })))
                 }} className="text-xs px-3 py-1 rounded border" style={{ color: theme.textSecondary, borderColor: theme.border }}>
                   Confirm No Sales This Shift
                 </button>
@@ -2362,12 +2477,13 @@ export default function MyShift() {
                         <span className="text-sm font-bold" style={{ color: theme.textPrimary }}>{row.description}</span>
                         <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ backgroundColor: theme.cardBg, color: theme.textSecondary }}>
                           Opening: {row.opening_stock}
+                          {row.additions !== 0 && <> | {row.additions > 0 ? 'Issued' : 'Taken off'}: {Math.abs(row.additions)}</>}
                         </span>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                           <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Qty Sold</label>
-                          <input type="number" min={0} max={row.opening_stock} step={1}
+                          <input type="number" min={0} max={comp.available} step={1}
                             value={row.sold} onChange={e => updateAccRow(idx, 'sold', e.target.value)}
                             placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
                             style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
@@ -2416,7 +2532,7 @@ export default function MyShift() {
                 <div className="px-4 pb-3">
                   <button onClick={() => {
                     setAccNoSales(true)
-                    setAccessoryRows(prev => prev.map(r => ({ ...r, closing_stock: String(r.opening_stock) })))
+                    setAccessoryRows(prev => prev.map(r => ({ ...r, closing_stock: String(r.opening_stock + (r.additions || 0)) })))
                   }} className="text-xs px-3 py-1 rounded border" style={{ color: theme.textSecondary, borderColor: theme.border }}>
                     Confirm No Sales This Shift
                   </button>
@@ -2471,12 +2587,13 @@ export default function MyShift() {
                         </div>
                         <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ backgroundColor: theme.cardBg, color: theme.textSecondary }}>
                           Opening: {row.opening_stock}
+                          {row.additions !== 0 && <> | {row.additions > 0 ? 'Issued' : 'Taken off'}: {Math.abs(row.additions)}</>}
                         </span>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                           <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Qty Sold</label>
-                          <input type="number" min={0} max={row.opening_stock} step={1}
+                          <input type="number" min={0} max={comp.available} step={1}
                             value={row.sold} onChange={e => updateLubRow(idx, 'sold', e.target.value)}
                             placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
                             style={{ ...inputStyle, borderColor: comp.soldExceedsOpening ? 'var(--color-status-error)' : theme.border }} />
@@ -2530,7 +2647,7 @@ export default function MyShift() {
                 <div className="px-4 pb-3">
                   <button onClick={() => {
                     setLubNoSales(true)
-                    setLubricantRows(prev => prev.map(r => ({ ...r, closing_stock: String(r.opening_stock) })))
+                    setLubricantRows(prev => prev.map(r => ({ ...r, closing_stock: String(r.opening_stock + (r.additions || 0)) })))
                   }} className="text-xs px-3 py-1 rounded border" style={{ color: theme.textSecondary, borderColor: theme.border }}>
                     Confirm No Sales This Shift
                   </button>

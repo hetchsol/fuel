@@ -38,6 +38,9 @@ export default function Shifts() {
   // Manage existing shift state
   const [selectedShiftId, setSelectedShiftId] = useState<string>('')
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null)
+  // Stock categories this shift already had on two attendants when opened for
+  // editing (saved before the one-attendant rule) - left alone, not refused.
+  const [preexistingCategoryClashes, setPreexistingCategoryClashes] = useState<string[]>([])
   const [showManageDropdown, setShowManageDropdown] = useState(false)
 
   // Opening readings panel visibility per attendant in the creation modal
@@ -503,6 +506,7 @@ export default function Shifts() {
     loadIslandsData()  // Re-fetch active islands
     fetchNozzles()     // Re-fetch nozzles from active islands
     setEditingShiftId(null)
+    setPreexistingCategoryClashes([])
     setShiftForm({ date: new Date().toISOString().split('T')[0], shift_type: 'Day', assignments: [] })
     setSelectedAttendants([])
     setShowConfirmation(false)
@@ -534,6 +538,10 @@ export default function Shifts() {
     } else {
       setSelectedAttendants([])
     }
+    setPreexistingCategoryClashes(
+      ['assigned_lpg', 'assigned_lubricants', 'assigned_accessories']
+        .filter(flag => (shift.assignments || []).filter((a: any) => a[flag]).length > 1)
+    )
     setEditingShiftId(shift.shift_id)
     setShowConfirmation(false)
     setValidationMessages([])
@@ -696,6 +704,18 @@ export default function Shifts() {
         }
         allNozzleIds.push(nid)
       })
+    })
+
+    // Each stock category can go to only one attendant
+    ;([
+      ['assigned_lpg', 'LPG'],
+      ['assigned_lubricants', 'Lubricants'],
+      ['assigned_accessories', 'Accessories'],
+    ] as const).forEach(([flag, label]) => {
+      const holders = selectedAttendants.filter(a => a[flag])
+      if (holders.length > 1 && !preexistingCategoryClashes.includes(flag)) {
+        errors.push(`${label} is assigned to ${holders.map(a => a.full_name).join(' and ')}. Only one attendant can hold ${label} per shift.`)
+      }
     })
 
     // 5. Check for unassigned active nozzles (warning, not error)
@@ -2371,45 +2391,38 @@ export default function Shifts() {
                     <label className="block text-sm font-medium mb-2">Assign Products</label>
                     <p className="text-xs text-content-secondary mb-2">Select which product operations this attendant is responsible for during this shift.</p>
                     <div className="flex flex-wrap gap-3">
-                      <label className="flex items-center gap-2 cursor-pointer p-2 border rounded-lg hover:bg-action-primary-light">
-                        <input
-                          type="checkbox"
-                          checked={attendant.assigned_lpg || false}
-                          onChange={() => {
-                            setSelectedAttendants(prev => prev.map(a =>
-                              a.user_id === attendant.user_id ? { ...a, assigned_lpg: !a.assigned_lpg } : a
-                            ))
-                          }}
-                          className="form-checkbox"
-                        />
-                        <span className="text-sm font-medium">LPG</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer p-2 border rounded-lg hover:bg-action-primary-light">
-                        <input
-                          type="checkbox"
-                          checked={attendant.assigned_lubricants || false}
-                          onChange={() => {
-                            setSelectedAttendants(prev => prev.map(a =>
-                              a.user_id === attendant.user_id ? { ...a, assigned_lubricants: !a.assigned_lubricants } : a
-                            ))
-                          }}
-                          className="form-checkbox"
-                        />
-                        <span className="text-sm font-medium">Lubricants</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer p-2 border rounded-lg hover:bg-action-primary-light">
-                        <input
-                          type="checkbox"
-                          checked={attendant.assigned_accessories || false}
-                          onChange={() => {
-                            setSelectedAttendants(prev => prev.map(a =>
-                              a.user_id === attendant.user_id ? { ...a, assigned_accessories: !a.assigned_accessories } : a
-                            ))
-                          }}
-                          className="form-checkbox"
-                        />
-                        <span className="text-sm font-medium">Accessories</span>
-                      </label>
+                      {([
+                        ['assigned_lpg', 'LPG'],
+                        ['assigned_lubricants', 'Lubricants'],
+                        ['assigned_accessories', 'Accessories'],
+                      ] as const).map(([flag, label]) => {
+                        // One attendant per stock category per shift: that person confirms
+                        // the Forecourt count at shift start and accounts for it at closing.
+                        const holder = selectedAttendants.find(a => a.user_id !== attendant.user_id && a[flag])
+                        // Still allow unticking, so a roster saved before this rule can be fixed.
+                        const blocked = !!holder && !attendant[flag]
+                        return (
+                          <label key={flag}
+                            className={`flex items-center gap-2 p-2 border rounded-lg ${blocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-action-primary-light'}`}
+                            title={holder ? `${label} is already assigned to ${holder.full_name || holder.username || 'another attendant'}` : undefined}>
+                            <input
+                              type="checkbox"
+                              checked={attendant[flag] || false}
+                              disabled={blocked}
+                              onChange={() => {
+                                setSelectedAttendants(prev => prev.map(a =>
+                                  a.user_id === attendant.user_id ? { ...a, [flag]: !a[flag] } : a
+                                ))
+                              }}
+                              className="form-checkbox"
+                            />
+                            <span className="text-sm font-medium">{label}</span>
+                            {holder && (
+                              <span className="text-xs text-content-secondary">({holder.full_name || holder.username})</span>
+                            )}
+                          </label>
+                        )
+                      })}
                     </div>
                   </div>
 

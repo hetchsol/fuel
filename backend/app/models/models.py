@@ -885,7 +885,10 @@ class LPGStockLineItem(BaseModel):
     size_kg: int
     opening_full: int = 0
     opening_empty: int = 0
-    additions: int = 0            # kept for backward compat; attendant sends 0
+    # Server-stamped from Stores movements during the shift (see
+    # attendant_handover._stamp_stock_opening); whatever the browser sends is replaced.
+    additions: int = 0            # full cylinders issued to (+) or taken off (-) the forecourt
+    additions_empty: int = 0      # empties added (+) or taken off (-), e.g. returned to the supplier
     closing_full: int = 0
     closing_empty: int = 0
     sold_refill: int = 0          # attendant enters directly
@@ -899,7 +902,7 @@ class AccessoryStockLineItem(BaseModel):
     product_code: str
     description: str
     opening_stock: int = 0
-    additions: int = 0            # kept for backward compat; attendant sends 0
+    additions: int = 0            # server-stamped: net issued to the forecourt during the shift
     sold: int = 0                 # attendant enters directly
     damaged: int = 0
     closing_stock: int = 0
@@ -911,7 +914,7 @@ class LubricantStockLineItem(BaseModel):
     product_code: str
     description: str
     opening_stock: int = 0
-    additions: int = 0            # kept for backward compat; attendant sends 0
+    additions: int = 0            # server-stamped: net issued to the forecourt during the shift
     sold: int = 0                 # attendant enters directly
     damaged: int = 0
     closing_stock: int = 0
@@ -976,6 +979,10 @@ class HandoverReviewInput(BaseModel):
 class HandoverOutput(BaseModel):
     """Output after submitting a shift handover with all computed values"""
     handover_id: str
+    # True when the shift was started under live Forecourt counts, so its
+    # sales move stock (see stock_service.moves_live_stock). None on records
+    # created before this existed.
+    counts_live: Optional[bool] = None
     shift_id: str
     attendant_id: str
     attendant_name: str

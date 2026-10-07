@@ -510,7 +510,8 @@ def update_shift(shift_id: str, shift: Shift, ctx: dict = Depends(get_station_co
     # Validate assignments if present
     if shift.assignments:
         try:
-            validate_shift_assignments([a.dict() for a in shift.assignments], storage)
+            validate_shift_assignments([a.dict() for a in shift.assignments], storage,
+                                       existing_assignments=shifts_data[shift_id].get("assignments") or [])
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 

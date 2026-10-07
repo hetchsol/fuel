@@ -319,7 +319,8 @@ def record_forecourt_return(station_id: str, item_key: str, qty, performed_by: s
 
 
 def sync_forecourt_deltas(station_id: str, previous: dict, current: dict,
-                          performed_by: str = "system", ref: str = "") -> dict:
+                          performed_by: str = "system", ref: str = "",
+                          entry_date: Optional[str] = None) -> dict:
     """
     Reconcile the forecourt bin to a NEW cumulative quantity-consumed total per
     item, given the PREVIOUS cumulative total already applied for the same
@@ -338,7 +339,14 @@ def sync_forecourt_deltas(station_id: str, previous: dict, current: dict,
     a negative running total so the same delta math applies uniformly).
     Missing keys are treated as 0. Returns `current` unchanged, for the
     caller to persist as the new baseline.
+
+    Once the station is live on Forecourt counts, a correction to an entry
+    dated before go-live does not move stock: the go-live counts already
+    include whatever happened on those days.
     """
+    live = forecourt_live_since(station_id)
+    if live and entry_date and entry_date < live[:10]:
+        return current
     for key in set(previous) | set(current):
         delta = round((current.get(key, 0) or 0) - (previous.get(key, 0) or 0), 4)
         if delta > 0:
@@ -435,7 +443,7 @@ def apply_handover_sales(station_id: str, handover: dict, performed_by: str = "s
     was already applied (the CALLER is responsible for persisting the handover so
     the flag sticks). Fully lenient — clamps at zero, skips unknown items.
     """
-    if not handover or handover.get("stock_applied"):
+    if not handover or handover.get("stock_applied") or not moves_live_stock(station_id, handover):
         return {"applied": False}
 
     snap = handover.get("stock_snapshot") or {}
@@ -462,7 +470,7 @@ def reverse_handover_sales(station_id: str, handover: dict, performed_by: str = 
     separate "reversed" flag) so `apply_handover_sales`'s own idempotency
     guard can be reused as-is to re-apply cleanly if the void is undone.
     """
-    if not handover or not handover.get("stock_applied"):
+    if not handover or not handover.get("stock_applied") or not moves_live_stock(station_id, handover):
         return {"reversed": False}
 
     snap = handover.get("stock_snapshot") or {}
@@ -478,6 +486,184 @@ def reverse_handover_sales(station_id: str, handover: dict, performed_by: str = 
     handover["stock_applied"] = False
     return {"reversed": True, "items_reversed": len(sold),
             "sales_applied": sales_applied, "returns_applied": returns_applied}
+
+
+# ── Forecourt go-live + shift-start counts ──────────────────────────
+#
+# Until a station "goes live" on the Forecourt bin, attendants' opening stock
+# carries forward from the previous handover's closing count and the bin is
+# not trusted. Going live sets every Forecourt count once (from the last
+# closings, or as already counted) and from then on the bin is the system
+# count each attendant confirms or corrects at shift start.
+
+SETTINGS_FILE = "stock_settings.json"
+OPENING_VARIANCES_FILE = "opening_stock_variances.json"
+
+# Manager movements that change what is on the forecourt during a shift and
+# therefore count as the attendant's "additions" (negative when stock is
+# taken away). Handover-driven sale/return rows and count corrections
+# (adjust) are deliberately excluded.
+_ADDITION_SIGNS = {
+    ("issue", "to"): 1,
+    ("return_to_store", "from"): -1,
+    ("return_to_supplier", "from"): -1,
+    ("damage", "from"): -1,
+}
+
+
+def load_settings(station_id: str) -> dict:
+    return load_station_json(station_id, SETTINGS_FILE, default={})
+
+
+def forecourt_live_since(station_id: str) -> Optional[str]:
+    """ISO timestamp the station went live on the Forecourt bin, or None."""
+    return (load_settings(station_id) or {}).get("forecourt_live_since")
+
+
+def moves_live_stock(station_id: str, handover: dict) -> bool:
+    """
+    Whether this handover's sales may move the Forecourt counts. Before
+    go-live every handover does (as before). After go-live only handovers
+    for shifts started under live counts do (`counts_live`, stamped when the
+    handover is created): the go-live counts already include every earlier
+    shift, so approving, correcting, voiding or un-voiding one of those must
+    not move stock again. Older records are never modified to achieve this.
+    """
+    if not forecourt_live_since(station_id):
+        return True
+    return bool(handover.get("counts_live"))
+
+
+def set_forecourt_live(station_id: str, performed_by: str, source: str) -> dict:
+    settings = load_settings(station_id) or {}
+    settings.update({
+        "forecourt_live_since": datetime.now().isoformat(),
+        "forecourt_live_by": performed_by,
+        "forecourt_live_source": source,
+    })
+    save_station_json(station_id, SETTINGS_FILE, settings)
+    return settings
+
+
+def forecourt_additions(station_id: str, since_iso: str, until_iso: Optional[str] = None) -> dict:
+    """
+    Net quantity a manager put on (+) or took off (-) the forecourt per item
+    between two timestamps: issues, returns to stores, empties returned to
+    the supplier and forecourt write-offs. {item_key: net_qty}, zero nets dropped.
+    """
+    net: dict = {}
+    if not since_iso:
+        return net
+    for m in load_movements(station_id):
+        ts = m.get("timestamp", "")
+        if ts < since_iso or (until_iso and ts > until_iso):
+            continue
+        mtype = m.get("type")
+        sign = 0
+        if m.get("to_bin") == "forecourt":
+            sign = _ADDITION_SIGNS.get((mtype, "to"), 0)
+        elif m.get("from_bin") == "forecourt":
+            sign = _ADDITION_SIGNS.get((mtype, "from"), 0)
+        if sign:
+            key = m.get("item_key")
+            net[key] = round(net.get(key, 0) + sign * (m.get("qty", 0) or 0), 4)
+    return {k: v for k, v in net.items() if v}
+
+
+def correct_forecourt_by(station_id: str, item_key: str, delta, performed_by: str,
+                         reason: str, ref: str = "") -> Optional[dict]:
+    """
+    Move a Forecourt count by a signed difference found in a count (as opposed
+    to adjust(), which sets an absolute figure and would wipe out sales booked
+    since the count was taken). Clamps at zero; no-op for unknown items.
+    """
+    try:
+        delta = round(float(delta), 4)
+    except (TypeError, ValueError):
+        return None
+    if not delta:
+        return None
+    items = load_items(station_id)
+    item = items.get(item_key)
+    if not item:
+        return None
+    item["forecourt"] = max(0, round(item["forecourt"] + delta, 4))
+    save_items(station_id, items)
+    _record_movement(station_id, "adjust", item, delta, "forecourt", "forecourt",
+                     performed_by, note=reason, ref=ref)
+    return item
+
+
+def load_opening_variances(station_id: str) -> dict:
+    return load_station_json(station_id, OPENING_VARIANCES_FILE, default={})
+
+
+def save_opening_variances(station_id: str, data: dict):
+    save_station_json(station_id, OPENING_VARIANCES_FILE, data)
+
+
+RESPONSIBILITY = ("previous_shift", "this_attendant", "stores_error")
+
+
+def resolve_opening_variance(station_id: str, variance_id: str, confirmed_qty,
+                             responsibility: str, note: str, performed_by: str) -> dict:
+    """
+    Manager decision on a shift-start count that did not match the system.
+    The Forecourt count moves by (confirmed - system), so the bin ends up at
+    what was physically there at shift start whichever way responsibility
+    falls. `confirmed_qty` defaults to the attendant's own count; a manager
+    recount can override it (e.g. the attendant under-declared).
+    """
+    if responsibility not in RESPONSIBILITY:
+        raise HTTPException(status_code=400, detail=f"responsibility must be one of {RESPONSIBILITY}.")
+    if not (note or "").strip():
+        raise HTTPException(status_code=400, detail="A note is required to resolve a count difference.")
+    variances = load_opening_variances(station_id)
+    v = variances.get(variance_id)
+    if not v:
+        raise HTTPException(status_code=404, detail="Count difference not found.")
+    if v.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="This count difference has already been resolved.")
+    if confirmed_qty is None:
+        confirmed_qty = v.get("counted_qty", 0)
+    try:
+        confirmed_qty = float(confirmed_qty)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Confirmed count must be a number.")
+    if confirmed_qty < 0 or confirmed_qty != int(confirmed_qty):
+        raise HTTPException(status_code=400, detail="Confirmed count must be a whole number, zero or more.")
+
+    delta = round(confirmed_qty - (v.get("system_qty", 0) or 0), 4)
+    bin_moved = False
+    if v.get("forecourt_live") and delta:
+        bin_moved = correct_forecourt_by(
+            station_id, v["item_key"], delta, performed_by,
+            reason=(f"Shift-start count {v.get('shift_id')} ({v.get('attendant_name')}): "
+                    f"system {v.get('system_qty', 0):g}, confirmed {confirmed_qty:g}. {note.strip()}"),
+            ref=variance_id) is not None
+
+    v.update({
+        "status": "resolved",
+        "confirmed_qty": confirmed_qty,
+        "responsibility": responsibility,
+        "resolution_note": note.strip(),
+        "resolved_by": performed_by,
+        "resolved_at": datetime.now().isoformat(),
+        "forecourt_corrected_by": delta if bin_moved else 0,
+    })
+    save_opening_variances(station_id, variances)
+    try:
+        log_audit_event(
+            station_id=station_id, action="opening_count_resolved", performed_by=performed_by,
+            entity_type="stock_item", entity_id=v["item_key"],
+            details={"variance_id": variance_id, "system_qty": v.get("system_qty"),
+                     "counted_qty": v.get("counted_qty"), "confirmed_qty": confirmed_qty,
+                     "responsibility": responsibility},
+            notes=note.strip(),
+        )
+    except Exception:
+        pass
+    return v
 
 
 # ── stock-take sessions ─────────────────────────────────────────────

@@ -6,12 +6,13 @@ sales flows. See services/stock_service.py for the model.
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from .auth import get_station_context, require_manager_or_owner, require_owner
 from ...database.station_files import load_station_json
 from ...services import stock_service as svc
+from ...services.audit_service import log_audit_event
 
 router = APIRouter()
 
@@ -219,26 +220,32 @@ def adjust(data: AdjustInput, ctx: dict = Depends(get_station_context)):
 _CYLINDER_SIZES = [3, 6, 9, 19, 45, 48]
 
 
-@router.post("/seed-catalog", dependencies=[Depends(require_manager_or_owner)])
-def seed_catalog(ctx: dict = Depends(get_station_context)):
+def _seed_catalog(station_id: str) -> int:
     """
     Best-effort import of item definitions (zero balances) from the existing
     lubricant / LPG-accessory catalogs + cylinder sizes. Existing items (and
     their balances) are preserved. Returns the number of items created/updated.
     """
-    station_id = ctx["station_id"]
     created = 0
+    existing = svc.load_items(station_id)
 
     def _upsert(category, code, name, unit="ea"):
         nonlocal created
+        if f"{category}:{code}" in existing:
+            return  # upsert_item would reset the manager's name, unit and re-order settings
         try:
             svc.upsert_item(station_id, category, str(code), name, unit)
             created += 1
         except Exception:
             pass
 
-    # Cylinders (full + empty) by size
-    for size in _CYLINDER_SIZES:
+    # Cylinders (full + empty) by size - the sizes attendants count, plus common extras
+    try:
+        from .lpg_daily import LPG_SIZES
+        sizes = sorted(set(_CYLINDER_SIZES) | set(LPG_SIZES))
+    except Exception:
+        sizes = _CYLINDER_SIZES
+    for size in sizes:
         _upsert("cylinder_full", f"{size}kg", f"{size}kg cylinder (full)", "cylinder")
         _upsert("cylinder_empty", f"{size}kg", f"{size}kg cylinder (empty)", "cylinder")
 
@@ -264,9 +271,144 @@ def seed_catalog(ctx: dict = Depends(get_station_context)):
                 _upsert("lpg_accessory", code, p.get("description", code))
     except Exception:
         pass
+    return created
 
+
+@router.post("/seed-catalog", dependencies=[Depends(require_manager_or_owner)])
+def seed_catalog(ctx: dict = Depends(get_station_context)):
+    """
+    Best-effort import of item definitions (zero balances) from the existing
+    lubricant / LPG-accessory catalogs + cylinder sizes. Existing items (and
+    their balances) are preserved. Returns the number of items created/updated.
+    """
+    station_id = ctx["station_id"]
+    created = _seed_catalog(station_id)
     return {"status": "success", "items_seeded": created,
             "total_items": len(svc.load_items(station_id))}
+
+
+# ── Forecourt go-live ───────────────────────────────────────────────
+
+class GoLiveInput(BaseModel):
+    # "last_closing": set every Forecourt count to the last shift's closing count.
+    # "current_counts": keep the Forecourt counts as they are (already counted,
+    # e.g. through a Forecourt stock take).
+    source: str = "last_closing"
+    dry_run: bool = True
+
+
+def _go_live_rows(station_id: str, storage: dict) -> list:
+    """Each forecourt item with its current count and the last shift's closing count."""
+    from .attendant_handover import _compute_stock_opening
+    opening = _compute_stock_opening(station_id, storage, use_forecourt=False)
+    prev = opening.get("previous_handovers", {})
+    items = svc.load_items(station_id)
+    rows = []
+
+    def _row(item_key, name, closing, source, ho):
+        it = items.get(item_key)
+        rows.append({
+            "item_key": item_key, "name": (it or {}).get("name") or name,
+            "forecourt_now": (it or {}).get("forecourt"),
+            "last_closing": closing, "closing_source": source, "handover_id": ho,
+        })
+
+    for r in opening["lpg_cylinders"]:
+        size = r["size_kg"]
+        _row(f"cylinder_full:{size}kg", f"{size}kg cylinder (full)", r["opening_full"], r["source"], prev.get("lpg"))
+        _row(f"cylinder_empty:{size}kg", f"{size}kg cylinder (empty)", r["opening_empty"], r["source"], prev.get("lpg"))
+    for r in opening["accessories"]:
+        _row(f"lpg_accessory:{r['product_code']}", r["description"], r["opening_stock"], r["source"], prev.get("acc"))
+    for r in opening["lubricants"]:
+        _row(f"lubricant:{r['product_code']}", r["description"], r["opening_stock"], r["source"], prev.get("lub"))
+    return rows
+
+
+@router.get("/forecourt-status", dependencies=[Depends(require_manager_or_owner)])
+def forecourt_status(ctx: dict = Depends(get_station_context)):
+    settings = svc.load_settings(ctx["station_id"]) or {}
+    pending = sum(1 for v in svc.load_opening_variances(ctx["station_id"]).values()
+                  if v.get("status") == "pending")
+    return {
+        "live_since": settings.get("forecourt_live_since"),
+        "live_by": settings.get("forecourt_live_by"),
+        "source": settings.get("forecourt_live_source"),
+        "pending_count_differences": pending,
+    }
+
+
+@router.post("/forecourt-go-live", dependencies=[Depends(require_owner)])
+def forecourt_go_live(data: GoLiveInput, ctx: dict = Depends(get_station_context)):
+    """
+    Switch the station to the Forecourt count as the source of every
+    attendant's opening stock. Owner only, once per station.
+
+    dry_run=True (default) only previews. Applying:
+      1. creates any missing catalog items;
+      2. with source="last_closing", sets each Forecourt count to the last
+         shift's closing count (recorded as adjustments);
+      3. records the go-live time. Shifts started before it keep the old
+         behaviour, and their handovers no longer move stock (their sales are
+         already inside the counts just set - see stock_service.moves_live_stock).
+         No existing handover or historical record is modified.
+    """
+    station_id = ctx["station_id"]
+    if data.source not in ("last_closing", "current_counts"):
+        raise HTTPException(status_code=400, detail="source must be 'last_closing' or 'current_counts'.")
+    if svc.forecourt_live_since(station_id):
+        raise HTTPException(status_code=400, detail="This station is already live on the Forecourt count.")
+
+    if data.dry_run:
+        return {"dry_run": True, "source": data.source, "rows": _go_live_rows(station_id, ctx["storage"])}
+
+    _seed_catalog(station_id)
+    rows = _go_live_rows(station_id, ctx["storage"])
+    changed = 0
+    if data.source == "last_closing":
+        for r in rows:
+            target = r["last_closing"] or 0
+            if r["forecourt_now"] is None or abs((r["forecourt_now"] or 0) - target) < 1e-9:
+                continue
+            svc.adjust(station_id, r["item_key"], "forecourt", target, ctx["username"],
+                       reason="Forecourt go-live: last shift closing count"
+                              + (f" ({r['handover_id']})" if r.get("handover_id") else ""))
+            changed += 1
+
+    settings = svc.set_forecourt_live(station_id, ctx["username"], data.source)
+    try:
+        log_audit_event(station_id=station_id, action="forecourt_go_live", performed_by=ctx["username"],
+                        entity_type="station", entity_id=station_id,
+                        details={"source": data.source, "counts_changed": changed})
+    except Exception:
+        pass
+    return {"dry_run": False, "source": data.source, "counts_changed": changed,
+            "live_since": settings["forecourt_live_since"],
+            "rows": _go_live_rows(station_id, ctx["storage"])}
+
+
+# ── shift-start count differences ───────────────────────────────────
+
+class ResolveCountInput(BaseModel):
+    responsibility: str              # previous_shift | this_attendant | stores_error
+    note: str
+    confirmed_qty: Optional[float] = None   # defaults to the attendant's count
+
+
+@router.get("/opening-variances", dependencies=[Depends(require_manager_or_owner)])
+def list_opening_variances(status: Optional[str] = None, limit: int = 200,
+                           ctx: dict = Depends(get_station_context)):
+    rows = list(svc.load_opening_variances(ctx["station_id"]).values())
+    if status:
+        rows = [v for v in rows if v.get("status") == status]
+    rows.sort(key=lambda v: v.get("created_at", ""), reverse=True)
+    return rows[:limit]
+
+
+@router.post("/opening-variances/{variance_id}/resolve", dependencies=[Depends(require_manager_or_owner)])
+def resolve_opening_variance(variance_id: str, data: ResolveCountInput,
+                             ctx: dict = Depends(get_station_context)):
+    return svc.resolve_opening_variance(ctx["station_id"], variance_id, data.confirmed_qty,
+                                        data.responsibility, data.note, ctx["username"])
 
 
 # ── stock-take sessions ─────────────────────────────────────────────

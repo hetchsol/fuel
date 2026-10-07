@@ -402,7 +402,7 @@ def submit_lpg_entry(
             key = f"cylinder_empty:{size}kg"
             current_applied[key] = current_applied.get(key, 0) - qty
     svc.sync_forecourt_deltas(station_id, previous_applied, current_applied,
-                              entry_input.recorded_by, ref=entry_id)
+                              entry_input.recorded_by, ref=entry_id, entry_date=entry_input.date)
 
     output = LPGDailyEntryOutput(
         entry_id=entry_id,
@@ -608,7 +608,7 @@ def submit_accessories_entry(
         if consumed:
             current_applied[f"lpg_accessory:{row.product_code}"] = consumed
     svc.sync_forecourt_deltas(station_id, previous_applied, current_applied,
-                              entry_input.recorded_by, ref=entry_id)
+                              entry_input.recorded_by, ref=entry_id, entry_date=entry_input.date)
 
     output = LPGAccessoriesDailyOutput(
         entry_id=entry_id,

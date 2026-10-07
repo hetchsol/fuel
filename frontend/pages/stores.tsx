@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ForecourtCountsPanel from '../components/ForecourtCountsPanel'
 import { getHeaders, authFetch } from '../lib/api'
 import { formatDateTimeToDisplay } from '../lib/dateUtils'
 
@@ -214,12 +215,14 @@ export default function StoresDashboard() {
   const [cylModal, setCylModal] = useState<CylRow | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ item_key: string; name: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [isOwner, setIsOwner] = useState(false)
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
     if (!userData) { router.push('/login'); return }
     const u = JSON.parse(userData)
     if (!['manager', 'owner'].includes(u.role)) router.push('/')
+    setIsOwner(u.role === 'owner')
   }, [router])
 
   // `quiet` refreshes keep the page in place (no spinner) so stock received,
@@ -359,6 +362,8 @@ export default function StoresDashboard() {
           Sync catalog
         </button>
       </div>
+
+      <ForecourtCountsPanel isOwner={isOwner} onChanged={() => fetchAll(true)} />
 
       {/* Summary strip */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

@@ -459,7 +459,7 @@ def submit_lubricant_entry(
         if consumed:
             current_applied[f"lubricant:{row.product_code}"] = consumed
     svc.sync_forecourt_deltas(station_id, previous_applied, current_applied,
-                              entry_input.recorded_by, ref=entry_id)
+                              entry_input.recorded_by, ref=entry_id, entry_date=entry_input.date)
 
     output = LubricantDailyEntryOutput(
         entry_id=entry_id,

@@ -71,6 +71,35 @@ def validate_unique_nozzle_assignment(assignments: List[Dict[str, Any]]) -> None
         raise ValueError(f"Nozzles assigned to multiple attendants: {', '.join(duplicates)}")
 
 
+STOCK_CATEGORY_FLAGS = (
+    ("assigned_lpg", "LPG"),
+    ("assigned_lubricants", "Lubricants"),
+    ("assigned_accessories", "Accessories"),
+)
+
+
+def validate_unique_category_assignment(assignments: List[Dict[str, Any]],
+                                        existing: List[Dict[str, Any]] = None) -> None:
+    """
+    Ensure each stock category (LPG, Lubricants, Accessories) goes to at most
+    one attendant per shift. The Forecourt count for a category is confirmed
+    at shift start and accounted for at closing by a single person, so two
+    attendants sharing one category would have no clear owner of that stock.
+
+    Forward-only: a shift already saved with a category on two attendants
+    (before this rule) can still be edited; only a new clash is refused.
+    """
+    clashes = []
+    for flag, label in STOCK_CATEGORY_FLAGS:
+        names = [a.get('attendant_name') or a.get('attendant_id') for a in assignments if a.get(flag)]
+        already = sum(1 for a in (existing or []) if a.get(flag)) > 1
+        if len(names) > 1 and not already:
+            clashes.append(f"{label} ({', '.join(names)})")
+    if clashes:
+        raise ValueError("Each stock category can go to only one attendant per shift: "
+                         + "; ".join(clashes))
+
+
 def derive_island_ids_from_nozzles(nozzle_ids: List[str], storage: Dict[str, Any] = None) -> List[str]:
     """Derive the set of island IDs that own the given nozzles."""
     store = storage if storage is not None else storage_module.STORAGE
@@ -86,7 +115,8 @@ def derive_island_ids_from_nozzles(nozzle_ids: List[str], storage: Dict[str, Any
     return island_ids
 
 
-def validate_shift_assignments(assignments: List[Dict[str, Any]], storage: Dict[str, Any] = None) -> None:
+def validate_shift_assignments(assignments: List[Dict[str, Any]], storage: Dict[str, Any] = None,
+                               existing_assignments: List[Dict[str, Any]] = None) -> None:
     """Validate all assignments in a shift"""
     errors = []
 
@@ -106,6 +136,10 @@ def validate_shift_assignments(assignments: List[Dict[str, Any]], storage: Dict[
     # Validate unique nozzle assignment
     try:
         validate_unique_nozzle_assignment(assignments)
+    except ValueError as e:
+        errors.append(str(e))
+    try:
+        validate_unique_category_assignment(assignments, existing_assignments)
     except ValueError as e:
         errors.append(str(e))
 
