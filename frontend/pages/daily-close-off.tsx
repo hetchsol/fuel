@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ShiftPosCheck from '../components/ShiftPosCheck'
 import { getHeaders, authFetch } from '../lib/api'
 import Link from 'next/link'
 import ExportButtons from '../components/ExportButtons'
@@ -456,6 +457,15 @@ export default function DailyCloseOff() {
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Card machines are shared on a shift: one check per shift, all attendants' slips combined */}
+          {(summary?.pos_machine_checks || []).length > 0 && (
+            <div className="space-y-3 mb-6">
+              {summary.pos_machine_checks.map((c: any) => (
+                <ShiftPosCheck key={c.shift_id} shiftId={c.shift_id} label={`${formatDateToDisplay(selectedDate)} ${c.shift_type || ''}`.trim()} />
+              ))}
             </div>
           )}
 

@@ -13,6 +13,8 @@ import { ExportConfig } from '../lib/exportUtils'
 import { formatDateToDisplay, formatDateTimeToDisplay } from '../lib/dateUtils'
 import { CreditItem, OtherProduct, NewAccountModal, fetchOtherProducts } from '../components/CreditSaleShared'
 import toast from 'react-hot-toast'
+import ShiftPosCheck from '../components/ShiftPosCheck'
+import PosSlipsInput, { PosSlip, PosType, newSlip, slipsToItems, slipsTotal, slipsProblem } from '../components/PosSlipsInput'
 
 const PAGE_SIZE = 20
 
@@ -91,7 +93,7 @@ interface HandoverEntry {
   expected_cash: number
   actual_cash: number
   pos_receipts?: number
-  pos_breakdown?: { id?: string; type_id: string; type_name: string; amount: number; reference?: string }[] | null
+  pos_breakdown?: { id?: string; type_id: string; type_name: string; amount: number; reference?: string; bank?: string | null }[] | null
   pos_terminal_batch_total?: number | null
   pos_terminal_variance?: number | null
   total_accounted?: number
@@ -140,6 +142,7 @@ const FLAG_LABELS: Record<string, string> = {
   cash_shortage: 'Cash Shortage',
   meter_deviation: 'Meter Deviation',
   pos_terminal_variance: 'POS Terminal Variance',
+  cash_below_safe_deposits: 'Cash Below Own Safe Deposits',
   stock_variance_unexplained: 'Stock Variance',
   nozzle_loss_exceeded: 'Nozzle Loss Exceeded',
   duplicate_meter_reading: 'Duplicate Meter Reading',
@@ -224,9 +227,8 @@ export default function HandoverReview() {
   // Inline closing form (Phase 2 embedded in this page)
   const [closingFormId, setClosingFormId] = useState<string | null>(null)
   const [closingCash, setClosingCash] = useState('')
-  const [closingPosAmounts, setClosingPosAmounts] = useState<Record<string, string>>({})
-  const [closingPosRefs, setClosingPosRefs] = useState<Record<string, string>>({})
-  const [closingPosTerminalBatch, setClosingPosTerminalBatch] = useState('')
+  const [closingPosSlips, setClosingPosSlips] = useState<PosSlip[]>([])
+  const [posBanks, setPosBanks] = useState<string[]>([])
   const [closingNotes, setClosingNotes] = useState('')
   const [closingCreditItems, setClosingCreditItems] = useState<CreditItem[]>([])
   const [closingSafeDeposit, setClosingSafeDeposit] = useState(0)
@@ -234,7 +236,7 @@ export default function HandoverReview() {
   const [closingError, setClosingError] = useState('')
   const [creditAccounts, setCreditAccounts] = useState<any[]>([])
   const [fuelPrices, setFuelPrices] = useState<Record<string, number>>({ Diesel: 0, Petrol: 0 })
-  const [posTypes, setPosTypes] = useState<{ type_id: string; name: string; is_active: boolean }[]>([])
+  const [posTypes, setPosTypes] = useState<PosType[]>([])
   const [otherProducts, setOtherProducts] = useState<OtherProduct[]>([])
 
   const [currentUserRole, setCurrentUserRole] = useState('')
@@ -325,9 +327,7 @@ export default function HandoverReview() {
       .then(data => {
         const active = (data.payment_types || []).filter((t: any) => t.is_active)
         setPosTypes(active)
-        const init: Record<string, string> = {}
-        active.forEach((t: any) => { init[t.type_id] = '' })
-        setClosingPosAmounts(init)
+        setPosBanks(data.banks || [])
       })
       .catch(() => {})
     // Non-fuel products a credit sale can be entered against — see
@@ -341,19 +341,17 @@ export default function HandoverReview() {
     const h = awaitingClosing.find(x => x.handover_id === closingFormId)
     if (!h) return
     setClosingCash('')
-    const resetAmounts: Record<string, string> = {}
-    posTypes.forEach(t => { resetAmounts[t.type_id] = '' })
-    setClosingPosAmounts(resetAmounts)
-    setClosingPosRefs({})
-    setClosingPosTerminalBatch('')
+    setClosingPosSlips([newSlip(posTypes[0]?.type_id || '')])
     setClosingNotes('')
     setClosingCreditItems([])
     setClosingSafeDeposit(0)
     setClosingError('')
+    // Only this attendant's own deposits count towards their close
     authFetch(`${BASE}/safe-deposits/${encodeURIComponent(h.shift_id)}`, { headers: getAuthHeaders() })
-      .then(r => r.ok ? r.json() : { total_amount: 0 })
+      .then(r => r.ok ? r.json() : { attendants: [] })
       .then(data => {
-        const total = data.total_amount || 0
+        const mine = (data.attendants || []).find((a: any) => a.attendant_id === h.attendant_id)
+        const total = mine?.total || 0
         setClosingSafeDeposit(total)
         if (total > 0) setClosingCash(total.toFixed(2))
       })
@@ -579,9 +577,13 @@ export default function HandoverReview() {
     setClosingError('')
     setClosingDipBlocked(false)
     const actualCashVal = parseFloat(closingCash) || 0
-    const posItems = posTypes
-      .map(t => ({ type_id: t.type_id, type_name: t.name, amount: parseFloat(closingPosAmounts[t.type_id] || '0') || 0, reference: closingPosRefs[t.type_id] || undefined }))
-      .filter(i => i.amount > 0)
+    const slipError = slipsProblem(closingPosSlips)
+    if (slipError) {
+      setClosingError(slipError)
+      setClosingSubmitting(false)
+      return
+    }
+    const posItems = slipsToItems(closingPosSlips, posTypes)
     const posTotal = posItems.reduce((s, i) => s + i.amount, 0)
     const creditTotal = closingCreditItems.reduce((s, i) => s + (i.amount || 0), 0)
     try {
@@ -594,7 +596,6 @@ export default function HandoverReview() {
           actual_cash: actualCashVal,
           pos_receipts: posTotal,
           pos_items: posItems,
-          pos_terminal_batch_total: closingPosTerminalBatch !== '' ? parseFloat(closingPosTerminalBatch) || 0 : null,
           credit_sales: creditTotal,
           credit_sale_items: closingCreditItems.map(i => ({
             account_id: i.account_id,
@@ -905,6 +906,21 @@ export default function HandoverReview() {
           ))}
         </div>
       </div>
+
+      {/* Card machines are shared on a shift: one check per shift, all attendants' slips combined */}
+      {filterDate ? (() => {
+        const shifts = new Map<string, string>()
+        ;[...awaitingClosing, ...allHandovers]
+          .filter(x => x.date === filterDate && (!filterShiftType || x.shift_type === filterShiftType))
+          .forEach(x => { if (x.shift_id) shifts.set(x.shift_id, x.shift_type) })
+        return Array.from(shifts.entries()).map(([sid, type]) => (
+          <ShiftPosCheck key={sid} shiftId={sid} label={`${formatDateToDisplay(filterDate)} ${type}`} />
+        ))
+      })() : (
+        <p className="text-xs" style={{ color: theme.textSecondary }}>
+          Pick a date to see each shift's card machine check.
+        </p>
+      )}
 
       {/* Batch approve bar */}
       {selectedIds.size > 0 && (
@@ -1246,12 +1262,9 @@ export default function HandoverReview() {
                       cash={closingCash}
                       onCashChange={setClosingCash}
                       posTypes={posTypes}
-                      posAmounts={closingPosAmounts}
-                      onPosAmountsChange={setClosingPosAmounts}
-                      posRefs={closingPosRefs}
-                      onPosRefsChange={setClosingPosRefs}
-                      posTerminalBatch={closingPosTerminalBatch}
-                      onPosTerminalBatchChange={setClosingPosTerminalBatch}
+                      posBanks={posBanks}
+                      posSlips={closingPosSlips}
+                      onPosSlipsChange={setClosingPosSlips}
                       notes={closingNotes}
                       onNotesChange={setClosingNotes}
                       creditItems={closingCreditItems}
@@ -1461,12 +1474,9 @@ export default function HandoverReview() {
                           cash={closingCash}
                           onCashChange={setClosingCash}
                           posTypes={posTypes}
-                          posAmounts={closingPosAmounts}
-                          onPosAmountsChange={setClosingPosAmounts}
-                          posRefs={closingPosRefs}
-                          onPosRefsChange={setClosingPosRefs}
-                          posTerminalBatch={closingPosTerminalBatch}
-                          onPosTerminalBatchChange={setClosingPosTerminalBatch}
+                          posBanks={posBanks}
+                          posSlips={closingPosSlips}
+                          onPosSlipsChange={setClosingPosSlips}
                           notes={closingNotes}
                           onNotesChange={setClosingNotes}
                           creditItems={closingCreditItems}
@@ -1799,13 +1809,10 @@ interface ClosingFormProps {
   safeDeposit: number
   cash: string
   onCashChange: (v: string) => void
-  posTypes: { type_id: string; name: string; is_active: boolean }[]
-  posAmounts: Record<string, string>
-  onPosAmountsChange: (v: Record<string, string>) => void
-  posRefs: Record<string, string>
-  onPosRefsChange: (v: Record<string, string>) => void
-  posTerminalBatch: string
-  onPosTerminalBatchChange: (v: string) => void
+  posTypes: PosType[]
+  posBanks: string[]
+  posSlips: PosSlip[]
+  onPosSlipsChange: (v: PosSlip[]) => void
   notes: string
   onNotesChange: (v: string) => void
   creditItems: CreditItem[]
@@ -1818,13 +1825,12 @@ interface ClosingFormProps {
 }
 
 function ClosingForm({ h, theme, creditAccounts, otherProducts, onAccountCreated, currentUserRole, fuelPrices, safeDeposit,
-  cash, onCashChange, posTypes, posAmounts, onPosAmountsChange, posRefs, onPosRefsChange,
-  posTerminalBatch, onPosTerminalBatchChange,
+  cash, onCashChange, posTypes, posBanks, posSlips, onPosSlipsChange,
   notes, onNotesChange,
   creditItems, onCreditItemsChange, submitting, error, dipBlocked, onSubmit, onCancel,
 }: ClosingFormProps) {
   const cashVal = parseFloat(cash) || 0
-  const posVal = posTypes.reduce((s, t) => s + (parseFloat(posAmounts[t.type_id] || '0') || 0), 0)
+  const posVal = slipsTotal(posSlips)
   const creditTotal = creditItems.reduce((s, i) => s + (i.amount || 0), 0)
   const totalAccounted = cashVal + posVal + creditTotal
   const difference = totalAccounted - (h.total_expected || 0)
@@ -1917,7 +1923,7 @@ function ClosingForm({ h, theme, creditAccounts, otherProducts, onAccountCreated
               equal to it, so this is context for the manager's own judgment, not a rule. */}
           {safeDeposit > 0 && cash !== '' && (
             <div className="mt-1.5 text-xs font-mono flex gap-3">
-              <span style={{ color: theme.textSecondary }}>Safe deposits: {fmtK(safeDeposit)}</span>
+              <span style={{ color: theme.textSecondary }}>{h.attendant_name}'s safe deposits: {fmtK(safeDeposit)}</span>
               <span style={{ color: theme.textSecondary }}>Cash entered: {fmtK(cashVal)}</span>
               {cashVal < safeDeposit && (
                 <span style={{ color: 'var(--color-status-warning)', fontWeight: 600 }}>
@@ -1929,57 +1935,10 @@ function ClosingForm({ h, theme, creditAccounts, otherProducts, onAccountCreated
         </div>
       </div>
 
-      {/* POS Receipts — per payment type + terminal batch cross-check */}
+      {/* Non-cash payments: one line per slip. The shared card machine's total is
+          checked once per shift against every attendant's slips (Shift card check). */}
       {posTypes.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>POS Receipts — ZMW</label>
-            {posVal > 0 && (
-              <span className="text-xs font-mono font-semibold" style={{ color: theme.textPrimary }}>
-                K{posVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            )}
-          </div>
-          <div className="space-y-2 mb-3">
-            {posTypes.map(t => (
-              <div key={t.type_id} className="flex items-center gap-2">
-                <span className="text-xs w-28 shrink-0" style={{ color: theme.textSecondary }}>{t.name}</span>
-                <input type="number" min={0} step="0.01" value={posAmounts[t.type_id] ?? ''} placeholder="0.00"
-                  onChange={e => onPosAmountsChange({ ...posAmounts, [t.type_id]: e.target.value })}
-                  className="w-28 px-2 py-1.5 rounded border text-sm text-right font-mono"
-                  style={inputStyle} />
-                <input type="text" value={posRefs[t.type_id] ?? ''} placeholder="Ref (optional)"
-                  onChange={e => onPosRefsChange({ ...posRefs, [t.type_id]: e.target.value })}
-                  className="flex-1 px-2 py-1.5 rounded border text-xs"
-                  style={inputStyle} />
-              </div>
-            ))}
-          </div>
-          <div className="pt-2" style={{ borderTopWidth: 1, borderTopColor: theme.border }}>
-            <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-              Terminal Batch Total — from settlement slip
-            </label>
-            <input type="number" min={0} step="0.01" value={posTerminalBatch} placeholder="0.00"
-              onChange={e => onPosTerminalBatchChange(e.target.value)}
-              className="w-40 px-2 py-1.5 rounded border text-sm text-right font-mono"
-              style={inputStyle} />
-            {posTerminalBatch !== '' && (() => {
-              const batch = parseFloat(posTerminalBatch) || 0
-              const variance = posVal - batch
-              const ok = Math.abs(variance) < 0.01
-              const fmt = (v: number) => `K${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-              return (
-                <div className="mt-1.5 text-xs font-mono flex gap-3">
-                  <span style={{ color: theme.textSecondary }}>Declared: K{posVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  <span style={{ color: theme.textSecondary }}>Terminal: {fmt(batch)}</span>
-                  <span style={{ color: ok ? 'var(--color-status-success)' : 'var(--color-status-error)', fontWeight: 600 }}>
-                    {ok ? 'Match' : `Variance: ${variance >= 0 ? '+' : '-'}${fmt(variance)}`}
-                  </span>
-                </div>
-              )
-            })()}
-          </div>
-        </div>
+        <PosSlipsInput types={posTypes} banks={posBanks} slips={posSlips} onChange={onPosSlipsChange} theme={theme} />
       )}
 
       {/* Credit sales */}
@@ -2211,7 +2170,7 @@ function ClosingForm({ h, theme, creditAccounts, otherProducts, onAccountCreated
           style={{ color: theme.textSecondary, borderWidth: 1, borderColor: theme.border }}>
           Cancel
         </button>
-        <button onClick={onSubmit} disabled={submitting || cash === ''}
+        <button onClick={onSubmit} disabled={submitting || cash === '' || !!slipsProblem(posSlips)}
           className="px-4 py-2 text-sm font-semibold rounded text-white disabled:opacity-50"
           style={{ backgroundColor: 'var(--color-status-success)' }}>
           {submitting ? 'Saving...' : 'Close & Approve'}
@@ -2335,7 +2294,7 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type_id: item.type_id, type_name: item.type_name,
-          amount: amt, reference: editPosForm.reference.trim() || null,
+          amount: amt, reference: editPosForm.reference.trim() || null, bank: item.bank || null,
         }),
       })
       if (!res.ok) {
@@ -2802,7 +2761,7 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
               ) : (
                 <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
                   style={{ backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border }}>
-                  <span style={{ color: theme.textSecondary }}>{item.type_name}</span>
+                  <span style={{ color: theme.textSecondary }}>{item.type_name}{item.bank ? ` (${item.bank})` : ''}</span>
                   <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>
                     K{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
@@ -3182,6 +3141,8 @@ function POSPanel({ handoverId, existingBreakdown, theme, onSaved }: {
   const [selectedTypeId, setSelectedTypeId] = useState('')
   const [amount, setAmount] = useState('')
   const [reference, setReference] = useState('')
+  const [bank, setBank] = useState('')
+  const [banks, setBanks] = useState<string[]>([])
   const [items, setItems] = useState<any[]>([])
   const [dupWarning, setDupWarning] = useState('')
   const [saving, setSaving] = useState(false)
@@ -3194,6 +3155,7 @@ function POSPanel({ handoverId, existingBreakdown, theme, onSaved }: {
       .then(data => {
         const active = (data.payment_types || []).filter((t: any) => t.is_active)
         setPosTypes(active)
+        setBanks(data.banks || [])
         if (active.length > 0) setSelectedTypeId(active[0].type_id)
       })
       .catch(() => {})
@@ -3222,10 +3184,14 @@ function POSPanel({ handoverId, existingBreakdown, theme, onSaved }: {
     if (!selectedTypeId || !amt || amt <= 0) return
     const type = posTypes.find(t => t.type_id === selectedTypeId)
     if (!type) return
+    if (!reference.trim()) { setDupWarning('Enter the slip reference. Every slip has its own reference number.'); return }
     const dupMsg = isDuplicate(type.type_id, amt, reference)
     if (dupMsg) { setDupWarning(dupMsg); return }
     setDupWarning('')
-    setItems(prev => [...prev, { type_id: type.type_id, type_name: type.name, amount: amt, reference: reference.trim() }])
+    setItems(prev => [...prev, {
+      type_id: type.type_id, type_name: type.name, amount: amt, reference: reference.trim(),
+      bank: type.is_terminal && bank ? bank : undefined,
+    }])
     setAmount('')
     setReference('')
   }
@@ -3300,11 +3266,21 @@ function POSPanel({ handoverId, existingBreakdown, theme, onSaved }: {
             className="w-28 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
         </div>
         <div>
-          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Transaction Ref.</div>
-          <input type="text" placeholder="Slip / batch no." value={reference}
+          <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Slip reference</div>
+          <input type="text" placeholder="Required" value={reference}
             onChange={e => { setReference(e.target.value); setDupWarning('') }} onKeyDown={e => e.key === 'Enter' && addItem()}
             className="w-36 px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }} />
         </div>
+        {posTypes.find(t => t.type_id === selectedTypeId)?.is_terminal && (
+          <div>
+            <div className="text-[10px] font-bold uppercase mb-1" style={{ color: theme.textSecondary }}>Bank (optional)</div>
+            <select value={bank} onChange={e => setBank(e.target.value)}
+              className="px-2 py-1.5 text-xs rounded border" style={{ backgroundColor: theme.background, color: theme.textPrimary, borderColor: theme.border }}>
+              <option value="">Not specified</option>
+              {banks.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+        )}
         <button onClick={addItem} className="px-3 py-1.5 text-xs font-bold rounded text-white self-end"
           style={{ backgroundColor: 'var(--color-action-primary)' }}>
           + Add
@@ -3313,7 +3289,7 @@ function POSPanel({ handoverId, existingBreakdown, theme, onSaved }: {
 
       {dupWarning && (
         <p className="text-xs font-medium px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--color-status-warning-light)', color: 'var(--color-status-warning)' }}>
-          Duplicate: {dupWarning}
+          {dupWarning}
         </p>
       )}
 
@@ -3329,7 +3305,7 @@ function POSPanel({ handoverId, existingBreakdown, theme, onSaved }: {
           {items.map((item, idx) => (
             <div key={idx} className="flex items-center justify-between text-xs px-2 py-1.5 rounded"
               style={{ backgroundColor: theme.background }}>
-              <span style={{ color: theme.textSecondary }}>{item.type_name}{item.reference && ` · ${item.reference}`}</span>
+              <span style={{ color: theme.textSecondary }}>{item.type_name}{item.bank && ` (${item.bank})`}{item.reference && ` | ${item.reference}`}</span>
               <div className="flex items-center gap-3">
                 <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>{fmtK(item.amount)}</span>
                 <button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))}

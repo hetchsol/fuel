@@ -6,6 +6,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import TankDipsCapture from '../components/TankDipsCapture'
 import { getHeaders, authFetch } from '../lib/api'
 import { CreditItem, OtherProduct, NewAccountModal, fetchOtherProducts } from '../components/CreditSaleShared'
+import PosSlipsInput, { PosSlip, PosType, newSlip, slipsToItems, slipsTotal, slipsProblem } from '../components/PosSlipsInput'
 
 const BASE = '/api/v1'
 
@@ -40,10 +41,9 @@ export default function ShiftClosing() {
   const [shiftInfo, setShiftInfo] = useState<any>(null)
 
   // POS payment types
-  const [posTypes, setPosTypes] = useState<{ type_id: string; name: string; is_active: boolean }[]>([])
-  const [posAmounts, setPosAmounts] = useState<Record<string, string>>({})
-  const [posRefs, setPosRefs] = useState<Record<string, string>>({})
-  const [posTerminalBatch, setPosTerminalBatch] = useState('')
+  const [posTypes, setPosTypes] = useState<PosType[]>([])
+  const [posBanks, setPosBanks] = useState<string[]>([])
+  const [posSlips, setPosSlips] = useState<PosSlip[]>([])
 
   // Phase 2 inputs
   const [actualCash, setActualCash] = useState('')
@@ -56,8 +56,8 @@ export default function ShiftClosing() {
   const [otherProducts, setOtherProducts] = useState<OtherProduct[]>([])
   const [showNewAccount, setShowNewAccount] = useState(false)
 
-  // Safe deposit info (display only)
-  const [safeDepositTotal, setSafeDepositTotal] = useState(0)
+  // Safe deposits per attendant on the shift; only the selected attendant's own count
+  const [shiftDeposits, setShiftDeposits] = useState<any[]>([])
 
   // Dips must be entered and saved before the rest of the close form is shown —
   // the manager is on-site right now, so this is the moment to force it.
@@ -88,11 +88,7 @@ export default function ShiftClosing() {
       const depRes = await authFetch(`${BASE}/safe-deposits/${shiftId}`, { headers: getAuthHeaders() })
       if (depRes.ok) {
         const depData = await depRes.json()
-        const depTotal = depData.total_amount || 0
-        setSafeDepositTotal(depTotal)
-        if (depTotal > 0) {
-          setActualCash(prev => prev === '' ? depTotal.toFixed(2) : prev)
-        }
+        setShiftDeposits(depData.attendants || [])
       }
     } catch {}
     try {
@@ -101,10 +97,8 @@ export default function ShiftClosing() {
         const posData = await posRes.json()
         const active = (posData.payment_types || []).filter((t: any) => t.is_active)
         setPosTypes(active)
-        const init: Record<string, string> = {}
-        active.forEach((t: any) => { init[t.type_id] = '' })
-        setPosAmounts(init)
-        setPosRefs({})
+        setPosBanks(posData.banks || [])
+        setPosSlips([newSlip(active[0]?.type_id || '')])
       }
     } catch {}
     try {
@@ -237,9 +231,15 @@ export default function ShiftClosing() {
     if (selectedShiftId) loadData(selectedShiftId)
   }, [selectedShiftId])
 
+  // This attendant's own safe deposits pre-fill the cash (never the whole shift's)
+  const safeDepositTotal = shiftDeposits.find(a => a.attendant_id === handover?.attendant_id)?.total || 0
+  useEffect(() => {
+    if (safeDepositTotal > 0) setActualCash(prev => prev === '' ? safeDepositTotal.toFixed(2) : prev)
+  }, [safeDepositTotal])
+
   // Computed values
   const actualCashVal = parseFloat(actualCash) || 0
-  const posTotal = Object.values(posAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+  const posTotal = slipsTotal(posSlips)
   const creditItemsTotal = creditItems.reduce((sum, i) => sum + (i.amount || 0), 0)
   const creditVal = creditItemsTotal || 0
   const totalExpected = handover?.total_expected || 0
@@ -247,16 +247,15 @@ export default function ShiftClosing() {
   const difference = totalAccounted - totalExpected
 
   const allAttendantsSubmitted = pendingAttendants.length === 0
-  const canSubmit = actualCash !== '' && allAttendantsSubmitted && !submitting
+  const slipProblem = slipsProblem(posSlips)
+  const canSubmit = actualCash !== '' && allAttendantsSubmitted && !submitting && !slipProblem
 
   const handleSubmit = async () => {
     if (!handover) return
     setSubmitting(true)
     setError('')
 
-    const posItems = posTypes
-      .map(t => ({ type_id: t.type_id, type_name: t.name, amount: parseFloat(posAmounts[t.type_id] || '0') || 0, reference: posRefs[t.type_id] || undefined }))
-      .filter(i => i.amount > 0)
+    const posItems = slipsToItems(posSlips, posTypes)
 
     try {
       const res = await authFetch(`${BASE}/handover/submit-closing`, {
@@ -267,7 +266,6 @@ export default function ShiftClosing() {
           actual_cash: actualCashVal,
           pos_receipts: posTotal,
           pos_items: posItems,
-          pos_terminal_batch_total: posTerminalBatch !== '' ? parseFloat(posTerminalBatch) || 0 : null,
           credit_sales: creditVal,
           credit_sale_items: creditItems.map(i => ({
             account_id: i.account_id,
@@ -581,7 +579,7 @@ export default function ShiftClosing() {
           {/* Safe Deposit Info (display only) */}
           {safeDepositTotal > 0 && (
             <div className="rounded-lg shadow p-3 mb-6 flex justify-between items-center text-sm" style={{ backgroundColor: theme.cardBg, borderColor: theme.border, borderWidth: 1 }}>
-              <span style={{ color: theme.textSecondary }}>Safe deposits recorded during shift:</span>
+              <span style={{ color: theme.textSecondary }}>{handover?.attendant_name ? `${handover.attendant_name}'s safe deposits:` : 'Safe deposits:'}</span>
               <span className="font-mono font-semibold" style={{ color: theme.textPrimary }}>{fmtZMW(safeDepositTotal)}</span>
             </div>
           )}
@@ -604,55 +602,10 @@ export default function ShiftClosing() {
                   style={inputStyle} />
               </div>
 
-              {/* POS Receipts — per payment type + terminal batch cross-check */}
+              {/* Non-cash payments: one line per slip. The shared card machine's total is
+                  checked once per shift against all attendants' slips (Handover Review). */}
               {posTypes.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-xs font-medium uppercase" style={{ color: theme.textSecondary }}>POS Receipts — ZMW</label>
-                    {posTotal > 0 && (
-                      <span className="text-xs font-mono font-semibold" style={{ color: theme.textPrimary }}>{fmtZMW(posTotal)}</span>
-                    )}
-                  </div>
-                  <div className="space-y-2 mb-3">
-                    {posTypes.map(t => (
-                      <div key={t.type_id} className="flex items-center gap-2">
-                        <span className="text-xs w-28 shrink-0" style={{ color: theme.textSecondary }}>{t.name}</span>
-                        <input type="number" min={0} step="0.01" value={posAmounts[t.type_id] ?? ''} placeholder="0.00"
-                          onChange={e => setPosAmounts(prev => ({ ...prev, [t.type_id]: e.target.value }))}
-                          className="w-28 px-2 py-1.5 rounded border text-sm text-right font-mono"
-                          style={inputStyle} />
-                        <input type="text" value={posRefs[t.type_id] ?? ''} placeholder="Ref (optional)"
-                          onChange={e => setPosRefs(prev => ({ ...prev, [t.type_id]: e.target.value }))}
-                          className="flex-1 px-2 py-1.5 rounded border text-xs"
-                          style={inputStyle} />
-                      </div>
-                    ))}
-                  </div>
-                  {/* Terminal batch cross-check */}
-                  <div className="pt-2" style={{ borderTopWidth: 1, borderTopColor: theme.border }}>
-                    <label className="block text-xs font-medium mb-1" style={{ color: theme.textSecondary }}>
-                      Terminal Batch Total — from settlement slip
-                    </label>
-                    <input type="number" min={0} step="0.01" value={posTerminalBatch} placeholder="0.00"
-                      onChange={e => setPosTerminalBatch(e.target.value)}
-                      className="w-40 px-2 py-1.5 rounded border text-sm text-right font-mono"
-                      style={inputStyle} />
-                    {posTerminalBatch !== '' && (() => {
-                      const batch = parseFloat(posTerminalBatch) || 0
-                      const variance = posTotal - batch
-                      const ok = Math.abs(variance) < 0.01
-                      return (
-                        <div className="mt-1.5 text-xs font-mono flex gap-3">
-                          <span style={{ color: theme.textSecondary }}>Declared: {fmtZMW(posTotal)}</span>
-                          <span style={{ color: theme.textSecondary }}>Terminal: {fmtZMW(batch)}</span>
-                          <span style={{ color: ok ? 'var(--color-status-success)' : 'var(--color-status-error)', fontWeight: 600 }}>
-                            {ok ? 'Match' : `Variance: ${variance >= 0 ? '+' : ''}${fmtZMW(variance)}`}
-                          </span>
-                        </div>
-                      )
-                    })()}
-                  </div>
-                </div>
+                <PosSlipsInput types={posTypes} banks={posBanks} slips={posSlips} onChange={setPosSlips} theme={theme} />
               )}
 
               {/* Credit Sales */}

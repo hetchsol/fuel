@@ -110,7 +110,9 @@ export default function Settings() {
   const [reconMessage, setReconMessage] = useState('')
   const [reconError, setReconError] = useState('')
 
-  const [posPaymentTypes, setPosPaymentTypes] = useState<{ type_id: string; name: string; is_active: boolean }[]>([])
+  const [posPaymentTypes, setPosPaymentTypes] = useState<{ type_id: string; name: string; is_active: boolean; is_terminal?: boolean }[]>([])
+  const [posBanks, setPosBanks] = useState<string[]>([])
+  const [newBankName, setNewBankName] = useState('')
   const [posVarianceThreshold, setPosVarianceThreshold] = useState('5.00')
   const [posLoading, setPosLoading] = useState(false)
   const [posMessage, setPosMessage] = useState('')
@@ -429,6 +431,7 @@ export default function Settings() {
       if (res.ok) {
         const data = await res.json()
         setPosPaymentTypes(data.payment_types || [])
+        setPosBanks(data.banks || [])
         setPosVarianceThreshold(String(data.variance_threshold ?? 5))
       }
     } catch {}
@@ -442,7 +445,7 @@ export default function Settings() {
       const res = await authFetch(`${BASE}/settings/pos`, {
         method: 'PUT',
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payment_types: posPaymentTypes, variance_threshold: parseFloat(posVarianceThreshold) || 5 }),
+        body: JSON.stringify({ payment_types: posPaymentTypes, banks: posBanks, variance_threshold: parseFloat(posVarianceThreshold) || 5 }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -451,6 +454,7 @@ export default function Settings() {
       }
       const data = await res.json()
       setPosPaymentTypes(data.payment_types || [])
+      setPosBanks(data.banks || [])
       setPosMessage('POS payment types saved successfully')
     } catch (err: any) {
       setPosError(err.message || 'Failed to save')
@@ -2126,7 +2130,7 @@ export default function Settings() {
       {activeTab === 'pos' && (
         <div className="bg-surface-card rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold text-content-primary mb-1">POS Payment Types</h2>
-          <p className="text-sm text-content-secondary mb-6">Configure which payment methods are accepted at the POS terminal. Inactive types are hidden from new entries but preserved in historical records.</p>
+          <p className="text-sm text-content-secondary mb-6">Configure the non-cash payment types attendants record, one slip per sale. Inactive types are hidden from new entries but preserved in historical records. Tick &quot;Card machine&quot; for types paid through a shared card machine: their slips are checked once per shift against the machine totals.</p>
 
           <div className="space-y-2 mb-4">
             {posPaymentTypes.map((pt, idx) => (
@@ -2146,6 +2150,15 @@ export default function Settings() {
                     className="rounded"
                   />
                   Active
+                </label>
+                <label className="flex items-center gap-1.5 text-sm text-content-secondary cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!pt.is_terminal}
+                    onChange={e => setPosPaymentTypes(prev => prev.map((t, i) => i === idx ? { ...t, is_terminal: e.target.checked } : t))}
+                    className="rounded"
+                  />
+                  Card machine
                 </label>
                 <button
                   type="button"
@@ -2188,9 +2201,43 @@ export default function Settings() {
           </div>
 
           <div className="mb-6 pt-4 border-t border-surface-border">
-            <h3 className="text-sm font-semibold text-content-primary mb-1">Terminal Batch Variance Tolerance</h3>
+            <h3 className="text-sm font-semibold text-content-primary mb-1">Card machine banks</h3>
             <p className="text-xs text-content-secondary mb-3">
-              If the declared POS total differs from the terminal settlement slip by more than this amount, the handover is flagged for review.
+              Banks a card slip can be marked with (optional on each slip). Picked from this list so the same bank is always spelled the same way.
+            </p>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {posBanks.length === 0 && <span className="text-xs text-content-secondary">No banks added yet.</span>}
+              {posBanks.map(b => (
+                <span key={b} className="flex items-center gap-2 px-2 py-1 text-sm border border-surface-border rounded">
+                  {b}
+                  <button type="button" onClick={() => setPosBanks(prev => prev.filter(x => x !== b))}
+                    className="text-xs text-status-error">Remove</button>
+                </span>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newBankName}
+                onChange={e => setNewBankName(e.target.value)}
+                placeholder="Bank name, e.g. ZANACO"
+                className="flex-1 px-3 py-2 border border-surface-border rounded-md text-sm focus:outline-none focus:ring-action-primary focus:border-action-primary"
+              />
+              <button
+                type="button"
+                disabled={!newBankName.trim() || posBanks.some(b => b.toLowerCase() === newBankName.trim().toLowerCase())}
+                onClick={() => { setPosBanks(prev => [...prev, newBankName.trim()]); setNewBankName('') }}
+                className="px-4 py-2 bg-action-primary text-white text-sm font-medium rounded-md hover:bg-action-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add Bank
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-6 pt-4 border-t border-surface-border">
+            <h3 className="text-sm font-semibold text-content-primary mb-1">Card Machine Variance Tolerance</h3>
+            <p className="text-xs text-content-secondary mb-3">
+              If all attendants' card slips on a shift differ from the card machine totals entered for that shift by more than this amount, the shift is flagged.
             </p>
             <div className="flex items-center gap-3">
               <input

@@ -3,6 +3,7 @@ Owner Settings API - Fuel pricing and allowable losses
 Station-aware: all data lives in ctx["storage"]
 """
 import re
+from typing import Optional
 import json
 import os
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,6 +17,7 @@ from pydantic import BaseModel as _BaseModel
 class POSSettingsInput(_BaseModel):
     payment_types: list[POSPaymentType]
     variance_threshold: float = 5.0
+    banks: Optional[list[str]] = None   # None keeps the saved list
 from .auth import get_station_context, require_manager_or_owner, require_owner
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
@@ -634,8 +636,10 @@ def update_reconciliation_tolerance_settings(settings: ReconciliationToleranceSe
 # ── POS Payment Types ────────────────────────────────────────
 
 DEFAULT_POS_TYPES = [
-    {"type_id": "visa",         "name": "Visa",          "is_active": True},
-    {"type_id": "mastercard",   "name": "Mastercard",    "is_active": True},
+    # All card machines are one type; the slip's bank is recorded separately.
+    {"type_id": "pos",          "name": "POS",           "is_active": True, "is_terminal": True},
+    {"type_id": "visa",         "name": "Visa",          "is_active": False, "is_terminal": True},
+    {"type_id": "mastercard",   "name": "Mastercard",    "is_active": False, "is_terminal": True},
     {"type_id": "momo_mtn",     "name": "MoMo (MTN)",    "is_active": True},
     {"type_id": "airtel_money", "name": "Airtel Money",  "is_active": True},
     {"type_id": "zamtel",       "name": "Zamtel Kwacha", "is_active": True},
@@ -643,16 +647,42 @@ DEFAULT_POS_TYPES = [
     {"type_id": "kazang",       "name": "Kazang",        "is_active": True},
 ]
 DEFAULT_POS_VARIANCE_THRESHOLD = 5.0
+DEFAULT_POS_BANKS = ["ZANACO", "FNB"]
+_CARD_TYPE_IDS = ("visa", "mastercard")
 
 
 def _load_pos_settings(station_id: str) -> dict:
     data = load_station_json(station_id, "pos_settings.json", default=None)
     if data is None:
-        data = {"payment_types": DEFAULT_POS_TYPES, "variance_threshold": DEFAULT_POS_VARIANCE_THRESHOLD}
+        data = {"payment_types": DEFAULT_POS_TYPES, "variance_threshold": DEFAULT_POS_VARIANCE_THRESHOLD,
+                "banks": DEFAULT_POS_BANKS, "pos_type_upgraded": True,
+                "slip_references_required_from": datetime.now().strftime("%Y-%m-%d")}
         save_station_json(station_id, "pos_settings.json", data)
     # Back-fill missing threshold on old records
     if "variance_threshold" not in data:
         data["variance_threshold"] = DEFAULT_POS_VARIANCE_THRESHOLD
+    if not data.get("pos_type_upgraded"):
+        # One-time move to a single POS type for every card machine (settings
+        # only - handovers keep the Visa/Mastercard names they were saved with).
+        # Flagged so an owner who later re-enables Visa/Mastercard keeps that.
+        types = data.get("payment_types") or []
+        for t in types:
+            if t.get("type_id") in _CARD_TYPE_IDS:
+                t["is_active"] = False
+                t["is_terminal"] = True
+        if not any(t.get("type_id") == "pos" for t in types):
+            types.insert(0, {"type_id": "pos", "name": "POS", "is_active": True, "is_terminal": True})
+        data["payment_types"] = types
+        data.setdefault("banks", DEFAULT_POS_BANKS)
+        data["pos_type_upgraded"] = True
+        save_station_json(station_id, "pos_settings.json", data)
+    if not data.get("slip_references_required_from"):
+        # The day slip references became required at this station. A manager's
+        # retrospective entry for a shift dated before it may leave them blank
+        # (old paper records often have none); later shifts need them.
+        data["slip_references_required_from"] = datetime.now().strftime("%Y-%m-%d")
+        save_station_json(station_id, "pos_settings.json", data)
+    data.setdefault("banks", [])
     return data
 
 
@@ -679,9 +709,20 @@ def update_pos_settings(body: POSSettingsInput, ctx: dict = Depends(get_station_
             raise HTTPException(status_code=422, detail=f"Duplicate type_id: {pt.type_id}")
         ids_seen.add(pt.type_id)
 
+    current = _load_pos_settings(station_id)
+    banks = current.get("banks", []) if body.banks is None else body.banks
+    cleaned, seen = [], set()
+    for b in banks:
+        name = (b or "").strip()
+        if name and name.lower() not in seen:
+            seen.add(name.lower())
+            cleaned.append(name)
     data = {
         "payment_types": [pt.model_dump() for pt in body.payment_types],
         "variance_threshold": body.variance_threshold,
+        "banks": cleaned,
+        "pos_type_upgraded": True,
+        "slip_references_required_from": current.get("slip_references_required_from"),
     }
     save_station_json(station_id, "pos_settings.json", data)
 

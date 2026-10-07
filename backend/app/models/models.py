@@ -939,12 +939,16 @@ class POSPaymentType(BaseModel):
     type_id: str
     name: str
     is_active: bool = True
+    # Paid through a card machine: its slips are cross-checked, all attendants
+    # combined, against the machine totals entered for the shift.
+    is_terminal: bool = False
 
 class POSReceiptItem(BaseModel):
     type_id: str
     type_name: str       # denormalized — preserved if type is later renamed
     amount: float = Field(default=0, ge=0)
-    reference: Optional[str] = None  # terminal batch/slip number
+    reference: Optional[str] = None  # slip / transaction reference (required on new slips)
+    bank: Optional[str] = None       # card machine's bank (ZANACO, FNB...), optional, from the station list
 
 class ShiftClosingInput(BaseModel):
     """Phase 2: Financial reconciliation submitted in the office with manager"""
@@ -1002,6 +1006,10 @@ class HandoverOutput(BaseModel):
     pos_receipts: float = 0                      # POS terminal total (declared)
     pos_breakdown: Optional[List[dict]] = None   # per-type breakdown; None on old records
     pos_terminal_batch_total: Optional[float] = None  # terminal settlement slip total
+    # This attendant's own safe deposits at close (see safe_deposit_service);
+    # None on handovers closed before deposits were bound to attendants.
+    safe_deposits_total: Optional[float] = None
+    safe_deposit_ids: Optional[List[str]] = None
     pos_terminal_variance: Optional[float] = None     # declared minus terminal; flagged if exceeds threshold
     total_accounted: float = 0                   # cash + POS + credit
     status: str                 # "submitted" or "reopened"

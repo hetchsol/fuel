@@ -447,6 +447,7 @@ async def get_close_off_summary(
             "expected_cash": h.get("expected_cash", 0),
             "actual_cash": h.get("actual_cash", 0),
             "pos_receipts": h.get("pos_receipts", 0),
+            "safe_deposits_total": h.get("safe_deposits_total"),
             "difference": round(
                 h.get("expected_cash", 0) - h.get("actual_cash", 0) - h.get("pos_receipts", 0), 2
             ),
@@ -466,8 +467,21 @@ async def get_close_off_summary(
 
     totals = _aggregate_handovers(approved)
 
+    # Card machines are shared on a shift: one check per shift, all slips combined
+    from .attendant_handover import _shift_pos_check
+    pos_machine_checks = []
+    for sid, s in sorted(ctx["storage"].get("shifts", {}).items()):
+        if s.get("date") == date:
+            try:
+                check = _shift_pos_check(station_id, ctx["storage"], sid)
+                check["shift_type"] = s.get("shift_type")
+                pos_machine_checks.append(check)
+            except Exception:
+                pass
+
     return {
         "date": date,
+        "pos_machine_checks": pos_machine_checks,
         "already_closed": already_closed,
         "close_off_record": close_off_record,
         "approved_handovers": approved_summaries,

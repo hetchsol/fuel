@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import DoubleEntryModal from '../components/DoubleEntryModal'
 import Pagination from '../components/Pagination'
+import DepositCorrections, { RecordDepositFor } from '../components/DepositCorrections'
 import OpeningStockCount, { CountLine, countLineState } from '../components/OpeningStockCount'
 import { getHeaders, authFetch } from '../lib/api'
 import { formatDateToDisplay, formatTimeToDisplay } from '../lib/dateUtils'
@@ -178,6 +179,9 @@ export default function MyShift() {
   const [depositAmount, setDepositAmount] = useState('')
   const [depositNote, setDepositNote] = useState('')
   const [depositSaving, setDepositSaving] = useState(false)
+  // Supervisor/manager/owner record a deposit for a rostered attendant
+  const [depositFor, setDepositFor] = useState('')
+  const [depositError, setDepositError] = useState('')
   const [myDeposits, setMyDeposits] = useState<any[]>([])
   const [depositTotal, setDepositTotal] = useState(0)
   const [depositOverdue, setDepositOverdue] = useState(false)
@@ -849,9 +853,10 @@ export default function MyShift() {
   }
   useEffect(() => { fetchSubmissionStatus() }, [shiftInfo?.shift_id])
 
-  // Fetch all attendants' deposits for "On This Shift" (supervisor/manager)
+  // Fetch all attendants' deposits: "On This Shift" (manager+) and the
+  // attendant picker for a supervisor/manager recording a deposit
   const fetchShiftDeposits = () => {
-    if (!shiftInfo?.shift_id || !isManagerPlus) return
+    if (!shiftInfo?.shift_id || isAttendant) return
     authFetch(`${BASE}/safe-deposits/${shiftInfo.shift_id}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => setShiftDeposits(data))
@@ -862,19 +867,30 @@ export default function MyShift() {
   const handleRecordDeposit = async () => {
     const amt = parseFloat(depositAmount)
     if (!amt || amt <= 0) return
+    if (!isAttendant && !depositFor) { setDepositError('Choose the attendant this deposit belongs to.'); return }
     setDepositSaving(true)
+    setDepositError('')
     try {
       const res = await authFetch(`${BASE}/safe-deposits/`, {
         method: 'POST',
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shift_id: shiftInfo.shift_id, amount: amt, note: depositNote }),
+        body: JSON.stringify({
+          shift_id: shiftInfo.shift_id, amount: amt, note: depositNote,
+          ...(isAttendant ? {} : { attendant_id: depositFor }),
+        }),
       })
       if (res.ok) {
         setDepositAmount('')
         setDepositNote('')
         fetchMyDeposits()
+        fetchShiftDeposits()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setDepositError(err.detail || 'Could not record the deposit')
       }
-    } catch {}
+    } catch {
+      setDepositError('Could not record the deposit')
+    }
     finally { setDepositSaving(false) }
   }
 
@@ -1324,6 +1340,13 @@ export default function MyShift() {
                           Last deposit: {attDeposits.deposits?.[attDeposits.deposits.length - 1]?.time || formatTimeToDisplay(attDeposits.last_deposit_time)}
                         </div>
                       )}
+                      <DepositCorrections
+                        shiftId={shiftInfo.shift_id}
+                        deposits={attDeposits?.deposits || []}
+                        attendants={(shiftDeposits?.attendants || []).map((a: any) => ({ attendant_id: a.attendant_id, attendant_name: a.attendant_name }))}
+                        theme={theme}
+                        onChanged={() => { fetchShiftDeposits(); fetchMyDeposits() }}
+                      />
                     </div>
                   )
                 })}
@@ -1453,6 +1476,18 @@ export default function MyShift() {
             <div className="p-3 space-y-3" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
               {/* Deposit form */}
               <div className="flex flex-col sm:flex-row gap-2 sm:items-end flex-wrap">
+                {!isAttendant && (
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-xs text-content-secondary mb-1">Deposit belongs to</label>
+                    <select value={depositFor} onChange={e => setDepositFor(e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded border" style={inputStyle}>
+                      <option value="">Choose attendant</option>
+                      {(shiftDeposits?.attendants || []).map((a: any) => (
+                        <option key={a.attendant_id} value={a.attendant_id}>{a.attendant_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <label className="block text-xs text-content-secondary mb-1">Amount (ZMW)</label>
                   <input type="number" min={0} step={1} value={depositAmount}
@@ -1473,6 +1508,14 @@ export default function MyShift() {
                   {depositSaving ? '...' : 'Deposit'}
                 </button>
               </div>
+              {depositError && (
+                <p className="text-xs" style={{ color: 'var(--color-status-error)' }}>{depositError}</p>
+              )}
+              {!isAttendant && (
+                <p className="text-xs" style={{ color: theme.textSecondary }}>
+                  A deposit counts only towards the attendant it belongs to.
+                </p>
+              )}
 
               {/* Deposit history */}
               {myDeposits.length > 0 && (
@@ -3193,6 +3236,15 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
   const [dashLoading, setDashLoading] = useState(true)
   const [shiftDeposits, setShiftDeposits] = useState<Record<string, any>>({})
   const [expandedDeposits, setExpandedDeposits] = useState<Record<string, boolean>>({})
+  const canCorrectDeposits = (() => {
+    try { return ['manager', 'owner'].includes(JSON.parse(localStorage.getItem('user') || '{}').role) } catch { return false }
+  })()
+  const refreshDeposits = (shiftId: string) => {
+    authFetch(`${BASE}/safe-deposits/${shiftId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setShiftDeposits(prev => ({ ...prev, [shiftId]: data })) })
+      .catch(() => {})
+  }
   // attendant_id -> review_status of their handover on the current active shift(s)
   const [attendantStatus, setAttendantStatus] = useState<Record<string, string>>({})
   // Keys "shift_id-attendant_id" that have verified their opening (started shift).
@@ -3426,17 +3478,23 @@ function SupervisorDashboard({ theme, pastHandovers }: { theme: any, pastHandove
                                 K{attDep.total.toLocaleString()} {expandedDeposits[depKey] ? '−' : '+'}
                               </span>
                             </button>
-                            {expandedDeposits[depKey] && attDep.deposits?.length > 0 && (
-                              <div className="mt-2 space-y-1">
-                                {attDep.deposits.map((d: any) => (
-                                  <div key={d.deposit_id} className="flex justify-between text-xs p-1.5 rounded"
-                                    style={{ backgroundColor: theme.cardBg }}>
-                                    <span style={{ color: theme.textSecondary }}>
-                                      {d.time || formatTimeToDisplay(d.timestamp)} {d.note && `— ${d.note}`}
-                                    </span>
-                                    <span className="font-semibold" style={{ color: theme.textPrimary }}>K{d.amount.toLocaleString()}</span>
-                                  </div>
-                                ))}
+                            {expandedDeposits[depKey] && (
+                              <div onClick={e => e.stopPropagation()}>
+                                <DepositCorrections
+                                  shiftId={shift.shift_id}
+                                  deposits={attDep.deposits || []}
+                                  attendants={(deposits?.attendants || []).map((a: any) => ({ attendant_id: a.attendant_id, attendant_name: a.attendant_name }))}
+                                  theme={theme}
+                                  canCorrect={canCorrectDeposits}
+                                  onChanged={() => refreshDeposits(shift.shift_id)}
+                                />
+                                <RecordDepositFor
+                                  shiftId={shift.shift_id}
+                                  attendantId={assignment.attendant_id}
+                                  attendantName={assignment.attendant_name}
+                                  theme={theme}
+                                  onRecorded={() => refreshDeposits(shift.shift_id)}
+                                />
                               </div>
                             )}
                           </div>

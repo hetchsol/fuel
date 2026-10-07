@@ -41,6 +41,7 @@ from ...services.stock_service import (
     load_opening_variances, save_opening_variances,
 )
 from ...database.station_files import load_station_json, save_station_json
+from ...services.safe_deposit_service import attendant_deposit_summary
 from .enter_readings import _load_readings as _load_enter_readings, _save_readings as _save_enter_readings
 from .lpg_daily import (
     load_lpg_pricing, LPG_SIZES, DEFAULT_LPG_ACCESSORIES,
@@ -2589,15 +2590,23 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
         handovers, shift.get("date", ""), data.pos_items,
         resubmission.get("supersedes_id") if resubmission.get("action") == "supersede" else None)
     if data.pos_items:
-        retro_pos_breakdown = [item if isinstance(item, dict) else item.model_dump() for item in data.pos_items]
+        rules = _pos_rules(station_id)
+        # Shifts dated before slip references became required may be
+        # back-filled without them (forward-only); later shifts need them.
+        from .settings import _load_pos_settings
+        refs_from = _load_pos_settings(station_id).get("slip_references_required_from") or ""
+        needs_refs = (shift.get("date") or "") >= refs_from
+        retro_pos_breakdown = [{**_clean_pos_item(item, station_id, rules, require_reference=needs_refs),
+                                "id": str(uuid.uuid4())}
+                               for item in data.pos_items]
         retro_pos_total = round(sum((item.get("amount", 0) if isinstance(item, dict) else item.amount) for item in data.pos_items), 2)
     else:
         retro_pos_total = data.pos_receipts
 
-    retro_pos_terminal_batch_total = data.pos_terminal_batch_total
+    # Shared card machine: checked per shift, not per attendant (see shift_pos_check)
+    retro_pos_terminal_batch_total = None
     retro_pos_terminal_variance = None
-    if retro_pos_terminal_batch_total is not None:
-        retro_pos_terminal_variance = round(retro_pos_total - retro_pos_terminal_batch_total, 2)
+    retro_deposits = attendant_deposit_summary(station_id, data.shift_id, data.attendant_id)
 
     total_expected = round(fuel_revenue, 2)
     expected_cash = round(total_expected - data.credit_sales, 2)
@@ -2608,8 +2617,8 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
 
     pos_settings = load_station_json(station_id, "pos_settings.json", default={})
     pos_variance_threshold = pos_settings.get("variance_threshold", 5.0)
-    if retro_pos_terminal_variance is not None and abs(retro_pos_terminal_variance) > pos_variance_threshold:
-        auto_flag_reasons = (auto_flag_reasons or []) + ["pos_terminal_variance"]
+    if retro_deposits["total"] and data.actual_cash + 0.005 < retro_deposits["total"]:
+        auto_flag_reasons = (auto_flag_reasons or []) + ["cash_below_safe_deposits"]
         review_status = "flagged"
 
     # Shift-wide tank dip vs. nozzle-sales reconciliation. This handover
@@ -2644,6 +2653,8 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
         actual_cash=data.actual_cash,
         pos_receipts=retro_pos_total,
         pos_breakdown=retro_pos_breakdown,
+        safe_deposits_total=retro_deposits["total"],
+        safe_deposit_ids=retro_deposits["deposit_ids"],
         pos_terminal_batch_total=retro_pos_terminal_batch_total,
         pos_terminal_variance=retro_pos_terminal_variance,
         total_accounted=total_accounted,
@@ -2814,6 +2825,120 @@ async def get_attendant_opening(shift_id: str, attendant_id: str, ctx: dict = De
         "forecourt_live": bool(view.get("forecourt_live")),
         "stock": stock,
     }
+
+
+POS_MACHINE_TOTALS_FILE = "pos_machine_totals.json"
+
+
+class MachineTotalEntry(BaseModel):
+    bank: Optional[str] = None
+    amount: float
+
+
+class MachineTotalsInput(BaseModel):
+    entries: List[MachineTotalEntry]
+    note: Optional[str] = None
+
+
+def _shift_pos_check(station_id: str, storage: dict, shift_id: str) -> dict:
+    """
+    Card machines are shared by every attendant on a shift, so their printed
+    totals are compared once, against ALL attendants' card slips combined.
+    Each attendant still answers only for their own slips (their handover).
+    """
+    terminal, banks = _pos_rules(station_id)
+    from .settings import _load_pos_settings
+    threshold = _load_pos_settings(station_id).get("variance_threshold", 5.0)
+
+    attendants, slips_total, by_bank = [], 0.0, {}
+    for h in _load_handovers(station_id).values():
+        if h.get("shift_id") != shift_id or not is_handover_canonical(h) or h.get("review_status") == "voided":
+            continue
+        slips = [e for e in (h.get("pos_breakdown") or []) if e.get("type_id") in terminal]
+        total = round(sum(e.get("amount", 0) or 0 for e in slips), 2)
+        slips_total += total
+        for e in slips:
+            key = e.get("bank") or ""
+            by_bank[key] = round(by_bank.get(key, 0) + (e.get("amount", 0) or 0), 2)
+        attendants.append({"attendant_id": h.get("attendant_id"), "attendant_name": h.get("attendant_name"),
+                           "closed": h.get("phase") == "completed", "slips": len(slips), "slips_total": total})
+    slips_total = round(slips_total, 2)
+
+    saved = load_station_json(station_id, POS_MACHINE_TOTALS_FILE, default={}).get(shift_id)
+    machine_total = round(sum(e.get("amount", 0) or 0 for e in (saved or {}).get("entries", [])), 2) if saved else None
+    difference = round(slips_total - machine_total, 2) if machine_total is not None else None
+    if machine_total is None:
+        status = "not_entered"
+    elif abs(difference) > threshold:
+        status = "mismatch"
+    else:
+        status = "match"
+    return {
+        "shift_id": shift_id,
+        "slips_total": slips_total,
+        "slips_by_bank": [{"bank": k or None, "total": v} for k, v in sorted(by_bank.items())],
+        "machine_entries": (saved or {}).get("entries", []),
+        "machine_total": machine_total,
+        "difference": difference,
+        "threshold": threshold,
+        "status": status,
+        "attendants": attendants,
+        "all_closed": bool(attendants) and all(a["closed"] for a in attendants),
+        "entered_by": (saved or {}).get("entered_by"),
+        "entered_at": (saved or {}).get("entered_at"),
+        "note": (saved or {}).get("note"),
+        "banks": list(banks.values()),
+    }
+
+
+@router.get("/shift/{shift_id}/pos-check", dependencies=[Depends(require_supervisor_or_owner)])
+async def get_shift_pos_check(shift_id: str, ctx: dict = Depends(get_station_context)):
+    """All attendants' card slips on the shift vs the card machine totals entered for it."""
+    if shift_id not in ctx["storage"].get("shifts", {}):
+        raise HTTPException(status_code=404, detail="Shift not found")
+    return _shift_pos_check(ctx["station_id"], ctx["storage"], shift_id)
+
+
+@router.put("/shift/{shift_id}/pos-check", dependencies=[Depends(require_supervisor_or_owner)])
+async def put_shift_machine_totals(shift_id: str, data: MachineTotalsInput, ctx: dict = Depends(get_station_context)):
+    """Record each card machine's printed total for the shift (one line per machine, bank optional)."""
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+    shift = storage.get("shifts", {}).get(shift_id)
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    assert_shift_editable(shift)
+    _, banks = _pos_rules(station_id)
+    entries = []
+    for e in data.entries:
+        if e.amount < 0:
+            raise HTTPException(status_code=400, detail="A machine total cannot be negative.")
+        bank = (e.bank or "").strip()
+        if bank and bank.lower() not in banks:
+            raise HTTPException(status_code=400, detail=f"Bank '{bank}' is not on this station's list.")
+        entries.append({"bank": banks[bank.lower()] if bank else None, "amount": round(e.amount, 2)})
+    db = load_station_json(station_id, POS_MACHINE_TOTALS_FILE, default={})
+    db[shift_id] = {"entries": entries, "note": (data.note or "").strip() or None,
+                    "entered_by": ctx["username"], "entered_at": datetime.now().isoformat()}
+    save_station_json(station_id, POS_MACHINE_TOTALS_FILE, db)
+    result = _shift_pos_check(station_id, storage, shift_id)
+    log_audit_event(station_id=station_id, action="pos_machine_totals_set", performed_by=ctx["username"],
+                    entity_type="shift", entity_id=shift_id,
+                    details={"entries": entries, "slips_total": result["slips_total"],
+                             "difference": result["difference"], "status": result["status"]})
+    if result["status"] == "mismatch" and result["all_closed"]:
+        try:
+            create_notification(
+                station_id=station_id, type="POS_MACHINE_MISMATCH", severity="warning",
+                title="Card machine total does not match slips",
+                message=(f"{shift.get('date')} {shift.get('shift_type')}: machines K{result['machine_total']:,.2f}, "
+                         f"attendants' slips K{result['slips_total']:,.2f} "
+                         f"(difference K{result['difference']:,.2f})."),
+                entity_type="shift", entity_id=shift_id,
+            )
+        except Exception:
+            pass
+    return result
 
 
 @router.get("/opening-verifications")
@@ -3518,16 +3643,21 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     pos_breakdown = None
     _require_no_pos_conflicts(handovers, handover.get("date", ""), data.pos_items, data.handover_id)
     if data.pos_items:
-        pos_breakdown = [{**item.model_dump(), "id": str(uuid.uuid4())} for item in data.pos_items]
+        rules = _pos_rules(station_id)
+        pos_breakdown = [{**_clean_pos_item(item, station_id, rules), "id": str(uuid.uuid4())}
+                         for item in data.pos_items]
         pos_total = round(sum(item.amount for item in data.pos_items), 2)
     else:
         pos_total = data.pos_receipts
 
-    # Terminal batch reconciliation
-    pos_terminal_batch_total = data.pos_terminal_batch_total
+    # The card machine is shared by every attendant on the shift, so its total
+    # is checked once per shift against all their slips combined (see
+    # shift_pos_check) - never against one attendant's slips.
+    pos_terminal_batch_total = None
     pos_terminal_variance = None
-    if pos_terminal_batch_total is not None:
-        pos_terminal_variance = round(pos_total - pos_terminal_batch_total, 2)
+
+    # This attendant's own safe deposits, fixed onto the handover at close
+    deposits = attendant_deposit_summary(station_id, shift_id, handover.get("attendant_id"))
 
     # Compute financials
     total_expected = handover.get("total_expected", 0)
@@ -3542,8 +3672,8 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     all_flags = list(phase1_flags)
     if abs(difference) > _cash_shortage_threshold(storage):
         all_flags.append("cash_shortage")
-    if pos_terminal_variance is not None and abs(pos_terminal_variance) > pos_variance_threshold:
-        all_flags.append("pos_terminal_variance")
+    if deposits["total"] and data.actual_cash + 0.005 < deposits["total"]:
+        all_flags.append("cash_below_safe_deposits")
 
     # Shift-wide tank dip vs. nozzle-sales reconciliation. Every attendant on
     # the shift is already guaranteed to have submitted by this point (see
@@ -3564,6 +3694,8 @@ async def submit_closing(data: ShiftClosingInput, ctx: dict = Depends(get_statio
     handover["pos_breakdown"] = pos_breakdown
     handover["pos_terminal_batch_total"] = pos_terminal_batch_total
     handover["pos_terminal_variance"] = pos_terminal_variance
+    handover["safe_deposits_total"] = deposits["total"]
+    handover["safe_deposit_ids"] = deposits["deposit_ids"]
     handover["credit_sales"] = credit_sales
     handover["credit_sale_details"] = credit_sale_details
     handover["expected_cash"] = expected_cash
@@ -3974,6 +4106,41 @@ async def reopen_handover(
     return {"status": "success", "message": f"Handover {handover_id} reopened for correction"}
 
 
+def _pos_rules(station_id: str) -> tuple:
+    """(terminal type ids, {bank lower: bank}) from the station's POS settings."""
+    from .settings import _load_pos_settings
+    settings = _load_pos_settings(station_id)
+    terminal = {t.get("type_id") for t in settings.get("payment_types", []) if t.get("is_terminal")}
+    banks = {b.strip().lower(): b.strip() for b in settings.get("banks", []) if (b or "").strip()}
+    return terminal, banks
+
+
+def _clean_pos_item(item, station_id: str, rules: tuple, require_reference: bool = True) -> dict:
+    """
+    Validate one slip: a reference is required (each sale has its own slip and
+    reference); a bank, when given, must be on the station's list and only
+    applies to card-machine types. Returns the item as a dict with the bank
+    spelled as on the list.
+    """
+    d = item if isinstance(item, dict) else item.model_dump()
+    d = dict(d)
+    terminal, banks = rules
+    ref = (d.get("reference") or "").strip()
+    if require_reference and not ref:
+        raise HTTPException(status_code=400, detail=(
+            f"Enter the slip reference for {d.get('type_name') or d.get('type_id')} "
+            f"K{float(d.get('amount') or 0):,.2f}. Every slip has its own reference number."))
+    d["reference"] = ref or None
+    bank = (d.get("bank") or "").strip()
+    if bank and d.get("type_id") in terminal:
+        if bank.lower() not in banks:
+            raise HTTPException(status_code=400, detail=f"Bank '{bank}' is not on this station's list.")
+        d["bank"] = banks[bank.lower()]
+    else:
+        d["bank"] = None
+    return d
+
+
 def _pos_reference_conflict(handovers: dict, date: str, reference: Optional[str],
                             exclude_handover_id: Optional[str] = None,
                             exclude_item_id: Optional[str] = None) -> Optional[dict]:
@@ -4064,6 +4231,11 @@ async def patch_pos_receipts(
         for e in existing
         if not (e.get("reference") and e["reference"].strip())
     }
+
+    rules = _pos_rules(station_id)
+    for item in data.pos_items:
+        cleaned = _clean_pos_item(item, station_id, rules)
+        item.reference, item.bank = cleaned["reference"], cleaned["bank"]
 
     accepted = []
     duplicates = []
@@ -4248,12 +4420,16 @@ async def edit_pos_receipt_item(
             detail=f"POS reference '{(data.reference or '').strip()}' is already recorded on "
                    f"{clash.get('attendant_name') or clash.get('attendant_id')}'s handover for {handover.get('date', '')}.")
 
+    # A slip saved before references were required may stay without one;
+    # a slip that has a reference can't lose it.
+    cleaned = _clean_pos_item(data, station_id, _pos_rules(station_id),
+                              require_reference=bool((target.get("reference") or "").strip()))
     old_amount = target.get("amount", 0)
     difference_before = handover.get("difference", 0)
 
     target.update({
         "type_id": data.type_id, "type_name": data.type_name,
-        "amount": data.amount, "reference": data.reference,
+        "amount": data.amount, "reference": cleaned["reference"], "bank": cleaned["bank"],
     })
     pos_total = round(sum(e["amount"] for e in existing), 2)
 

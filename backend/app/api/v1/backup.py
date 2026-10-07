@@ -50,6 +50,15 @@ _BACKUP_JSON_FILES = [
     "store_transactions.json",
     "notifications.json",
     "audit_log.json",
+    # Stores, shift-start counts and card machine checks
+    "stock_items.json",
+    "stock_movements.json",
+    "stock_takes.json",
+    "stock_settings.json",
+    "opening_verifications.json",
+    "opening_stock_variances.json",
+    "pos_settings.json",
+    "pos_machine_totals.json",
 ]
 
 

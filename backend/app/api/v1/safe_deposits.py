@@ -1,10 +1,12 @@
 """
 Safe Deposit Tracking API
 
-Informational tracking of cash deposits into the safe during shifts.
-Attendants record deposits; supervisors/managers monitor compliance.
-This data is purely informational — it does NOT feed into handover
-calculations, reconciliation, or any other financial logic.
+Cash deposits into the safe during shifts, bound to the attendant who made
+them. Attendants record their own; a supervisor/manager recording at the safe
+picks the attendant from the shift roster. A deposit counts only towards its
+own attendant's shift close (see safe_deposit_service), is refused once that
+attendant's handover is closed, and can be voided or moved to the right
+attendant by a manager while both handovers are still open.
 """
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -13,9 +15,12 @@ from typing import Optional, List
 from datetime import datetime
 import uuid
 
-from .auth import get_current_user, get_station_context, require_supervisor_or_owner
+from .auth import get_current_user, get_station_context, require_supervisor_or_owner, require_manager_or_owner
 from ...database.station_files import load_station_json, save_station_json
 from ...services.notification_service import create_notification
+from ...services.audit_service import log_audit_event
+from ...services.handover_lookup import get_active_handover
+from ...services import safe_deposit_service as deps
 
 router = APIRouter()
 
@@ -29,19 +34,56 @@ class DepositInput(BaseModel):
     shift_id: str
     amount: float = Field(..., gt=0)
     note: Optional[str] = ""
+    # Supervisor/manager/owner recording at the safe on an attendant's behalf.
+    # Attendants always record for themselves; this is ignored for them.
+    attendant_id: Optional[str] = None
+
+
+class DepositVoidInput(BaseModel):
+    reason: str
+
+
+class DepositReassignInput(BaseModel):
+    attendant_id: str
+    reason: str
+
+
+_PRIVILEGED = ("supervisor", "manager", "owner")
 
 
 def _load_deposits(station_id: str) -> dict:
-    return load_station_json(station_id, 'safe_deposits.json', default={})
+    return deps.load_deposits(station_id)
 
 
 def _save_deposits(station_id: str, data: dict):
-    save_station_json(station_id, 'safe_deposits.json', data)
+    deps.save_deposits(station_id, data)
+
+
+def _role(ctx: dict) -> str:
+    role = ctx.get("role", "")
+    return getattr(role, "value", role) or ""
+
+
+def _roster_entry(shift: dict, attendant_id: str) -> Optional[dict]:
+    return next((a for a in shift.get("assignments", []) or [] if a.get("attendant_id") == attendant_id), None)
+
+
+def _require_open_for_deposits(station_id: str, shift_id: str, attendant_id: str, name: str):
+    """A deposit can only be added to (or moved onto/off) an attendant whose cash close hasn't happened."""
+    h = get_active_handover(station_id, shift_id, attendant_id)
+    if h and h.get("phase") == "completed" and h.get("review_status") != "voided":
+        raise HTTPException(
+            status_code=400,
+            detail=f"{name}'s shift is already closed, so this deposit can no longer count towards it.")
 
 
 @router.post("/")
 def record_deposit(deposit: DepositInput, ctx: dict = Depends(get_station_context)):
-    """Record a cash deposit into the safe. Any authenticated user on an active shift."""
+    """
+    Record a cash deposit into the safe, bound to one rostered attendant.
+    Attendants record their own. A supervisor/manager/owner may record one
+    for a rostered attendant (attendant_id); they are stored as recorded_by.
+    """
     station_id = ctx["station_id"]
     storage = ctx["storage"]
     shifts_data = storage.get('shifts', {})
@@ -53,6 +95,16 @@ def record_deposit(deposit: DepositInput, ctx: dict = Depends(get_station_contex
     if shift.get("status") != "active":
         raise HTTPException(status_code=400, detail="Shift is not active")
 
+    privileged = _role(ctx) in _PRIVILEGED
+    target_id = deposit.attendant_id if (privileged and deposit.attendant_id) else ctx["user_id"]
+    entry = _roster_entry(shift, target_id)
+    if not entry:
+        if target_id == ctx["user_id"] and privileged:
+            raise HTTPException(status_code=400, detail="Choose the attendant this deposit belongs to.")
+        raise HTTPException(status_code=403, detail="Only an attendant on this shift's roster can make a deposit.")
+    target_name = entry.get("attendant_name") or (ctx["full_name"] if target_id == ctx["user_id"] else target_id)
+    _require_open_for_deposits(station_id, deposit.shift_id, target_id, target_name)
+
     deposits_db = _load_deposits(station_id)
 
     if deposit.shift_id not in deposits_db:
@@ -61,8 +113,10 @@ def record_deposit(deposit: DepositInput, ctx: dict = Depends(get_station_contex
     now_dt = datetime.now()
     deposit_record = {
         "deposit_id": f"DEP-{uuid.uuid4().hex[:8]}",
-        "attendant_id": ctx["user_id"],
-        "attendant_name": ctx["full_name"],
+        "attendant_id": target_id,
+        "attendant_name": target_name,
+        "recorded_by_id": ctx["user_id"],
+        "recorded_by_name": ctx["full_name"],
         "amount": deposit.amount,
         "time": now_dt.strftime("%H:%M"),
         "timestamp": now_dt.isoformat(),
@@ -73,9 +127,8 @@ def record_deposit(deposit: DepositInput, ctx: dict = Depends(get_station_contex
     deposits_db[deposit.shift_id]["deposits"].append(deposit_record)
     _save_deposits(station_id, deposits_db)
 
-    # Calculate running total for this attendant
-    my_deposits = [d for d in deposits_db[deposit.shift_id]["deposits"]
-                   if d["attendant_id"] == ctx["user_id"]]
+    # Running total for the attendant the deposit belongs to
+    my_deposits = deps.attendant_deposits(station_id, deposit.shift_id, target_id)
     total = sum(d["amount"] for d in my_deposits)
 
     return {
@@ -96,8 +149,9 @@ def get_shift_deposits(shift_id: str, ctx: dict = Depends(get_station_context)):
     storage = ctx["storage"]
     shifts_data = storage.get('shifts', {})
 
-    deposits_db = _load_deposits(station_id)
-    shift_deposits = deposits_db.get(shift_id, {}).get("deposits", [])
+    all_rows = deps.shift_deposits(station_id, shift_id, include_voided=True)
+    shift_deposits = [d for d in all_rows if deps.is_live(d)]
+    voided = [d for d in all_rows if not deps.is_live(d)]
 
     # Group by attendant
     by_attendant = {}
@@ -232,6 +286,7 @@ def get_shift_deposits(shift_id: str, ctx: dict = Depends(get_station_context)):
         "attendants": list(by_attendant.values()),
         "total_deposits": len(shift_deposits),
         "total_amount": sum(d["amount"] for d in shift_deposits),
+        "voided": voided,
     }
 
 
@@ -241,10 +296,7 @@ def get_my_deposits(shift_id: str, ctx: dict = Depends(get_station_context)):
     station_id = ctx["station_id"]
     user_id = ctx["user_id"]
 
-    deposits_db = _load_deposits(station_id)
-    shift_deposits = deposits_db.get(shift_id, {}).get("deposits", [])
-
-    my_deposits = [d for d in shift_deposits if d["attendant_id"] == user_id]
+    my_deposits = deps.attendant_deposits(station_id, shift_id, user_id)
     total = sum(d["amount"] for d in my_deposits)
 
     # Attendant overdue: remind every hour
@@ -282,3 +334,69 @@ def get_my_deposits(shift_id: str, ctx: dict = Depends(get_station_context)):
         "threshold_minutes": DEPOSIT_INTERVAL_MINUTES,
         "threshold_amount": DEPOSIT_THRESHOLD_AMOUNT,
     }
+
+
+def _find_deposit(station_id: str, shift_id: str, deposit_id: str):
+    db = _load_deposits(station_id)
+    rows = (db.get(shift_id) or {}).get("deposits", [])
+    d = next((x for x in rows if x.get("deposit_id") == deposit_id), None)
+    if not d:
+        raise HTTPException(status_code=404, detail="Deposit not found")
+    if not deps.is_live(d):
+        raise HTTPException(status_code=400, detail="This deposit has already been voided.")
+    return db, d
+
+
+@router.post("/{shift_id}/{deposit_id}/void", dependencies=[Depends(require_manager_or_owner)])
+def void_deposit(shift_id: str, deposit_id: str, data: DepositVoidInput, ctx: dict = Depends(get_station_context)):
+    """Void a wrongly recorded deposit (manager/owner), while its attendant's shift is still open."""
+    if not data.reason.strip():
+        raise HTTPException(status_code=400, detail="A reason is required.")
+    station_id = ctx["station_id"]
+    db, d = _find_deposit(station_id, shift_id, deposit_id)
+    _require_open_for_deposits(station_id, shift_id, d["attendant_id"], d.get("attendant_name") or d["attendant_id"])
+    d.update({"voided": True, "voided_by": ctx["username"], "voided_at": datetime.now().isoformat(),
+              "void_reason": data.reason.strip()})
+    _save_deposits(station_id, db)
+    log_audit_event(station_id=station_id, action="safe_deposit_void", performed_by=ctx["username"],
+                    entity_type="safe_deposit", entity_id=deposit_id,
+                    details={"shift_id": shift_id, "attendant_id": d["attendant_id"], "amount": d["amount"]},
+                    notes=data.reason.strip())
+    return {"status": "success", "deposit": d}
+
+
+@router.post("/{shift_id}/{deposit_id}/reassign", dependencies=[Depends(require_manager_or_owner)])
+def reassign_deposit(shift_id: str, deposit_id: str, data: DepositReassignInput,
+                     ctx: dict = Depends(get_station_context)):
+    """
+    Move a deposit recorded against the wrong attendant to the right one
+    (manager/owner). Both attendants' shifts must still be open.
+    """
+    if not data.reason.strip():
+        raise HTTPException(status_code=400, detail="A reason is required.")
+    station_id = ctx["station_id"]
+    shift = ctx["storage"].get("shifts", {}).get(shift_id)
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    entry = _roster_entry(shift, data.attendant_id)
+    if not entry:
+        raise HTTPException(status_code=400, detail="That attendant is not on this shift.")
+    db, d = _find_deposit(station_id, shift_id, deposit_id)
+    if d["attendant_id"] == data.attendant_id:
+        raise HTTPException(status_code=400, detail="The deposit already belongs to that attendant.")
+    _require_open_for_deposits(station_id, shift_id, d["attendant_id"], d.get("attendant_name") or d["attendant_id"])
+    _require_open_for_deposits(station_id, shift_id, data.attendant_id, entry.get("attendant_name") or data.attendant_id)
+    before = {"attendant_id": d["attendant_id"], "attendant_name": d.get("attendant_name")}
+    d.setdefault("reassignments", []).append({
+        **{f"from_{k}": v for k, v in before.items()},
+        "by": ctx["username"], "at": datetime.now().isoformat(), "reason": data.reason.strip(),
+    })
+    d["attendant_id"] = data.attendant_id
+    d["attendant_name"] = entry.get("attendant_name") or data.attendant_id
+    _save_deposits(station_id, db)
+    log_audit_event(station_id=station_id, action="safe_deposit_reassign", performed_by=ctx["username"],
+                    entity_type="safe_deposit", entity_id=deposit_id,
+                    details={"shift_id": shift_id, "from": before["attendant_id"], "to": data.attendant_id,
+                             "amount": d["amount"]},
+                    notes=data.reason.strip())
+    return {"status": "success", "deposit": d}
