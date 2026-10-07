@@ -5,6 +5,7 @@ import Pagination from '../components/Pagination'
 import ReasonChips, { REASON_PRESETS } from '../components/ReasonChips'
 import { getHeaders, authFetch } from '../lib/api'
 import { formatDateToDisplay, formatDateTimeToDisplay, formatTimeToDisplay } from '../lib/dateUtils'
+import AttendantOpeningPanel from '../components/AttendantOpeningPanel'
 
 const HISTORY_PAGE_SIZE = 20
 
@@ -29,6 +30,8 @@ export default function Shifts() {
   const [islandsData, setIslandsData] = useState<any[]>([])
   const [selectedAttendants, setSelectedAttendants] = useState<any[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
+  // Manager+ can open an attendant on the active shift to see their opening readings and Forecourt count
+  const [openAttendantId, setOpenAttendantId] = useState<string | null>(null)
 
   // Shift history state
   const [allShifts, setAllShifts] = useState<any[]>([])
@@ -500,6 +503,7 @@ export default function Shifts() {
 
   // Shift management handlers
   const canManageShifts = currentUser?.role === 'supervisor' || currentUser?.role === 'manager' || currentUser?.role === 'owner'
+  const canViewAttendantOpening = currentUser?.role === 'manager' || currentUser?.role === 'owner'
 
   const openShiftModal = () => {
     loadAvailableStaff()
@@ -1187,7 +1191,19 @@ export default function Shifts() {
                   ).map((assignment: any) => (
                     <div key={assignment.attendant_id} className="p-4 bg-surface-card rounded-lg border border-surface-border">
                       <div className="flex items-center justify-between mb-2">
-                        <p className="font-medium text-content-primary">{assignment.attendant_name}</p>
+                        {canViewAttendantOpening ? (
+                          <button type="button"
+                            onClick={() => setOpenAttendantId(id => id === assignment.attendant_id ? null : assignment.attendant_id)}
+                            aria-expanded={openAttendantId === assignment.attendant_id}
+                            className="font-medium text-action-primary hover:underline text-left">
+                            {assignment.attendant_name}
+                            <span className="ml-2 text-xs font-normal text-content-secondary">
+                              {openAttendantId === assignment.attendant_id ? 'Hide opening' : 'View opening'}
+                            </span>
+                          </button>
+                        ) : (
+                          <p className="font-medium text-content-primary">{assignment.attendant_name}</p>
+                        )}
                         {currentUser?.role === 'owner' && (
                           <div className="flex items-center gap-3">
                             <button
@@ -1269,6 +1285,10 @@ export default function Shifts() {
                             ))
                           })()}
                         </div>
+                      )}
+
+                      {canViewAttendantOpening && openAttendantId === assignment.attendant_id && (
+                        <AttendantOpeningPanel shiftId={activeShift.shift_id} attendantId={assignment.attendant_id} />
                       )}
                     </div>
                   ))}

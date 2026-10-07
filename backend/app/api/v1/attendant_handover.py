@@ -2162,6 +2162,36 @@ async def submit_price_change_reading(data: dict, ctx: dict = Depends(get_statio
     return {"status": "recorded"}
 
 
+def _nozzle_openings(station_id: str, storage: dict, shift: dict, attendant_id: str,
+                     nozzle_ids: list) -> dict:
+    """
+    Opening meter readings for one attendant's nozzles on a shift, by the
+    3-tier priority:
+      1. the attendant's own opening record for this shift (attendant_readings.json)
+      2. the previous shift's closing
+      3. the nozzle's current reading in station storage
+    {nozzle_id: {"electronic", "mechanical", "source"}}. Shared by My Shift and
+    the manager's view of an attendant so both always show the same figure.
+    """
+    ar_db = _load_enter_readings(station_id)
+    own = {nr["nozzle_id"]: nr for nr in
+           ar_db.get(f"AR-{shift.get('shift_id', '')}-{attendant_id}-O", {}).get("nozzle_readings", [])}
+    prev = _find_previous_shift_readings(shift, storage, station_id)
+    out = {}
+    for nozzle_id in nozzle_ids:
+        if nozzle_id in own:
+            out[nozzle_id] = {"electronic": own[nozzle_id]["electronic_reading"],
+                              "mechanical": own[nozzle_id]["mechanical_reading"], "source": "attendant_entry"}
+        elif nozzle_id in prev:
+            out[nozzle_id] = {"electronic": prev[nozzle_id]["electronic"],
+                              "mechanical": prev[nozzle_id]["mechanical"], "source": "previous_shift"}
+        else:
+            nozzle = get_nozzle(nozzle_id, storage=storage) or {}
+            out[nozzle_id] = {"electronic": nozzle.get("electronic_reading", 0) or 0,
+                              "mechanical": nozzle.get("mechanical_reading", 0) or 0, "source": "nozzle_current"}
+    return out
+
+
 @router.get("/my-shift")
 async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_context)):
     """
@@ -2218,20 +2248,9 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
     shift_date = my_shift.get("date", "")
     shift_type_val = my_shift.get("shift_type", "")
 
-    # 3-tier opening priority per nozzle:
-    # 1. Already-submitted opening record for this shift (attendant_readings.json)
-    # 2. Previous shift's closing from attendant_readings.json
-    # 3. Nozzle's current electronic_reading in station storage
-    ar_db = _load_enter_readings(ctx["station_id"])
-    opening_key_ar = f"AR-{shift_id}-{user_id}-O"
-    opening_record_ar = ar_db.get(opening_key_ar, {})
-    opening_map_ar = {}
-    for nr in opening_record_ar.get("nozzle_readings", []):
-        opening_map_ar[nr["nozzle_id"]] = {
-            "electronic": nr["electronic_reading"],
-            "mechanical": nr["mechanical_reading"],
-        }
-    prev_readings = _find_previous_shift_readings(my_shift, storage, ctx["station_id"])
+    # 3-tier opening priority per nozzle - see _nozzle_openings
+    openings = _nozzle_openings(ctx["station_id"], storage, {**my_shift, "shift_id": shift_id},
+                                user_id, assigned_nozzle_ids)
 
     nozzle_details = []
     price_change_detected = False
@@ -2254,15 +2273,8 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
                             break
                     if fuel_type_abbrev:
                         break
-            if nozzle_id in opening_map_ar:
-                elec_open = opening_map_ar[nozzle_id]["electronic"]
-                mech_open = opening_map_ar[nozzle_id]["mechanical"]
-            elif nozzle_id in prev_readings:
-                elec_open = prev_readings[nozzle_id]["electronic"]
-                mech_open = prev_readings[nozzle_id]["mechanical"]
-            else:
-                elec_open = nozzle.get("electronic_reading", 0) or 0
-                mech_open = nozzle.get("mechanical_reading", 0) or 0
+            elec_open = openings[nozzle_id]["electronic"]
+            mech_open = openings[nozzle_id]["mechanical"]
             nozzle_details.append({
                 "nozzle_id": nozzle_id,
                 "fuel_type": fuel_type,
@@ -2712,6 +2724,95 @@ async def manager_retro_entry(data: ManagerRetroEntryInput, ctx: dict = Depends(
         "total_expected": total_expected,
         "difference": difference,
         "review_status": review_status,
+    }
+
+
+@router.get("/attendant-opening", dependencies=[Depends(require_manager_or_owner)])
+async def get_attendant_opening(shift_id: str, attendant_id: str, ctx: dict = Depends(get_station_context)):
+    """
+    Manager/owner view of one attendant on a shift: whether they have started,
+    their opening meter readings, and their Forecourt stock count (system vs
+    counted, with any difference's review status and stock issued since).
+    Read-only.
+    """
+    station_id = ctx["station_id"]
+    storage = ctx["storage"]
+    shift = storage.get("shifts", {}).get(shift_id)
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    shift = {**shift, "shift_id": shift_id}
+    assignment = next((a for a in shift.get("assignments", []) if a.get("attendant_id") == attendant_id), None)
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Attendant is not on this shift")
+
+    # Same nozzle set My Shift uses: explicit nozzles, else every nozzle on the assigned islands
+    nozzle_ids = list(assignment.get("nozzle_ids") or [])
+    if not nozzle_ids:
+        for isl_id in assignment.get("island_ids", []) or []:
+            ps = storage.get("islands", {}).get(isl_id, {}).get("pump_station") or {}
+            nozzle_ids.extend(n["nozzle_id"] for n in ps.get("nozzles", []))
+
+    islands_data = storage.get("islands", {})
+    openings = _nozzle_openings(station_id, storage, shift, attendant_id, nozzle_ids)
+    nozzles = []
+    for nid in nozzle_ids:
+        nozzle = get_nozzle(nid, storage=storage) or {}
+        abbrev = next((isl.get("fuel_type_abbrev") for isl in islands_data.values()
+                       if any(n.get("nozzle_id") == nid for n in (isl.get("pump_station") or {}).get("nozzles", []))),
+                      None)
+        nozzles.append({
+            "nozzle_id": nid,
+            "display_label": nozzle.get("display_label"),
+            "fuel_type_abbrev": abbrev,
+            "fuel_type": _get_fuel_type(nid, storage=storage),
+            "electronic": openings[nid]["electronic"],
+            "mechanical": openings[nid]["mechanical"],
+            "source": openings[nid]["source"],
+        })
+
+    verification = _load_opening_verifications(station_id).get(f"{shift_id}-{attendant_id}")
+    active = get_active_handover(station_id, shift_id, attendant_id, handovers=_load_handovers(station_id))
+
+    # Stock, limited to the categories this attendant holds
+    view = _shift_stock_view(station_id, storage, shift, verification)
+    reviews = {v["item_key"]: v for vid, v in load_opening_variances(station_id).items()
+               if vid.startswith(f"OSV-{shift_id}-{attendant_id}-")}
+
+    def _review(item_key):
+        v = reviews.get(item_key)
+        return None if not v else {"status": v.get("status"), "responsibility": v.get("responsibility"),
+                                   "confirmed_qty": v.get("confirmed_qty")}
+
+    stock = []
+    if assignment.get("assigned_lpg"):
+        for r in view["lpg_cylinders"]:
+            for part, label in (("full", "full"), ("empty", "empty")):
+                key = f"cylinder_{part}:{r['size_kg']}kg"
+                stock.append({"group": "LPG", "label": f"{r['size_kg']}kg {label}", "item_key": key,
+                              "system": r[f"system_{part}"], "counted": r[f"opening_{part}"],
+                              "additions": r.get(f"additions_{part}", 0), "review": _review(key)})
+    for flag, field, group, category in (("assigned_accessories", "accessories", "Accessories", "lpg_accessory"),
+                                         ("assigned_lubricants", "lubricants", "Lubricants", "lubricant")):
+        if assignment.get(flag):
+            for r in view[field]:
+                key = f"{category}:{r['product_code']}"
+                stock.append({"group": group, "label": r.get("description") or r["product_code"], "item_key": key,
+                              "system": r["system_stock"], "counted": r["opening_stock"],
+                              "additions": r.get("additions", 0), "review": _review(key)})
+
+    return {
+        "shift_id": shift_id,
+        "attendant_id": attendant_id,
+        "attendant_name": assignment.get("attendant_name"),
+        "started": bool(verification) or active is not None,
+        "verified_at": (verification or {}).get("verified_at"),
+        "discrepancy_note": (verification or {}).get("discrepancy_note"),
+        "handover_phase": (active or {}).get("phase"),
+        "nozzles": nozzles,
+        "stock_count_confirmed": bool(view.get("count_confirmed")),
+        "stock_count_note": view.get("count_note"),
+        "forecourt_live": bool(view.get("forecourt_live")),
+        "stock": stock,
     }
 
 

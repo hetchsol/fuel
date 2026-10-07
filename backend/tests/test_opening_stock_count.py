@@ -288,3 +288,46 @@ def test_shift_started_before_counts_keeps_old_behaviour(mem):
     snap = ShiftStockSnapshot(**{"accessories": [{"product_code": "REG", "description": "R", "opening_stock": 5}]})
     assert ah._stamp_stock_opening(snap, ST, "SH1", "U1") == []
     assert snap.accessories[0].opening_stock == 5
+
+
+# ── manager view of one attendant's opening ─────────────────────────
+
+def test_attendant_opening_view(system, monkeypatch):
+    import asyncio
+    monkeypatch.setattr(ah, "_load_enter_readings", lambda st: {
+        "AR-SH1-U1-O": {"nozzle_readings": [{"nozzle_id": "N1", "electronic_reading": 100.5, "mechanical_reading": 99.0}]}})
+    monkeypatch.setattr(ah, "_find_previous_shift_readings", lambda *a: {"N2": {"electronic": 50.0, "mechanical": 49.0}})
+    monkeypatch.setattr(ah, "get_nozzle", lambda nid, storage=None: {"nozzle_id": nid, "display_label": nid})
+    monkeypatch.setattr(ah, "_get_fuel_type", lambda nid, storage=None: "Diesel")
+    monkeypatch.setattr(ah, "get_active_handover", lambda *a, **k: None)
+    storage = {"shifts": {"SH1": {"date": "2026-10-08", "shift_type": "Day", "assignments": [
+        {"attendant_id": "U1", "attendant_name": "Att One", "nozzle_ids": ["N1", "N2"], "assigned_lpg": True}]}},
+        "islands": {}}
+    ctx = {"station_id": ST, "storage": storage}
+
+    # Before the attendant starts: system figures, not started
+    out = asyncio.run(ah.get_attendant_opening("SH1", "U1", ctx))
+    assert out["started"] is False and out["stock_count_confirmed"] is False
+    assert [(n["nozzle_id"], n["electronic"], n["source"]) for n in out["nozzles"]] == [
+        ("N1", 100.5, "attendant_entry"), ("N2", 50.0, "previous_shift")]
+    assert [(s["label"], s["system"]) for s in out["stock"]] == [("9kg full", 8), ("9kg empty", 2)]
+
+    # After a count with a difference
+    ah._record_stock_count(ST, storage, {**storage["shifts"]["SH1"], "shift_id": "SH1"}, {"assigned_lpg": True},
+                           {"lpg_cylinders": [{"size_kg": 9, "counted_full": 7, "counted_empty": 2}], "note": "short"},
+                           CTX, "2000-01-01T00:00:00")
+    block = svc.load_opening_variances(ST)
+    # verify-opening stores the count on the verification record like this
+    ah._save_opening_verifications({"SH1-U1": {"verified_at": "2000-01-01T00:00:00", "stock_opening": {
+        "live": True, "note": "short",
+        "lpg": [{"size_kg": 9, "system_full": 8, "system_empty": 2, "counted_full": 7, "counted_empty": 2}],
+        "accessories": [], "lubricants": []}}}, ST)
+    out = asyncio.run(ah.get_attendant_opening("SH1", "U1", ctx))
+    assert out["started"] is True and out["stock_count_confirmed"] is True
+    full = out["stock"][0]
+    assert (full["system"], full["counted"], full["review"]["status"]) == (8, 7, "pending")
+    assert out["stock"][1]["review"] is None
+    assert len(block) == 1
+
+    with pytest.raises(HTTPException):
+        asyncio.run(ah.get_attendant_opening("SH1", "NOBODY", ctx))
