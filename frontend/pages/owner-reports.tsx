@@ -559,8 +559,8 @@ function StockLosses({ data, from, range }: { data: any; from: string; range: st
 
 // Fuel colours are fixed across every chart: petrol green, diesel purple (the app's
 // --color-chart-petrol / --color-chart-diesel tokens, which switch for dark mode).
-// Two tanks of the same fuel share the colour and differ by line style, and every
-// line carries its tank name at the end, so identity never rests on colour alone.
+// Two tanks of the same fuel on one chart share the colour and differ by line style,
+// and every line carries its tank name, so identity never rests on colour alone.
 const fuelColour = (fuel?: string) =>
   (fuel || '').toLowerCase() === 'diesel' ? 'var(--color-chart-diesel)'
     : (fuel || '').toLowerCase() === 'petrol' ? 'var(--color-chart-petrol)'
@@ -575,41 +575,115 @@ const tankStyles = (tanks: any[]) => {
   })
 }
 
-/** Weekly loss as % of litres that left each tank, one line per tank, with the tolerance band. */
+/**
+ * Weekly loss as % of litres that left each tank, with the tolerance band.
+ * One or two tanks: one chart, a line per tank. More than two: one small panel
+ * per tank in a grid (lines would otherwise cross and labels pile up), all on
+ * the same scale so the tanks stay directly comparable.
+ */
 function FuelTrendChart({ weeks, tanks, passPct, warnPct }: { weeks: any[]; tanks: any[]; passPct: number; warnPct: number }) {
-  const [hover, setHover] = useState<{ x: number; y: number; text: string } | null>(null)
-  const shown = tanks.slice(0, 4)   // four lines at most; the table lists every tank
-  const styles = tankStyles(shown)
   const weekKeys = Array.from(new Set(weeks.map(w => w.week_start))).sort()
-  if (weekKeys.length < 2 || shown.length === 0) return null
+  if (weekKeys.length < 2 || tanks.length === 0) return null
 
-  const W = 720, H = 260, L = 48, R = 110, T = 16, B = 32
-  const vals = weeks.filter(w => shown.some(t => t.tank_id === w.tank_id)).map(w => w.loss_percent)
+  // One scale for every panel, so a tall line means a big loss wherever it sits
+  const vals = weeks.map(w => w.loss_percent)
   const top = Math.max(warnPct * 1.5, ...vals, 0.5)
   const bottom = Math.min(-warnPct * 1.5, ...vals, -0.5)
+  const styles = tankStyles(tanks)
+  const split = tanks.length > 2
+
+  const legendBand = (
+    <span className="flex items-center gap-1.5">
+      <span className="inline-block w-4 h-3 rounded-sm bg-status-success/15" />within tolerance ({passPct}%)
+    </span>
+  )
+
+  if (!split) {
+    return (
+      <div className="rounded-lg border border-surface-border bg-surface-card p-3">
+        <p className="text-sm font-semibold text-content-primary">Weekly fuel loss, % of litres that left the tank</p>
+        <div className="flex flex-wrap gap-4 text-xs text-content-secondary mt-1 mb-2">
+          {tanks.map((t, i) => (
+            <span key={t.tank_id} className="flex items-center gap-1.5">
+              <svg width="18" height="6" aria-hidden="true">
+                <line x1="0" y1="3" x2="18" y2="3" stroke={styles[i].colour} strokeWidth={2} strokeDasharray={styles[i].dash} />
+              </svg>
+              {t.tank}{t.fuel_type ? ` (${t.fuel_type})` : ''}
+            </span>
+          ))}
+          {legendBand}
+        </div>
+        <TrendPlot tanks={tanks} styles={styles} weeks={weeks} weekKeys={weekKeys}
+          top={top} bottom={bottom} passPct={passPct} warnPct={warnPct} height={260} endLabels />
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border border-surface-border bg-surface-card p-3">
+      <p className="text-sm font-semibold text-content-primary">Weekly fuel loss per tank, % of litres that left the tank</p>
+      <div className="flex flex-wrap gap-4 text-xs text-content-secondary mt-1 mb-3">
+        <span>One panel per tank, all on the same scale.</span>
+        {legendBand}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {tanks.map(t => {
+          const colour = fuelColour(t.fuel_type)
+          return (
+            <div key={t.tank_id} className="rounded border border-surface-border p-2">
+              <div className="flex items-baseline justify-between gap-2 mb-1">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-content-primary">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: colour }} aria-hidden="true" />
+                  {t.tank}{t.fuel_type ? ` (${t.fuel_type})` : ''}
+                </span>
+                <span className={`text-xs font-mono ${t.shifts_over ? 'text-status-error' : 'text-content-secondary'}`}>
+                  {t.loss_percent}% overall
+                </span>
+              </div>
+              <TrendPlot tanks={[t]} styles={[{ colour, dash: undefined }]} weeks={weeks} weekKeys={weekKeys}
+                top={top} bottom={bottom} passPct={passPct} warnPct={warnPct} height={170} />
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/** One plot area: axes, tolerance band and a line per tank, with a hover tooltip. */
+function TrendPlot({ tanks, styles, weeks, weekKeys, top, bottom, passPct, warnPct, height, endLabels = false }: {
+  tanks: any[]; styles: { colour: string; dash?: string }[]; weeks: any[]; weekKeys: string[]
+  top: number; bottom: number; passPct: number; warnPct: number; height: number; endLabels?: boolean
+}) {
+  const [hover, setHover] = useState<{ x: number; y: number; text: string } | null>(null)
+  const W = 720, H = height, L = 48, R = endLabels ? 110 : 16, T = 12, B = 28
   const x = (i: number) => L + (i / (weekKeys.length - 1)) * (W - L - R)
   const y = (v: number) => T + ((top - v) / (top - bottom)) * (H - T - B)
   const ticks = [bottom, -warnPct, 0, warnPct, top].filter((v, i, a) => a.indexOf(v) === i)
+  const every = Math.ceil(weekKeys.length / (endLabels ? 8 : 6))
   const weekLabel = (k: string) => formatDateToDisplay(k).slice(0, 5)
 
+  const lines = tanks.map((t, si) => {
+    const pts = weekKeys.map((k, i) => {
+      const w = weeks.find(w => w.tank_id === t.tank_id && w.week_start === k)
+      return w ? { i, w } : null
+    }).filter(Boolean) as { i: number; w: any }[]
+    return { t, si, pts }
+  }).filter(l => l.pts.length)
+
+  // End labels: keep at least 13px apart so two lines ending close together stay readable
+  const labelY: Record<string, number> = {}
+  if (endLabels) {
+    const ends = lines.map(l => ({ id: l.t.tank_id, y: y(l.pts[l.pts.length - 1].w.loss_percent) + 4 }))
+      .sort((a, b) => a.y - b.y)
+    ends.forEach((e, i) => { if (i > 0 && e.y - ends[i - 1].y < 13) e.y = ends[i - 1].y + 13 })
+    ends.forEach(e => { labelY[e.id] = Math.min(e.y, H - B) })
+  }
+
   return (
-    <div className="relative rounded-lg border border-surface-border bg-surface-card p-3">
-      <p className="text-sm font-semibold text-content-primary">Weekly fuel loss, % of litres that left the tank</p>
-      <div className="flex flex-wrap gap-4 text-xs text-content-secondary mt-1 mb-2">
-        {shown.map((t, i) => (
-          <span key={t.tank_id} className="flex items-center gap-1.5">
-            <svg width="18" height="6" aria-hidden="true">
-              <line x1="0" y1="3" x2="18" y2="3" stroke={styles[i].colour} strokeWidth={2} strokeDasharray={styles[i].dash} />
-            </svg>
-            {t.tank}{t.fuel_type ? ` (${t.fuel_type})` : ''}
-          </span>
-        ))}
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block w-4 h-3 rounded-sm bg-status-success/15" />within tolerance ({passPct}%)
-        </span>
-      </div>
+    <div className="relative">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img"
-        aria-label="Weekly fuel loss percentage per tank" onMouseLeave={() => setHover(null)}>
+        aria-label={`Weekly fuel loss percentage: ${tanks.map(t => t.tank).join(', ')}`} onMouseLeave={() => setHover(null)}>
         <rect x={L} y={y(passPct)} width={W - L - R} height={y(-passPct) - y(passPct)} className="fill-current text-status-success" opacity={0.12} />
         {ticks.map(v => (
           <g key={v}>
@@ -620,44 +694,37 @@ function FuelTrendChart({ weeks, tanks, passPct, warnPct }: { weeks: any[]; tank
             </text>
           </g>
         ))}
-        {weekKeys.map((k, i) => (i % Math.ceil(weekKeys.length / 8) === 0 || i === weekKeys.length - 1) && (
-          <text key={k} x={x(i)} y={H - 10} textAnchor="middle" className="fill-current text-content-secondary" fontSize={11}>{weekLabel(k)}</text>
+        {weekKeys.map((k, i) => (i % every === 0 || i === weekKeys.length - 1) && (
+          <text key={k} x={x(i)} y={H - 8} textAnchor="middle" className="fill-current text-content-secondary" fontSize={11}>{weekLabel(k)}</text>
         ))}
-        {shown.map((t, si) => {
-          const pts = weekKeys.map((k, i) => {
-            const w = weeks.find(w => w.tank_id === t.tank_id && w.week_start === k)
-            return w ? { i, w } : null
-          }).filter(Boolean) as { i: number; w: any }[]
-          if (!pts.length) return null
-          const last = pts[pts.length - 1]
-          return (
-            <g key={t.tank_id}>
-              <polyline fill="none" stroke={styles[si].colour} strokeWidth={2} strokeLinejoin="round" strokeDasharray={styles[si].dash}
-                points={pts.map(p => `${x(p.i)},${y(p.w.loss_percent)}`).join(' ')} />
-              {pts.map(p => (
-                <g key={p.i}>
-                  <circle cx={x(p.i)} cy={y(p.w.loss_percent)} r={4} fill={styles[si].colour} className="stroke-current text-surface-card" strokeWidth={2} />
-                  <circle cx={x(p.i)} cy={y(p.w.loss_percent)} r={12} fill="transparent"
-                    onMouseEnter={() => setHover({
-                      x: x(p.i), y: y(p.w.loss_percent),
-                      text: `${t.tank}, week of ${formatDateToDisplay(p.w.week_start)}: ${p.w.loss_percent}% (${fmtN(p.w.loss_litres)} L, ${fmtK(p.w.loss_value)})`,
-                    })} />
-                </g>
-              ))}
-              <text x={x(last.i) + 8} y={y(last.w.loss_percent) + 4} fontSize={11} className="fill-current text-content-primary">
+        {lines.map(({ t, si, pts }) => (
+          <g key={t.tank_id}>
+            <polyline fill="none" stroke={styles[si].colour} strokeWidth={2} strokeLinejoin="round" strokeDasharray={styles[si].dash}
+              points={pts.map(p => `${x(p.i)},${y(p.w.loss_percent)}`).join(' ')} />
+            {pts.map(p => (
+              <g key={p.i}>
+                <circle cx={x(p.i)} cy={y(p.w.loss_percent)} r={4} fill={styles[si].colour} className="stroke-current text-surface-card" strokeWidth={2} />
+                <circle cx={x(p.i)} cy={y(p.w.loss_percent)} r={12} fill="transparent"
+                  onMouseEnter={() => setHover({
+                    x: x(p.i), y: y(p.w.loss_percent),
+                    text: `${t.tank}, week of ${formatDateToDisplay(p.w.week_start)}: ${p.w.loss_percent}% (${fmtN(p.w.loss_litres)} L, ${fmtK(p.w.loss_value)})`,
+                  })} />
+              </g>
+            ))}
+            {endLabels && (
+              <text x={x(pts[pts.length - 1].i) + 8} y={labelY[t.tank_id]} fontSize={11} className="fill-current text-content-primary">
                 {t.tank}
               </text>
-            </g>
-          )
-        })}
+            )}
+          </g>
+        ))}
       </svg>
       {hover && (
-        <div className="absolute pointer-events-none rounded border border-surface-border bg-surface-card px-2 py-1 text-xs text-content-primary shadow"
+        <div className="absolute z-10 pointer-events-none rounded border border-surface-border bg-surface-card px-2 py-1 text-xs text-content-primary shadow whitespace-nowrap"
           style={{ left: `${(hover.x / W) * 100}%`, top: `${(hover.y / H) * 100}%`, transform: 'translate(-50%, -120%)' }}>
           {hover.text}
         </div>
       )}
-      {tanks.length > 4 && <p className="text-xs text-content-secondary">Chart shows the four tanks with the most loss; the table lists all.</p>}
     </div>
   )
 }
