@@ -444,9 +444,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     },
     // Consolidated analytical clusters (each is a single tabbed page).
     { path: '/shift-reconciliation', label: 'Reconciliation', roles: ['supervisor', 'manager', 'owner'] },
-    { path: '/reports', label: 'Reports', roles: ['supervisor', 'manager', 'owner'] },
+    {
+      label: 'Reports',
+      roles: ['supervisor', 'manager', 'owner'],
+      children: [
+        { path: '/reports', label: 'All Reports', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/alerts', label: 'Alerts', roles: ['supervisor', 'manager', 'owner'] },
+      ]
+    },
     { path: '/owner-reports', label: 'Owner Reports', roles: ['owner'] },
-    { path: '/alerts', label: 'Alerts', roles: ['supervisor', 'manager', 'owner'] },
     {
       label: 'Administration',
       roles: ['manager', 'owner'],
@@ -499,8 +505,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     },
     // Same consolidated clusters as every other role.
     { path: '/shift-reconciliation', label: 'Reconciliation', roles: ['manager'] },
-    { path: '/reports', label: 'Reports', roles: ['manager'] },
-    { path: '/alerts', label: 'Alerts', roles: ['manager'] },
+    {
+      label: 'Reports',
+      roles: ['manager'],
+      children: [
+        { path: '/reports', label: 'All Reports', roles: ['manager'] },
+        { path: '/alerts', label: 'Alerts', roles: ['manager'] },
+      ],
+    },
     {
       label: 'Admin',
       roles: ['manager'],
