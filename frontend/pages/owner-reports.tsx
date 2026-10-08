@@ -557,19 +557,29 @@ function StockLosses({ data, from, range }: { data: any; from: string; range: st
 
 // ── 4. Fuel losses ──────────────────────────────────────────────────
 
-// Series colours for the trend chart (validated: light and dark, adjacent CVD and contrast).
-// The third light hue is below 3:1 on white, so every line carries a direct label and the
-// per-tank table sits beside the chart.
-const VIZ_STYLE = `
-.viz-root { --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; }
-.dark .viz-root { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; }
-`
-const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)']
+// Fuel colours are fixed across every chart: petrol green, diesel purple (the app's
+// --color-chart-petrol / --color-chart-diesel tokens, which switch for dark mode).
+// Two tanks of the same fuel share the colour and differ by line style, and every
+// line carries its tank name at the end, so identity never rests on colour alone.
+const fuelColour = (fuel?: string) =>
+  (fuel || '').toLowerCase() === 'diesel' ? 'var(--color-chart-diesel)'
+    : (fuel || '').toLowerCase() === 'petrol' ? 'var(--color-chart-petrol)'
+    : 'var(--color-text-secondary, #6b7280)'
+const DASHES = [undefined, '6 4', '2 4']
+const tankStyles = (tanks: any[]) => {
+  const seen: Record<string, number> = {}
+  return tanks.map(t => {
+    const fuel = (t.fuel_type || '').toLowerCase()
+    const n = seen[fuel] = (seen[fuel] ?? -1) + 1
+    return { colour: fuelColour(t.fuel_type), dash: DASHES[n % DASHES.length] }
+  })
+}
 
 /** Weekly loss as % of litres that left each tank, one line per tank, with the tolerance band. */
 function FuelTrendChart({ weeks, tanks, passPct, warnPct }: { weeks: any[]; tanks: any[]; passPct: number; warnPct: number }) {
   const [hover, setHover] = useState<{ x: number; y: number; text: string } | null>(null)
-  const shown = tanks.slice(0, 3)   // three lines at most; the table lists every tank
+  const shown = tanks.slice(0, 4)   // four lines at most; the table lists every tank
+  const styles = tankStyles(shown)
   const weekKeys = Array.from(new Set(weeks.map(w => w.week_start))).sort()
   if (weekKeys.length < 2 || shown.length === 0) return null
 
@@ -583,13 +593,15 @@ function FuelTrendChart({ weeks, tanks, passPct, warnPct }: { weeks: any[]; tank
   const weekLabel = (k: string) => formatDateToDisplay(k).slice(0, 5)
 
   return (
-    <div className="viz-root relative rounded-lg border border-surface-border bg-surface-card p-3">
-      <style>{VIZ_STYLE}</style>
+    <div className="relative rounded-lg border border-surface-border bg-surface-card p-3">
       <p className="text-sm font-semibold text-content-primary">Weekly fuel loss, % of litres that left the tank</p>
       <div className="flex flex-wrap gap-4 text-xs text-content-secondary mt-1 mb-2">
         {shown.map((t, i) => (
           <span key={t.tank_id} className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-0.5" style={{ backgroundColor: SERIES[i] }} />{t.tank}
+            <svg width="18" height="6" aria-hidden="true">
+              <line x1="0" y1="3" x2="18" y2="3" stroke={styles[i].colour} strokeWidth={2} strokeDasharray={styles[i].dash} />
+            </svg>
+            {t.tank}{t.fuel_type ? ` (${t.fuel_type})` : ''}
           </span>
         ))}
         <span className="flex items-center gap-1.5">
@@ -620,11 +632,11 @@ function FuelTrendChart({ weeks, tanks, passPct, warnPct }: { weeks: any[]; tank
           const last = pts[pts.length - 1]
           return (
             <g key={t.tank_id}>
-              <polyline fill="none" stroke={SERIES[si]} strokeWidth={2} strokeLinejoin="round"
+              <polyline fill="none" stroke={styles[si].colour} strokeWidth={2} strokeLinejoin="round" strokeDasharray={styles[si].dash}
                 points={pts.map(p => `${x(p.i)},${y(p.w.loss_percent)}`).join(' ')} />
               {pts.map(p => (
                 <g key={p.i}>
-                  <circle cx={x(p.i)} cy={y(p.w.loss_percent)} r={4} fill={SERIES[si]} className="stroke-current text-surface-card" strokeWidth={2} />
+                  <circle cx={x(p.i)} cy={y(p.w.loss_percent)} r={4} fill={styles[si].colour} className="stroke-current text-surface-card" strokeWidth={2} />
                   <circle cx={x(p.i)} cy={y(p.w.loss_percent)} r={12} fill="transparent"
                     onMouseEnter={() => setHover({
                       x: x(p.i), y: y(p.w.loss_percent),
@@ -645,7 +657,7 @@ function FuelTrendChart({ weeks, tanks, passPct, warnPct }: { weeks: any[]; tank
           {hover.text}
         </div>
       )}
-      {tanks.length > 3 && <p className="text-xs text-content-secondary">Chart shows the three tanks with the most loss; the table lists all.</p>}
+      {tanks.length > 4 && <p className="text-xs text-content-secondary">Chart shows the four tanks with the most loss; the table lists all.</p>}
     </div>
   )
 }
