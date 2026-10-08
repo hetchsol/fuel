@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import { useRouter } from 'next/router'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ExportButtons from '../components/ExportButtons'
@@ -153,9 +153,56 @@ export default function OwnerReports() {
 
 // ── 1. Attendant scorecard ──────────────────────────────────────────
 
+// Scorecard columns: header, how a row sorts on it, and which way the first click sorts
+type SortDir = 'asc' | 'desc'
+const SCORE_COLUMNS = (threshold: number): { label: string; key: string; value: (r: any) => number | string; first: SortDir }[] => [
+  { label: 'Attendant', key: 'attendant_name', value: r => (r.attendant_name || r.attendant_id || '').toLowerCase(), first: 'asc' },
+  { label: 'Shifts', key: 'shifts_closed', value: r => r.shifts_closed, first: 'desc' },
+  { label: 'Sales', key: 'sales', value: r => r.sales, first: 'desc' },
+  { label: 'Cash short', key: 'cash_short', value: r => r.cash_short, first: 'desc' },
+  { label: 'Cash over', key: 'cash_over', value: r => r.cash_over, first: 'desc' },
+  // Net cash: biggest shortfall (most negative) first
+  { label: 'Net cash', key: 'net_cash', value: r => r.net_cash, first: 'asc' },
+  { label: `Short > K${threshold}`, key: 'shifts_short_over_threshold', value: r => r.shifts_short_over_threshold, first: 'desc' },
+  { label: 'Stock short', key: 'stock_short_value', value: r => r.stock_short_value, first: 'desc' },
+  { label: 'Count diffs', key: 'count_differences', value: r => r.count_differences, first: 'desc' },
+  { label: 'Flagged', key: 'flagged_shifts', value: r => r.flagged_shifts, first: 'desc' },
+  { label: 'Deposits', key: 'deposit_total', value: r => r.deposit_total, first: 'desc' },
+  { label: 'Voided / moved', key: 'deposits_corrected', value: r => (r.deposits_voided || 0) + (r.deposits_moved_away || 0), first: 'desc' },
+  { label: 'Overdue', key: 'overdue_reminders', value: r => r.overdue_reminders, first: 'desc' },
+]
+
 function Scorecard({ data, from, range }: { data: any; from: string; range: string }) {
   const [open, setOpen] = useState<string | null>(null)
-  const rows: any[] = data.attendants || []
+  const [sortKey, setSortKey] = useState('net_cash')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [nameFilter, setNameFilter] = useState('')
+  const columns = SCORE_COLUMNS(data.cash_shortage_threshold)
+
+  // Filtered by name, then sorted by the chosen column (ties by name)
+  const rows: any[] = useMemo(() => {
+    const col = columns.find(c => c.key === sortKey) || columns[0]
+    const q = nameFilter.trim().toLowerCase()
+    const list = (data.attendants || []).filter((r: any) =>
+      !q || (r.attendant_name || '').toLowerCase().includes(q) || (r.attendant_id || '').toLowerCase().includes(q))
+    return [...list].sort((a: any, b: any) => {
+      const va = col.value(a), vb = col.value(b)
+      const cmp = typeof va === 'string' ? String(va).localeCompare(String(vb)) : (Number(va) || 0) - (Number(vb) || 0)
+      if (cmp !== 0) return sortDir === 'asc' ? cmp : -cmp
+      return (a.attendant_name || '').localeCompare(b.attendant_name || '')
+    })
+  }, [data.attendants, sortKey, sortDir, nameFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sortBy = (key: string) => {
+    const col = columns.find(c => c.key === key)!
+    if (key === sortKey) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir(col.first) }
+  }
+  const sortHint = (key: string) => {
+    if (key !== sortKey) return ''
+    if (key === 'attendant_name') return sortDir === 'asc' ? 'A to Z' : 'Z to A'
+    return sortDir === 'desc' ? 'high first' : 'low first'
+  }
 
   const getConfig = useCallback((): ExportConfig | null => rows.length ? {
     title: 'Attendant Scorecard',
@@ -187,20 +234,34 @@ function Scorecard({ data, from, range }: { data: any; from: string; range: stri
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-content-secondary">
-          Biggest net cash shortfall first. Click an attendant for their shifts.
+          Click a column heading to sort by it, again to reverse. Click an attendant for their shifts.
         </p>
-        <ExportButtons getConfig={getConfig} />
+        <div className="flex flex-wrap items-center gap-2">
+          <input type="text" value={nameFilter} onChange={e => setNameFilter(e.target.value)}
+            placeholder="Filter by attendant" aria-label="Filter by attendant"
+            className="px-2 py-1.5 text-sm rounded border border-surface-border bg-surface-card text-content-primary" />
+          <ExportButtons getConfig={getConfig} />
+        </div>
       </div>
       <FeatureNote dates={data.feature_dates} from={from} which={['deposits', 'counts']} />
       {rows.length === 0 ? (
-        <p className="text-sm text-content-secondary">No closed shifts in this period.</p>
+        <p className="text-sm text-content-secondary">
+          {(data.attendants || []).length ? 'No attendant matches that filter.' : 'No closed shifts in this period.'}
+        </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card">
           <table className="min-w-full">
             <thead className="bg-surface-bg">
               <tr>
-                {['Attendant', 'Shifts', 'Sales', 'Cash short', 'Cash over', 'Net cash', `Short > K${data.cash_shortage_threshold}`,
-                  'Stock short', 'Count diffs', 'Flagged', 'Deposits', 'Voided / moved', 'Overdue'].map(h => <th key={h} className={th}>{h}</th>)}
+                {columns.map(c => (
+                  <th key={c.key} className={th} aria-sort={c.key === sortKey ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button type="button" onClick={() => sortBy(c.key)}
+                      className={`uppercase text-left hover:text-content-primary ${c.key === sortKey ? 'text-action-primary' : ''}`}>
+                      {c.label}
+                      {c.key === sortKey && <span className="block normal-case font-normal text-[10px]">{sortHint(c.key)}</span>}
+                    </button>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
