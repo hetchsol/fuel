@@ -126,3 +126,100 @@ def test_stock_losses(mem):
     assert (cyl["lost"], cyl["closing_shortfall_value"]) == (0, 1000)
     assert out["months"] == [{"month": "2026-10", "lost_value": 500, "found_value": 100,
                               "net_lost_value": 400, "closing_shortfall_value": 1200}]
+
+
+# ── the other owner tools ───────────────────────────────────────────
+
+def test_fuel_losses(mem, monkeypatch):
+    import app.services.tank_movement as tm
+    monkeypatch.setattr(tm, "get_pass_threshold", lambda: 0.5)
+    monkeypatch.setattr(tm, "get_warning_threshold", lambda: 1.0)
+    mem[(ST, "tank_readings.json")] = {
+        "r1": {"tank_id": "T1", "date": "2026-10-06", "shift_type": "Day", "tank_volume_movement": 1000,
+               "total_electronic_dispensed": 990, "price_per_liter": 30},          # 1% loss -> warning
+        "r2": {"tank_id": "T1", "date": "2026-10-07", "shift_type": "Day", "tank_volume_movement": 1000,
+               "total_electronic_dispensed": 980, "price_per_liter": 30},          # 2% -> over
+        "r3": {"tank_id": "T1", "date": "2026-10-08", "shift_type": "Day"},        # not worked out: skipped
+    }
+    storage = {"tanks": {"T1": {"name": "Diesel Tank", "fuel_type": "Diesel"}}}
+    out = rep.fuel_losses_data(ST, storage, "2026-10-01", "2026-10-31")
+    (t,) = out["tanks"]
+    assert (t["loss_litres"], t["loss_percent"], t["loss_value"], t["shifts"], t["shifts_over"]) == (30, 1.5, 900, 2, 1)
+    assert [s["status"] for s in out["shifts"]] == ["over", "warning"]
+    assert out["weeks"][0]["week_start"] == "2026-10-05"
+
+
+def test_credit_exposure(mem):
+    storage = {"accounts": {
+        "P1": {"account_name": "Post Co", "account_type": "Post-Paid", "current_balance": 1500, "credit_limit": 1000},
+        "Q1": {"account_name": "Pre Co", "account_type": "Pre-Paid", "current_balance": 0, "opening_balance": 500},
+    }, "credit_sales": [
+        {"account_id": "P1", "date": "2026-10-01", "amount": 1000},
+        {"account_id": "P1", "date": "2026-07-01", "amount": 800},
+        {"account_id": "P1", "date": "2026-06-01", "amount": 999, "voided": True},
+    ]}
+    mem[(ST, "audit_log.json")] = [{"action": "account_payment", "entity_id": "P1", "timestamp": "2026-09-01T10:00:00"}]
+    out = rep.credit_exposure_data(ST, storage, today="2026-10-08")
+    p, q = out["accounts"]
+    assert (p["status"], p["owed"], p["available"], p["last_payment"]) == ("over_limit", 1500, -500, "2026-09-01")
+    assert p["aging"] == {"0-30": 1000, "31-60": 0, "61-90": 0, "90+": 500}     # newest sales are the unpaid ones
+    assert p["oldest_unpaid_days"] == 99
+    assert q["status"] == "empty"
+
+
+def test_banking(mem):
+    mem[(ST, "attendant_handovers.json")] = {
+        "H1": ho("H1", "A", "Att A", "2026-10-07", actual_cash=3000),
+        "H2": ho("H2", "A", "Att A", "2026-10-08", actual_cash=2000),
+    }
+    mem[(ST, "daily_close_offs.json")] = {"2026-10-07": {"summary": {"total_actual_cash": 3000},
+                                                        "bank_deposit": {"amount": 2900, "reference": "DEP1"}}}
+    out = rep.banking_data(ST, "2026-10-01", "2026-10-31")
+    d8, d7 = out["days"]
+    assert (d7["gap"], d7["running_gap"], d7["reference"]) == (-100, -100, "DEP1")
+    assert (d8["closed"], d8["banked"], d8["gap"], d8["running_gap"]) == (False, None, -2000, -2100)
+    assert out["days_not_closed"] == 1
+
+
+def test_reorder(mem):
+    mem[(ST, "stock_items.json")] = {
+        "lubricant:OIL1": {"item_key": "lubricant:OIL1", "name": "Engine Oil 1L", "category": "lubricant",
+                           "stores": 4, "forecourt": 2, "reorder_level": 5, "reorder_qty": 12},
+        "lpg_accessory:REG": {"item_key": "lpg_accessory:REG", "name": "Regulator", "category": "lpg_accessory",
+                              "stores": 50, "forecourt": 5, "reorder_level": 5, "reorder_qty": 10},
+        "cylinder_empty:9kg": {"item_key": "cylinder_empty:9kg", "category": "cylinder_empty", "stores": 0, "forecourt": 9},
+    }
+    mem[(ST, "stock_movements.json")] = [
+        {"timestamp": "2026-10-01T09:00:00", "type": "sale", "item_key": "lubricant:OIL1", "qty": 28},
+        {"timestamp": "2026-10-01T09:00:00", "type": "sale", "item_key": "lpg_accessory:REG", "qty": 2},
+    ]
+    out = rep.reorder_data(ST, days=28, cover_days=14, today="2026-10-08")
+    oil, reg = out["items"]
+    assert (oil["per_day"], oil["days_cover"], oil["suggested_order"], oil["suggested_value"]) == (1.0, 6.0, 12, 1200)
+    assert reg["suggested_order"] == 0
+    assert all(not i["item_key"].startswith("cylinder_empty") for i in out["items"])
+
+
+def test_sensitive_actions(mem):
+    mem[(ST, "audit_log.json")] = [
+        {"timestamp": "2026-10-08T09:00:00", "action": "handover_voided", "performed_by": "owner1", "entity_id": "H1"},
+        {"timestamp": "2026-10-08T10:00:00", "action": "stock_adjust", "performed_by": "mgr", "entity_id": "lubricant:OIL1"},
+        {"timestamp": "2026-10-08T11:00:00", "action": "handover_submit", "performed_by": "att", "entity_id": "H2"},
+        {"timestamp": "2026-09-01T11:00:00", "action": "user_delete", "performed_by": "owner1", "entity_id": "U9"},
+    ]
+    out = rep.sensitive_actions_data(ST, "2026-10-01", "2026-10-31")
+    assert [(e["action"], e["group"]) for e in out] == [("stock_adjust", "Stock"), ("handover_voided", "Handovers")]
+
+
+def test_station_comparison(mem, monkeypatch):
+    from app.database import stations_registry
+    import app.database.storage as storage_mod
+    monkeypatch.setattr(ah, "_pos_rules", lambda st: (set(), {}))
+    monkeypatch.setattr(stations_registry, "list_stations", lambda: [
+        {"station_id": ST, "name": "Kalulushi"}, {"station_id": "OFF", "name": "Closed", "status": "disabled"},
+        {"station_id": "TST", "name": "Test", "is_test_station": True}])
+    monkeypatch.setattr(storage_mod, "get_station_storage", lambda sid: {"shifts": {}, "accounts": {}})
+    mem[(ST, "attendant_handovers.json")] = {"H1": ho("H1", "A", "Att A", "2026-10-08", -200, actual_cash=100)}
+    out = rep.station_comparison(None, None, {"station_id": ST, "storage": {}})
+    (row,) = out["stations"]
+    assert (row["name"], row["shifts"], row["net_cash"], row["days_not_closed"]) == ("Kalulushi", 1, -200, 1)
