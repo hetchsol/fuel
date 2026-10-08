@@ -445,6 +445,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     // Consolidated analytical clusters (each is a single tabbed page).
     { path: '/shift-reconciliation', label: 'Reconciliation', roles: ['supervisor', 'manager', 'owner'] },
     { path: '/reports', label: 'Reports', roles: ['supervisor', 'manager', 'owner'] },
+    { path: '/owner-reports', label: 'Owner Reports', roles: ['owner'] },
     { path: '/alerts', label: 'Alerts', roles: ['supervisor', 'manager', 'owner'] },
     {
       label: 'Administration',
