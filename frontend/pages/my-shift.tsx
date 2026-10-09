@@ -523,7 +523,18 @@ export default function MyShift() {
     const hasVariance = row.closing_full !== '' && variance !== 0
     const soldExceedsOpening = totalSold + damaged > available
     const value = refill * row.refill_price + withCyl * row.price_with_cylinder
-    return { totalSold, refill, withCyl, damaged, available, expectedClosing, closingFull, variance, hasVariance, soldExceedsOpening, value }
+    // Empties: each refill and each trade-in of this size brings an empty back
+    const tradeIn = lpgTrades.reduce((s, t) =>
+      t.from_size_kg === row.size_kg && t.from_size_kg !== t.to_size_kg ? s + (parseInt(t.quantity) || 0) : s, 0)
+    const expectedEmpty = row.opening_empty + (row.additions_empty || 0) + refill + tradeIn
+    const emptyCounted = row.closing_empty !== ''
+    const closingEmpty = emptyCounted ? parseInt(row.closing_empty) || 0 : expectedEmpty
+    const emptyVariance = emptyCounted ? expectedEmpty - closingEmpty : 0
+    const emptyHasVariance = emptyVariance !== 0
+    const emptyMissing = !emptyCounted && refill + tradeIn > 0
+    const needsNote = hasVariance || emptyHasVariance
+    return { totalSold, refill, withCyl, damaged, available, expectedClosing, closingFull, variance, hasVariance, soldExceedsOpening, value,
+      tradeIn, expectedEmpty, closingEmpty, emptyVariance, emptyHasVariance, emptyMissing, needsNote }
   })
   const lpgRowTotal = lpgComputations.reduce((s, c) => s + c.value, 0)
   // Trade (upgrade/downgrade) revenue = price_refill[to] + (deposit[to] - deposit[from]) per trade.
@@ -587,11 +598,12 @@ export default function MyShift() {
   const allMechValid = nozzleComputations.every(c => c.mechValid !== false)
   // Stock variance validation: all variances must have notes
   const allStockVarianceNotesProvided = [
-    ...lpgComputations.map((c, i) => !c.hasVariance || lpgRows[i].variance_note.trim() !== ''),
+    ...lpgComputations.map((c, i) => !c.needsNote || lpgRows[i].variance_note.trim() !== ''),
     ...accComputations.map((c, i) => !c.hasVariance || accessoryRows[i].variance_note.trim() !== ''),
     ...lubComputations.map((c, i) => !c.hasVariance || lubricantRows[i].variance_note.trim() !== ''),
   ].every(Boolean)
   const noStockOutViolations = [...lpgComputations, ...accComputations, ...lubComputations].every(c => !c.soldExceedsOpening)
+  const allEmptiesCounted = lpgComputations.every(c => !c.emptyMissing)
   const hasDeviationFlags = nozzleComputations.some(c => c.flagged)
   const hasLossFlags = nozzleComputations.some(c => c.lossExceedsThreshold)
   // All flagged nozzles must have a deviation note before proceeding
@@ -600,9 +612,9 @@ export default function MyShift() {
     return !comp?.flagged && !comp?.lossExceedsThreshold || row.deviation_note.trim() !== ''
   })
 
-  const canProceedToReview = allClosingsEntered && allValid && allMechEntered && allMechValid && allStockVarianceNotesProvided && noStockOutViolations && allDeviationNotesProvided
+  const canProceedToReview = allClosingsEntered && allValid && allMechEntered && allMechValid && allStockVarianceNotesProvided && noStockOutViolations && allEmptiesCounted && allDeviationNotesProvided
   const canSubmit = currentStep === 2 && allClosingsEntered && allValid && allMechEntered && allMechValid
-    && allStockVarianceNotesProvided && noStockOutViolations && !submitting
+    && allStockVarianceNotesProvided && noStockOutViolations && allEmptiesCounted && !submitting
     && (!hasDeviationFlags || notes.trim() !== '')
 
   // Plain-language list of what still blocks submission (read-only; mirrors the
@@ -619,9 +631,11 @@ export default function MyShift() {
     const stockOuts = [...lpgComputations, ...accComputations, ...lubComputations].filter(c => c.soldExceedsOpening).length
     if (stockOuts > 0) items.push(`${n(stockOuts, 'An item', 'items')} sold more than the opening stock`)
     const stockNotesMissing =
-      lpgComputations.filter((c, i) => c.hasVariance && lpgRows[i].variance_note.trim() === '').length +
+      lpgComputations.filter((c, i) => c.needsNote && lpgRows[i].variance_note.trim() === '').length +
       accComputations.filter((c, i) => c.hasVariance && accessoryRows[i].variance_note.trim() === '').length +
       lubComputations.filter((c, i) => c.hasVariance && lubricantRows[i].variance_note.trim() === '').length
+    const emptiesMissing = lpgComputations.filter(c => c.emptyMissing).length
+    if (emptiesMissing > 0) items.push(`${n(emptiesMissing, 'An LPG empties count', 'LPG empties counts')} still to enter`)
     if (stockNotesMissing > 0) items.push(`${n(stockNotesMissing, 'A stock variance', 'stock variances')} need a note`)
     const devNotesMissing = nozzleRows.filter((row, i) => {
       const c = nozzleComputations[i]
@@ -728,7 +742,7 @@ export default function MyShift() {
           additions: row.additions_full || 0,
           additions_empty: row.additions_empty || 0,
           closing_full: parseInt(row.closing_full) || 0,
-          closing_empty: parseInt(row.closing_empty) || 0,
+          closing_empty: row.closing_empty === '' ? null : parseInt(row.closing_empty) || 0,
           sold_refill: parseInt(row.sold_refill) || 0,
           sold_with_cylinder: parseInt(row.sold_with_cylinder) || 0,
           damaged: parseInt(row.damaged) || 0,
@@ -2351,6 +2365,13 @@ export default function MyShift() {
                           value={row.closing_full} onChange={e => updateLpgRow(idx, 'closing_full', e.target.value)}
                           placeholder="0" className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono" style={inputStyle} />
                       </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: theme.textSecondary }}>Empties (Count)</label>
+                        <input type="number" min={0} step={1}
+                          value={row.closing_empty} onChange={e => updateLpgRow(idx, 'closing_empty', e.target.value)}
+                          placeholder={String(comp.expectedEmpty)} className="w-full px-2 py-1.5 rounded border text-sm text-center font-mono"
+                          style={{ ...inputStyle, borderColor: comp.emptyMissing ? 'var(--color-status-error)' : theme.border }} />
+                      </div>
                     </div>
 
                     {/* Computed footer */}
@@ -2365,16 +2386,33 @@ export default function MyShift() {
                       </div>
                     )}
 
+                    {row.closing_empty !== '' && (
+                      <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
+                        <span className="text-xs" style={{ color: theme.textSecondary }}>
+                          Expected empties: <span className="font-mono">{comp.expectedEmpty}</span>
+                        </span>
+                        <span className="text-xs font-medium font-mono" style={{ color: comp.emptyHasVariance ? 'var(--color-status-error)' : 'var(--color-status-success)' }}>
+                          Empties variance: {comp.emptyVariance}
+                        </span>
+                      </div>
+                    )}
+
+                    {comp.emptyMissing && (
+                      <div className="mt-2 text-xs" style={{ color: 'var(--color-status-error)' }}>
+                        Count the empty {row.size_kg}kg cylinders: refills and trade-ins bring empties back (expected {comp.expectedEmpty})
+                      </div>
+                    )}
+
                     {comp.soldExceedsOpening && (
                       <div className="mt-2 text-xs" style={{ color: 'var(--color-status-error)' }}>
                         Cannot sell more than opening stock plus stock issued ({comp.available})
                       </div>
                     )}
 
-                    {comp.hasVariance && (
+                    {comp.needsNote && (
                       <div className="mt-2 p-2 rounded" style={{ backgroundColor: 'var(--color-status-error-light)' }}>
                         <label className="block text-[10px] uppercase font-medium mb-1" style={{ color: 'var(--color-status-error)' }}>
-                          Explain variance ({comp.variance})
+                          Explain variance ({[comp.hasVariance && `full ${comp.variance}`, comp.emptyHasVariance && `empty ${comp.emptyVariance}`].filter(Boolean).join(', ')})
                         </label>
                         <input type="text" value={row.variance_note}
                           onChange={e => updateLpgRow(idx, 'variance_note', e.target.value)}
@@ -2818,7 +2856,7 @@ export default function MyShift() {
               <table className="min-w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: theme.background }}>
-                    {['Size', 'Opening', 'Refills', 'New Cyl', 'Damaged', 'Closing', 'Variance'].map(h => (
+                    {['Size', 'Opening', 'Refills', 'New Cyl', 'Damaged', 'Closing', 'Variance', 'Empties', 'Empty Var.'].map(h => (
                       <th key={h} className="px-2 py-2 text-center text-xs font-medium uppercase whitespace-nowrap"
                         style={{ color: theme.textSecondary }}>{h}</th>
                     ))}
@@ -2827,7 +2865,7 @@ export default function MyShift() {
                 <tbody>
                   {lpgRows.map((row, idx) => {
                     const comp = lpgComputations[idx]
-                    if (comp.totalSold === 0 && comp.damaged === 0) return null
+                    if (comp.totalSold === 0 && comp.damaged === 0 && comp.tradeIn === 0 && !comp.emptyHasVariance) return null
                     return (
                       <tr key={row.size_kg} style={{ borderTopColor: theme.border, borderTopWidth: 1 }}>
                         <td className="px-2 py-2 text-center font-medium" style={{ color: theme.textPrimary }}>{row.size_kg}kg</td>
@@ -2837,7 +2875,11 @@ export default function MyShift() {
                         <td className="px-2 py-2 text-center font-mono" style={{ color: comp.damaged > 0 ? 'var(--color-status-warning)' : theme.textSecondary }}>{comp.damaged}</td>
                         <td className="px-2 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>{comp.closingFull}</td>
                         <td className="px-2 py-2 text-center font-mono" style={{ color: comp.hasVariance ? 'var(--color-status-error)' : theme.textSecondary }}>
-                          {comp.variance}{comp.hasVariance && row.variance_note ? ` (${row.variance_note})` : ''}
+                          {comp.variance}{comp.needsNote && row.variance_note ? ` (${row.variance_note})` : ''}
+                        </td>
+                        <td className="px-2 py-2 text-center font-mono" style={{ color: theme.textPrimary }}>{comp.closingEmpty}</td>
+                        <td className="px-2 py-2 text-center font-mono" style={{ color: comp.emptyHasVariance ? 'var(--color-status-error)' : theme.textSecondary }}>
+                          {comp.emptyVariance}
                         </td>
                       </tr>
                     )

@@ -903,6 +903,16 @@ def _process_stock_snapshot(stock_snapshot, station_id, storage, my_assignment=N
         # (when the station gives back a smaller empty) reduce them. In the upgrade case the station
         # hands out a filled larger cylinder, so there is no empty-out movement for traded_out.
         expected_closing_empty = row.opening_empty + additions_empty + row.sold_refill + t_in
+        # Empties must be counted whenever refills or trade-ins brought some in. With
+        # neither, an uncounted row means nothing changed: take the expected figure
+        # rather than 0, so empties never silently drop to nothing at close.
+        if row.closing_empty is None:
+            if row.sold_refill + t_in > 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Count the {row.size_kg}kg empty cylinders: refills and trade-ins bring empties back.",
+                )
+            row.closing_empty = expected_closing_empty
         empty_variance = expected_closing_empty - row.closing_empty
         pricing = get_pricing_for_size(row.size_kg, lpg_pricing_db)
         value_refill = round(row.sold_refill * pricing["price_refill"], 2)

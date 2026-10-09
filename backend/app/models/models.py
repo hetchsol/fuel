@@ -890,7 +890,10 @@ class LPGStockLineItem(BaseModel):
     additions: int = 0            # full cylinders issued to (+) or taken off (-) the forecourt
     additions_empty: int = 0      # empties added (+) or taken off (-), e.g. returned to the supplier
     closing_full: int = 0
-    closing_empty: int = 0
+    # Counted empties at close. None = not counted: accepted only when nothing
+    # brought empties in (no refills, no trade-ins), and then taken as the expected
+    # figure; see attendant_handover._process_stock_snapshot.
+    closing_empty: Optional[int] = None
     sold_refill: int = 0          # attendant enters directly
     sold_with_cylinder: int = 0   # attendant enters directly
     damaged: int = 0              # known damaged/lost cylinders
