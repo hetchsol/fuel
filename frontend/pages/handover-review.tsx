@@ -2379,9 +2379,34 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
   const [voidNote, setVoidNote] = useState('')
   const [voiding, setVoiding] = useState(false)
 
+  const isManager = currentUserRole === 'manager'
   const handleVoidThisEntry = async () => {
     if (!voidNote.trim()) return
     setVoiding(true)
+    if (isManager) {
+      // Managers ask; the owner approves on To-Do and Requests, which runs the void
+      try {
+        const res = await authFetch(`${BASE}/manager/requests`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            type: 'void_handover', reason: voidNote.trim(),
+            shift_id: h.shift_id, attendant_id: h.attendant_id,
+            attendant_name: h.attendant_name, handover_id: h.handover_id,
+          }),
+        })
+        const out = await res.json().catch(() => ({}))
+        if (!res.ok) { toast.error(`Request not sent: ${out.detail || 'unknown error'}`); return }
+        toast.success('Request sent to the owner. Nothing changes until it is approved.')
+        setShowVoidForm(false)
+        setVoidNote('')
+      } catch (err: any) {
+        toast.error(`Request not sent: ${err.message}`)
+      } finally {
+        setVoiding(false)
+      }
+      return
+    }
     try {
       const res = await authFetch(`${BASE}/handover/void`, {
         method: 'POST',
@@ -2414,15 +2439,17 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
       {/* Returned entries never reappear on their own — this is the one place
           an owner can either wait for the attendant to redo it, or discard it
           if it was a mistaken/duplicate submission. */}
-      {h.review_status === 'returned' && currentUserRole === 'owner' && (
+      {((h.review_status === 'returned' && currentUserRole === 'owner')
+        || (isManager && h.handover_id && h.review_status !== 'voided')) && (
         <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--color-status-warning-light, #fff8e1)', borderWidth: 1, borderColor: 'var(--color-status-warning)' }}>
           <div className="text-xs font-medium uppercase mb-1" style={{ color: 'var(--color-status-warning)' }}>
-            Returned — awaiting attendant resubmission
+            {h.review_status === 'returned' ? 'Returned — awaiting attendant resubmission' : 'Wrong or duplicate entry?'}
           </div>
           <div className="text-sm mb-2" style={{ color: theme.textPrimary }}>
-            This shift can't close until this entry is resolved. If it will be redone, no action is
-            needed here. If it's a mistaken or duplicate submission that will never be resubmitted,
-            void just this entry — any other handover this attendant has for the same shift is untouched.
+            {h.review_status === 'returned' && <>This shift can't close until this entry is resolved. If it will be redone, no action is
+            needed here. </>}If it's a mistaken or duplicate submission that will never be resubmitted,
+            {isManager ? ' ask the owner to void just this entry. Nothing changes until the owner approves.'
+              : ' void just this entry — any other handover this attendant has for the same shift is untouched.'}
           </div>
           {!showVoidForm ? (
             <button
@@ -2430,7 +2457,7 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
               className="text-xs font-medium hover:underline"
               style={{ color: 'var(--color-status-error)' }}
             >
-              Void/Annul this entry
+              {isManager ? 'Ask the owner to void this entry' : 'Void/Annul this entry'}
             </button>
           ) : (
             <div className="space-y-2">
@@ -2450,7 +2477,7 @@ function ExpandedDetail({ h, theme, onRefresh, currentUserRole }: { h: HandoverE
                   className="px-3 py-1 text-xs font-medium rounded text-white disabled:opacity-60"
                   style={{ backgroundColor: 'var(--color-status-error)' }}
                 >
-                  {voiding ? 'Voiding...' : 'Confirm Void'}
+                  {voiding ? (isManager ? 'Sending...' : 'Voiding...') : isManager ? 'Send Request' : 'Confirm Void'}
                 </button>
                 <button
                   onClick={() => { setShowVoidForm(false); setVoidNote('') }}

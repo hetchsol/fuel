@@ -389,6 +389,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const DEFAULT_NAV = [
     { path: '/', label: 'Dashboard', roles: ['supervisor', 'owner'] },
+    { path: '/manager-desk', label: 'To-Do and Requests', roles: ['manager', 'owner'] },
     {
       // Attendant: their whole job — Start the shift (verify auto-fetched opening)
       // and End the shift (record closing + send to supervisor).

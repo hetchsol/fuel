@@ -50,6 +50,10 @@ _ALLOWED = {
     # of Void, so they must bypass the canonical filter on purpose rather
     # than being migrated to it.
     "api/v1/attendant_handover.py": 3,
+    # manager_tools._describe: checks a manager's void request against the
+    # same records void_handover will act on (any non-voided entry for the
+    # pair, duplicates included), so it must match Void's own filter.
+    "api/v1/manager_tools.py": 1,
 }
 
 

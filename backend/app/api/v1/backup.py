@@ -31,6 +31,7 @@ _MAX_SNAPSHOTS = 30
 
 # Station JSON files that live outside the main STORAGE dict
 _BACKUP_JSON_FILES = [
+    "approval_requests.json",
     "attendant_handovers.json",
     "tank_readings.json",
     "tank_deliveries.json",

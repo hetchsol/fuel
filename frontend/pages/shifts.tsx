@@ -168,6 +168,31 @@ export default function Shifts() {
   const handleVoidEntry = async () => {
     if (!voidTarget || !voidNote.trim()) return
     setVoiding(true)
+    if (currentUser?.role === 'manager') {
+      // Managers ask; the owner approves on To-Do and Requests, which runs the void
+      try {
+        const res = await authFetch(`${BASE}/manager/requests`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getHeaders() },
+          body: JSON.stringify({
+            type: 'void_handover', reason: voidNote.trim(),
+            shift_id: voidTarget.shift_id, attendant_id: voidTarget.attendant_id,
+            attendant_name: voidTarget.attendant_name,
+            ...(selectedVoidHandoverId ? { handover_id: selectedVoidHandoverId } : {}),
+          }),
+        })
+        const out = await res.json().catch(() => ({}))
+        if (!res.ok) { toast.error(`Request not sent: ${out.detail || 'unknown error'}`); return }
+        toast.success('Request sent to the owner. Nothing changes until it is approved.')
+        setVoidTarget(null)
+        setVoidNote('')
+      } catch (err: any) {
+        toast.error(`Request not sent: ${err.message}`)
+      } finally {
+        setVoiding(false)
+      }
+      return
+    }
     try {
       const res = await authFetch(`${BASE}/handover/void`, {
         method: 'POST',
@@ -1207,6 +1232,14 @@ export default function Shifts() {
                         ) : (
                           <p className="font-medium text-content-primary">{assignment.attendant_name}</p>
                         )}
+                        {currentUser?.role === 'manager' && (
+                          <button
+                            onClick={() => setVoidTarget({ shift_id: activeShift.shift_id, attendant_id: assignment.attendant_id, attendant_name: assignment.attendant_name })}
+                            className="text-xs font-medium text-status-error hover:underline"
+                          >
+                            Request void
+                          </button>
+                        )}
                         {currentUser?.role === 'owner' && (
                           <div className="flex items-center gap-3">
                             <button
@@ -1892,10 +1925,17 @@ export default function Shifts() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-surface-card rounded-lg p-6 max-w-md w-full">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold text-content-primary">Void/Annul Entry</h2>
+              <h2 className="text-lg font-bold text-content-primary">
+                {currentUser?.role === 'manager' ? 'Request Void/Annul' : 'Void/Annul Entry'}
+              </h2>
               <button onClick={() => { setVoidTarget(null); setVoidNote('') }} className="text-content-secondary hover:text-content-primary text-2xl">&times;</button>
             </div>
 
+            {currentUser?.role === 'manager' && (
+              <p className="mb-4 text-sm text-content-secondary">
+                This sends a request to the owner. Nothing is voided until the owner approves it.
+              </p>
+            )}
             <div className="mb-4 p-3 bg-status-error/10 border border-status-error rounded-lg">
               <p className="text-sm font-semibold text-status-error mb-1">{voidTarget.attendant_name}</p>
               <p className="text-xs text-status-error">
@@ -1988,7 +2028,8 @@ export default function Shifts() {
                 disabled={voiding || !voidNote.trim()}
                 className="px-5 py-2 text-sm bg-status-error hover:bg-status-error/90 text-white rounded-md font-medium disabled:opacity-60"
               >
-                {voiding ? 'Voiding...' : 'Void/Annul Entry'}
+                {voiding ? (currentUser?.role === 'manager' ? 'Sending...' : 'Voiding...')
+                  : currentUser?.role === 'manager' ? 'Send Request' : 'Void/Annul Entry'}
               </button>
             </div>
           </div>

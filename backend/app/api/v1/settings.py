@@ -40,7 +40,7 @@ def get_fuel_settings(ctx: dict = Depends(get_station_context)):
         save_station_storage(station_id)
     return FuelSettings(**storage.setdefault('fuel_settings', {}))
 
-@router.put("/fuel")
+@router.put("/fuel", dependencies=[Depends(require_manager_or_owner)])
 def update_fuel_settings(settings: FuelSettings, ctx: dict = Depends(get_station_context)):
     """
     Update fuel pricing and allowable loss settings

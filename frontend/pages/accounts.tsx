@@ -75,6 +75,7 @@ export default function Accounts() {
   const [overdraftAccount, setOverdraftAccount] = useState<any | null>(null)
   const [overdraftAmount, setOverdraftAmount] = useState('')
   const [overdraftSaving, setOverdraftSaving] = useState(false)
+  const [overdraftReason, setOverdraftReason] = useState('')
 
   // Record payment modal (Post-Paid, manager/owner)
   const [paymentAccount, setPaymentAccount] = useState<any | null>(null)
@@ -520,6 +521,23 @@ export default function Accounts() {
     const amt = parseFloat(overdraftAmount)
     if (isNaN(amt) || amt < 0) { toast.error('Enter a valid amount (0 to clear)'); return }
     setOverdraftSaving(true)
+    if (!isOwner) {
+      // Managers ask; the owner approves on To-Do and Requests
+      if (!overdraftReason.trim()) { toast.error('Give a reason for the owner'); setOverdraftSaving(false); return }
+      try {
+        const res = await authFetch(`${BASE}/manager/requests`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', ...getHeaders() },
+          body: JSON.stringify({ type: 'overdraft', account_id: overdraftAccount.account_id,
+                                 amount: Number(amt.toFixed(2)), reason: overdraftReason.trim() }),
+        })
+        const d = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(d.detail || 'Request not sent')
+        toast.success('Request sent to the owner. Nothing changes until it is approved.')
+        setOverdraftAccount(null); setOverdraftAmount(''); setOverdraftReason('')
+      } catch (err: any) { toast.error(err.message) }
+      finally { setOverdraftSaving(false) }
+      return
+    }
     try {
       const res = await authFetch(`${BASE}/accounts/${overdraftAccount.account_id}/approve-overdraft?amount=${amt.toFixed(2)}`, {
         method: 'POST', headers: getHeaders(),
@@ -632,10 +650,10 @@ export default function Accounts() {
                 Top Up
               </button>
             )}
-            {isOwner && (
-              <button onClick={() => { setOverdraftAccount(account); setOverdraftAmount(overdraft > 0 ? String(overdraft) : '') }}
+            {canManage && (
+              <button onClick={() => { setOverdraftAccount(account); setOverdraftAmount(overdraft > 0 ? String(overdraft) : ''); setOverdraftReason('') }}
                 className="px-3 py-1.5 text-xs rounded border border-status-warning text-status-warning hover:bg-status-warning hover:text-white transition-colors font-medium">
-                {overdraft > 0 ? 'Adjust Overdraft' : 'Approve Overdraft'}
+                {!isOwner ? 'Request Overdraft' : overdraft > 0 ? 'Adjust Overdraft' : 'Approve Overdraft'}
               </button>
             )}
             {isOwner && (
@@ -1258,7 +1276,7 @@ export default function Accounts() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-sm rounded-lg shadow-lg p-6 bg-surface-card border border-surface-border">
             <h3 className="text-lg font-bold text-content-primary mb-1">
-              Approve Overdraft — {overdraftAccount.account_name}
+              {isOwner ? 'Approve Overdraft' : 'Request Overdraft'} — {overdraftAccount.account_name}
             </h3>
             <p className="text-sm text-content-secondary mb-1">
               Type: <span className="font-semibold">{effectiveType(overdraftAccount)}</span>
@@ -1279,12 +1297,21 @@ export default function Accounts() {
                   placeholder="0.00 to clear" required autoFocus />
                 <p className="mt-1 text-xs text-content-secondary">Set to 0 to remove any existing approval.</p>
               </div>
+              {!isOwner && (
+                <div>
+                  <label className="block text-sm font-medium text-content-secondary mb-1">Reason for the owner</label>
+                  <textarea value={overdraftReason} onChange={(e) => setOverdraftReason(e.target.value)} rows={2} required
+                    className="w-full px-3 py-2 border border-surface-border rounded-md bg-surface-bg text-content-primary"
+                    placeholder="e.g. Fleet payment due Friday, needs to keep fuelling" />
+                  <p className="mt-1 text-xs text-content-secondary">Nothing changes until the owner approves.</p>
+                </div>
+              )}
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" onClick={() => setOverdraftAccount(null)}
                   className="px-4 py-2 text-sm rounded-md border border-surface-border text-content-secondary">Cancel</button>
                 <button type="submit" disabled={overdraftSaving}
                   className="px-4 py-2 text-sm font-semibold rounded-md bg-status-warning text-white disabled:opacity-50">
-                  {overdraftSaving ? 'Saving...' : 'Approve'}
+                  {overdraftSaving ? 'Saving...' : isOwner ? 'Approve' : 'Send Request'}
                 </button>
               </div>
             </form>

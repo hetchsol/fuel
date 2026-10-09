@@ -620,6 +620,8 @@ SENSITIVE_ACTIONS = {
     "Users and settings": ["user_create", "user_delete", "user_password_reset", "user_update", "threshold_update",
                            "reconciliation_tolerance_update", "pos_settings_update", "settings_update",
                            "email_settings_update", "backup_restore"],
+    "Manager requests": ["approval_request_created", "approval_request_approved", "approval_request_declined",
+                         "approval_request_withdrawn"],
 }
 _ACTION_GROUP = {a: g for g, acts in SENSITIVE_ACTIONS.items() for a in acts}
 
