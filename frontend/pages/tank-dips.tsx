@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
 import { authFetch, getHeaders, isManagerOrAbove } from '../lib/api'
 import { formatDateToDisplay } from '../lib/dateUtils'
+import { useWorkingDay } from '../contexts/WorkingDayContext'
 
 const BASE = '/api/v1'
 
@@ -66,6 +67,9 @@ export default function TankDips() {
   const [userRole, setUserRole] = useState('')
   const [userName, setUserName] = useState('')
   const [tanks, setTanks] = useState<Tank[]>([])
+  // With no date/shift in the URL, start on the shared working day (the shift
+  // running now, unless the user picked another one this shift).
+  const workingDay = useWorkingDay()
   // Read directly off the URL rather than router.query — this page is only
   // ever reached by client-side navigation (no dynamic segments), so the
   // query string is already present on first render; waiting on router.isReady
@@ -75,14 +79,14 @@ export default function TankDips() {
       const q = new URLSearchParams(window.location.search).get('date')
       if (q) return q
     }
-    return new Date().toISOString().split('T')[0]
+    return workingDay.date
   })
-  const [shiftType, setShiftType] = useState(() => {
+  const [shiftType, setShiftType] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const q = new URLSearchParams(window.location.search).get('shift_type')
       if (q === 'Day' || q === 'Night') return q
     }
-    return 'Day'
+    return workingDay.shiftType
   })
   const [rows, setRows] = useState<DipRow[]>([])
   const [loading, setLoading] = useState(true)

@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { authFetch, BASE, getHeaders } from '../lib/api'
 import { formatDateTimeToDisplay } from '../lib/dateUtils'
 import Footer from './Footer'
+import CurrentShiftBar from './CurrentShiftBar'
 
 function LiveClock() {
   const [time, setTime] = useState('')
@@ -802,6 +803,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             ))}
           </div>
         </div>
+
+        {/* Current shift: Day/Night, date and who is on shift — every role, every screen size */}
+        {user && !hideNav && <CurrentShiftBar stationId={activeStationId} />}
       </nav>
 
       {/* Mobile / Tablet Drawer */}

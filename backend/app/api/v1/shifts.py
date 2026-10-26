@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import List
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from ...models.models import Shift, ShiftType, DualReading, NozzleShiftSummary, TankDipReading
 from ...services.relationship_validation import validate_create, validate_delete_operation
 from ...services.shift_validation import validate_shift_assignments, derive_island_ids_from_nozzles
@@ -186,20 +186,32 @@ def get_current_shift(ctx: dict = Depends(get_station_context)):
     shifts_data = storage.get('shifts', {})
     readings_data = storage.get('readings', [])
 
-    now = datetime.now()
+    # Station time is Zambia (CAT, UTC+2, no daylight saving). Read it
+    # explicitly: the hosted server's own clock runs on UTC, which would hold
+    # the Day label until 08:00 and the Night label until 20:00 local.
+    now = datetime.now(timezone(timedelta(hours=2)))
     hour = now.hour
-    date_str = now.strftime("%Y-%m-%d")
 
     # Determine shift type based on hour (6 AM to 6 PM = Day, 6 PM to 6 AM = Night)
     shift_type = ShiftType.DAY if 6 <= hour < 18 else ShiftType.NIGHT
+
+    # Night shift on date D runs 18:00 D to 06:00 D+1, so 00:00-05:59 still
+    # belongs to the previous date's Night shift.
+    shift_date = now - timedelta(days=1) if hour < 6 else now
+    date_str = shift_date.strftime("%Y-%m-%d")
 
     # Look for matching active shift
     for shift in shifts_data.values():
         if shift["date"] == date_str and shift["shift_type"] == shift_type and shift["status"] == "active":
             return Shift(**shift)
 
-    # Create new shift if none exists
+    # The shift exists but is no longer active (completed/reconciled): return
+    # it as it is, never replace it with an empty one.
     shift_id = f"{date_str}-{shift_type.value}"
+    if shift_id in shifts_data:
+        return Shift(**shifts_data[shift_id])
+
+    # Create new shift if none exists
     new_shift = Shift(
         shift_id=shift_id,
         date=date_str,

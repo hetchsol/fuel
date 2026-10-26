@@ -35,6 +35,20 @@ export function formatDateToDisplay(dateStr: string | null | undefined): string 
 }
 
 /**
+ * Convert ISO date string (YYYY-MM-DD) to display format with the weekday
+ * ("Monday, 26 October 2026")
+ */
+export function formatDayDateToDisplay(dateStr: string | null | undefined): string {
+  if (!dateStr) return ''
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
+  if (!m) return formatDateToDisplay(dateStr)
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  if (isNaN(date.getTime())) return dateStr
+  const weekday = date.toLocaleString('en-GB', { weekday: 'long' })
+  return `${weekday}, ${formatDateToDisplay(dateStr)}`
+}
+
+/**
  * Convert display format (DD-MM-YYYY) to ISO format (YYYY-MM-DD)
  * Used for API calls and date inputs
  */
@@ -133,6 +147,21 @@ export function getTodayISO(): string {
   const month = String(today.getMonth() + 1).padStart(2, '0')
   const day = String(today.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+/**
+ * The shift running right now, by the browser's local clock:
+ *   06:00-17:59  Day shift of today
+ *   18:00-23:59  Night shift of today
+ *   00:00-05:59  Night shift of yesterday (it started at 18:00 the day before)
+ * Matches the backend's shift windows (Night on date D runs 18:00 D to 06:00 D+1).
+ */
+export function getCurrentShift(now: Date = new Date()): { date: string; shiftType: 'Day' | 'Night' } {
+  const h = now.getHours()
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (h < 6) d.setDate(d.getDate() - 1)
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return { date, shiftType: h >= 6 && h < 18 ? 'Day' : 'Night' }
 }
 
 /**
