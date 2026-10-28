@@ -805,7 +805,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Current shift: Day/Night, date and who is on shift — every role, every screen size */}
-        {user && !hideNav && <CurrentShiftBar stationId={activeStationId} />}
+        {user && !hideNav && <CurrentShiftBar stationId={activeStationId} canLookUp={isSupervisorOrAbove} />}
       </nav>
 
       {/* Mobile / Tablet Drawer */}
