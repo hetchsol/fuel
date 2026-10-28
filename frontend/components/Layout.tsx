@@ -781,7 +781,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       {item.children.map((child: any, i: number) => (
                         <Fragment key={child.path}>
                         {sectionHeadingAt(item.children, i) && (
-                          <p className={`mx-3 ${i > 0 ? 'mt-3' : 'mt-1'} mb-1 pb-1 text-xs font-bold uppercase tracking-wider text-action-primary border-b-2 border-action-primary/40`}>
+                          <p className={`mx-3 ${i > 0 ? 'mt-3' : 'mt-1'} mb-1 pb-1 text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 border-b-2 border-amber-600/50 dark:border-amber-300/50`}>
                             {child.section}
                           </p>
                         )}
@@ -898,7 +898,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         {item.children.map((child: any, i: number) => (
                           <Fragment key={child.path}>
                           {sectionHeadingAt(item.children, i) && (
-                            <p className={`mx-3 ${i > 0 ? 'mt-3' : 'mt-1'} mb-1 pb-1 text-xs font-bold uppercase tracking-wider text-action-primary border-b-2 border-action-primary/40`}>
+                            <p className={`mx-3 ${i > 0 ? 'mt-3' : 'mt-1'} mb-1 pb-1 text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 border-b-2 border-amber-600/50 dark:border-amber-300/50`}>
                               {child.section}
                             </p>
                           )}
