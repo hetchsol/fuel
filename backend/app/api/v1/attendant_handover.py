@@ -1451,6 +1451,11 @@ def _compute_tank_nozzle_variance(station_id: str, shift_id: str, storage: dict,
 _SHIFT_TYPE_ORDER = {"Day": 0, "Night": 1}
 
 
+def _shift_recency(shift: dict) -> tuple:
+    """Sort key for how recent a shift is: by date, then Night after Day."""
+    return (shift.get("date") or "", _SHIFT_TYPE_ORDER.get(shift.get("shift_type"), -1))
+
+
 def _apply_shift_contribution(daily_entry: dict, shift_type: str, new_rows: list, sold_field: str) -> list:
     """
     Record one shift's per-product rows into a day-level daily entry shared
@@ -2071,6 +2076,8 @@ async def get_my_active_shifts(ctx: dict = Depends(get_station_context)):
                 })
                 break
 
+    # Newest first, so pages that open the first entry open the current shift.
+    my_shifts.sort(key=_shift_recency, reverse=True)
     return {"shifts": my_shifts, "count": len(my_shifts)}
 
 
@@ -2216,7 +2223,9 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
     shifts_data = storage.get('shifts', {})
     islands_data = storage.get('islands', {})
 
-    # Search active shifts for one with an assignment matching this user
+    # Search active shifts for one with an assignment matching this user.
+    # With no shift_id, the newest match wins (latest date, Night after Day):
+    # an older shift left open must not stand in for the one being worked now.
     my_shift = None
     my_assignment = None
 
@@ -2226,6 +2235,8 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
         # If shift_id specified, only match that one
         if shift_id and shift.get("shift_id", sid) != shift_id:
             continue
+        if my_shift and _shift_recency(shift) <= _shift_recency(my_shift):
+            continue
         assignments = shift.get("assignments", [])
         for assignment in assignments:
             if assignment.get("attendant_id") == user_id or \
@@ -2233,8 +2244,6 @@ async def get_my_shift(shift_id: str = None, ctx: dict = Depends(get_station_con
                 my_shift = shift
                 my_assignment = assignment
                 break
-        if my_shift:
-            break
 
     if not my_shift:
         return {"found": False, "message": "No active shift assigned to you"}
