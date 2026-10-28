@@ -406,10 +406,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // True where a dropdown should show a section heading above item i: the
   // item starts a new section, and this role's items span more than one.
-  const sectionHeadingAt = (children: any[], i: number) => {
-    const sections = new Set(children.map(c => c.section).filter(Boolean))
-    return sections.size > 1 && !!children[i].section && children[i].section !== children[i - 1]?.section
-  }
+  const hasSections = (children: any[]) =>
+    new Set(children.map(c => c.section).filter(Boolean)).size > 1
+  const sectionHeadingAt = (children: any[], i: number) =>
+    hasSections(children) && !!children[i].section && children[i].section !== children[i - 1]?.section
 
   // One menu for every role. Each item's `roles` decides who sees it, so every
   // role keeps the same pages it had before the regroup (managers previously
@@ -781,14 +781,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       {item.children.map((child: any, i: number) => (
                         <Fragment key={child.path}>
                         {sectionHeadingAt(item.children, i) && (
-                          <p className={`px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-content-secondary ${i > 0 ? 'mt-1 border-t border-surface-border' : ''}`}>
+                          <p className={`mx-3 ${i > 0 ? 'mt-3' : 'mt-1'} mb-1 pb-1 text-xs font-bold uppercase tracking-wider text-action-primary border-b-2 border-action-primary/40`}>
                             {child.section}
                           </p>
                         )}
                         {child.disabled ? (
                           <span
                             key={child.path}
-                            className="block px-4 py-2.5 text-sm text-content-secondary/40 border-l-2 border-transparent cursor-not-allowed select-none"
+                            className={`block ${hasSections(item.children) ? 'pl-7 pr-4' : 'px-4'} py-2.5 text-sm text-content-secondary/40 border-l-2 border-transparent cursor-not-allowed select-none`}
                             title="Coming soon"
                           >
                             {child.label}
@@ -798,7 +798,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                           <Link
                             key={child.path}
                             href={child.path}
-                            className={`block px-4 py-2.5 text-sm transition-all ${
+                            className={`block ${hasSections(item.children) ? 'pl-7 pr-4' : 'px-4'} py-2.5 text-sm transition-all ${
                               isActive(child.path)
                                 ? 'bg-action-primary/10 text-action-primary font-medium border-l-2 border-action-primary'
                                 : 'text-content-primary hover:bg-white/5 border-l-2 border-transparent'
@@ -898,14 +898,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         {item.children.map((child: any, i: number) => (
                           <Fragment key={child.path}>
                           {sectionHeadingAt(item.children, i) && (
-                            <p className="px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-content-secondary">
+                            <p className={`mx-3 ${i > 0 ? 'mt-3' : 'mt-1'} mb-1 pb-1 text-xs font-bold uppercase tracking-wider text-action-primary border-b-2 border-action-primary/40`}>
                               {child.section}
                             </p>
                           )}
                           {child.disabled ? (
                             <span
                               key={child.path}
-                              className="flex items-center px-3 py-2.5 rounded-btn text-sm text-content-secondary/40 cursor-not-allowed select-none"
+                              className={`flex items-center ${hasSections(item.children) ? 'pl-6 pr-3' : 'px-3'} py-2.5 rounded-btn text-sm text-content-secondary/40 cursor-not-allowed select-none`}
                             >
                               {child.label}
                               <span className="ml-2 text-[10px] font-medium bg-surface-bg px-1.5 py-0.5 rounded">Soon</span>
@@ -914,7 +914,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                             <Link
                               key={child.path}
                               href={child.path}
-                              className={`flex items-center px-3 py-2.5 rounded-btn text-sm transition-all min-h-[44px] ${
+                              className={`flex items-center ${hasSections(item.children) ? 'pl-6 pr-3' : 'px-3'} py-2.5 rounded-btn text-sm transition-all min-h-[44px] ${
                                 isActive(child.path)
                                   ? 'bg-action-primary/10 text-action-primary font-medium'
                                   : 'text-content-secondary hover:text-content-primary hover:bg-surface-bg'
