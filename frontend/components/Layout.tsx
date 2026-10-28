@@ -832,7 +832,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Current shift: Day/Night, date and who is on shift — every role, every screen size */}
-        {user && !hideNav && <CurrentShiftBar stationId={activeStationId} canLookUp={isSupervisorOrAbove} />}
+        {/* The Dashboard shows this as a card in its own layout instead */}
+        {user && !hideNav && router.pathname !== '/' && <CurrentShiftBar stationId={activeStationId} canLookUp={isSupervisorOrAbove} />}
       </nav>
 
       {/* Mobile / Tablet Drawer */}

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import useSWR from 'swr'
-import { getDaily, getFlags, getTankLevels, isManagerOrAbove, authFetch, getHeaders } from '../lib/api'
+import { getDaily, getFlags, getTankLevels, isManagerOrAbove, isSupervisorOrAbove, authFetch, getHeaders } from '../lib/api'
+import CurrentShiftBar from '../components/CurrentShiftBar'
 import TankCard from '../components/TankCard'
 import DayChecklist from '../components/DayChecklist'
 import StockCountBanner from '../components/StockCountBanner'
@@ -89,15 +90,9 @@ export default function Home() {
     isManagerOrAbove(userRole) ? 'notifications-brief' : null,
     () => authFetch(`${BASE}/notifications/?limit=50`, { headers: getHeaders() }).then(r => r.ok ? r.json() : []),
   )
-  const { data: allShifts } = useSWR('shifts-dashboard', () =>
-    authFetch(`${BASE}/shifts/`, { headers: getHeaders() }).then(r => r.ok ? r.json() : []),
-  )
 
   const allTanks = tanks || []
   const periodTotals = getPeriodTotals(salesSummary, daily, date, cardPeriod)
-  const todayShift = (allShifts || []).find((s: any) => s.date === date && s.status === 'active')
-  const onShiftNames: string[] = todayShift?.attendants || []
-  const shiftType: string = todayShift?.shift_type || ''
   const notifs: any[] = Array.isArray(notifications) ? notifications : []
   const notifCounts = {
     critical: notifs.filter(n => n.severity === 'critical').length,
@@ -146,37 +141,9 @@ export default function Home() {
         </div>
       )}
 
-      {/* On Shift Now */}
+      {/* Current shift: the same strip as under the menu, shown here as a card */}
       <div className="mb-6 animate-fade-in-up-2">
-        <div className="glass-card-static p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="w-9 h-9 rounded-xl bg-action-secondary/15 flex items-center justify-center">
-                <svg className="w-5 h-5 text-action-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-content-secondary uppercase tracking-wide">On Shift Now</p>
-                {shiftType && <p className="text-[10px] text-content-secondary/50">{shiftType} Shift</p>}
-              </div>
-            </div>
-            <div className="flex-1 flex flex-wrap gap-2">
-              {!allShifts ? (
-                <span className="text-xs text-content-secondary/50">Loading...</span>
-              ) : onShiftNames.length === 0 ? (
-                <span className="text-xs text-content-secondary/50">No active shift for this date</span>
-              ) : (
-                onShiftNames.map((name, i) => (
-                  <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-action-secondary/10 border border-action-secondary/20 text-xs font-medium text-action-secondary">
-                    <span className="w-1.5 h-1.5 rounded-full bg-action-secondary animate-pulse" />
-                    {name}
-                  </span>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+        <CurrentShiftBar variant="card" canLookUp={isSupervisorOrAbove(userRole)} />
       </div>
 
       {/* Tank Cards */}

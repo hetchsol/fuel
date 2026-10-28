@@ -15,6 +15,9 @@
 // effect free — it deliberately does NOT call /shifts/current/active, which
 // creates a shift record when none exists. Re-fetched every minute, so a newly
 // set-up shift or newly assigned attendant appears on its own.
+//
+// variant="bar" (default) is the strip under the top menu; variant="card" is the
+// same content as a card on a page (the Dashboard uses it in place of the strip).
 
 import { useEffect, useState } from 'react'
 import { authFetch, BASE, getHeaders } from '../lib/api'
@@ -35,7 +38,33 @@ const STATUS_LABELS: Record<string, string> = {
   inactive: 'Inactive',
 }
 
-export default function CurrentShiftBar({ stationId, canLookUp = false }: { stationId?: string; canLookUp?: boolean }) {
+const STYLES = {
+  bar: {
+    outer: 'border-t border-white/10',
+    inner: 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-white/80',
+    strong: 'text-white',
+    muted: 'text-white/60',
+    day: 'bg-status-warning/40 text-white',
+    night: 'bg-action-primary/50 text-white',
+    control: 'px-2 py-0.5 text-xs rounded-btn border bg-white/10 text-white border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40',
+    controlHover: 'hover:bg-white/20',
+    link: 'text-white/70 hover:text-white underline underline-offset-2',
+  },
+  card: {
+    outer: 'glass-card-static p-4',
+    inner: 'flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-content-secondary',
+    strong: 'text-content-primary',
+    muted: 'text-content-secondary',
+    day: 'bg-status-warning/20 text-content-primary border border-status-warning/40',
+    night: 'bg-action-primary/25 text-content-primary border border-action-primary/40',
+    control: 'px-2 py-1 text-xs rounded-btn border border-surface-border bg-surface-bg text-content-primary focus:outline-none focus:ring-2 focus:ring-action-primary',
+    controlHover: 'hover:bg-surface-border',
+    link: 'text-content-secondary hover:text-content-primary underline underline-offset-2',
+  },
+}
+
+export default function CurrentShiftBar({ stationId, canLookUp = false, variant = 'bar' }: { stationId?: string; canLookUp?: boolean; variant?: 'bar' | 'card' }) {
+  const st = STYLES[variant]
   const [current, setCurrent] = useState(() => getCurrentShift())
   // A looked-up shift (supervisors and above); null = show the current shift.
   const [viewing, setViewing] = useState<{ date: string; shiftType: ShiftType } | null>(null)
@@ -126,29 +155,29 @@ export default function CurrentShiftBar({ stationId, canLookUp = false }: { stat
   else if (names.length) onShift = names.join(', ')
   else onShift = shiftStatus ? 'No attendants assigned yet' : 'Shift not set up yet'
 
-  const controlClass = 'px-2 py-0.5 text-xs rounded-btn border bg-white/10 text-white border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40'
-  const linkClass = 'text-white/70 hover:text-white underline underline-offset-2'
+  const controlClass = st.control
+  const linkClass = st.link
 
   return (
-    <div className="border-t border-white/10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-white/80">
+    <div className={st.outer}>
+      <div className={st.inner}>
         {viewing && <span className="font-semibold uppercase tracking-wide text-status-warning">Viewing</span>}
         <span
-          className={`px-2 py-0.5 rounded-full font-semibold text-white ${isDay ? 'bg-status-warning/40' : 'bg-action-primary/50'}`}
+          className={`px-2 py-0.5 rounded-full font-semibold ${isDay ? st.day : st.night}`}
         >
           {shown.shiftType} Shift
         </span>
-        <span className="font-medium text-white">{formatDayDateToDisplay(shown.date)}</span>
-        {!viewing && !openShift && <span className="text-white/60">{SHIFT_HOURS[shown.shiftType]}</span>}
+        <span className={`font-medium ${st.strong}`}>{formatDayDateToDisplay(shown.date)}</span>
+        {!viewing && !openShift && <span className={st.muted}>{SHIFT_HOURS[shown.shiftType]}</span>}
         {shiftStatus && (
           <span>
-            <span className="text-white/60">Status: </span>
-            <span className="font-medium text-white">{STATUS_LABELS[shiftStatus] || shiftStatus}</span>
+            <span className={st.muted}>Status: </span>
+            <span className={`font-medium ${st.strong}`}>{STATUS_LABELS[shiftStatus] || shiftStatus}</span>
           </span>
         )}
         <span className="min-w-0">
-          <span className="text-white/60">On shift: </span>
-          <span className={names && names.length ? 'font-medium text-white' : 'italic text-white/60'}>{onShift}</span>
+          <span className={st.muted}>On shift: </span>
+          <span className={names && names.length ? `font-medium ${st.strong}` : `italic ${st.muted}`}>{onShift}</span>
         </span>
 
         {canLookUp && (
@@ -171,7 +200,7 @@ export default function CurrentShiftBar({ stationId, canLookUp = false }: { stat
                   <option value="Day" className="bg-surface-card text-content-primary">Day</option>
                   <option value="Night" className="bg-surface-card text-content-primary">Night</option>
                 </select>
-                <button onClick={applyPick} disabled={!pickDate} className={`${controlClass} font-medium hover:bg-white/20 disabled:opacity-50`}>
+                <button onClick={applyPick} disabled={!pickDate} className={`${controlClass} font-medium ${st.controlHover} disabled:opacity-50`}>
                   Show
                 </button>
                 <button onClick={() => setPickerOpen(false)} className={linkClass}>Cancel</button>
