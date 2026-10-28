@@ -1,20 +1,23 @@
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { Fragment, useEffect, useState, useRef, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import { authFetch, BASE, getHeaders } from '../lib/api'
-import { formatDateTimeToDisplay } from '../lib/dateUtils'
+import { formatDateToDisplay, formatTimeToDisplay } from '../lib/dateUtils'
 import Footer from './Footer'
 import CurrentShiftBar from './CurrentShiftBar'
 
+// Date and time to the minute ("28 October 2026, 14:30"). Re-checked every
+// 15 seconds so the minute rolls over on time without a per-second re-render.
 function LiveClock() {
   const [time, setTime] = useState('')
   useEffect(() => {
     const tick = () => {
-      setTime(formatDateTimeToDisplay(new Date().toISOString()))
+      const now = new Date().toISOString()
+      setTime(`${formatDateToDisplay(now)}, ${formatTimeToDisplay(now)}`)
     }
     tick()
-    const interval = setInterval(tick, 1000)
+    const interval = setInterval(tick, 15000)
     return () => clearInterval(interval)
   }, [])
   return <p className="text-[10px] text-white/40 leading-tight font-mono">{time}</p>
@@ -27,45 +30,30 @@ const icons: Record<string, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1" />
     </svg>
   ),
-  'My Shift': (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
   "Today's Shift": (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
-  Day: (
+  Shifts: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
     </svg>
   ),
-  'Stock & Sales': (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-    </svg>
-  ),
-  Admin: (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-    </svg>
-  ),
-  Operations: (
+  'Daily Entry': (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   ),
-  'Inventory & Sales': (
+  Stock: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
     </svg>
   ),
-  Reconciliation: (
+  Credit: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
     </svg>
   ),
   Reports: (
@@ -73,14 +61,9 @@ const icons: Record<string, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
     </svg>
   ),
-  Administration: (
+  Admin: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-    </svg>
-  ),
-  Sales: (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
     </svg>
   ),
 }
@@ -105,6 +88,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // Deposit overdue alert
   const [depositOverdue, setDepositOverdue] = useState(false)
+
+  // Name menu (My Payslips, Logout) — desktop header
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
+
+  // To-Do and Requests count by the bell (managers and owners)
+  const [todoCount, setTodoCount] = useState(0)
 
   // Manager+ forcing function: block every other screen while shift closures
   // have gone stale — the attendant is stuck waiting on the manager to dip
@@ -285,20 +275,46 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval)
   }, [user, router.pathname])
 
-  // Click outside to close notification dropdown
+  // To-Do and Requests count — read-only, the same data the page loads.
+  // Manager: open To-Do items (their task list). Owner: requests awaiting
+  // their approval (the owner's side of the page).
+  const isManagerOrOwner = user && ['manager', 'owner'].includes(user.role)
+  useEffect(() => {
+    if (router.pathname === '/login' || router.pathname === '/setup' || router.pathname === '/initializing') return
+    if (!isManagerOrOwner) return
+    const fetchTodo = () => {
+      const req = user.role === 'owner'
+        ? authFetch(`${BASE}/manager/requests?status=pending`, { headers: getHeaders() })
+            .then(r => (r.ok ? r.json() : []))
+            .then(rows => (Array.isArray(rows) ? rows.length : 0))
+        : authFetch(`${BASE}/manager/todo`, { headers: getHeaders() })
+            .then(r => (r.ok ? r.json() : null))
+            .then(data => data?.total || 0)
+      req.then(setTodoCount).catch(() => {})
+    }
+    fetchTodo()
+    const interval = setInterval(fetchTodo, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [isManagerOrOwner, router.pathname])
+
+  // Click outside to close the notification and name dropdowns
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setShowNotifications(false)
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Close mobile nav on route change
+  // Close mobile nav and the name menu on route change
   useEffect(() => {
     setMobileNavOpen(false)
+    setShowUserMenu(false)
   }, [router.pathname])
 
   const openNotifDropdown = useCallback(() => {
@@ -388,9 +404,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     )
   }
 
-  const DEFAULT_NAV = [
+  // True where a dropdown should show a section heading above item i: the
+  // item starts a new section, and this role's items span more than one.
+  const sectionHeadingAt = (children: any[], i: number) => {
+    const sections = new Set(children.map(c => c.section).filter(Boolean))
+    return sections.size > 1 && !!children[i].section && children[i].section !== children[i - 1]?.section
+  }
+
+  // One menu for every role. Each item's `roles` decides who sees it, so every
+  // role keeps the same pages it had before the regroup (managers previously
+  // had their own MANAGER_NAV; its pages map 1:1 onto the groups below).
+  // `section` adds a small heading inside a dropdown, shown only when the
+  // items visible to this role span more than one section.
+  // My Payslips and Logout live in the name menu; To-Do and Requests sits by
+  // the notification bell.
+  const NAV = [
     { path: '/', label: 'Dashboard', roles: ['supervisor', 'owner'] },
-    { path: '/manager-desk', label: 'To-Do and Requests', roles: ['manager', 'owner'] },
     {
       // Attendant: their whole job — Start the shift (verify auto-fetched opening)
       // and End the shift (record closing + send to supervisor).
@@ -399,44 +428,45 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       children: [
         { path: '/my-shift?mode=start', label: 'Start Shift', roles: ['user'] },
         { path: '/my-shift?mode=end', label: 'End Shift', roles: ['user'] },
-        { path: '/my-payslip', label: 'My Payslips', roles: ['user'] },
       ]
     },
     {
-      label: 'Shift Status',
+      label: 'Shifts',
       roles: ['supervisor', 'manager', 'owner'],
       children: [
+        { path: '/shifts', label: 'Shifts', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/my-shift', label: 'View Status', roles: ['supervisor'] },
-        { path: '/shift-closing', label: 'Close Shift', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/my-payslip', label: 'My Payslips', roles: ['supervisor', 'manager', 'owner'] },
-      ]
-    },
-    {
-      label: 'Operations',
-      roles: ['user', 'supervisor', 'owner'],
-      children: [
-        { path: '/shifts', label: 'Shifts', roles: ['supervisor', 'owner'] },
         { path: '/handover-review', label: 'Handover Review', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/readings', label: 'OCR Reading Entry', roles: ['supervisor'], disabled: true },
-        { path: '/tank-dips', label: 'Tank Dips', roles: ['manager', 'owner'] },
-        { path: '/daily-tank-reading', label: 'Daily Shift Capture', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/fuel-operations', label: 'Fuel Operations', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/lpg-daily', label: 'LPG Daily Operations', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/lubricants-daily', label: 'Lubricants Daily', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/accessories-daily', label: 'Accessories Daily', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/shift-closing', label: 'Close Shift', roles: ['supervisor', 'owner'] },
+        { path: '/daily-close-off', label: 'Daily Close-Off', roles: ['manager', 'owner'] },
       ]
     },
     {
-      label: 'Inventory & Sales',
+      // 'user' kept on the group (no attendant pages yet) — the attendant
+      // Operations menu is planned; it stays hidden until it has a page.
+      // OCR Reading Entry (/readings, supervisor) is hidden until it works.
+      label: 'Daily Entry',
+      roles: ['user', 'supervisor', 'manager', 'owner'],
+      children: [
+        { section: 'Fuel', path: '/tank-dips', label: 'Tank Dips', roles: ['manager', 'owner'] },
+        { section: 'Fuel', path: '/daily-tank-reading', label: 'Shift Capture', roles: ['supervisor', 'manager', 'owner'] },
+        { section: 'Fuel', path: '/fuel-operations', label: 'Fuel Operations', roles: ['supervisor', 'manager', 'owner'] },
+        { section: 'Shop', path: '/lpg-daily', label: 'LPG Daily', roles: ['supervisor', 'owner'] },
+        { section: 'Shop', path: '/lubricants-daily', label: 'Lubricants Daily', roles: ['supervisor', 'owner'] },
+        { section: 'Shop', path: '/accessories-daily', label: 'Accessories Daily', roles: ['supervisor', 'owner'] },
+      ]
+    },
+    {
+      label: 'Stock',
       roles: ['supervisor', 'manager', 'owner'],
       children: [
         { path: '/inventory', label: 'Stock Overview', roles: ['supervisor', 'manager', 'owner'] },
-        { path: '/stores', label: 'Stores / Stock', roles: ['manager', 'owner'] },
+        { path: '/stores', label: 'Stores', roles: ['manager', 'owner'] },
         { path: '/stock-takes', label: 'Stock Takes', roles: ['manager', 'owner'] },
       ]
     },
     {
-      label: 'Credit & Sales',
+      label: 'Credit',
       roles: ['user', 'supervisor', 'manager', 'owner'],
       children: [
         { path: '/accounts', label: 'Credit Accounts', roles: ['manager', 'owner'] },
@@ -444,91 +474,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { path: '/credit-sales', label: 'Credit Sales', roles: ['manager', 'owner'] },
       ]
     },
-    // Consolidated analytical clusters (each is a single tabbed page).
-    { path: '/shift-reconciliation', label: 'Reconciliation', roles: ['supervisor', 'manager', 'owner'] },
     {
       label: 'Reports',
       roles: ['supervisor', 'manager', 'owner'],
       children: [
+        { path: '/shift-reconciliation', label: 'Reconciliation', roles: ['supervisor', 'manager', 'owner'] },
         { path: '/reports', label: 'All Reports', roles: ['supervisor', 'manager', 'owner'] },
+        { path: '/owner-reports', label: 'Owner Reports', roles: ['owner'] },
         { path: '/alerts', label: 'Alerts', roles: ['supervisor', 'manager', 'owner'] },
       ]
     },
-    { path: '/owner-reports', label: 'Owner Reports', roles: ['owner'] },
     {
-      label: 'Administration',
+      label: 'Admin',
       roles: ['manager', 'owner'],
       children: [
-        { path: '/daily-close-off', label: 'Daily Close-Off', roles: ['manager', 'owner'] },
-        { path: '/payroll', label: 'Payroll', roles: ['owner'] },
-        { path: '/stations', label: 'Stations', roles: ['owner'] },
-        { path: '/infrastructure', label: 'Infrastructure', roles: ['owner'] },
-        { path: '/settings', label: 'Settings', roles: ['manager', 'owner'] },
-        { path: '/backup', label: 'Backup & Restore', roles: ['manager', 'owner'] },
-        { path: '/users', label: 'Users', roles: ['manager', 'owner'] },
-        { path: '/audit', label: 'Audit Log', roles: ['manager', 'owner'] },
+        { section: 'Setup', path: '/stations', label: 'Stations', roles: ['owner'] },
+        { section: 'Setup', path: '/infrastructure', label: 'Infrastructure', roles: ['owner'] },
+        { section: 'Setup', path: '/settings', label: 'Settings', roles: ['manager', 'owner'] },
+        { section: 'People', path: '/users', label: 'Users', roles: ['manager', 'owner'] },
+        { section: 'People', path: '/payroll', label: 'Payroll', roles: ['owner'] },
+        { section: 'System', path: '/backup', label: 'Backup & Restore', roles: ['owner'] },
+        { section: 'System', path: '/audit', label: 'Audit Log', roles: ['manager', 'owner'] },
       ]
     },
   ]
 
-  // Manager-only menu: a leaner, task-focused 4-group layout. Same pages and the
-  // same middleware permissions — only the grouping/labels differ. The launchpad
-  // (landed on at "/") remains the manager's home for the daily chain.
-  const MANAGER_NAV = [
-    {
-      label: 'Day',
-      roles: ['manager'],
-      children: [
-        { path: '/shifts', label: 'Shifts', roles: ['manager'] },
-        { path: '/handover-review', label: 'Handover Review', roles: ['manager'] },
-        { path: '/daily-close-off', label: 'Daily Close-Off', roles: ['manager'] },
-      ],
-    },
-    {
-      label: 'Stock & Sales',
-      roles: ['manager'],
-      children: [
-        { path: '/tank-dips', label: 'Tank Dips', roles: ['manager'] },
-        { path: '/daily-tank-reading', label: 'Daily Shift Capture', roles: ['manager'] },
-        { path: '/fuel-operations', label: 'Fuel Operations', roles: ['manager'] },
-        { path: '/stores', label: 'Stores / Stock', roles: ['manager'] },
-        { path: '/stock-takes', label: 'Stock Takes', roles: ['manager'] },
-        { path: '/inventory', label: 'Stock Overview', roles: ['manager'] },
-      ],
-    },
-    {
-      label: 'Credit & Sales',
-      roles: ['manager'],
-      children: [
-        { path: '/accounts', label: 'Credit Accounts', roles: ['manager'] },
-        { path: '/credit-lookup', label: 'Credit Lookup', roles: ['manager'] },
-        { path: '/credit-sales', label: 'Credit Sales', roles: ['manager'] },
-      ],
-    },
-    // Same consolidated clusters as every other role.
-    { path: '/shift-reconciliation', label: 'Reconciliation', roles: ['manager'] },
-    {
-      label: 'Reports',
-      roles: ['manager'],
-      children: [
-        { path: '/reports', label: 'All Reports', roles: ['manager'] },
-        { path: '/alerts', label: 'Alerts', roles: ['manager'] },
-      ],
-    },
-    {
-      label: 'Admin',
-      roles: ['manager'],
-      children: [
-        { path: '/payroll', label: 'Payroll', roles: ['owner'] },
-        { path: '/settings', label: 'Settings', roles: ['manager'] },
-        { path: '/users', label: 'Users', roles: ['manager'] },
-        { path: '/audit', label: 'Audit Log', roles: ['manager'] },
-      ],
-    },
-  ]
-
-  // Managers get the leaner 4-group menu; everyone else keeps the default nav.
-  const allNavItems = user?.role === 'manager' ? MANAGER_NAV : DEFAULT_NAV
+  const allNavItems = NAV
 
   const isSetupPage = ['/setup', '/initializing', '/login'].includes(router.pathname)
   const hideNav = setupPending || isSetupPage
@@ -546,10 +517,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       })
       // Collapse a menu that has only one visible child into a direct link —
       // fewer clicks, no pointless dropdown (e.g. attendant's "My Shift").
+      // The link keeps its group's icon.
       .map((item: any) => {
         if (item.children && item.children.length === 1) {
           const only = item.children[0]
-          return { path: only.path, label: only.label, roles: item.roles, disabled: only.disabled }
+          return { path: only.path, label: only.label, iconKey: item.label, roles: item.roles, disabled: only.disabled }
         }
         return item
       })
@@ -617,6 +589,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </svg>
                   )}
                 </button>
+
+                {/* To-Do and Requests — managers and owners */}
+                {isManagerOrOwner && (
+                  <Link
+                    href="/manager-desk"
+                    className={`p-2 rounded-btn transition-all relative ${isActive('/manager-desk') ? 'bg-white/20 text-white' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
+                    title="To-Do and Requests"
+                    aria-label="To-Do and Requests"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    {todoCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white rounded-full ring-2 ring-action-primary/50 bg-status-warning">
+                        {todoCount > 99 ? '99+' : todoCount}
+                      </span>
+                    )}
+                  </Link>
+                )}
 
                 {/* Notification bell */}
                 {isSupervisorOrOwner && (
@@ -695,32 +686,61 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </div>
                 )}
 
-                {/* User info — desktop only */}
-                <div className="hidden lg:flex items-center gap-3 pl-3 border-l border-white/20">
-                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-semibold text-white">
-                    {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-white leading-tight">{user.full_name}</p>
-                    <p className="text-[11px] text-white/60 leading-tight">
-                      {user.role === 'user' && 'Attendant'}
-                      {user.role === 'supervisor' && 'Supervisor'}
-                      {user.role === 'manager' && 'Manager'}
-                      {user.role === 'owner' && 'Owner'}
-                    </p>
-                    <LiveClock />
-                    {depositOverdue && (
-                      <p className="text-[10px] text-status-warning font-semibold animate-pulse leading-tight">Safe deposit overdue</p>
-                    )}
-                  </div>
-                </div>
+                {/* Name menu — desktop only (the drawer covers mobile/tablet):
+                    click the name for My Payslips and Logout */}
+                <div className="hidden lg:block relative pl-3 border-l border-white/20" ref={userMenuRef}>
+                  <button
+                    onClick={() => setShowUserMenu(prev => !prev)}
+                    className="flex items-center gap-3 px-2 py-1 rounded-btn hover:bg-white/10 transition-all"
+                    aria-haspopup="menu"
+                    aria-expanded={showUserMenu}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-semibold text-white">
+                      {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-white leading-tight">{user.full_name}</p>
+                      <p className="text-[11px] text-white/60 leading-tight">
+                        {user.role === 'user' && 'Attendant'}
+                        {user.role === 'supervisor' && 'Supervisor'}
+                        {user.role === 'manager' && 'Manager'}
+                        {user.role === 'owner' && 'Owner'}
+                      </p>
+                      <LiveClock />
+                      {depositOverdue && (
+                        <p className="text-[10px] text-status-warning font-semibold animate-pulse leading-tight">Safe deposit overdue</p>
+                      )}
+                    </div>
+                    <svg className={`w-3 h-3 text-white/60 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
 
-                <button
-                  onClick={handleLogout}
-                  className="hidden lg:inline-flex px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-sm font-medium rounded-btn border border-white/10 transition-all"
-                >
-                  Logout
-                </button>
+                  {showUserMenu && (
+                    <div className="dropdown-enter absolute right-0 mt-2 w-48 rounded-card z-50 glass-card-static border border-surface-border overflow-hidden" role="menu">
+                      <div className="py-1">
+                        <Link
+                          href="/my-payslip"
+                          role="menuitem"
+                          className={`block px-4 py-2.5 text-sm transition-all ${
+                            isActive('/my-payslip')
+                              ? 'bg-action-primary/10 text-action-primary font-medium'
+                              : 'text-content-primary hover:bg-white/5'
+                          }`}
+                        >
+                          My Payslips
+                        </Link>
+                        <button
+                          onClick={handleLogout}
+                          role="menuitem"
+                          className="block w-full text-left px-4 py-2.5 text-sm text-status-error hover:bg-status-error-light transition-colors border-t border-surface-border"
+                        >
+                          Logout
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Hamburger — visible on mobile and tablet */}
                 <button
@@ -758,8 +778,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <div className="absolute left-0 pt-2 w-56 rounded-card invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-200 z-50">
                   <div className="rounded-card glass-card-static border border-surface-border overflow-hidden dropdown-enter">
                     <div className="py-1">
-                      {item.children.map((child: any) => (
-                        child.disabled ? (
+                      {item.children.map((child: any, i: number) => (
+                        <Fragment key={child.path}>
+                        {sectionHeadingAt(item.children, i) && (
+                          <p className={`px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-content-secondary ${i > 0 ? 'mt-1 border-t border-surface-border' : ''}`}>
+                            {child.section}
+                          </p>
+                        )}
+                        {child.disabled ? (
                           <span
                             key={child.path}
                             className="block px-4 py-2.5 text-sm text-content-secondary/40 border-l-2 border-transparent cursor-not-allowed select-none"
@@ -780,7 +806,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                           >
                             {child.label}
                           </Link>
-                        )
+                        )}
+                        </Fragment>
                       ))}
                     </div>
                   </div>
@@ -796,7 +823,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       : 'text-white/70 hover:text-white hover:bg-white/10'
                   }`}
                 >
-                  {icons[item.label]}
+                  {icons[item.iconKey || item.label]}
                   {item.label}
                 </Link>
               )
@@ -868,8 +895,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </button>
                     {openMenus.includes(item.label) && (
                       <div className="pl-9 space-y-0.5 mb-1">
-                        {item.children.map((child: any) => (
-                          child.disabled ? (
+                        {item.children.map((child: any, i: number) => (
+                          <Fragment key={child.path}>
+                          {sectionHeadingAt(item.children, i) && (
+                            <p className="px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-content-secondary">
+                              {child.section}
+                            </p>
+                          )}
+                          {child.disabled ? (
                             <span
                               key={child.path}
                               className="flex items-center px-3 py-2.5 rounded-btn text-sm text-content-secondary/40 cursor-not-allowed select-none"
@@ -889,7 +922,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                             >
                               {child.label}
                             </Link>
-                          )
+                          )}
+                          </Fragment>
                         ))}
                       </div>
                     )}
@@ -904,15 +938,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         : 'text-content-primary hover:bg-surface-bg'
                     }`}
                   >
-                    {icons[item.label]}
+                    {icons[item.iconKey || item.label]}
                     {item.label}
                   </Link>
                 )
               ))}
             </nav>
 
-            {/* Drawer footer: station selector + dark mode + logout */}
+            {/* Drawer footer: My Payslips + station selector + dark mode + logout */}
             <div className="shrink-0 px-3 py-3 border-t border-surface-border space-y-2">
+              <Link
+                href="/my-payslip"
+                className={`flex items-center px-3 py-2.5 rounded-btn text-sm transition-all ${
+                  isActive('/my-payslip')
+                    ? 'bg-action-primary/10 text-action-primary font-medium'
+                    : 'text-content-primary hover:bg-surface-bg'
+                }`}
+              >
+                My Payslips
+              </Link>
               {(user?.role === 'owner' || user?.role === 'manager') && switchableStations.length > 1 && (
                 <select
                   value={activeStationId}
