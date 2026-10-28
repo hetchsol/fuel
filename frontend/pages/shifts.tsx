@@ -4,7 +4,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import Pagination from '../components/Pagination'
 import ReasonChips, { REASON_PRESETS } from '../components/ReasonChips'
 import { getHeaders, authFetch } from '../lib/api'
-import { formatDateToDisplay, formatDateTimeToDisplay, formatTimeToDisplay, getCurrentShift } from '../lib/dateUtils'
+import { formatDateToDisplay, formatDateTimeToDisplay, formatTimeToDisplay } from '../lib/dateUtils'
 import AttendantOpeningPanel from '../components/AttendantOpeningPanel'
 import PosSlipsInput, { PosSlip, PosType, newSlip, slipsToItems, slipsTotal, slipsProblem } from '../components/PosSlipsInput'
 import { useTheme } from '../contexts/ThemeContext'
@@ -89,19 +89,27 @@ export default function Shifts() {
     fetchTanks()
   }, [])
 
-  // The active-shift banner is fetched on load; if the page stays open across
-  // 06:00 or 18:00, fetch it (and the shift list) again once the shift changes.
+  // The active-shift banner is fetched on load. While the page stays open, check
+  // every minute which shift is set up and open (read-only /shifts/current/open)
+  // and fetch the banner and shift list again when that shift changes.
   useEffect(() => {
-    const keyOf = () => { const c = getCurrentShift(); return `${c.date}-${c.shiftType}` }
-    let last = keyOf()
-    const interval = setInterval(() => {
-      const now = keyOf()
-      if (now !== last) {
-        last = now
-        fetchActiveShift()
-        fetchAllShifts()
-      }
-    }, 60000)
+    let last: string | null = null
+    const check = () => {
+      authFetch(`${BASE}/shifts/current/open`, { headers: getHeaders() })
+        .then(r => (r.ok ? r.json() : null))
+        .then((data: any) => {
+          if (!data) return
+          const now = data.shift ? data.shift.shift_id : ''
+          if (last !== null && now !== last) {
+            fetchActiveShift()
+            fetchAllShifts()
+          }
+          last = now
+        })
+        .catch(() => {})
+    }
+    check()
+    const interval = setInterval(check, 60000)
     return () => clearInterval(interval)
   }, [])
 
@@ -510,8 +518,8 @@ export default function Shifts() {
 
 
   const getShiftTypeDisplay = (shiftType: string) => {
-    if (shiftType === 'Day') return '☀️ Day Shift (6AM - 6PM)'
-    if (shiftType === 'Night') return '🌙 Night Shift (6PM - 6AM)'
+    if (shiftType === 'Day') return 'Day Shift'
+    if (shiftType === 'Night') return 'Night Shift'
     return shiftType
   }
 

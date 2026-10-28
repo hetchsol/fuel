@@ -180,11 +180,18 @@ def get_shifts_by_date(date: str, ctx: dict = Depends(get_station_context)):
 @router.get("/current/active")
 def get_current_shift(ctx: dict = Depends(get_station_context)):
     """
-    Get the currently active shift based on time
+    Get the current shift: the newest shift that has been set up and is still
+    open, whatever the time of day (so a Night shift set up at 14:00 is the
+    current one straight away). Only when none is open does it fall back to
+    the clock, as before.
     """
     storage = ctx["storage"]
     shifts_data = storage.get('shifts', {})
     readings_data = storage.get('readings', [])
+
+    set_up = _newest_set_up_shift(shifts_data)
+    if set_up:
+        return Shift(**set_up)
 
     # Station time is Zambia (CAT, UTC+2, no daylight saving). Read it
     # explicitly: the hosted server's own clock runs on UTC, which would hold
@@ -221,6 +228,41 @@ def get_current_shift(ctx: dict = Depends(get_station_context)):
     )
     shifts_data[shift_id] = new_shift.dict()
     return new_shift
+
+_SHIFT_TYPE_ORDER = {"Day": 0, "Night": 1}
+
+
+def _newest_set_up_shift(shifts_data: dict):
+    """
+    The shift that has been set up and is running: the newest active shift,
+    by date and then Night after Day, whatever the time of day. Ignored:
+      - shifts dated after today (Zambia time), so one set up in advance
+        does not show early;
+      - empty placeholders /current/active creates when nothing exists
+        (no creator, no attendants) — nobody set those up.
+    Returns None when no such shift is open.
+    """
+    today = datetime.now(timezone(timedelta(hours=2))).strftime("%Y-%m-%d")
+    open_shifts = [
+        s for s in shifts_data.values()
+        if s.get("status") == "active"
+        and (s.get("date") or "") <= today
+        and (s.get("created_by") or s.get("assignments") or s.get("attendants"))
+    ]
+    if not open_shifts:
+        return None
+    return max(open_shifts, key=lambda s: (s.get("date") or "", _SHIFT_TYPE_ORDER.get(s.get("shift_type"), -1)))
+
+
+@router.get("/current/open")
+def get_current_open_shift(ctx: dict = Depends(get_station_context)):
+    """
+    The newest set-up shift that is still open (see _newest_set_up_shift), or
+    {"shift": null}. Read-only: unlike /current/active it never creates a
+    shift record.
+    """
+    newest = _newest_set_up_shift(ctx["storage"].get('shifts', {}))
+    return {"shift": jsonable_encoder(Shift(**newest)) if newest else None}
 
 @router.post("/readings", response_model=DualReading)
 def submit_dual_reading(reading: DualReading, ctx: dict = Depends(get_station_context)):

@@ -5,14 +5,16 @@
 // a Day/Night dropdown; the strip then shows that shift (marked "Viewing") until
 // "Back to current shift" is pressed. Attendants only ever see the current shift.
 //
-// Read-only. It reads /shifts/date/{date} (side-effect free) and picks out the
-// shift — it deliberately does NOT call /shifts/current/active, which creates a
-// shift record when none exists.
+// The current shift is the one that has been set up: the newest open shift at
+// the station (/shifts/current/open), whatever the time of day. So a Night shift
+// set up at 14:00 shows as Night straight away. Only when no shift is open does
+// the strip fall back to the clock (getCurrentShift(): Day 06:00 to 18:00, Night
+// otherwise) and show that shift's status, or "Shift not set up yet".
 //
-// The current shift comes from getCurrentShift(), so it moves at 06:00 and 18:00
-// and the hours after midnight show the previous date's Night shift. Checked
-// every minute; the assigned names are re-fetched when the shown shift changes
-// and every 5 minutes otherwise, so a newly assigned attendant appears on its own.
+// Read-only. It reads /shifts/current/open and /shifts/date/{date}, both side-
+// effect free — it deliberately does NOT call /shifts/current/active, which
+// creates a shift record when none exists. Re-fetched every minute, so a newly
+// set-up shift or newly assigned attendant appears on its own.
 
 import { useEffect, useState } from 'react'
 import { authFetch, BASE, getHeaders } from '../lib/api'
@@ -41,10 +43,12 @@ export default function CurrentShiftBar({ stationId, canLookUp = false }: { stat
   const [pickDate, setPickDate] = useState('')
   const [pickType, setPickType] = useState<ShiftType>('Day')
 
+  // The open shift that has been set up; null = none open, fall back to the clock.
+  const [openShift, setOpenShift] = useState<{ date: string; shiftType: ShiftType } | null>(null)
   const [names, setNames] = useState<string[] | null>(null)  // null = not loaded yet
   const [shiftStatus, setShiftStatus] = useState<string | null>(null)  // null = no shift record
 
-  // Follow the clock across the 06:00 / 18:00 boundaries.
+  // Clock fallback, followed across the 06:00 / 18:00 boundaries.
   useEffect(() => {
     const tick = () => {
       const now = getCurrentShift()
@@ -55,29 +59,49 @@ export default function CurrentShiftBar({ stationId, canLookUp = false }: { stat
     return () => clearInterval(interval)
   }, [])
 
-  const shown = viewing || current
+  const live = openShift || current
+  const shown = viewing || live
 
-  // Who is on the shown shift, and its status.
+  // Which shift is open, who is on it, and its status.
   useEffect(() => {
     let cancelled = false
-    const load = () => {
-      authFetch(`${BASE}/shifts/date/${shown.date}`, { headers: getHeaders() })
+    const showShift = (shift: any) => {
+      const fromAssignments = (shift?.assignments || []).map((a: any) => a.attendant_name).filter(Boolean)
+      const list: string[] = fromAssignments.length ? fromAssignments : (shift?.attendants || []).filter(Boolean)
+      setShiftStatus(shift ? (shift.status || 'active') : null)
+      setNames(Array.from(new Set(list)))
+    }
+    const loadByDate = (date: string, shiftType: ShiftType) =>
+      authFetch(`${BASE}/shifts/date/${date}`, { headers: getHeaders() })
         .then(r => (r.ok ? r.json() : []))
         .then((shifts: any[]) => {
           if (cancelled) return
-          const shift = (Array.isArray(shifts) ? shifts : []).find(s => s.shift_type === shown.shiftType)
-          const fromAssignments = (shift?.assignments || []).map((a: any) => a.attendant_name).filter(Boolean)
-          const list: string[] = fromAssignments.length ? fromAssignments : (shift?.attendants || []).filter(Boolean)
-          setShiftStatus(shift ? (shift.status || 'active') : null)
-          setNames(Array.from(new Set(list)))
+          showShift((Array.isArray(shifts) ? shifts : []).find(s => s.shift_type === shiftType))
         })
-        .catch(() => { if (!cancelled) setNames([]) })
+    const load = () => {
+      const request = viewing
+        ? loadByDate(viewing.date, viewing.shiftType)
+        : authFetch(`${BASE}/shifts/current/open`, { headers: getHeaders() })
+            .then(r => (r.ok ? r.json() : { shift: null }))
+            .then((data: any) => {
+              if (cancelled) return
+              const shift = data?.shift
+              if (shift && (shift.shift_type === 'Day' || shift.shift_type === 'Night')) {
+                setOpenShift(prev => (prev && prev.date === shift.date && prev.shiftType === shift.shift_type
+                  ? prev : { date: shift.date, shiftType: shift.shift_type }))
+                showShift(shift)
+              } else {
+                setOpenShift(null)
+                return loadByDate(current.date, current.shiftType)
+              }
+            })
+      request.catch(() => { if (!cancelled) setNames([]) })
     }
     setNames(null)
     load()
-    const interval = setInterval(load, 5 * 60000)
+    const interval = setInterval(load, 60000)
     return () => { cancelled = true; clearInterval(interval) }
-  }, [shown.date, shown.shiftType, stationId])
+  }, [viewing?.date, viewing?.shiftType, current.date, current.shiftType, stationId])
 
   const openPicker = () => {
     setPickDate(shown.date)
@@ -86,7 +110,7 @@ export default function CurrentShiftBar({ stationId, canLookUp = false }: { stat
   }
   const applyPick = () => {
     if (!pickDate) return
-    const isCurrent = pickDate === current.date && pickType === current.shiftType
+    const isCurrent = pickDate === live.date && pickType === live.shiftType
     setViewing(isCurrent ? null : { date: pickDate, shiftType: pickType })
     setPickerOpen(false)
   }
@@ -115,7 +139,7 @@ export default function CurrentShiftBar({ stationId, canLookUp = false }: { stat
           {shown.shiftType} Shift
         </span>
         <span className="font-medium text-white">{formatDayDateToDisplay(shown.date)}</span>
-        <span className="text-white/60">{SHIFT_HOURS[shown.shiftType]}</span>
+        {!viewing && !openShift && <span className="text-white/60">{SHIFT_HOURS[shown.shiftType]}</span>}
         {shiftStatus && (
           <span>
             <span className="text-white/60">Status: </span>
