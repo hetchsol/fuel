@@ -23,6 +23,8 @@ interface PasswordStatus {
   days_left: number | null
   must_change: boolean
   remind: boolean
+  // '21' | '15' | '10' (one notice each, until the next) or 'daily' (last 7 days)
+  notice: string | null
 }
 
 interface Campaign {
@@ -167,8 +169,15 @@ export default function AccountGuard({ username, role, onLogout }: {
     return () => window.removeEventListener(HANDOVER_SUBMITTED_EVENT, onHandover)
   }, [shared])
 
+  // The 21-, 15- and 10-day notices stay hidden after OK until the next notice;
+  // in the last 7 days the reminder returns at every sign-in and each new day.
+  const keyFor = (kind: string) =>
+    kind === 'staff' && status?.notice && status.notice !== 'daily'
+      ? `pwReminderOk:staff:${username}:${status.due_at}:${status.notice}`
+      : dismissKey(kind, username)
+
   const dismiss = (kind: string) => {
-    try { localStorage.setItem(dismissKey(kind, username), '1') } catch {}
+    try { localStorage.setItem(keyFor(kind), '1') } catch {}
     setTick(t => t + 1)
   }
 
@@ -179,7 +188,7 @@ export default function AccountGuard({ username, role, onLogout }: {
   }
 
   const dueDate = status?.due_at ? formatDateToDisplay(catDate(status.due_at)) : ''
-  const showStaffReminder = !forced && !showChange && !!status?.remind && !isDismissed(dismissKey('staff', username))
+  const showStaffReminder = !forced && !showChange && !!status?.remind && !isDismissed(keyFor('staff'))
   const campaignOpen = !!campaign && (!campaign.deadline_passed || campaign.pending.length > 0)
   const showOwnerReminder = role === 'owner' && !forced && !showChange && campaignOpen
     && !isDismissed(dismissKey('owner', username))

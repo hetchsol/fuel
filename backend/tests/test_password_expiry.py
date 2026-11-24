@@ -79,10 +79,35 @@ def test_countdown_runs_7_to_1_then_forces():
     assert st["must_change"] and st["days_left"] == 0
 
 
-def test_no_reminder_until_last_7_days():
+def test_rotation_reminders_at_21_15_10_then_daily():
     user = {"role": "user", "password_change_due": pwp.next_rotation(START)}
-    assert pwp.status(user, START)["remind"] is False
-    assert pwp.status(user, START + timedelta(days=83))["remind"] is True
+    expected = {}
+    for left in range(90, 0, -1):
+        expected[left] = ("21" if 16 <= left <= 21 else "15" if 11 <= left <= 15
+                          else "10" if 8 <= left <= 10 else "daily" if left <= 7 else None)
+    for day in range(0, 90):
+        st = pwp.status(user, START + timedelta(days=day))
+        left = 90 - day
+        assert st["days_left"] == left
+        assert st["notice"] == expected[left], (left, st["notice"])
+        assert st["remind"] is (expected[left] is not None)
+        assert st["must_change"] is False
+    st = pwp.status(user, START + timedelta(days=90))
+    assert st["must_change"] and st["notice"] is None and not st["remind"]
+
+
+def test_changing_inside_the_reminder_period_starts_a_new_90_days(client, owner_headers, monkeypatch):
+    at(monkeypatch, START)
+    u = make_staff(client, owner_headers)
+    h = bearer(login(client, u, "Start-pass-1")["access_token"])
+    client.post("/api/v1/auth/change-password", headers=h,
+                json={"current_password": "Start-pass-1", "new_password": "Second-pass-2"})
+    at(monkeypatch, START + timedelta(days=72))          # 18 days left: inside the 21-day notice
+    st = client.get("/api/v1/auth/password-status", headers=h).json()["password_status"]
+    assert st["notice"] == "21" and st["days_left"] == 18
+    ok = client.post("/api/v1/auth/change-password", headers=h,
+                     json={"current_password": "Second-pass-2", "new_password": "Third-pass-3"}).json()
+    assert ok["password_status"]["days_left"] == 90 and ok["password_status"]["remind"] is False
 
 
 def test_owner_is_never_due():

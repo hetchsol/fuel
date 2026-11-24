@@ -1,8 +1,9 @@
 """
 Password expiry policy.
 
-Every non-owner user has a `password_change_due` timestamp (ISO, UTC). Seven
-days before it the user is reminded at every sign-in (and each new day); from
+Every non-owner user has a `password_change_due` timestamp (ISO, UTC). The
+user is reminded at 21, 15 and 10 days left, then at every sign-in (and each
+new day) for the last 7 days; from
 the due moment on, the server refuses everything except changing the password
 (see auth.get_current_user). A change sets the next due date 90 days on.
 
@@ -26,7 +27,11 @@ from fastapi import HTTPException
 from ..database.station_files import load_station_json, save_station_json
 
 CAT = timezone(timedelta(hours=2))
-REMIND_DAYS = 7
+# Reminder notices before a password is due: one notice at 21, 15 and 10 days
+# left (each covering the days up to the next, so someone off on that day still
+# sees it at their next sign-in), then every day for the last 7 days.
+NOTICES = ((21, 16, "21"), (15, 11, "15"), (10, 8, "10"), (7, 1, "daily"))
+REMIND_DAYS = NOTICES[0][0]
 CAMPAIGN_DAYS = 7
 ROTATION_DAYS = 90
 MIN_LENGTH = 8
@@ -78,18 +83,27 @@ def next_rotation(now: Optional[datetime] = None) -> str:
     return start_of_day_in(ROTATION_DAYS, now)
 
 
+def notice_for(days_left: int) -> Optional[str]:
+    """Which reminder notice applies with this many days left, if any."""
+    for top, bottom, name in NOTICES:
+        if bottom <= days_left <= top:
+            return name
+    return None
+
+
 def status(user: dict, now: Optional[datetime] = None) -> dict:
     """What the app should show this user about their password."""
     now = now or utcnow()
     due = _parse((user or {}).get("password_change_due"))
     if is_exempt((user or {}).get("role")) or not due:
         return {"exempt": is_exempt((user or {}).get("role")), "due_at": None, "days_left": None,
-                "must_change": False, "remind": False,
+                "must_change": False, "remind": False, "notice": None,
                 "changed_at": (user or {}).get("password_changed_at")}
     must = now >= due
     days_left = (due.astimezone(CAT).date() - now.astimezone(CAT).date()).days
+    notice = None if must else notice_for(days_left)
     return {"exempt": False, "due_at": due.isoformat(), "days_left": max(days_left, 0),
-            "must_change": must, "remind": not must and days_left <= REMIND_DAYS,
+            "must_change": must, "remind": notice is not None, "notice": notice,
             "changed_at": user.get("password_changed_at")}
 
 
