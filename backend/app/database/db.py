@@ -639,6 +639,42 @@ def db_save_all_stations(stations: dict):
 # Users — auth user management
 # ──────────────────────────────────────────────────────────
 
+_password_columns_ok = False
+
+
+def db_ensure_password_columns() -> bool:
+    """
+    Make sure the password-expiry columns exist. The startup migration can
+    miss them during a deploy: the old instance still holds a lock on users
+    (its connection sits in an open transaction), the ALTER waits, hits the
+    5 s startup timeout and is skipped. Retried here whenever the columns are
+    needed, with a short lock wait so a request never hangs on it.
+    """
+    global _password_columns_ok
+    if _password_columns_ok:
+        return True
+    conn = _get_connection()
+    if conn is None:
+        return False
+    try:
+        conn.execute("SET lock_timeout = '3s'")
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_change_due TEXT")
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TEXT")
+        conn.commit()
+        _password_columns_ok = True
+        logger.info("[db] password-expiry columns present")
+    except Exception as e:
+        conn.rollback()
+        logger.warning(f"[db] password-expiry columns not added yet: {e}")
+    finally:
+        try:
+            conn.execute("SET lock_timeout = 0")
+            conn.commit()
+        except Exception:
+            pass
+    return _password_columns_ok
+
+
 _USER_COLS = "user_id, username, password, full_name, role, station_id, is_active"
 _USER_PW_COLS = ", password_change_due, password_changed_at"
 

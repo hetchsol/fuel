@@ -119,12 +119,26 @@ def _get_user_record(username: str) -> Optional[dict]:
     return users_db.get(username)
 
 
+def _db_safe_fields(fields: dict) -> dict:
+    """
+    Drop the password-expiry fields if their columns cannot be added yet, so
+    saving a password (or anything else) never fails because of this feature.
+    """
+    if not any(k in fields for k in ("password_change_due", "password_changed_at")):
+        return fields
+    from ...database.db import db_ensure_password_columns
+    if db_ensure_password_columns():
+        return fields
+    logger.warning("[auth] password-expiry columns missing; saving without expiry fields")
+    return {k: v for k, v in fields.items() if k not in ("password_change_due", "password_changed_at")}
+
+
 def _set_user_fields(username: str, fields: dict):
     if not fields:
         return
     if _USE_DB():
         from ...database.db import db_update_user
-        db_update_user(username, fields)
+        db_update_user(username, _db_safe_fields(fields))
     else:
         users_db[username].update(fields)
         _save_users_file()
@@ -717,7 +731,7 @@ def update_user(username: str, user_data: dict, current_user: dict = Depends(req
             fields.update(_due_now_unless_owner(fields.get("role", user["role"])))
 
         if fields:
-            db_update_user(username, fields)
+            db_update_user(username, _db_safe_fields(fields))
 
         # Re-read for response
         user = db_get_user_by_username(username)
@@ -968,7 +982,7 @@ def reset_user_password(username: str, current_user: dict = Depends(require_mana
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        db_update_user(username, {"password": hashed, **_due_now_unless_owner(user["role"])})
+        db_update_user(username, _db_safe_fields({"password": hashed, **_due_now_unless_owner(user["role"])}))
         # Invalidate existing sessions so user must re-login
         db_delete_user_sessions(username)
         user_id = user["user_id"]
@@ -1107,6 +1121,11 @@ def launch_password_campaign(deadline: str, started_by: str, station_id: str,
     password, record the countdown and tell the owner. Used by the owner's
     button (7 days from today) and by one-off system launches.
     """
+    if _USE_DB():
+        from ...database.db import db_ensure_password_columns
+        if not db_ensure_password_columns():
+            raise HTTPException(status_code=503,
+                                detail="The password settings are not ready yet. Please try again in a minute.")
     now = pwp.utcnow()
     staff = [u for u in _all_user_records() if not pwp.is_exempt(u.get("role"))]
     for u in staff:

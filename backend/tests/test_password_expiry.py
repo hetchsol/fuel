@@ -255,7 +255,7 @@ def test_one_off_countdown_starts_once_with_fixed_deadline(client, owner_headers
     u = make_staff(client, owner_headers)
     clear_due(u)
 
-    assert once.run_once() is True
+    assert once.run_once() == "started"
     assert auth.users_db[u]["password_change_due"] == once.DEADLINE
     assert auth.users_db["owner1"].get("password_change_due") is None
     msg = isolated["sent"][-1]
@@ -268,14 +268,14 @@ def test_one_off_countdown_starts_once_with_fixed_deadline(client, owner_headers
     st = login(client, u, "Start-pass-1")["password_status"]
     assert st["remind"] and st["days_left"] == 7
 
-    assert once.run_once() is False                       # a restart never repeats it
+    assert once.run_once() == "not_needed"               # a restart never repeats it
     assert len([m for m in isolated["sent"] if m["type"] == "PASSWORD_CAMPAIGN_START"]) == 1
 
 
 def test_one_off_countdown_skipped_after_deadline(monkeypatch, isolated):
     from app.services import one_off_password_countdown as once
     at(monkeypatch, datetime(2026, 12, 1, 8, 0, tzinfo=CAT))
-    assert once.run_once() is False
+    assert once.run_once() == "not_needed"
     assert not isolated["sent"]
 
 
@@ -298,3 +298,29 @@ def test_rotation_continues_every_90_days(client, owner_headers, monkeypatch):
     again = client.post("/api/v1/auth/change-password", headers=h,
                         json={"current_password": "Second-pass-2", "new_password": "Third-pass-3"}).json()
     assert again["password_status"]["days_left"] == 90 and not again["password_status"]["must_change"]
+
+
+def test_one_off_countdown_retries_when_columns_cannot_be_added(client, owner_headers, monkeypatch, isolated):
+    """During a deploy the old instance can lock users; the start fails, nothing is half-done, a retry succeeds."""
+    from app.services import one_off_password_countdown as once
+    from app.database import db
+    at(monkeypatch, START)
+    u = make_staff(client, owner_headers)
+    clear_due(u)
+    monkeypatch.setattr(auth, "_USE_DB", lambda: True)
+    monkeypatch.setattr(db, "db_ensure_password_columns", lambda: False)
+    assert once.run_once() == "failed"
+    assert not [m for m in isolated["sent"] if m["type"].startswith("PASSWORD_CAMPAIGN")]
+    assert not pwp.load_campaign()
+    monkeypatch.setattr(auth, "_USE_DB", lambda: False)
+    assert once.run_once() == "started"
+    assert auth.users_db[u]["password_change_due"] == once.DEADLINE
+
+
+def test_saving_a_password_never_fails_without_the_columns(monkeypatch):
+    from app.database import db
+    monkeypatch.setattr(db, "db_ensure_password_columns", lambda: False)
+    fields = {"password": "x", "password_change_due": "d", "password_changed_at": "c", "full_name": "n"}
+    assert auth._db_safe_fields(fields) == {"password": "x", "full_name": "n"}
+    monkeypatch.setattr(db, "db_ensure_password_columns", lambda: True)
+    assert auth._db_safe_fields(fields) == fields
