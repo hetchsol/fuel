@@ -260,6 +260,53 @@ def adjust(station_id: str, item_key: str, bin: str, new_qty, performed_by: str,
     return item
 
 
+def set_counts_bulk(station_id: str, targets: dict, performed_by: str,
+                    reason: str, ref: str = "") -> list:
+    """
+    Set many bin counts in one go (e.g. an opening count upload). `targets` is
+    {item_key: {"stores": qty, "forecourt": qty}}; a bin left out is not
+    touched. Every item must already exist - the caller validates first, so
+    nothing is half-applied. Only counts that actually change are written,
+    each as an `adjust` movement, so re-applying the same figures is a no-op.
+    Items and movements are each saved once. Returns the changes made.
+    """
+    items = load_items(station_id)
+    missing = [k for k in targets if k not in items]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Not in Stores: {', '.join(missing[:5])}")
+    now = datetime.now().isoformat()
+    changes, new_movements = [], []
+    for key, bins in targets.items():
+        item = items[key]
+        for bin in BINS:
+            if bin not in bins:
+                continue
+            new_qty = float(bins[bin])
+            if new_qty < 0:
+                raise HTTPException(status_code=400, detail=f"{key}: {bin} count cannot be negative.")
+            delta = round(new_qty - (item.get(bin) or 0), 4)
+            if not delta:
+                continue
+            item[bin] = new_qty
+            changes.append({"item_key": key, "bin": bin, "new_qty": new_qty, "delta": delta})
+            new_movements.append({"timestamp": now, "type": "adjust", "item_key": key,
+                                  "name": item.get("name", ""), "category": item.get("category", ""),
+                                  "qty": delta, "from_bin": bin, "to_bin": bin,
+                                  "performed_by": performed_by,
+                                  "note": f"{reason} (set {bin} to {new_qty:g})", "ref": ref or ""})
+    if not changes:
+        return changes
+    save_items(station_id, items)
+    # stores_after / forecourt_after carry each item's final figures
+    for m in new_movements:
+        m["stores_after"] = items[m["item_key"]]["stores"]
+        m["forecourt_after"] = items[m["item_key"]]["forecourt"]
+    movements = load_movements(station_id)
+    movements.extend(new_movements)
+    save_station_json(station_id, MOVEMENTS_FILE, movements)
+    return changes
+
+
 def delete_item(station_id: str, item_key: str, performed_by: str = "system") -> dict:
     """Remove an item from the catalog. Stock quantities are lost."""
     items = load_items(station_id)

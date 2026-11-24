@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ForecourtCountsPanel from '../components/ForecourtCountsPanel'
+import OpeningCountUpload from '../components/OpeningCountUpload'
 import { getHeaders, authFetch } from '../lib/api'
 import { formatDateTimeToDisplay } from '../lib/dateUtils'
 
@@ -216,6 +217,8 @@ export default function StoresDashboard() {
   const [deleteTarget, setDeleteTarget] = useState<{ item_key: string; name: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
+  // Bumped after an opening count upload so the go-live panel reloads its status
+  const [countsKey, setCountsKey] = useState(0)
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -363,7 +366,10 @@ export default function StoresDashboard() {
         </button>
       </div>
 
-      <ForecourtCountsPanel isOwner={isOwner} onChanged={() => fetchAll(true)} />
+      <ForecourtCountsPanel key={countsKey} isOwner={isOwner} onChanged={() => fetchAll(true)} />
+      {isOwner && (
+        <OpeningCountUpload onChanged={() => { setCountsKey(k => k + 1); fetchAll(true) }} />
+      )}
 
       {/* Summary strip */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

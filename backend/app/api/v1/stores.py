@@ -6,7 +6,7 @@ sales flows. See services/stock_service.py for the model.
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel
 
 from .auth import get_station_context, require_manager_or_owner, require_owner
@@ -384,6 +384,104 @@ def forecourt_go_live(data: GoLiveInput, ctx: dict = Depends(get_station_context
     return {"dry_run": False, "source": data.source, "counts_changed": changed,
             "live_since": settings["forecourt_live_since"],
             "rows": _go_live_rows(station_id, ctx["storage"])}
+
+
+# ── opening stock count upload (owner, before go-live) ──────────────
+
+def _attendants_mid_shift(station_id: str, storage: dict) -> list:
+    """
+    Names of attendants who have started an active shift (opening verified)
+    but not yet handed over. Their sales come off the Forecourt when they
+    hand over, so counts set now would have those sales taken off twice -
+    and if the station went live now, their shift would stay on the old basis.
+    """
+    from .attendant_handover import _load_opening_verifications
+    from ...services.handover_lookup import get_active_handover
+
+    shifts = (storage or {}).get("shifts", {}) or {}
+    active = {s.get("shift_id", sid) for sid, s in shifts.items() if s.get("status") == "active"}
+    if not active:
+        return []
+    handovers = load_station_json(station_id, "attendant_handovers.json", default={})
+    names = []
+    for v in _load_opening_verifications(station_id).values():
+        sid, aid = v.get("shift_id"), v.get("attendant_id")
+        if sid in active and aid and not get_active_handover(station_id, sid, aid, handovers=handovers):
+            names.append(v.get("attendant_name") or aid)
+    return sorted(set(names))
+
+
+def _count_upload_blocks(station_id: str, storage: dict) -> list:
+    blocks = []
+    if svc.forecourt_live_since(station_id):
+        blocks.append("This station is already live on Forecourt counts - use Stock Takes from now on")
+    mid = _attendants_mid_shift(station_id, storage)
+    if mid:
+        blocks.append("Attendant(s) still on shift, not yet handed over: " + ", ".join(mid)
+                      + ". Upload at a shift change")
+    drafts = [t["take_id"] for t in svc.load_takes(station_id).values() if t.get("status") == "draft"]
+    if drafts:
+        blocks.append("A stock take is still open (" + ", ".join(drafts)
+                      + "). Submit or finish it first - submitting it later would overwrite these counts")
+    return blocks
+
+
+async def _read_upload(file: UploadFile) -> bytes:
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Upload the .xlsx stock count sheet.")
+    return await file.read()
+
+
+@router.get("/count-template", dependencies=[Depends(require_owner)])
+def count_template(ctx: dict = Depends(get_station_context)):
+    """The Stock Count sheet with this station's product list and blank counts."""
+    from ...services import stock_count_upload as scu
+    data = scu.build_template(ctx["station_id"])
+    return Response(content=data,
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f"attachment; filename=Stock_Count_{ctx['station_id']}.xlsx"})
+
+
+@router.post("/count-upload/preview", dependencies=[Depends(require_owner)])
+async def count_upload_preview(file: UploadFile = File(...), ctx: dict = Depends(get_station_context)):
+    """Check an uploaded stock count sheet and show what applying it would change. Writes nothing."""
+    from ...services import stock_count_upload as scu
+    content = await _read_upload(file)
+    station_id = ctx["station_id"]
+    return scu.build_preview(station_id, content, file.filename,
+                             _count_upload_blocks(station_id, ctx["storage"]))
+
+
+@router.post("/count-upload/apply", dependencies=[Depends(require_owner)])
+async def count_upload_apply(file: UploadFile = File(...), go_live: bool = Form(False),
+                             ctx: dict = Depends(get_station_context)):
+    """
+    Set every Stores and Forecourt count from the sheet (all or nothing) and,
+    with go_live, switch the station to live Forecourt counts on those figures
+    in the same step - so no shift can start in between.
+    """
+    from ...services import stock_count_upload as scu
+    content = await _read_upload(file)
+    station_id = ctx["station_id"]
+    blocks = _count_upload_blocks(station_id, ctx["storage"])
+    record = scu.apply_upload(station_id, content, file.filename, blocks, ctx["username"])
+    live_since = None
+    if go_live:
+        live_since = svc.set_forecourt_live(station_id, ctx["username"], "count_upload")["forecourt_live_since"]
+        scu.mark_went_live(station_id, record["upload_id"])
+        record["went_live"] = True
+    try:
+        log_audit_event(station_id=station_id, action="stock_count_upload", performed_by=ctx["username"],
+                        entity_type="station", entity_id=station_id,
+                        details={k: record[k] for k in ("upload_id", "file_name", "rows", "items_created",
+                                                        "stores_changed", "forecourt_changed", "went_live")})
+        if go_live:
+            log_audit_event(station_id=station_id, action="forecourt_go_live", performed_by=ctx["username"],
+                            entity_type="station", entity_id=station_id,
+                            details={"source": "count_upload", "upload_id": record["upload_id"]})
+    except Exception:
+        pass
+    return {**record, "live_since": live_since}
 
 
 # ── shift-start count differences ───────────────────────────────────

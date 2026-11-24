@@ -124,7 +124,8 @@ export default function ForecourtCountsPanel({ isOwner, onChanged }: { isOwner: 
             Attendants' opening stock still carries forward from the previous shift's closing count, and stock you
             issue to the forecourt does not reach them. Going live makes the Forecourt count the figure each
             attendant confirms or corrects at the start of their shift.
-            Do a Forecourt and a Stores stock take at a shift change first, then keep those counts.
+            Count the Forecourt and Stores at a shift change first - the quickest way is the Opening stock upload
+            below, which can go live in the same step.
           </p>
           {isOwner ? (
             <div className="flex flex-wrap gap-2 mt-3">
