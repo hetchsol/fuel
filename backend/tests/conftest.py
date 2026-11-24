@@ -28,6 +28,24 @@ STATIONS.setdefault("ST001", {
 })
 
 
+@pytest.fixture(autouse=True)
+def _password_expiry_off(request, monkeypatch):
+    """
+    Accounts created by tests get a password set by someone else, which the
+    password-expiry rule makes due at first sign-in - every staff fixture
+    would then be refused. Switch the rule off everywhere except the tests
+    that cover it (test_password_expiry.py).
+    """
+    if request.module.__name__.endswith("test_password_expiry"):
+        yield
+        return
+    from app.api.v1 import auth
+    from app.services import password_policy as pwp
+    monkeypatch.setattr(auth, "_due_now_unless_owner", lambda role: {})
+    monkeypatch.setattr(pwp, "must_change", lambda user, now=None: False)
+    yield
+
+
 @pytest.fixture
 def client():
     """FastAPI test client — no real DB, uses in-memory storage."""

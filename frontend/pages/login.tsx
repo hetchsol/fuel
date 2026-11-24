@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { getDeviceId } from '../lib/api'
+import { SESSION_MARK } from '../components/AccountGuard'
 
 function FuelMeter() {
   const [liters, setLiters] = useState(0)
@@ -79,6 +81,11 @@ export default function Login() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // A shared station device: ask the browser not to fill in or save the login
+  const [sharedDevice, setSharedDevice] = useState(false)
+  useEffect(() => {
+    try { setSharedDevice(localStorage.getItem('sharedDevice') === '1') } catch {}
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -91,7 +98,7 @@ export default function Login() {
       for (let attempt = 0; attempt < 3; attempt++) {
         res = await fetch(`${BASE}/auth/login`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Device-Id': getDeviceId() },
           body: JSON.stringify(credentials),
         })
 
@@ -130,6 +137,10 @@ export default function Login() {
       localStorage.setItem('user', JSON.stringify(data.user))
       localStorage.setItem('stationId', data.user.station_id || 'ST001')
       localStorage.setItem('tokenSetAt', String(Date.now()))
+      localStorage.setItem('sharedDevice', data.device_shared ? '1' : '0')
+      // Gone once the browser is closed; a shared device then asks for a fresh sign-in
+      try { sessionStorage.setItem(SESSION_MARK, '1') } catch {}
+      setCredentials({ username: '', password: '' })
 
       const secure = window.location.protocol === 'https:' ? '; Secure' : ''
       document.cookie = `accessToken=${data.access_token}; path=/; SameSite=Strict${secure}`
@@ -190,7 +201,7 @@ export default function Login() {
             <p className="text-content-secondary mt-1 text-sm">Fuel Management System</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5" autoComplete={sharedDevice ? 'off' : 'on'}>
             <div>
               <label className="block text-sm font-medium text-content-secondary mb-1.5">
                 Username
@@ -205,6 +216,7 @@ export default function Login() {
                   type="text"
                   value={credentials.username}
                   onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
+                  autoComplete={sharedDevice ? 'off' : 'username'}
                   className="w-full pl-10 pr-4 py-3 border border-surface-border rounded-input focus:outline-none focus:ring-2 focus:ring-action-primary focus:border-action-primary"
                   placeholder="Enter your username"
                   required
@@ -226,6 +238,7 @@ export default function Login() {
                   type="password"
                   value={credentials.password}
                   onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
+                  autoComplete={sharedDevice ? 'off' : 'current-password'}
                   className="w-full pl-10 pr-4 py-3 border border-surface-border rounded-input focus:outline-none focus:ring-2 focus:ring-action-primary focus:border-action-primary"
                   placeholder="Enter your password"
                   required

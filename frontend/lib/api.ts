@@ -8,13 +8,40 @@ export function isManagerOrAbove(role: string): boolean {
   return ['manager', 'owner'].includes(role)
 }
 
+/**
+ * A random id for this browser, kept in its storage. The server uses it to
+ * notice a device that several people sign in on (a shared station tablet).
+ * It identifies the browser, not the person, and resets if site data is cleared.
+ */
+export function getDeviceId(): string {
+  if (typeof window === 'undefined') return ''
+  try {
+    let id = localStorage.getItem('deviceId')
+    if (!id) {
+      const rand = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+      id = `dev-${rand}`
+      localStorage.setItem('deviceId', id)
+    }
+    return id
+  } catch {
+    return ''
+  }
+}
+
+// Fired when the server refuses a request because the user's password has expired.
+export const PASSWORD_CHANGE_EVENT = 'password-change-required'
+
 export function getHeaders(): Record<string, string> {
   if (typeof window === 'undefined') return {}
   const token = localStorage.getItem('accessToken')
   const stationId = localStorage.getItem('stationId')
+  const deviceId = getDeviceId()
   return {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(stationId ? { 'X-Station-Id': stationId } : {}),
+    ...(deviceId ? { 'X-Device-Id': deviceId } : {}),
   }
 }
 
@@ -27,6 +54,9 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     headers['Content-Type'] = 'application/json';
   }
   const response = await fetch(url, { ...options, headers });
+  if (response.status === 403 && response.headers.get('X-Password-Change-Required')) {
+    window.dispatchEvent(new Event(PASSWORD_CHANGE_EVENT))
+  }
   if (!response.ok) {
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {

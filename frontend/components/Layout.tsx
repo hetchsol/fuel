@@ -4,8 +4,10 @@ import { Fragment, useEffect, useState, useRef, useCallback } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import { authFetch, BASE, getHeaders } from '../lib/api'
 import { formatDateToDisplay, formatTimeToDisplay } from '../lib/dateUtils'
+import toast from 'react-hot-toast'
 import Footer from './Footer'
 import CurrentShiftBar from './CurrentShiftBar'
+import AccountGuard, { OPEN_CHANGE_PASSWORD_EVENT, SESSION_MARK } from './AccountGuard'
 
 // Date and time to the minute ("28 October 2026, 14:30"). Re-checked every
 // 15 seconds so the minute rolls over on time without a per-second re-render.
@@ -384,7 +386,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     router.reload()
   }
 
-  const handleLogout = () => {
+  const signOut = (reason?: string) => {
+    // End the session on the server too, so the token is useless on a shared device
+    const token = localStorage.getItem('accessToken')
+    if (token) {
+      fetch(`${BASE}/auth/logout?token=${encodeURIComponent(token)}`, { method: 'POST', keepalive: true }).catch(() => {})
+    }
+    try { sessionStorage.removeItem(SESSION_MARK) } catch {}
+    if (reason) toast(reason)
     localStorage.removeItem('accessToken')
     localStorage.removeItem('user')
     localStorage.removeItem('stationId')
@@ -393,6 +402,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     document.cookie = `user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${secure}`
     setUser(null)
     router.push('/login')
+  }
+  const handleLogout = () => signOut()
+  const openChangePassword = () => {
+    setShowUserMenu(false)
+    setMobileNavOpen(false)
+    window.dispatchEvent(new Event(OPEN_CHANGE_PASSWORD_EVENT))
   }
 
   const isActive = (path: string) => router.pathname === path
@@ -731,6 +746,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                           My Payslips
                         </Link>
                         <button
+                          onClick={openChangePassword}
+                          role="menuitem"
+                          className="block w-full text-left px-4 py-2.5 text-sm text-content-primary hover:bg-white/5 transition-colors"
+                        >
+                          Change password
+                        </button>
+                        <button
                           onClick={handleLogout}
                           role="menuitem"
                           className="block w-full text-left px-4 py-2.5 text-sm text-status-error hover:bg-status-error-light transition-colors border-t border-surface-border"
@@ -986,6 +1008,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {isDark ? 'Light mode' : 'Dark mode'}
                 </button>
                 <button
+                  onClick={openChangePassword}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-btn border border-surface-border text-sm text-content-secondary hover:bg-surface-bg transition-colors"
+                >
+                  Change password
+                </button>
+                <button
                   onClick={handleLogout}
                   className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-btn border border-surface-border text-sm text-status-error hover:bg-status-error-light transition-colors"
                 >
@@ -1023,6 +1051,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </main>
 
       <Footer userRole={user?.role} />
+
+      {user?.username && !['/login', '/setup', '/initializing'].includes(router.pathname) && (
+        <AccountGuard username={user.username} role={user.role} onLogout={signOut} />
+      )}
     </div>
   )
 }

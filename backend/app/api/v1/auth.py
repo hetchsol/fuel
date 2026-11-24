@@ -10,6 +10,7 @@ from ...models.models import UserLogin, User, UserRole
 from ...database.storage import get_station_storage
 from ...services.audit_service import log_audit_event
 from ...services.notification_service import create_notification
+from ...services import password_policy as pwp
 from ...database.db import DATABASE_URL, is_db_active
 import hashlib
 import secrets
@@ -110,6 +111,44 @@ def _save_users_file():
         logger.warning(f"[auth] Could not save users file: {e}")
 
 
+def _get_user_record(username: str) -> Optional[dict]:
+    """The stored user (with password hash and expiry fields), whichever mode is active."""
+    if _USE_DB():
+        from ...database.db import db_get_user_by_username
+        return db_get_user_by_username(username)
+    return users_db.get(username)
+
+
+def _set_user_fields(username: str, fields: dict):
+    if not fields:
+        return
+    if _USE_DB():
+        from ...database.db import db_update_user
+        db_update_user(username, fields)
+    else:
+        users_db[username].update(fields)
+        _save_users_file()
+
+
+def _all_user_records() -> list:
+    if _USE_DB():
+        from ...database.db import db_get_all_users
+        return db_get_all_users()
+    return list(users_db.values())
+
+
+def _due_now_unless_owner(role) -> dict:
+    """A password someone else set (new user, reset, edit) must be changed at first sign-in."""
+    return {} if pwp.is_exempt(role) else {"password_change_due": pwp.due_now()}
+
+
+def _check_password_expiry(user: dict, request: Optional[Request]):
+    """From the due moment on, only changing the password (or signing out) is allowed."""
+    if request is not None and pwp.must_change(user) and not pwp.path_is_exempt(request.url.path):
+        raise HTTPException(status_code=403, detail=pwp.FORCED_DETAIL,
+                            headers={pwp.FORCED_HEADER: "1"})
+
+
 users_db = {
     "owner1": {
         "user_id": "O001",
@@ -139,7 +178,7 @@ active_sessions = {}
 # Authentication Dependencies (unchanged signatures)
 # ──────────────────────────────────────────────────────────
 
-async def get_current_user(authorization: Optional[str] = Header(None)):
+async def get_current_user(request: Request, authorization: Optional[str] = Header(None)):
     """Extract and validate user from session token."""
     if not authorization:
         raise HTTPException(status_code=401, detail="Authorization header missing")
@@ -158,6 +197,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
             raise HTTPException(status_code=401, detail="User not found")
         if not user.get("is_active", True):
             raise HTTPException(status_code=403, detail="Account is disabled. Contact the owner.")
+        _check_password_expiry(user, request)
         return {
             "user_id": user["user_id"],
             "username": user["username"],
@@ -190,6 +230,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
         user_data = users_db[username]
         if not user_data.get("is_active", True):
             raise HTTPException(status_code=403, detail="Account is disabled. Contact the owner.")
+        _check_password_expiry(user_data, request)
         return {
             "user_id": user_data["user_id"],
             "username": username,
@@ -275,6 +316,21 @@ async def get_station_context(
 # Routes
 # ──────────────────────────────────────────────────────────
 
+def _device_station(request: Request, user: dict) -> str:
+    return request.headers.get("x-station-id") or user.get("station_id") or DEFAULT_STATION_ID
+
+
+def _login_extras(user: dict, request: Request) -> dict:
+    """Password status and shared-device flag returned with every sign-in."""
+    shared = False
+    try:
+        shared = pwp.record_login(_device_station(request, user), request.headers.get("x-device-id"),
+                                  user["username"], request.headers.get("user-agent", ""))
+    except Exception as e:
+        logger.warning(f"[auth] could not record device for {user.get('username')}: {e}")
+    return {"password_status": pwp.status(user), "device_shared": shared}
+
+
 @router.post("/login")
 def login(credentials: UserLogin, request: Request):
     """Authenticate user and return role-based access token."""
@@ -310,6 +366,7 @@ def login(credentials: UserLogin, request: Request):
             "access_token": token,
             "token_type": "bearer",
             "needs_setup": needs_setup,
+            **_login_extras(user, request),
             "user": {
                 "user_id": user["user_id"],
                 "username": username,
@@ -352,6 +409,7 @@ def login(credentials: UserLogin, request: Request):
             "access_token": session_token,
             "token_type": "bearer",
             "needs_setup": needs_setup,
+            **_login_extras(user_data, request),
             "user": {
                 "user_id": user_data["user_id"],
                 "username": username,
@@ -478,6 +536,7 @@ def list_users(ctx: dict = Depends(get_station_context)):
             "full_name": u["full_name"], "role": u["role"],
             "station_id": u.get("station_id"),
             "is_active": u.get("is_active", True),
+            "password_status": pwp.status(u),
         }
         for u in users if visible(u)
     ]
@@ -565,6 +624,7 @@ def create_user(user_data: dict, current_user: dict = Depends(require_manager_or
         try:
             db_create_user(user_id, username, hashed, full_name, role,
                            station_id if role != "owner" else None)
+            _set_user_fields(username, _due_now_unless_owner(role))
         except Exception as e:
             logger.error(f"[auth] create_user DB insert failed for {username}: {e}")
             raise HTTPException(status_code=400, detail="Could not create user. Please try again.")
@@ -578,6 +638,7 @@ def create_user(user_data: dict, current_user: dict = Depends(require_manager_or
             "full_name": full_name, "role": role,
             "station_id": station_id if role != "owner" else None,
             "is_active": True,
+            **_due_now_unless_owner(role),
         }
         _save_users_file()
 
@@ -653,6 +714,7 @@ def update_user(username: str, user_data: dict, current_user: dict = Depends(req
         if "password" in user_data and user_data["password"]:
             changed["password"] = "changed"
             fields["password"] = _hash_password(user_data["password"])
+            fields.update(_due_now_unless_owner(fields.get("role", user["role"])))
 
         if fields:
             db_update_user(username, fields)
@@ -680,6 +742,7 @@ def update_user(username: str, user_data: dict, current_user: dict = Depends(req
         if "password" in user_data and user_data["password"]:
             changed["password"] = "changed"
             user["password"] = _hash_password(user_data["password"])
+            user.update(_due_now_unless_owner(user["role"]))
         user_id = user["user_id"]
         _save_users_file()
 
@@ -905,7 +968,7 @@ def reset_user_password(username: str, current_user: dict = Depends(require_mana
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        db_update_user(username, {"password": hashed})
+        db_update_user(username, {"password": hashed, **_due_now_unless_owner(user["role"])})
         # Invalidate existing sessions so user must re-login
         db_delete_user_sessions(username)
         user_id = user["user_id"]
@@ -913,6 +976,8 @@ def reset_user_password(username: str, current_user: dict = Depends(require_mana
         if username not in users_db:
             raise HTTPException(status_code=404, detail="User not found")
         users_db[username]["password"] = hashed
+        users_db[username].update(_due_now_unless_owner(users_db[username]["role"]))
+        _save_users_file()
         user_id = users_db[username]["user_id"]
 
         # Invalidate existing sessions
@@ -943,3 +1008,168 @@ def reset_user_password(username: str, current_user: dict = Depends(require_mana
         "message": f"Password for {username} has been reset",
         "new_password": new_password,
     }
+
+
+# ──────────────────────────────────────────────────────────
+# Password expiry: status, self-service change, owner countdown, devices
+# ──────────────────────────────────────────────────────────
+
+def _token_from(authorization: Optional[str]) -> str:
+    if authorization and authorization.startswith("Bearer "):
+        return authorization.split(" ", 1)[1]
+    return authorization or ""
+
+
+def _deadline_message(summary: dict) -> str:
+    pending = summary["pending"]
+    if not pending:
+        return "Every staff member changed their password in time."
+    names = ", ".join(p["full_name"] for p in pending[:10])
+    more = len(pending) - 10
+    return (f"{len(pending)} staff had not changed their password and must change it at their next "
+            f"sign-in: {names}" + (f", and {more} more" if more > 0 else "") + ".")
+
+
+def _owner_campaign() -> Optional[dict]:
+    """The owner's countdown summary; sends the deadline message once when it passes."""
+    summary = pwp.campaign_summary(_all_user_records())
+    if not summary:
+        return None
+    if summary["deadline_passed"] and not summary["deadline_notified"]:
+        try:
+            create_notification(
+                station_id=summary.get("station_id") or DEFAULT_STATION_ID,
+                type="PASSWORD_CAMPAIGN_DEADLINE", severity="warning",
+                title="Password change deadline reached",
+                message=_deadline_message(summary),
+                entity_type="password_campaign", entity_id=summary["started_at"],
+                created_by="system",
+            )
+            pwp.mark_deadline_notified()
+            summary["deadline_notified"] = True
+        except Exception as e:
+            logger.warning(f"[auth] password deadline notification failed: {e}")
+    summary.pop("station_id", None)
+    return summary
+
+
+@router.get("/password-status")
+def password_status(request: Request, current_user: dict = Depends(get_current_user)):
+    """Reminder / forced-change status for the signed-in user, plus the owner's countdown view."""
+    user = _get_user_record(current_user["username"]) or {}
+    station = request.headers.get("x-station-id") or current_user.get("station_id") or DEFAULT_STATION_ID
+    out = {
+        "password_status": pwp.status(user),
+        "device_shared": pwp.device_is_shared(station, request.headers.get("x-device-id")),
+    }
+    if pwp.is_exempt(current_user.get("role")):
+        out["campaign"] = _owner_campaign()
+    return out
+
+
+@router.post("/change-password")
+def change_password(data: dict, authorization: Optional[str] = Header(None),
+                    current_user: dict = Depends(get_current_user)):
+    """The signed-in user changes their own password (current + new)."""
+    username = current_user["username"]
+    user = _get_user_record(username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    current = data.get("current_password") or ""
+    new = data.get("new_password") or ""
+    if not _verify_password(current, user["password"]):
+        raise HTTPException(status_code=400, detail="Your current password is not correct.")
+    pwp.validate_new_password(username, current, new)
+
+    now = pwp.utcnow()
+    _set_user_fields(username, {
+        "password": _hash_password(new),
+        "password_changed_at": now.isoformat(),
+        "password_change_due": None if pwp.is_exempt(user.get("role")) else pwp.next_rotation(now),
+    })
+    # Sign the user out everywhere else; this device stays signed in.
+    if _USE_DB():
+        from ...database.db import db_delete_user_sessions_except
+        db_delete_user_sessions_except(username, _token_from(authorization))
+
+    log_audit_event(
+        station_id=current_user.get("station_id") or DEFAULT_STATION_ID,
+        action="user_password_changed", performed_by=username,
+        entity_type="user", entity_id=user["user_id"], details={"username": username},
+    )
+    return {"message": "Password changed.", "password_status": pwp.status(_get_user_record(username) or {})}
+
+
+def launch_password_campaign(deadline: str, started_by: str, station_id: str,
+                             by_system: bool = False) -> dict:
+    """
+    Give every staff member (not owners) until `deadline` to change their
+    password, record the countdown and tell the owner. Used by the owner's
+    button (7 days from today) and by one-off system launches.
+    """
+    now = pwp.utcnow()
+    staff = [u for u in _all_user_records() if not pwp.is_exempt(u.get("role"))]
+    for u in staff:
+        due = pwp._parse(u.get("password_change_due"))
+        # Someone already due sooner (e.g. just reset) keeps the earlier date
+        if not due or due > pwp._parse(deadline):
+            _set_user_fields(u["username"], {"password_change_due": deadline})
+    pwp.start_campaign([u["username"] for u in staff], started_by, station_id, now, deadline=deadline)
+
+    days = (pwp._parse(deadline).astimezone(pwp.CAT).date() - now.astimezone(pwp.CAT).date()).days
+    last_day = (pwp._parse(deadline).astimezone(pwp.CAT) - timedelta(days=1)).strftime("%d/%m/%Y")
+    log_audit_event(station_id=station_id, action="password_campaign_start",
+                    performed_by=started_by, entity_type="password_campaign",
+                    entity_id=deadline, details={"staff": len(staff), "deadline": deadline,
+                                                 "by_system": by_system})
+    try:
+        create_notification(
+            station_id=station_id, type="PASSWORD_CAMPAIGN_START", severity="info",
+            title="Password change started" + (" by the system" if by_system else ""),
+            message=(f"{len(staff)} staff (attendants, supervisors and managers) have {days} day"
+                     f"{'' if days == 1 else 's'} to change their password, until the end of {last_day}. "
+                     f"A prompt has been sent to them. After that they will have to change it before "
+                     f"they can continue."),
+            entity_type="password_campaign", entity_id=deadline, created_by=started_by,
+        )
+    except Exception as e:
+        logger.warning(f"[auth] password campaign notification failed: {e}")
+    return _owner_campaign()
+
+
+@router.post("/password-campaign")
+def start_password_campaign(current_user: dict = Depends(require_owner)):
+    """Owner: every staff member (not owners) must change their password within 7 days."""
+    existing = pwp.campaign_summary(_all_user_records())
+    if existing and not existing["deadline_passed"]:
+        raise HTTPException(status_code=400, detail="A password change countdown is already running.")
+    return launch_password_campaign(pwp.start_of_day_in(pwp.CAMPAIGN_DAYS), current_user["username"],
+                                    current_user.get("station_id") or DEFAULT_STATION_ID)
+
+
+@router.get("/devices", dependencies=[Depends(require_manager_or_owner)])
+def list_devices(ctx: dict = Depends(get_station_context)):
+    """Devices people have signed in on at this station, and whether each counts as shared."""
+    names = {u["username"]: (u.get("full_name") or u["username"]) for u in _all_user_records()}
+    rows = []
+    for d in pwp.load_devices(ctx["station_id"]).values():
+        users = sorted((d.get("users") or {}).items(), key=lambda kv: kv[1], reverse=True)
+        rows.append({
+            "device_id": d["device_id"], "label": d.get("label") or "",
+            "override": d.get("override"), "shared": pwp.is_shared(d),
+            "first_seen": d.get("first_seen"), "last_seen": d.get("last_seen"),
+            "user_agent": d.get("user_agent", ""),
+            "users": [{"username": u, "full_name": names.get(u, u), "last_seen": t} for u, t in users],
+        })
+    rows.sort(key=lambda r: r.get("last_seen") or "", reverse=True)
+    return rows
+
+
+@router.patch("/devices/{device_id}", dependencies=[Depends(require_manager_or_owner)])
+def update_device(device_id: str, data: dict, ctx: dict = Depends(get_station_context)):
+    """Mark a device shared / personal (or back to automatic), and name it."""
+    d = pwp.set_device(ctx["station_id"], device_id, data.get("override"), data.get("label"))
+    log_audit_event(station_id=ctx["station_id"], action="device_update", performed_by=ctx["username"],
+                    entity_type="device", entity_id=device_id,
+                    details={"override": d.get("override"), "label": d.get("label")})
+    return {**d, "shared": pwp.is_shared(d)}

@@ -453,6 +453,9 @@ def init_db():
         # Migrations — safe to re-run (IF NOT EXISTS / ON CONFLICT)
         for migration_sql in [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
+            # Password expiry (ISO UTC strings; NULL = nothing due / never changed in-app)
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_change_due TEXT",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TEXT",
             "ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS pending_deactivation BOOLEAN NOT NULL DEFAULT FALSE",
             "ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS released BOOLEAN NOT NULL DEFAULT FALSE",
         ]:
@@ -636,19 +639,40 @@ def db_save_all_stations(stations: dict):
 # Users — auth user management
 # ──────────────────────────────────────────────────────────
 
+_USER_COLS = "user_id, username, password, full_name, role, station_id, is_active"
+_USER_PW_COLS = ", password_change_due, password_changed_at"
+
+
+def _select_users(conn, tail: str, params: tuple, one: bool = False):
+    """
+    Read users including the password-expiry columns. If those columns are
+    missing (their migration failed), fall back to the old column list padded
+    with NULLs, so signing in never breaks because of this feature.
+    """
+    try:
+        cur = conn.execute(f"SELECT {_USER_COLS}{_USER_PW_COLS} FROM users {tail}", params)
+        return cur.fetchone() if one else cur.fetchall()
+    except Exception as e:
+        logger.warning(f"[db] users select without password-expiry columns: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        cur = conn.execute(f"SELECT {_USER_COLS}, NULL, NULL FROM users {tail}", params)
+        return cur.fetchone() if one else cur.fetchall()
+
+
 def db_get_user_by_username(username: str) -> Optional[dict]:
     """Get a user by username."""
     conn = _get_connection()
     try:
-        row = conn.execute(
-            "SELECT user_id, username, password, full_name, role, station_id, is_active FROM users WHERE username = %s",
-            (username,)
-        ).fetchone()
+        row = _select_users(conn, "WHERE username = %s", (username,), one=True)
         if row:
             return {
                 "user_id": row[0], "username": row[1], "password": row[2],
                 "full_name": row[3], "role": row[4], "station_id": row[5],
                 "is_active": row[6] if row[6] is not None else True,
+                "password_change_due": row[7], "password_changed_at": row[8],
             }
         return None
     except Exception as e:
@@ -660,13 +684,12 @@ def db_get_all_users() -> List[dict]:
     """Get all users."""
     conn = _get_connection()
     try:
-        rows = conn.execute(
-            "SELECT user_id, username, password, full_name, role, station_id, is_active FROM users ORDER BY user_id"
-        ).fetchall()
+        rows = _select_users(conn, "ORDER BY user_id", ())
         return [
             {"user_id": r[0], "username": r[1], "password": r[2],
              "full_name": r[3], "role": r[4], "station_id": r[5],
-             "is_active": r[6] if r[6] is not None else True}
+             "is_active": r[6] if r[6] is not None else True,
+             "password_change_due": r[7], "password_changed_at": r[8]}
             for r in rows
         ]
     except Exception as e:
@@ -696,7 +719,8 @@ def db_update_user(username: str, fields: dict):
     conn = _get_connection()
     try:
         sets, vals = [], []
-        for col in ("full_name", "role", "station_id", "password", "is_active"):
+        for col in ("full_name", "role", "station_id", "password", "is_active",
+                    "password_change_due", "password_changed_at"):
             if col in fields:
                 sets.append(f"{col} = %s")
                 vals.append(fields[col])
@@ -798,6 +822,17 @@ def db_delete_user_sessions(username: str):
     except Exception as e:
         conn.rollback()
         logger.error(f"[db] delete_user_sessions failed: {e}")
+
+
+def db_delete_user_sessions_except(username: str, keep_token: str):
+    """Delete every session for a user except the one still in use."""
+    conn = _get_connection()
+    try:
+        conn.execute("DELETE FROM sessions WHERE username = %s AND token <> %s", (username, keep_token))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[db] delete_user_sessions_except failed: {e}")
 
 
 def db_cleanup_expired_sessions():

@@ -34,6 +34,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.headers.authorization) headers['Authorization'] = req.headers.authorization as string
   if (req.headers['x-station-id']) headers['X-Station-Id'] = req.headers['x-station-id'] as string
   if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type'] as string
+  // Shared-device detection: the browser's random device id, and its browser name for the Devices list
+  if (req.headers['x-device-id']) headers['X-Device-Id'] = req.headers['x-device-id'] as string
+  if (req.headers['user-agent']) headers['User-Agent'] = req.headers['user-agent'] as string
 
   // Read body for non-GET/HEAD methods
   let rawBody: Buffer | undefined
@@ -78,6 +81,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (retryAfter) res.setHeader('Retry-After', retryAfter)
     const disposition = response.headers.get('content-disposition')
     if (disposition) res.setHeader('Content-Disposition', disposition)
+    const pwForced = response.headers.get('x-password-change-required')
+    if (pwForced) res.setHeader('X-Password-Change-Required', pwForced)
     if (contentType) res.setHeader('Content-Type', contentType)
 
     if (contentType.includes('application/json')) {

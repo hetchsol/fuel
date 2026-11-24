@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { getHeaders, authFetch } from '../lib/api'
+import { StaffPasswordPanel, DevicesPanel, passwordLabel, PasswordStatus } from '../components/UserSecurityPanels'
 
 const BASE = '/api/v1'
 
@@ -11,6 +12,7 @@ interface User {
   role: string
   station_id?: string
   is_active?: boolean
+  password_status?: PasswordStatus
 }
 
 interface ConfirmDialog {
@@ -268,6 +270,8 @@ export default function UsersManagement() {
         </div>
       )}
 
+      {currentUserRole === 'owner' && <StaffPasswordPanel onChanged={fetchUsers} />}
+
       {loading ? (
         <div className="text-center py-8">Loading...</div>
       ) : (
@@ -293,6 +297,9 @@ export default function UsersManagement() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                   Station
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
+                  Password
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-content-secondary uppercase tracking-wider">
                   Actions
@@ -327,6 +334,13 @@ export default function UsersManagement() {
                           ? `${stations.find(s => s.station_id === user.station_id)!.name} (${user.station_id})`
                           : user.station_id)
                       : '—'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {(() => {
+                      const p = passwordLabel(user.password_status)
+                      const tone = { ok: 'text-status-success', warn: 'text-status-warning', bad: 'text-status-error font-semibold', muted: 'text-content-secondary' }[p.tone]
+                      return <span className={tone}>{p.text}</span>
+                    })()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                     <button
@@ -368,6 +382,8 @@ export default function UsersManagement() {
           </div>
         </div>
       )}
+
+      {(currentUserRole === 'owner' || currentUserRole === 'manager') && <DevicesPanel />}
 
       {/* Confirmation Dialog */}
       {confirmDialog && (
@@ -517,7 +533,8 @@ export default function UsersManagement() {
           <div className="bg-surface-card rounded-lg p-6 w-full max-w-md mx-4 shadow-xl">
             <h2 className="text-xl font-bold mb-4 text-content-primary">Password Reset Successful</h2>
             <p className="text-sm text-content-secondary mb-4">
-              New password for <strong className="text-content-primary">{resetPasswordResult.username}</strong>:
+              New password for <strong className="text-content-primary">{resetPasswordResult.username}</strong>.
+              They will have to change it to their own when they sign in.
             </p>
             <div className="flex items-center gap-2 mb-4">
               <code className="flex-1 px-4 py-3 bg-surface-bg border border-surface-border rounded-md text-lg font-mono text-content-primary select-all">

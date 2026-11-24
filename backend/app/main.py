@@ -88,6 +88,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Password-Change-Required"],
 )
 
 # Global exception handler — unhandled errors return JSON, not HTML
@@ -142,6 +143,11 @@ def startup():
         # Load saved tank calibrations
         from app.api.v1.tank_calibrations import load_saved_calibrations
         load_saved_calibrations(station_id)
+
+    # ONE-OFF (Nov 2026): first staff password countdown, deadline 30/11/2026.
+    # Remove with app/services/one_off_password_countdown.py once it has run.
+    from app.services.one_off_password_countdown import run_once as _password_countdown_once
+    _password_countdown_once()
 
     # Sync station name from business name in system_settings
     from app.database.stations_registry import save_stations

@@ -8,6 +8,7 @@ import Pagination from '../components/Pagination'
 import DepositCorrections, { RecordDepositFor } from '../components/DepositCorrections'
 import OpeningStockCount, { CountLine, countLineState } from '../components/OpeningStockCount'
 import { getHeaders, authFetch } from '../lib/api'
+import { HANDOVER_SUBMITTED_EVENT } from '../components/AccountGuard'
 import { formatDateToDisplay, formatTimeToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
@@ -835,6 +836,8 @@ export default function MyShift() {
       setReadingsVerifiedHandover(result)
       setSuccess('Readings verified successfully! Proceed to the office for shift closing.')
       setTimeout(fetchSubmissionStatus, 800)
+      // On a shared device the Layout signs the attendant out a few seconds later
+      window.dispatchEvent(new Event(HANDOVER_SUBMITTED_EVENT))
     } catch (err: any) {
       setError(err.message || 'Submission failed')
     } finally {
