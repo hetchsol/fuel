@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { getHeaders, authFetch } from '../lib/api'
 import { StaffPasswordPanel, DevicesPanel, passwordLabel, PasswordStatus } from '../components/UserSecurityPanels'
+import { formatDateTimeToDisplay } from '../lib/dateUtils'
 
 const BASE = '/api/v1'
 
@@ -13,6 +14,7 @@ interface User {
   station_id?: string
   is_active?: boolean
   password_status?: PasswordStatus
+  last_login?: string | null
 }
 
 interface ConfirmDialog {
@@ -301,6 +303,11 @@ export default function UsersManagement() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
                   Password
                 </th>
+                {currentUserRole === 'owner' && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-content-secondary uppercase tracking-wider">
+                    Last sign-in
+                  </th>
+                )}
                 <th className="px-6 py-3 text-right text-xs font-medium text-content-secondary uppercase tracking-wider">
                   Actions
                 </th>
@@ -342,6 +349,11 @@ export default function UsersManagement() {
                       return <span className={tone}>{p.text}</span>
                     })()}
                   </td>
+                  {currentUserRole === 'owner' && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-content-secondary">
+                      {user.last_login ? formatDateTimeToDisplay(user.last_login) : 'None since 24 November 2026'}
+                    </td>
+                  )}
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                     <button
                       onClick={() => handleEdit(user)}

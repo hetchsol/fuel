@@ -324,3 +324,31 @@ def test_saving_a_password_never_fails_without_the_columns(monkeypatch):
     assert auth._db_safe_fields(fields) == {"password": "x", "full_name": "n"}
     monkeypatch.setattr(db, "db_ensure_password_columns", lambda: True)
     assert auth._db_safe_fields(fields) == fields
+
+
+# ── last sign-in ────────────────────────────────────────────────────
+
+def test_owner_sees_each_users_last_sign_in(client, owner_headers, monkeypatch):
+    a, b = make_staff(client, owner_headers), make_staff(client, owner_headers)
+    clear_due(a), clear_due(b)
+    when = datetime(2026, 11, 25, 8, 30, tzinfo=timezone.utc)
+    at(monkeypatch, when)
+    login(client, a, "Start-pass-1")
+
+    rows = {r["username"]: r for r in client.get("/api/v1/auth/users", headers=owner_headers).json()}
+    assert rows[a]["last_login"] == when.isoformat()
+    assert rows[b]["last_login"] is None
+
+    later = when + timedelta(hours=5)
+    at(monkeypatch, later)
+    login(client, a, "Start-pass-1", "dev-" + uuid.uuid4().hex)
+    rows = {r["username"]: r for r in client.get("/api/v1/auth/users", headers=owner_headers).json()}
+    assert rows[a]["last_login"] == later.isoformat()
+
+
+def test_manager_does_not_get_last_sign_in(client, owner_headers):
+    m = make_staff(client, owner_headers, role="manager")
+    clear_due(m)
+    token = login(client, m, "Start-pass-1")["access_token"]
+    rows = client.get("/api/v1/auth/users", headers=bearer(token)).json()
+    assert rows and all("last_login" not in r for r in rows)

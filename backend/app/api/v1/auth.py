@@ -338,6 +338,10 @@ def _login_extras(user: dict, request: Request) -> dict:
     """Password status and shared-device flag returned with every sign-in."""
     shared = False
     try:
+        pwp.note_sign_in(user["username"])
+    except Exception as e:
+        logger.warning(f"[auth] could not note sign-in for {user.get('username')}: {e}")
+    try:
         shared = pwp.record_login(_device_station(request, user), request.headers.get("x-device-id"),
                                   user["username"], request.headers.get("user-agent", ""))
     except Exception as e:
@@ -544,6 +548,14 @@ def list_users(ctx: dict = Depends(get_station_context)):
     else:
         users = list(users_db.values())
 
+    # Last sign-in is shown to the owner only
+    last_seen = {}
+    if caller_role == "owner":
+        try:
+            last_seen = pwp.last_sign_ins(station_id)
+        except Exception as e:
+            logger.warning(f"[auth] could not load last sign-ins: {e}")
+
     return [
         {
             "user_id": u["user_id"], "username": u["username"],
@@ -551,6 +563,7 @@ def list_users(ctx: dict = Depends(get_station_context)):
             "station_id": u.get("station_id"),
             "is_active": u.get("is_active", True),
             "password_status": pwp.status(u),
+            **({"last_login": last_seen.get(u["username"])} if caller_role == "owner" else {}),
         }
         for u in users if visible(u)
     ]

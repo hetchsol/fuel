@@ -180,6 +180,36 @@ def mark_deadline_notified():
     save_campaign(camp)
 
 
+# ── last sign-in ────────────────────────────────────────────────────
+
+LAST_LOGIN_FILE = "last_logins.json"
+
+
+def note_sign_in(username: str, now: Optional[datetime] = None):
+    """Remember when this user last signed in (shown to the owner)."""
+    data = load_station_json(GLOBAL_SLOT, LAST_LOGIN_FILE, default={}) or {}
+    data[username] = (now or utcnow()).isoformat()
+    save_station_json(GLOBAL_SLOT, LAST_LOGIN_FILE, data)
+
+
+def last_sign_ins(station_id: str) -> dict:
+    """username -> latest sign-in (ISO UTC). Also reads the device records,
+    which have noted sign-ins since the password change went live."""
+    out = {}
+
+    def keep(name, iso):
+        at = _parse(iso)
+        if at and (name not in out or at > _parse(out[name])):
+            out[name] = at.isoformat()
+
+    for name, iso in (load_station_json(GLOBAL_SLOT, LAST_LOGIN_FILE, default={}) or {}).items():
+        keep(name, iso)
+    for d in load_devices(station_id).values():
+        for name, iso in (d.get("users") or {}).items():
+            keep(name, iso)
+    return out
+
+
 # ── devices ─────────────────────────────────────────────────────────
 
 _DEVICE_RE = re.compile(r"^[A-Za-z0-9-]{8,64}$")
